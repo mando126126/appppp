@@ -21,103 +21,106 @@
       align-items: center;
       justify-content: space-between;
       font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
-      padding: 8px 8px 6px;
+      padding: 6px 8px 6px;
     }
-
-    /* ── Header ── */
-    #header {
-      text-align: center;
-      flex-shrink: 0;
-    }
+    #header { text-align: center; flex-shrink: 0; }
     #title {
-      font-size: clamp(22px, 5.5vw, 38px);
-      font-weight: 900;
-      letter-spacing: 3px;
+      font-size: clamp(20px, 5vw, 34px);
+      font-weight: 900; letter-spacing: 3px;
       background: linear-gradient(135deg, #ff9de2 0%, #c77dff 50%, #ff9de2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
-      text-shadow: none;
       filter: drop-shadow(0 0 12px rgba(255,105,180,0.7));
     }
-    #score-line {
-      margin-top: 3px;
-      color: #d4aaff;
-      font-size: clamp(13px, 3vw, 18px);
-      letter-spacing: 1px;
+    #hud-row1, #hud-row2 {
+      margin-top: 2px; color: #d4aaff;
+      font-size: clamp(11px, 2.8vw, 16px); letter-spacing: 1px;
     }
+    #powerup-display {
+      display: inline-block; min-width: 52px;
+      font-weight: 800; color: #44ff88;
+      transition: opacity 0.3s;
+    }
+    #lives-display { letter-spacing: 2px; }
 
-    /* ── Canvas Wrapper ── */
     #canvas-wrap {
-      position: relative;
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      position: relative; flex: 1;
+      display: flex; align-items: center; justify-content: center;
       width: 100%;
     }
     #gameCanvas {
-      display: block;
-      border-radius: 16px;
-      border: 2px solid rgba(199, 125, 255, 0.45);
-      box-shadow:
-        0 0 30px rgba(199,125,255,0.25),
-        0 0 60px rgba(255,105,180,0.12),
-        inset 0 0 30px rgba(0,0,0,0.6);
+      display: block; border-radius: 16px;
+      border: 2px solid rgba(199,125,255,0.45);
+      box-shadow: 0 0 30px rgba(199,125,255,0.25), 0 0 60px rgba(255,105,180,0.12), inset 0 0 30px rgba(0,0,0,0.6);
     }
 
-    /* ── UwU Popup ── */
+    /* UwU / popup */
     #uwu-popup {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) scale(0.5);
-      font-size: clamp(28px, 8vw, 52px);
-      font-weight: 900;
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%) scale(0.5);
+      font-size: clamp(24px, 7vw, 48px); font-weight: 900;
       color: #ff9de2;
       filter: drop-shadow(0 0 16px #ff69b4) drop-shadow(0 0 32px #c77dff);
-      pointer-events: none;
-      opacity: 0;
-      white-space: nowrap;
-      z-index: 20;
-      transition: none;
+      pointer-events: none; opacity: 0; white-space: nowrap;
+      z-index: 20; transition: none;
     }
-    #uwu-popup.pop {
-      animation: uwuAnim 1.6s ease-out forwards;
-    }
+    #uwu-popup.pop { animation: uwuAnim 1.6s ease-out forwards; }
     @keyframes uwuAnim {
-      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
-      18%  { opacity: 1; transform: translate(-50%, -55%) scale(1.25); }
-      55%  { opacity: 1; transform: translate(-50%, -60%) scale(1.0); }
-      100% { opacity: 0; transform: translate(-50%, -75%) scale(0.85); }
+      0%   { opacity:0; transform:translate(-50%,-50%) scale(0.4); }
+      18%  { opacity:1; transform:translate(-50%,-55%) scale(1.25); }
+      55%  { opacity:1; transform:translate(-50%,-60%) scale(1.0); }
+      100% { opacity:0; transform:translate(-50%,-75%) scale(0.85); }
     }
 
-    /* ── Controls ── */
+    /* Game Over Overlay */
+    #gameover-overlay {
+      display: none; position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(5,0,15,0.93); border-radius: 16px;
+      flex-direction: column; align-items: center; justify-content: center;
+      z-index: 50; gap: 10px;
+    }
+    #go-title {
+      font-size: clamp(28px, 8vw, 46px); font-weight: 900;
+      color: #ff4488;
+      filter: drop-shadow(0 0 18px #ff0066) drop-shadow(0 0 32px #c77dff);
+    }
+    #go-score-line { color: #d4aaff; font-size: clamp(14px, 4vw, 20px); }
+    #go-hs-line    { color: #ffd700; font-size: clamp(13px, 3.5vw, 18px); }
+    #go-newhs      { color: #ff9de2; font-size: clamp(14px,3.5vw,18px); font-weight:800; display:none; }
+    #go-restart {
+      margin-top: 10px; padding: 11px 34px;
+      background: linear-gradient(135deg, #c77dff, #ff69b4);
+      border: none; border-radius: 14px; color: white;
+      font-size: clamp(15px, 4vw, 20px); font-weight: 800;
+      cursor: pointer; letter-spacing: 1px;
+      box-shadow: 0 0 22px rgba(199,125,255,0.55);
+    }
+    #go-restart:active { transform: scale(0.94); }
+    #go-legend {
+      margin-top: 6px; color: rgba(180,150,220,0.75);
+      font-size: clamp(10px, 2.5vw, 13px); text-align: center;
+      line-height: 1.7;
+    }
+
+    /* Controls */
     #controls {
       flex-shrink: 0;
       display: grid;
       grid-template-areas: ". up ." "left down right";
-      gap: 7px;
-      padding: 4px 0;
+      gap: 7px; padding: 4px 0;
     }
     .btn {
-      width:  clamp(58px, 16vw, 82px);
-      height: clamp(58px, 16vw, 82px);
-      background: rgba(45, 10, 80, 0.85);
-      border: 2px solid rgba(199, 125, 255, 0.55);
-      border-radius: 16px;
-      color: #e0b3ff;
-      font-size: clamp(24px, 6.5vw, 36px);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: clamp(56px,15vw,80px); height: clamp(56px,15vw,80px);
+      background: rgba(45,10,80,0.85);
+      border: 2px solid rgba(199,125,255,0.55); border-radius: 16px;
+      color: #e0b3ff; font-size: clamp(22px, 6vw, 34px);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
       user-select: none;
       transition: background 0.08s, transform 0.08s, box-shadow 0.08s;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.5);
-      touch-action: none;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5); touch-action: none;
     }
-    .btn:active { background: rgba(120, 40, 180, 0.85); transform: scale(0.91); box-shadow: 0 0 14px rgba(199,125,255,0.6); }
+    .btn:active { background: rgba(120,40,180,0.85); transform: scale(0.91); box-shadow: 0 0 14px rgba(199,125,255,0.6); }
     #btn-up    { grid-area: up; }
     #btn-left  { grid-area: left; }
     #btn-down  { grid-area: down; }
@@ -128,12 +131,34 @@
 
 <div id="header">
   <div id="title">🐱 KittiCatch ✨</div>
-  <div id="score-line">🐟 Score: <span id="sc">0</span> &nbsp;·&nbsp; 🌟 Leckerlis: <span id="lc">0</span></div>
+  <div id="hud-row1">
+    🏆 <span id="sc">0</span>
+    &nbsp;&nbsp;<span id="powerup-display" style="opacity:0"></span>&nbsp;&nbsp;
+    ⭐ Best: <span id="hs">0</span>
+  </div>
+  <div id="hud-row2">
+    <span id="lives-display">❤️❤️❤️</span>
+    &nbsp;·&nbsp; 🎣 <span id="lc">0</span>
+  </div>
 </div>
 
 <div id="canvas-wrap">
   <canvas id="gameCanvas"></canvas>
   <div id="uwu-popup">UwU~ ♡</div>
+
+  <div id="gameover-overlay">
+    <div id="go-title">💀 Game Over!</div>
+    <div id="go-score-line">Score: <span id="go-score">0</span></div>
+    <div id="go-hs-line">🏆 Highscore: <span id="go-hs">0</span></div>
+    <div id="go-newhs">✨ Neuer Rekord! ✨</div>
+    <button id="go-restart">↺ Nochmal!</button>
+    <div id="go-legend">
+      🌿 Cannabis = alles langsamer + mega trippy<br>
+      🏓 Paddel = 🍑 versolhen für Bonuspunkte<br>
+      🐕 Hund · 🦊 Fuchs · 🐺 Wolf = Feinde!<br>
+      🦐 +20 · 🍣 +35 · 🍰 +50
+    </div>
+  </div>
 </div>
 
 <div id="controls">
@@ -144,14 +169,14 @@
 </div>
 
 <script>
-// ═══════════════════════════════════════════════
-//  KITTI CATCH  ·  Canvas Game
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  KITTI CATCH  ·  MEGA EDITION
+// ═══════════════════════════════════════════════════════
 
 const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 
-// ── Sizing ──────────────────────────────────────
+// ── Sizing ──────────────────────────────────────────────
 const COLS = 20, ROWS = 20;
 let CELL = 24, W = 480, H = 480;
 
@@ -161,15 +186,13 @@ function resize() {
   const maxH = wrap.clientHeight - 4;
   const size = Math.min(maxW, maxH, 540);
   CELL = Math.max(14, Math.floor(size / COLS));
-  W = COLS * CELL;
-  H = ROWS * CELL;
-  canvas.width  = W;
-  canvas.height = H;
+  W = COLS * CELL; H = ROWS * CELL;
+  canvas.width = W; canvas.height = H;
 }
 resize();
-window.addEventListener('resize', () => { resize(); });
+window.addEventListener('resize', resize);
 
-// ── Audio ────────────────────────────────────────
+// ── Audio ────────────────────────────────────────────────
 let aud = null;
 function initAud() {
   if (!aud) aud = new (window.AudioContext || window.webkitAudioContext)();
@@ -178,8 +201,7 @@ function initAud() {
 function tone(freq, dur, type='sine', vol=0.28, delay=0) {
   if (!aud) return;
   const o = aud.createOscillator(), g = aud.createGain();
-  o.type = type;
-  o.connect(g); g.connect(aud.destination);
+  o.type = type; o.connect(g); g.connect(aud.destination);
   const t = aud.currentTime + delay;
   o.frequency.setValueAtTime(freq, t);
   g.gain.setValueAtTime(0, t);
@@ -187,376 +209,704 @@ function tone(freq, dur, type='sine', vol=0.28, delay=0) {
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.start(t); o.stop(t + dur + 0.05);
 }
-function playCollect() {
-  tone(880, 0.10, 'sine', 0.22);
-  tone(1320, 0.08, 'sine', 0.14, 0.08);
-}
-function playUwu() {
-  // cute ascending jingle ♪
-  [523, 659, 784, 988, 1175, 1319].forEach((f, i) => tone(f, 0.20, 'sine', 0.32, i * 0.12));
-  // cute little tinkle on top
-  [2093, 2637].forEach((f, i) => tone(f, 0.15, 'sine', 0.18, 0.75 + i * 0.1));
-}
+function playCollect()  { tone(880,0.10,'sine',0.22); tone(1320,0.08,'sine',0.14,0.08); }
+function playUwu()      { [523,659,784,988,1175,1319].forEach((f,i)=>tone(f,0.20,'sine',0.32,i*0.12)); [2093,2637].forEach((f,i)=>tone(f,0.15,'sine',0.18,0.75+i*0.1)); }
+function playHurt()     { tone(200,0.35,'sawtooth',0.3); tone(140,0.45,'sawtooth',0.2,0.12); }
+function playGameOver() { [440,349,262,196].forEach((f,i)=>tone(f,0.5,'sawtooth',0.25,i*0.28)); }
+function playCannabis() { [180,220,160,200,240].forEach((f,i)=>tone(f,1.0,'sine',0.12,i*0.25)); }
+function playPaddle()   { [523,659,880,1047].forEach((f,i)=>tone(f,0.15,'square',0.2,i*0.08)); }
+function playSpank()    { tone(380,0.05,'square',0.28); tone(760,0.04,'square',0.14,0.04); }
+function playPowerSpawn(){ tone(600,0.06,'sine',0.15); tone(900,0.06,'sine',0.12,0.07); }
 
-// ── State ────────────────────────────────────────
-const BIG_EVERY = 5;   // big treat every N collects
+// ── Constants ────────────────────────────────────────────
+const BIG_EVERY = 5;
+
+const TREAT_TYPES = [
+  { type:'fish',   points:10, emoji:'🐟', weight:50 },
+  { type:'shrimp', points:20, emoji:'🦐', weight:28 },
+  { type:'sushi',  points:35, emoji:'🍣', weight:15 },
+  { type:'cake',   points:50, emoji:'🍰', weight:7  },
+];
+
+const ENEMY_TYPES = [
+  { name:'Hund', emoji:'🐕', speedMs:520, color:'#cc8844' },
+  { name:'Fuchs',emoji:'🦊', speedMs:330, color:'#ff6622' },
+  { name:'Wolf', emoji:'🐺', speedMs:195, color:'#888888' },
+];
+
+const FIELD_POWERUP_TYPES = [
+  { type:'cannabis', emoji:'🌿', color:'#44ff44' },
+  { type:'paddle',   emoji:'🏓', color:'#ffcc00' },
+];
+
+// ── State ────────────────────────────────────────────────
+let gameState  = 'playing';
+let score      = 0;
+let highscore  = parseInt(localStorage.getItem('kitti_hs') || '0');
+let collected  = 0;
+let lives      = 3;
+let invincible = 0;   // frames
+let hurtFlash  = 0;   // frames
+let stepCount  = 0;
 
 let cat = {
   x: Math.floor(COLS/2), y: Math.floor(ROWS/2),
-  dir: 'right', next: 'right',
-  happy: 0,           // > 0 → draw ^w^ eyes
-  eatAnim: 0          // scale bump when eating
+  dir:'right', next:'right', happy:0, eatAnim:0
 };
-let treats   = [];
-let bigTreat = null;
-let score    = 0;
-let collected= 0;
-let particles= [];
-let trail    = [];
 
-// Background stars (static grid positions, pre-computed)
-const stars = Array.from({ length: 55 }, () => ({
-  x: Math.random(), y: Math.random(),
-  r: Math.random() * 1.4 + 0.4,
-  phase: Math.random() * Math.PI * 2
+let treats      = [];
+let bigTreat    = null;
+let enemies     = [];
+let fieldPowerUp= null;
+let activePowerUp = null; // { type, frames }
+
+// Cannabis visuals
+let cannabisHue    = 0;
+let cannabisWobble = 0;
+
+// Paddle mode
+let butts = []; // pixel-space bouncing butts
+
+let particles = [];
+let trail     = [];
+let nextEnemyId = 0;
+
+const stars = Array.from({length:55},()=>({
+  x:Math.random(), y:Math.random(),
+  r:Math.random()*1.4+0.4,
+  phase:Math.random()*Math.PI*2
 }));
 
-// ── Treat Helpers ────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────
 function occupied(x, y) {
-  if (x === cat.x && y === cat.y) return true;
-  if (bigTreat && bigTreat.x === x && bigTreat.y === y) return true;
-  return treats.some(t => t.x === x && t.y === y);
+  if (x===cat.x && y===cat.y) return true;
+  if (bigTreat && bigTreat.x===x && bigTreat.y===y) return true;
+  if (fieldPowerUp && fieldPowerUp.x===x && fieldPowerUp.y===y) return true;
+  if (treats.some(t=>t.x===x&&t.y===y)) return true;
+  if (enemies.some(e=>e.x===x&&e.y===y)) return true;
+  return false;
 }
 function freeCell() {
-  let x, y, tries = 0;
-  do { x = Math.floor(Math.random()*COLS); y = Math.floor(Math.random()*ROWS); }
-  while (occupied(x,y) && ++tries < 300);
-  return { x, y };
+  let x, y, tries=0;
+  do { x=Math.floor(Math.random()*COLS); y=Math.floor(Math.random()*ROWS); }
+  while (occupied(x,y) && ++tries<400);
+  return {x,y};
 }
+function weightedRandom(arr) {
+  const tot = arr.reduce((s,i)=>s+i.weight,0);
+  let r = Math.random()*tot;
+  for (const item of arr) { r-=item.weight; if(r<=0) return item; }
+  return arr[arr.length-1];
+}
+
+// ── Spawning ─────────────────────────────────────────────
 function spawnTreats() {
-  while (treats.length < 28) {
+  while (treats.length < 22) {
     const {x,y} = freeCell();
-    treats.push({ x, y, wobble: Math.random()*Math.PI*2 });
+    treats.push({ x, y, wobble:Math.random()*Math.PI*2, ttype:weightedRandom(TREAT_TYPES) });
   }
 }
 function spawnBig() {
   const {x,y} = freeCell();
-  bigTreat = { x, y, pulse: 0, spin: 0 };
+  bigTreat = {x,y,pulse:0,spin:0};
+}
+function spawnEnemy() {
+  let typeIdx = 0;
+  if (score >= 600) typeIdx = Math.floor(Math.random()*3);
+  else if (score >= 250) typeIdx = Math.min(1, Math.floor(Math.random()*2));
+  const etype = ENEMY_TYPES[typeIdx];
+
+  // Spawn at edge, away from cat
+  let x, y;
+  const side = Math.floor(Math.random()*4);
+  if      (side===0) { x=0;      y=Math.floor(Math.random()*ROWS); }
+  else if (side===1) { x=COLS-1; y=Math.floor(Math.random()*ROWS); }
+  else if (side===2) { x=Math.floor(Math.random()*COLS); y=0; }
+  else               { x=Math.floor(Math.random()*COLS); y=ROWS-1; }
+
+  if (Math.abs(x-cat.x)+Math.abs(y-cat.y)<6) { x=(x+COLS/2)%COLS|0; y=(y+ROWS/2)%ROWS|0; }
+
+  enemies.push({ id:nextEnemyId++, x, y, etype, lastMove:0, wobble:0 });
+}
+function spawnFieldPowerUp() {
+  if (fieldPowerUp) return;
+  const {x,y} = freeCell();
+  const ptype = FIELD_POWERUP_TYPES[Math.floor(Math.random()*FIELD_POWERUP_TYPES.length)];
+  fieldPowerUp = {x,y,pulse:0,ptype};
+  playPowerSpawn();
+}
+function spawnButts() {
+  butts = [];
+  for (let i=0;i<8;i++) {
+    const a = Math.random()*Math.PI*2;
+    const sp = 2.5 + Math.random()*3;
+    butts.push({
+      x:Math.random()*W, y:Math.random()*H,
+      vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+      rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.18,
+      size:20+Math.random()*12
+    });
+  }
 }
 
 spawnTreats();
+spawnEnemy();
 
-// ── Drawing Helpers ──────────────────────────────
+// ── Background Drawing ───────────────────────────────────
 function drawBg() {
-  ctx.fillStyle = '#08010f';
-  ctx.fillRect(0, 0, W, H);
+  const isCannabis = activePowerUp && activePowerUp.type==='cannabis';
 
-  // subtle vignette
+  if (isCannabis) {
+    cannabisHue    = (cannabisHue + 2.5) % 360;
+    cannabisWobble += 0.055;
+    ctx.fillStyle = `hsl(${cannabisHue},55%,6%)`;
+    ctx.fillRect(0,0,W,H);
+
+    // rainbow wave overlays
+    for (let i=0;i<5;i++) {
+      const hue = (cannabisHue + i*72) % 360;
+      const grad = ctx.createLinearGradient(
+        W/2 + Math.cos(cannabisWobble+i)*W*0.6, 0,
+        W/2 - Math.cos(cannabisWobble+i)*W*0.6, H
+      );
+      grad.addColorStop(0, `hsla(${hue},100%,60%,0.05)`);
+      grad.addColorStop(0.5, `hsla(${(hue+120)%360},100%,60%,0.07)`);
+      grad.addColorStop(1, `hsla(${(hue+240)%360},100%,60%,0.05)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0,0,W,H);
+    }
+
+    // spinning spiral
+    ctx.save();
+    ctx.translate(W/2, H/2);
+    for (let i=0;i<10;i++) {
+      const a = (i/10)*Math.PI*2 + cannabisWobble*0.7;
+      const r = 80 + 60*Math.sin(cannabisWobble*1.5+i*0.7);
+      ctx.strokeStyle = `hsla(${(cannabisHue+i*36)%360},100%,70%,0.12)`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); ctx.stroke();
+    }
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#08010f';
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // vignette
   const vig = ctx.createRadialGradient(W/2,H/2,H*0.25,W/2,H/2,H*0.75);
-  vig.addColorStop(0, 'rgba(0,0,0,0)');
-  vig.addColorStop(1, 'rgba(0,0,0,0.55)');
-  ctx.fillStyle = vig;
-  ctx.fillRect(0,0,W,H);
+  vig.addColorStop(0,'rgba(0,0,0,0)');
+  vig.addColorStop(1,'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vig; ctx.fillRect(0,0,W,H);
 
-  // twinkling stars
+  // stars
   const t = Date.now()/1000;
   stars.forEach(s => {
-    const b = 0.35 + 0.65 * Math.abs(Math.sin(s.phase + t * (0.4 + s.r*0.3)));
-    ctx.fillStyle = `rgba(220,190,255,${b})`;
-    ctx.beginPath();
-    ctx.arc(s.x*W, s.y*H, s.r, 0, Math.PI*2);
-    ctx.fill();
+    const b = 0.35+0.65*Math.abs(Math.sin(s.phase+t*(0.4+s.r*0.3)));
+    ctx.fillStyle = isCannabis
+      ? `hsla(${(cannabisHue+s.phase*60)%360},100%,85%,${b})`
+      : `rgba(220,190,255,${b})`;
+    ctx.beginPath(); ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2); ctx.fill();
   });
 
-  // faint grid
-  ctx.strokeStyle = 'rgba(70,20,110,0.28)';
+  // grid (wobbly in cannabis mode)
   ctx.lineWidth = 0.6;
-  for (let i=0;i<=COLS;i++){ ctx.beginPath(); ctx.moveTo(i*CELL,0); ctx.lineTo(i*CELL,H); ctx.stroke(); }
-  for (let j=0;j<=ROWS;j++){ ctx.beginPath(); ctx.moveTo(0,j*CELL); ctx.lineTo(W,j*CELL); ctx.stroke(); }
+  ctx.strokeStyle = isCannabis ? `hsla(${cannabisHue},80%,45%,0.3)` : 'rgba(70,20,110,0.28)';
+  for (let i=0;i<=COLS;i++) {
+    const off = isCannabis ? Math.sin(cannabisWobble*3+i*0.6)*4 : 0;
+    ctx.beginPath(); ctx.moveTo(i*CELL,off); ctx.lineTo(i*CELL,H+off); ctx.stroke();
+  }
+  for (let j=0;j<=ROWS;j++) {
+    const off = isCannabis ? Math.cos(cannabisWobble*2.2+j*0.5)*4 : 0;
+    ctx.beginPath(); ctx.moveTo(off,j*CELL); ctx.lineTo(W+off,j*CELL); ctx.stroke();
+  }
+
+  // hurt flash
+  if (hurtFlash > 0) {
+    ctx.fillStyle = `rgba(255,0,0,${(hurtFlash/30)*0.45})`;
+    ctx.fillRect(0,0,W,H);
+    hurtFlash--;
+  }
 }
 
-// small fish treat
+// ── Treat Drawing ────────────────────────────────────────
 function drawTreat(t) {
   t.wobble += 0.045;
-  const cx = t.x*CELL + CELL/2;
-  const cy = t.y*CELL + CELL/2 + Math.sin(t.wobble)*1.8;
-  const r  = CELL * 0.21;
+  const cx = t.x*CELL+CELL/2;
+  const cy = t.y*CELL+CELL/2 + Math.sin(t.wobble)*1.8;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.shadowColor = '#ff9944'; ctx.shadowBlur = 7;
-  // body
-  ctx.fillStyle = '#ffbb44';
-  ctx.beginPath(); ctx.ellipse(0,0,r*1.35,r*0.78,0,0,Math.PI*2); ctx.fill();
-  // tail
-  ctx.beginPath();
-  ctx.moveTo(r*1.2,0); ctx.lineTo(r*2.1,-r*0.72); ctx.lineTo(r*2.1,r*0.72);
-  ctx.closePath(); ctx.fill();
-  // fin on top
-  ctx.fillStyle = '#ffcc66';
-  ctx.beginPath();
-  ctx.moveTo(-r*0.2,-r*0.72); ctx.lineTo(-r*0.5,-r*1.3); ctx.lineTo(r*0.3,-r*0.72);
-  ctx.closePath(); ctx.fill();
-  // eye
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#1a0828';
-  ctx.beginPath(); ctx.arc(-r*0.52,-r*0.08,r*0.2,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle = 'white';
-  ctx.beginPath(); ctx.arc(-r*0.58,-r*0.15,r*0.07,0,Math.PI*2); ctx.fill();
+
+  if (t.ttype.type === 'fish') {
+    const r = CELL*0.21;
+    ctx.shadowColor='#ff9944'; ctx.shadowBlur=7;
+    ctx.fillStyle='#ffbb44';
+    ctx.beginPath(); ctx.ellipse(0,0,r*1.35,r*0.78,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(r*1.2,0); ctx.lineTo(r*2.1,-r*0.72); ctx.lineTo(r*2.1,r*0.72); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#ffcc66';
+    ctx.beginPath(); ctx.moveTo(-r*0.2,-r*0.72); ctx.lineTo(-r*0.5,-r*1.3); ctx.lineTo(r*0.3,-r*0.72); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur=0; ctx.fillStyle='#1a0828';
+    ctx.beginPath(); ctx.arc(-r*0.52,-r*0.08,r*0.2,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='white';
+    ctx.beginPath(); ctx.arc(-r*0.58,-r*0.15,r*0.07,0,Math.PI*2); ctx.fill();
+  } else {
+    // Emoji treats
+    const fSize = t.ttype.type==='cake' ? CELL*0.65 : CELL*0.55;
+    if (t.ttype.type==='cake') { ctx.shadowColor='#ff88cc'; ctx.shadowBlur=10; }
+    ctx.font = `${fSize}px Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(t.ttype.emoji, 0, 0);
+  }
   ctx.restore();
 }
 
-// big golden treat
+// ── Big Golden Treat ─────────────────────────────────────
 function drawBigTreat(b) {
-  b.pulse += 0.055;
-  b.spin  += 0.025;
-  const sc = 1 + 0.13*Math.sin(b.pulse);
-  const cx = b.x*CELL + CELL/2;
-  const cy = b.y*CELL + CELL/2;
+  b.pulse += 0.055; b.spin += 0.025;
+  const sc = 1+0.13*Math.sin(b.pulse);
+  const cx = b.x*CELL+CELL/2, cy = b.y*CELL+CELL/2;
   const r  = CELL*0.40*sc;
-  ctx.save();
-  ctx.translate(cx, cy);
-
-  // outer halo
+  ctx.save(); ctx.translate(cx,cy);
   const halo = ctx.createRadialGradient(0,0,0,0,0,r*3);
   halo.addColorStop(0,'rgba(255,215,0,0.38)');
   halo.addColorStop(0.5,'rgba(255,180,0,0.12)');
   halo.addColorStop(1,'rgba(255,150,0,0)');
-  ctx.fillStyle = halo;
-  ctx.beginPath(); ctx.arc(0,0,r*3,0,Math.PI*2); ctx.fill();
-
-  // rotating sparkle ring
+  ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(0,0,r*3,0,Math.PI*2); ctx.fill();
   ctx.rotate(b.spin);
   for(let i=0;i<6;i++){
-    const a = (i/6)*Math.PI*2;
-    ctx.fillStyle = 'rgba(255,240,80,0.9)';
-    ctx.font = `${r*0.5}px Arial`;
-    const ex = Math.cos(a)*r*2.1, ey = Math.sin(a)*r*2.1;
-    ctx.fillText('✦', ex - r*0.15, ey + r*0.15);
+    const a=(i/6)*Math.PI*2;
+    ctx.fillStyle='rgba(255,240,80,0.9)'; ctx.font=`${r*0.5}px Arial`;
+    ctx.fillText('✦',Math.cos(a)*r*2.1-r*0.15,Math.sin(a)*r*2.1+r*0.15);
   }
   ctx.rotate(-b.spin);
-
-  // main fish (golden, big)
-  ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 20;
-  ctx.fillStyle = '#ffd700';
+  ctx.shadowColor='#ffd700'; ctx.shadowBlur=20; ctx.fillStyle='#ffd700';
   ctx.beginPath(); ctx.ellipse(0,0,r*1.45,r*0.88,0,0,Math.PI*2); ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(r*1.3,0); ctx.lineTo(r*2.25,-r*0.85); ctx.lineTo(r*2.25,r*0.85);
-  ctx.closePath(); ctx.fill();
-  // dorsal fin
-  ctx.fillStyle = '#ffe040';
-  ctx.beginPath();
-  ctx.moveTo(-r*0.15,-r*0.85); ctx.lineTo(-r*0.55,-r*1.5); ctx.lineTo(r*0.35,-r*0.85);
-  ctx.closePath(); ctx.fill();
-  // shine
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = 'rgba(255,255,255,0.38)';
+  ctx.beginPath(); ctx.moveTo(r*1.3,0); ctx.lineTo(r*2.25,-r*0.85); ctx.lineTo(r*2.25,r*0.85); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#ffe040';
+  ctx.beginPath(); ctx.moveTo(-r*0.15,-r*0.85); ctx.lineTo(-r*0.55,-r*1.5); ctx.lineTo(r*0.35,-r*0.85); ctx.closePath(); ctx.fill();
+  ctx.shadowBlur=0; ctx.fillStyle='rgba(255,255,255,0.38)';
   ctx.beginPath(); ctx.ellipse(-r*0.18,-r*0.22,r*0.52,r*0.25,-0.4,0,Math.PI*2); ctx.fill();
-  // eye
-  ctx.fillStyle = '#1a0828';
-  ctx.beginPath(); ctx.arc(-r*0.55,-r*0.1,r*0.22,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='white';
-  ctx.beginPath(); ctx.arc(-r*0.63,-r*0.18,r*0.09,0,Math.PI*2); ctx.fill();
-
+  ctx.fillStyle='#1a0828'; ctx.beginPath(); ctx.arc(-r*0.55,-r*0.1,r*0.22,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='white'; ctx.beginPath(); ctx.arc(-r*0.63,-r*0.18,r*0.09,0,Math.PI*2); ctx.fill();
   ctx.restore();
 }
 
-// anime cat  ♡
-function drawCat() {
-  // trail
-  trail.forEach((p,i) => {
-    const frac = (i+1)/trail.length;
+// ── Field Power-Up Drawing ───────────────────────────────
+function drawFieldPowerUp(p) {
+  p.pulse += 0.07;
+  const sc = 1+0.18*Math.sin(p.pulse);
+  const cx = p.x*CELL+CELL/2, cy = p.y*CELL+CELL/2;
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(sc,sc);
+  const glow = ctx.createRadialGradient(0,0,0,0,0,CELL*0.9);
+  glow.addColorStop(0, p.ptype.type==='cannabis' ? 'rgba(0,255,60,0.45)' : 'rgba(255,200,0,0.45)');
+  glow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(0,0,CELL*0.9,0,Math.PI*2); ctx.fill();
+  ctx.font=`${CELL*0.68}px Arial`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor=p.ptype.color; ctx.shadowBlur=18;
+  ctx.fillText(p.ptype.emoji,0,0);
+  ctx.restore();
+}
+
+// ── Enemy Drawing ────────────────────────────────────────
+function drawEnemy(e) {
+  e.wobble = (e.wobble||0) + 0.09;
+  const cx = e.x*CELL+CELL/2;
+  const cy = e.y*CELL+CELL/2 + Math.sin(e.wobble)*1.5;
+  ctx.save(); ctx.translate(cx,cy);
+  const glow = ctx.createRadialGradient(0,0,0,0,0,CELL*0.85);
+  glow.addColorStop(0,'rgba(255,40,40,0.28)');
+  glow.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(0,0,CELL*0.85,0,Math.PI*2); ctx.fill();
+  ctx.font=`${CELL*0.62}px Arial`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor='#ff4444'; ctx.shadowBlur=10;
+  ctx.fillText(e.etype.emoji,0,0);
+  ctx.restore();
+}
+
+// ── Butt Drawing ─────────────────────────────────────────
+function drawButts() {
+  butts.forEach(b => {
     ctx.save();
-    ctx.globalAlpha = frac * 0.22;
-    ctx.fillStyle = '#c77dff';
-    ctx.shadowColor = '#ff69b4'; ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.arc(p.x*CELL+CELL/2, p.y*CELL+CELL/2, CELL*0.12*frac, 0, Math.PI*2);
-    ctx.fill();
+    ctx.translate(b.x, b.y); ctx.rotate(b.rot);
+    ctx.font=`${b.size}px Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.shadowColor='#ff88ff'; ctx.shadowBlur=9;
+    ctx.fillText('🍑',0,0);
     ctx.restore();
   });
+}
 
-  const cx = cat.x*CELL + CELL/2;
-  const cy = cat.y*CELL + CELL/2;
-  const eatS = 1 + 0.12 * Math.sin(cat.eatAnim * 0.4);
-  const r  = CELL * 0.43 * (cat.eatAnim > 0 ? eatS : 1);
-  if (cat.eatAnim > 0) cat.eatAnim--;
+// ── Cat Drawing ──────────────────────────────────────────
+function drawCat() {
+  trail.forEach((p,i) => {
+    const frac=(i+1)/trail.length;
+    ctx.save(); ctx.globalAlpha=frac*0.22;
+    ctx.fillStyle = activePowerUp?.type==='cannabis'
+      ? `hsl(${cannabisHue},100%,70%)` : '#c77dff';
+    ctx.shadowColor='#ff69b4'; ctx.shadowBlur=6;
+    ctx.beginPath();
+    ctx.arc(p.x*CELL+CELL/2, p.y*CELL+CELL/2, CELL*0.12*frac, 0, Math.PI*2);
+    ctx.fill(); ctx.restore();
+  });
 
-  const isHappy = cat.happy > 0;
+  if (invincible>0 && Math.floor(invincible/4)%2===0) return; // blink
+
+  const cx = cat.x*CELL+CELL/2, cy = cat.y*CELL+CELL/2;
+  const isCannabis = activePowerUp?.type==='cannabis';
+  const isPaddle   = activePowerUp?.type==='paddle';
+  const wx = isCannabis ? Math.sin(cannabisWobble*3)*3.5 : 0;
+  const wy = isCannabis ? Math.cos(cannabisWobble*2.2)*3.5 : 0;
+  const eatS = 1+0.12*Math.sin(cat.eatAnim*0.4);
+  const r = CELL*0.43*(cat.eatAnim>0?eatS:1);
+  if (cat.eatAnim>0) cat.eatAnim--;
+  const isHappy = cat.happy>0;
   if (isHappy) cat.happy--;
 
-  ctx.save();
-  ctx.translate(cx, cy);
+  ctx.save(); ctx.translate(cx+wx, cy+wy);
+
+  // Paddle weapon
+  if (isPaddle) {
+    ctx.save();
+    ctx.fillStyle='#8B4513';
+    ctx.fillRect(r*0.85,-r*0.15,r*1.1,r*0.3);
+    ctx.fillStyle='#ff4488'; ctx.shadowColor='#ff88ff'; ctx.shadowBlur=10;
+    ctx.beginPath(); ctx.ellipse(r*2.15,0,r*0.65,r*0.82,0,0,Math.PI*2); ctx.fill();
+    // paddle stripes
+    ctx.strokeStyle='rgba(255,255,255,0.4)'; ctx.lineWidth=2; ctx.shadowBlur=0;
+    ctx.beginPath(); ctx.moveTo(r*1.7,-r*0.5); ctx.lineTo(r*1.7,r*0.5); ctx.stroke();
+    ctx.restore();
+  }
 
   // glow
-  ctx.shadowColor = '#ff9de2'; ctx.shadowBlur = 14;
+  ctx.shadowColor = isCannabis ? `hsl(${cannabisHue},100%,70%)` : '#ff9de2';
+  ctx.shadowBlur  = isCannabis ? 22 : 14;
 
   // body
-  ctx.fillStyle = '#fff3fb';
-  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur = 0;
+  ctx.fillStyle = isCannabis ? `hsl(${(cannabisHue+180)%360},35%,95%)` : '#fff3fb';
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+  ctx.shadowBlur=0;
 
-  // ears (always upward)
-  const eTipX = r*0.78, eTipY = -(r*1.28);
-  ctx.fillStyle = '#fff3fb';
-  // left
+  // ears
+  const eTipX=r*0.78, eTipY=-(r*1.28);
+  ctx.fillStyle = isCannabis ? `hsl(${(cannabisHue+180)%360},35%,95%)` : '#fff3fb';
   ctx.beginPath(); ctx.moveTo(-r*0.22,-r*0.82); ctx.lineTo(-eTipX,eTipY); ctx.lineTo(-r*0.06,-r*0.9); ctx.closePath(); ctx.fill();
-  // right
-  ctx.beginPath(); ctx.moveTo(r*0.22,-r*0.82); ctx.lineTo(eTipX,eTipY); ctx.lineTo(r*0.06,-r*0.9); ctx.closePath(); ctx.fill();
-  // inner ears (pink)
-  ctx.fillStyle = '#ffb3cc';
+  ctx.beginPath(); ctx.moveTo( r*0.22,-r*0.82); ctx.lineTo( eTipX,eTipY); ctx.lineTo( r*0.06,-r*0.9); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#ffb3cc';
   ctx.beginPath(); ctx.moveTo(-r*0.21,-r*0.84); ctx.lineTo(-r*0.66,eTipY*0.85); ctx.lineTo(-r*0.1,-r*0.9); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(r*0.21,-r*0.84); ctx.lineTo(r*0.66,eTipY*0.85); ctx.lineTo(r*0.1,-r*0.9); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo( r*0.21,-r*0.84); ctx.lineTo( r*0.66,eTipY*0.85); ctx.lineTo( r*0.1,-r*0.9); ctx.closePath(); ctx.fill();
 
-  // ── eyes ──
-  if (isHappy) {
-    // ^w^ arcs
-    ctx.strokeStyle = '#2d0050'; ctx.lineWidth = r*0.13; ctx.lineCap = 'round';
+  // eyes
+  if (isCannabis) {
+    // X X eyes (dizzy)
+    ctx.strokeStyle='#2d0050'; ctx.lineWidth=r*0.1; ctx.lineCap='round';
+    [[-r*0.48,-r*0.24,-r*0.14,-r*0.0],[-r*0.14,-r*0.24,-r*0.48,-r*0.0],
+     [ r*0.14,-r*0.24, r*0.48,-r*0.0],[ r*0.48,-r*0.24, r*0.14,-r*0.0]].forEach(([x1,y1,x2,y2])=>{
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    });
+    // spinning star pupils
+    ctx.font=`${r*0.28}px Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('⭐',-r*0.31,-r*0.12);
+    ctx.fillText('⭐', r*0.31,-r*0.12);
+  } else if (isHappy) {
+    ctx.strokeStyle='#2d0050'; ctx.lineWidth=r*0.13; ctx.lineCap='round';
     ctx.beginPath(); ctx.arc(-r*0.3,-r*0.1,r*0.22,Math.PI,0); ctx.stroke();
     ctx.beginPath(); ctx.arc( r*0.3,-r*0.1,r*0.22,Math.PI,0); ctx.stroke();
-    // little sparkles beside happy eyes
-    ctx.fillStyle = '#ffe0f7'; ctx.font = `${r*0.35}px Arial`;
-    ctx.fillText('✦', -r*0.65,-r*0.38);
-    ctx.fillText('✦',  r*0.42,-r*0.38);
+    ctx.fillStyle='#ffe0f7'; ctx.font=`${r*0.35}px Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('✦',-r*0.65,-r*0.38); ctx.fillText('✦', r*0.42,-r*0.38);
   } else {
-    // big anime eyes
-    ctx.fillStyle = '#1e0040';
+    ctx.fillStyle='#1e0040';
     ctx.beginPath(); ctx.ellipse(-r*0.3,-r*0.1,r*0.21,r*0.27,0,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.ellipse( r*0.3,-r*0.1,r*0.21,r*0.27,0,0,Math.PI*2); ctx.fill();
-    // pupil highlight (big)
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fillStyle='rgba(255,255,255,0.95)';
     ctx.beginPath(); ctx.arc(-r*0.37,-r*0.21,r*0.08,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc( r*0.23,-r*0.21,r*0.08,0,Math.PI*2); ctx.fill();
-    // pupil highlight (small)
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillStyle='rgba(255,255,255,0.5)';
     ctx.beginPath(); ctx.arc(-r*0.26,-r*0.03,r*0.04,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc( r*0.34,-r*0.03,r*0.04,0,Math.PI*2); ctx.fill();
   }
 
-  // nose (tiny pink triangle)
-  ctx.fillStyle = '#ff9de2';
+  // nose
+  ctx.fillStyle='#ff9de2';
   ctx.beginPath(); ctx.moveTo(0,r*0.12); ctx.lineTo(-r*0.09,r*0.22); ctx.lineTo(r*0.09,r*0.22); ctx.closePath(); ctx.fill();
 
-  // mouth (cute w-shape / smile)
-  ctx.strokeStyle = '#cc5588'; ctx.lineWidth = r*0.065; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const mDip = isHappy ? r*0.46 : r*0.38;
-  ctx.beginPath();
-  ctx.moveTo(-r*0.24, r*0.3);
-  ctx.quadraticCurveTo(-r*0.08, mDip, 0, r*0.3);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(0, r*0.3);
-  ctx.quadraticCurveTo(r*0.08, mDip, r*0.24, r*0.3);
-  ctx.stroke();
+  // mouth
+  ctx.strokeStyle='#cc5588'; ctx.lineWidth=r*0.065; ctx.lineCap='round'; ctx.lineJoin='round';
+  const mDip = (isHappy||isCannabis) ? r*0.46 : r*0.38;
+  ctx.beginPath(); ctx.moveTo(-r*0.24,r*0.3); ctx.quadraticCurveTo(-r*0.08,mDip,0,r*0.3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,r*0.3); ctx.quadraticCurveTo(r*0.08,mDip,r*0.24,r*0.3); ctx.stroke();
 
   // whiskers
-  ctx.strokeStyle = 'rgba(180,130,200,0.65)'; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+  ctx.strokeStyle='rgba(180,130,200,0.65)'; ctx.lineWidth=1.2; ctx.lineCap='round';
   [[-r*0.14,r*0.08,-r*0.88,-r*0.02],[-r*0.14,r*0.19,-r*0.88,r*0.26],
    [ r*0.14,r*0.08, r*0.88,-r*0.02],[ r*0.14,r*0.19, r*0.88,r*0.26]].forEach(([sx,sy,ex,ey])=>{
     ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
   });
 
   // blush
-  ctx.fillStyle = 'rgba(255,120,160,0.28)';
+  ctx.fillStyle='rgba(255,120,160,0.28)';
   ctx.beginPath(); ctx.ellipse(-r*0.52,r*0.07,r*0.22,r*0.12,0,0,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.ellipse( r*0.52,r*0.07,r*0.22,r*0.12,0,0,Math.PI*2); ctx.fill();
 
   ctx.restore();
 }
 
-// ── Particles ────────────────────────────────────
+// ── Particles ────────────────────────────────────────────
 function addParticles(gx, gy, big) {
-  const cx = gx*CELL+CELL/2, cy = gy*CELL+CELL/2;
+  const cx=gx*CELL+CELL/2, cy=gy*CELL+CELL/2;
   const chars  = big ? ['✨','⭐','💖','🌟','♡','★','✦'] : ['✦','♡','·','~','✿'];
   const colors = big ? ['#ffd700','#ff9de2','#fff','#c77dff'] : ['#ff9de2','#d4aaff','#fff0f8'];
   const count  = big ? 14 : 5;
   for (let i=0;i<count;i++) {
-    const a = Math.random()*Math.PI*2;
-    const sp = (Math.random()*3+1.5)*(big?2.2:1);
+    const a=Math.random()*Math.PI*2, sp=(Math.random()*3+1.5)*(big?2.2:1);
     particles.push({
-      x:cx, y:cy, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-(big?2.5:1),
-      char: chars[Math.floor(Math.random()*chars.length)],
-      color: colors[Math.floor(Math.random()*colors.length)],
-      size: big ? (Math.random()*18+14) : (Math.random()*10+8),
-      life: big?60:38, max:big?60:38, g:0.14
+      x:cx,y:cy, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-(big?2.5:1),
+      char:chars[Math.floor(Math.random()*chars.length)],
+      color:colors[Math.floor(Math.random()*colors.length)],
+      size:big?(Math.random()*18+14):(Math.random()*10+8),
+      life:big?60:38, max:big?60:38, g:0.14
+    });
+  }
+}
+function addButtParticles(x, y) {
+  const chars=['💨','✨','⭐','🌸','💥'];
+  for (let i=0;i<6;i++) {
+    const a=Math.random()*Math.PI*2;
+    particles.push({
+      x,y, vx:Math.cos(a)*3.5, vy:Math.sin(a)*3.5,
+      char:chars[Math.floor(Math.random()*chars.length)],
+      color:'#ff88ff',
+      size:Math.random()*14+9,
+      life:45, max:45, g:0.1
     });
   }
 }
 function tickParticles() {
-  particles = particles.filter(p=>p.life>0);
+  particles=particles.filter(p=>p.life>0);
   particles.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=p.g; p.life--; });
 }
 function drawParticles() {
   particles.forEach(p=>{
-    ctx.save();
-    ctx.globalAlpha = Math.pow(p.life/p.max, 0.7);
-    ctx.font = `${p.size}px Arial`;
-    ctx.fillStyle = p.color;
+    ctx.save(); ctx.globalAlpha=Math.pow(p.life/p.max,0.7);
+    ctx.font=`${p.size}px Arial`; ctx.fillStyle=p.color;
     ctx.fillText(p.char, p.x-p.size*0.4, p.y+p.size*0.35);
     ctx.restore();
   });
 }
 
-// ── UwU Popup ────────────────────────────────────
+// ── UwU Popup ────────────────────────────────────────────
 const uwuEl = document.getElementById('uwu-popup');
-function showUwu() {
+let _uwuTimeout = null;
+function showPopup(text) {
+  uwuEl.textContent = text;
   uwuEl.classList.remove('pop');
   void uwuEl.offsetWidth;
   uwuEl.classList.add('pop');
-  setTimeout(()=>uwuEl.classList.remove('pop'), 1700);
+  clearTimeout(_uwuTimeout);
+  _uwuTimeout = setTimeout(()=>{ uwuEl.classList.remove('pop'); uwuEl.textContent='UwU~ ♡'; }, 1700);
 }
 
-// ── Score ─────────────────────────────────────────
+// ── HUD ──────────────────────────────────────────────────
 function updateHUD() {
   document.getElementById('sc').textContent = score;
   document.getElementById('lc').textContent = collected;
+  document.getElementById('hs').textContent = highscore;
+  document.getElementById('lives-display').textContent = '❤️'.repeat(Math.max(0,lives)) + '🖤'.repeat(Math.max(0,3-lives));
+  const puEl = document.getElementById('powerup-display');
+  if (activePowerUp) {
+    const secs = Math.ceil(activePowerUp.frames/60);
+    puEl.textContent = `${activePowerUp.type==='cannabis'?'🌿':'🏓'} ${secs}s`;
+    puEl.style.opacity='1';
+    puEl.style.color = activePowerUp.type==='cannabis' ? '#44ff88' : '#ffcc44';
+  } else {
+    puEl.textContent=''; puEl.style.opacity='0';
+  }
 }
 
-// ── Movement ─────────────────────────────────────
+// ── Power-Up Activation ──────────────────────────────────
+function activatePowerUp(type) {
+  activePowerUp = { type, frames: 600 }; // 10 seconds
+  if (type==='cannabis') {
+    playCannabis();
+    showPopup('🌿 Woooah...');
+    cat.happy=0; // force dizzy eyes
+  } else if (type==='paddle') {
+    playPaddle();
+    spawnButts();
+    showPopup('🏓 Versohlen!');
+    cat.happy=120;
+  }
+  updateHUD();
+}
+
+// ── Step Logic ───────────────────────────────────────────
 function step() {
   cat.dir = cat.next;
-  const moves = { right:[1,0], left:[-1,0], down:[0,1], up:[0,-1] };
-  const [dx,dy] = moves[cat.dir];
-  const nx = (cat.x+dx+COLS)%COLS;
-  const ny = (cat.y+dy+ROWS)%ROWS;
+  const moves={right:[1,0],left:[-1,0],down:[0,1],up:[0,-1]};
+  const [dx,dy]=moves[cat.dir];
+  const nx=(cat.x+dx+COLS)%COLS, ny=(cat.y+dy+ROWS)%ROWS;
 
-  // trail
-  trail.unshift({x:cat.x, y:cat.y});
+  trail.unshift({x:cat.x,y:cat.y});
   if(trail.length>6) trail.pop();
-
   cat.x=nx; cat.y=ny;
+  stepCount++;
 
-  // small treat?
-  const ti = treats.findIndex(t=>t.x===cat.x && t.y===cat.y);
-  if(ti!==-1){
-    treats.splice(ti,1);
-    score+=10; collected++;
+  // Treat collision
+  const ti=treats.findIndex(t=>t.x===cat.x&&t.y===cat.y);
+  if (ti!==-1) {
+    const t=treats[ti]; treats.splice(ti,1);
+    const pts=t.ttype.points;
+    score+=pts; collected++;
     cat.happy=22; cat.eatAnim=18;
-    addParticles(cat.x,cat.y,false);
-    playCollect();
-    updateHUD();
-    if(collected%BIG_EVERY===0 && !bigTreat) spawnBig();
+    addParticles(cat.x,cat.y, pts>=35);
+    playCollect(); updateHUD();
+    if(pts>=20) showPopup(`+${pts} ${t.ttype.emoji}`);
+    if(collected%BIG_EVERY===0&&!bigTreat) spawnBig();
     if(treats.length<18) spawnTreats();
   }
 
-  // big treat?
-  if(bigTreat && bigTreat.x===cat.x && bigTreat.y===cat.y){
-    score+=50;
-    cat.happy=70; cat.eatAnim=35;
+  // Big treat
+  if (bigTreat&&bigTreat.x===cat.x&&bigTreat.y===cat.y) {
+    score+=50; cat.happy=70; cat.eatAnim=35;
     addParticles(cat.x,cat.y,true);
-    playUwu(); showUwu();
-    bigTreat=null;
+    playUwu(); showPopup('UwU~ ♡');
+    bigTreat=null; updateHUD();
+  }
+
+  // Field power-up
+  if (fieldPowerUp&&fieldPowerUp.x===cat.x&&fieldPowerUp.y===cat.y) {
+    const ptype=fieldPowerUp.ptype.type;
+    fieldPowerUp=null;
+    activatePowerUp(ptype);
+  }
+
+  // Spawn field power-up periodically
+  if (stepCount>0 && stepCount%55===0 && !fieldPowerUp && !activePowerUp) {
+    spawnFieldPowerUp();
+  }
+
+  // Spawn more enemies as score grows
+  const maxE = Math.min(5, 1+Math.floor(score/200));
+  if (enemies.length<maxE && stepCount%90===0) spawnEnemy();
+
+  // Highscore
+  if (score>highscore) { highscore=score; localStorage.setItem('kitti_hs',highscore); updateHUD(); }
+
+  checkEnemyCollision();
+}
+
+// ── Enemy Movement ───────────────────────────────────────
+function moveEnemies(ts) {
+  if (gameState!=='playing') return;
+  enemies.forEach(e=>{
+    const slowFactor = (activePowerUp?.type==='cannabis') ? 2.2 : 1;
+    const interval = e.etype.speedMs * slowFactor;
+    if (!e.lastMove) e.lastMove=ts;
+    if (ts-e.lastMove<interval) return;
+    e.lastMove=ts;
+
+    // Move toward cat (wrapping-aware)
+    const dx=cat.x-e.x, dy=cat.y-e.y;
+    const wdx=Math.abs(dx)<=COLS/2?Math.sign(dx):-Math.sign(dx);
+    const wdy=Math.abs(dy)<=ROWS/2?Math.sign(dy):-Math.sign(dy);
+
+    const tries=Math.abs(dx)>=Math.abs(dy)
+      ?[[wdx,0],[0,wdy],[-wdx,0],[0,-wdy]]
+      :[[0,wdy],[wdx,0],[0,-wdy],[-wdx,0]];
+
+    for (const [mx,my] of tries) {
+      if(mx===0&&my===0) continue;
+      const nx=(e.x+mx+COLS)%COLS, ny=(e.y+my+ROWS)%ROWS;
+      if(!enemies.some(o=>o!==e&&o.x===nx&&o.y===ny)) {
+        e.x=nx; e.y=ny; break;
+      }
+    }
+  });
+  checkEnemyCollision();
+}
+
+function checkEnemyCollision() {
+  if (invincible>0||gameState!=='playing') return;
+  if (!enemies.some(e=>e.x===cat.x&&e.y===cat.y)) return;
+  lives--;
+  invincible=110; hurtFlash=30;
+  playHurt();
+  cat.happy=0; updateHUD();
+  if (lives<=0) triggerGameOver();
+}
+
+// ── Butt Tick ────────────────────────────────────────────
+function tickButts() {
+  if (!activePowerUp||activePowerUp.type!=='paddle') return;
+  const catPx=cat.x*CELL+CELL/2, catPy=cat.y*CELL+CELL/2;
+  const cr=CELL*1.15;
+  butts=butts.filter(b=>{
+    b.x+=b.vx; b.y+=b.vy; b.rot+=b.rotV;
+    if(b.x<0||b.x>W){b.vx*=-1;b.x=Math.max(0,Math.min(W,b.x));}
+    if(b.y<0||b.y>H){b.vy*=-1;b.y=Math.max(0,Math.min(H,b.y));}
+    const dist=Math.hypot(b.x-catPx,b.y-catPy);
+    if(dist<cr){
+      score+=25; cat.happy=18; cat.eatAnim=12;
+      addButtParticles(b.x,b.y);
+      playSpank(); updateHUD();
+      return false;
+    }
+    return true;
+  });
+}
+
+// ── Power-Up Tick ─────────────────────────────────────────
+function tickPowerUp() {
+  if (invincible>0) invincible--;
+  if (!activePowerUp) return;
+  activePowerUp.frames--;
+  if (activePowerUp.frames%60===0) updateHUD(); // update countdown display
+  if (activePowerUp.frames<=0) {
+    if (activePowerUp.type==='cannabis') { cannabisHue=0; cannabisWobble=0; }
+    else if (activePowerUp.type==='paddle') { butts=[]; }
+    activePowerUp=null;
     updateHUD();
   }
 }
 
-// ── Direction ────────────────────────────────────
+// ── Game Over ────────────────────────────────────────────
+function triggerGameOver() {
+  gameState='gameover';
+  if(score>highscore){ highscore=score; localStorage.setItem('kitti_hs',highscore); }
+  playGameOver();
+  document.getElementById('go-score').textContent=score;
+  document.getElementById('go-hs').textContent=highscore;
+  document.getElementById('go-newhs').style.display = score>=highscore&&score>0 ? 'block' : 'none';
+  document.getElementById('gameover-overlay').style.display='flex';
+}
+
+function restartGame() {
+  document.getElementById('gameover-overlay').style.display='none';
+  score=0; collected=0; lives=3;
+  invincible=0; hurtFlash=0; stepCount=0;
+  gameState='playing';
+  activePowerUp=null; fieldPowerUp=null;
+  enemies=[]; butts=[]; particles=[]; trail=[];
+  cannabisHue=0; cannabisWobble=0;
+  cat={x:Math.floor(COLS/2),y:Math.floor(ROWS/2),dir:'right',next:'right',happy:0,eatAnim:0};
+  treats=[]; bigTreat=null;
+  spawnTreats(); spawnEnemy();
+  updateHUD();
+}
+document.getElementById('go-restart').addEventListener('click', restartGame);
+
+// ── Direction ────────────────────────────────────────────
 function setDir(d) {
   initAud();
-  const opp = {right:'left',left:'right',up:'down',down:'up'};
+  if(gameState!=='playing') return;
+  const opp={right:'left',left:'right',up:'down',down:'up'};
   if(d!==opp[cat.dir]) cat.next=d;
 }
 
-// ── Controls ──────────────────────────────────────
+// ── Controls ─────────────────────────────────────────────
 [['btn-up','up'],['btn-down','down'],['btn-left','left'],['btn-right','right']].forEach(([id,dir])=>{
   const el=document.getElementById(id);
   el.addEventListener('touchstart',e=>{e.preventDefault();setDir(dir);},{passive:false});
@@ -566,34 +916,45 @@ document.addEventListener('keydown',e=>{
   const m={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'};
   if(m[e.key]){e.preventDefault();setDir(m[e.key]);}
 });
-
-// swipe on canvas
 let sx=0,sy=0;
 canvas.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;e.preventDefault();},{passive:false});
 canvas.addEventListener('touchend',e=>{
   const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy;
   if(Math.abs(dx)<8&&Math.abs(dy)<8) return;
-  Math.abs(dx)>Math.abs(dy) ? setDir(dx>0?'right':'left') : setDir(dy>0?'down':'up');
+  Math.abs(dx)>Math.abs(dy)?setDir(dx>0?'right':'left'):setDir(dy>0?'down':'up');
   e.preventDefault();
 },{passive:false});
 
-// ── Game Loop ─────────────────────────────────────
+// ── Game Loop ────────────────────────────────────────────
 let lastStep=0;
-function speed(){ return Math.max(85, 200 - Math.floor(collected/25)*18); }
+function speed() {
+  let s=Math.max(100, 200-Math.floor(collected/25)*18);
+  if(activePowerUp?.type==='cannabis') s=Math.floor(s*2.1);
+  return s;
+}
 
-function loop(ts){
-  if(ts-lastStep >= speed()){
-    step();
-    lastStep=ts;
+function loop(ts) {
+  if(gameState==='playing') {
+    if(ts-lastStep>=speed()){ step(); lastStep=ts; }
+    tickPowerUp();
+    tickButts();
+    moveEnemies(ts);
   }
+
   drawBg();
   treats.forEach(t=>drawTreat(t));
   if(bigTreat) drawBigTreat(bigTreat);
+  if(fieldPowerUp) drawFieldPowerUp(fieldPowerUp);
+  enemies.forEach(e=>drawEnemy(e));
+  if(activePowerUp?.type==='paddle') drawButts();
   tickParticles();
   drawCat();
   drawParticles();
+
   requestAnimationFrame(loop);
 }
+
+updateHUD();
 requestAnimationFrame(loop);
 </script>
 </body>
