@@ -1,4 +1,4 @@
--- Wir Zwei – Datenbank-Setup
+-- kitti-hub – Datenbank-Setup
 -- Einmal im Supabase SQL Editor ausführen (Projekt → SQL Editor → New query
 -- → einfügen → Run). Danach ist nichts mehr zu tun.
 

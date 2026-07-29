@@ -182,7 +182,7 @@ function renderSetup(invite) {
 
   clear(root).append(
     h('div', { class: 'logo' }, '💞'),
-    h('h1', {}, 'Wir Zwei'),
+    h('h1', {}, 'kitti-hub'),
     h('p', { class: 'lead' }, invite
       ? 'Du wurdest eingeladen. Nur noch kurz bestätigen, dann seid ihr verbunden.'
       : 'Eine App für euch beide: Kalender, Listen, Ausgaben und alles, was nur euch gehört.'),
@@ -230,7 +230,7 @@ function renderSetup(invite) {
 
 /** Lesbarer, aber schwer zu erratender Raumname. */
 function suggestRoom() {
-  return `wir-${uid().replace(/-/g, '').slice(0, 12)}`;
+  return `kitti-${uid().replace(/-/g, '').slice(0, 12)}`;
 }
 
 export { navigate };

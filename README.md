@@ -1,4 +1,4 @@
-# 💞 Wir Zwei
+# 💞 kitti-hub
 
 Eine kleine Handy-App für genau zwei Menschen. Was einer einträgt, sieht der
 andere sofort – Kalender, Listen, Ausgaben und die Dinge, die nur euch gehören.

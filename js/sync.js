@@ -6,7 +6,7 @@
 
 import { store } from './store.js';
 
-const QUEUE_KEY = 'wz.queue';
+const QUEUE_KEY = 'kh.queue';
 const LIB = 'js/vendor/supabase.js';
 
 let libPromise = null;

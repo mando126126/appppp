@@ -126,7 +126,7 @@ async function shareInvite(cfg) {
 
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'Wir Zwei', text: 'Unsere App – einfach öffnen 💞', url: link });
+      await navigator.share({ title: 'kitti-hub', text: 'Unsere App – einfach öffnen 💞', url: link });
       return;
     } catch { /* abgebrochen: unten weiter mit Kopieren */ }
   }
@@ -204,7 +204,7 @@ function dataCard() {
 
 function exportJSON() {
   const blob = new Blob([JSON.stringify(store.all(), null, 2)], { type: 'application/json' });
-  const a = h('a', { href: URL.createObjectURL(blob), download: `wir-zwei-${todayISO()}.json` });
+  const a = h('a', { href: URL.createObjectURL(blob), download: `kitti-hub-${todayISO()}.json` });
   document.body.append(a);
   a.click();
   a.remove();
@@ -213,7 +213,7 @@ function exportJSON() {
 
 function aboutCard() {
   return h('div', { class: 'card' },
-    h('strong', {}, 'Wir Zwei'),
+    h('strong', {}, 'kitti-hub'),
     h('p', { class: 'small muted', style: 'margin:6px 0 0' },
       'Eine kleine App für zwei Menschen. Läuft im Browser, lässt sich zum Homescreen hinzufügen und funktioniert auch offline.'),
   );

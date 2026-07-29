@@ -2,7 +2,7 @@
 // Strategie "network first, cache fallback" – Updates kommen an, und ohne Netz
 // startet die App trotzdem aus dem Cache.
 
-const CACHE = 'wir-zwei-v1';
+const CACHE = 'kitti-hub-v1';
 const SHELL = [
   '.',
   'index.html',

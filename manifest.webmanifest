@@ -1,6 +1,6 @@
 {
-  "name": "Wir Zwei",
-  "short_name": "Wir Zwei",
+  "name": "kitti-hub",
+  "short_name": "kitti-hub",
   "description": "Kalender, Listen, Ausgaben und Liebes-Extras – gemeinsam und in Echtzeit.",
   "start_url": ".",
   "scope": ".",

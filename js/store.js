@@ -8,7 +8,7 @@
 // Der Store ist offline-first: geschrieben wird immer zuerst lokal
 // (localStorage), erst danach versucht sync.js den Upload.
 
-const CONFIG_KEY = 'wz.config';
+const CONFIG_KEY = 'kh.config';
 
 export const KINDS = {
   COUPLE: 'couple',   // { nameA, nameB, since, anniversaries: [{label,date}] }
@@ -168,7 +168,7 @@ function persist() {
   } catch { /* Quota voll – der Server bleibt die Wahrheit */ }
 }
 
-const cacheKey = () => `wz.data.${room}`;
+const cacheKey = () => `kh.data.${room}`;
 
 export function uid() {
   if (crypto.randomUUID) return crypto.randomUUID();
