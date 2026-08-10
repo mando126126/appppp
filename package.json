@@ -1,0 +1,22 @@
+{
+  "name": "einkaufsanker",
+  "version": "5.0.0",
+  "private": true,
+  "description": "Web-App: Wochenliste, Vorrat und Verschwendung aus den eigenen Kassenbons — ohne KI-Modell, ohne Server.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "node build.js",
+    "start": "node tools/serve.js",
+    "dev": "node build.js && node tools/serve.js",
+    "test": "node test/tests.js && node test/stresstest.js && node build.js --quiet && node test/uitest.js",
+    "test:algo": "node test/tests.js && node test/stresstest.js",
+    "test:ui": "node build.js && node test/uitest.js",
+    "icons": "node tools/iconGen.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

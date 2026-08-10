@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Einkaufs-Anker</title>
+<meta name="description" content="Wochenliste, Vorrat und Verschwendung im Blick — gerechnet aus den eigenen Bons, ohne Konto und ohne Server.">
+
+<!-- Als App installierbar: Vollbild ohne Browserleiste, eigenes Symbol -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Anker">
+<meta name="theme-color" content="#12352A">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<div class="shell">
+  <nav class="nav" id="nav" aria-label="Hauptbereiche"></nav>
+  <div class="col">
+    <header class="appbar" id="appbar"></header>
+    <main id="main"></main>
+  </div>
+</div>
+
+<!-- Ladenmodus: Vollbild, große Ziele, eine Hand -->
+<div class="store" id="store" hidden role="dialog" aria-label="Ladenmodus">
+  <div class="storeTop">
+    <h2>Im Laden</h2>
+    <span class="prog num" id="storeProg">0 von 0</span>
+    <button class="close" id="storeClose">Fertig</button>
+  </div>
+  <div class="storeBody" id="storeBody"></div>
+  <div class="storeFoot">
+    <div>
+      <div class="stat">im Wagen</div>
+      <div class="sum" id="storeSum">0,00 €</div>
+    </div>
+    <button class="cta" id="storeDone">buchen</button>
+  </div>
+</div>
+
+<!-- Aktionsblatt für Schritte, die sich nicht zurücknehmen lassen -->
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheetBody">
+    <div class="grabber"></div>
+    <div class="sheetTitle" id="sheetTitle"></div>
+    <div class="sheetSub" id="sheetSub"></div>
+    <div id="sheetOpts"></div>
+    <button class="cta light" id="sheetCancel">Abbrechen</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>window.__BUILD__ = "2y5qrw";</script>
+
+<!-- Algorithmen: gebündelt aus src/algo, nicht von Hand abgeschrieben -->
+<script src="bundle.js"></script>
+<!-- Speicher und Berechnung -->
+<script src="data.js"></script>
+<!-- Ansichten und Rahmen -->
+<script src="views.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

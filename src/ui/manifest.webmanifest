@@ -1,0 +1,21 @@
+{
+  "name": "Einkaufs-Anker",
+  "short_name": "Anker",
+  "description": "Wochenliste, Vorrat und Verschwendung im Blick — gerechnet aus den eigenen Bons, ohne Konto und ohne Server.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12352A",
+  "theme_color": "#12352A",
+  "lang": "de",
+  "categories": ["food", "productivity", "lifestyle"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Einkauf erfassen", "url": "./index.html#erfassen" },
+    { "name": "Deine Zahlen", "url": "./index.html#zahlen" }
+  ]
+}
