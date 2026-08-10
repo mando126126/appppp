@@ -62,7 +62,14 @@ const MODULES = [
   "seasonCalendar.js",
   "openedTracker.js",
   "shoppingDay.js",
-  "listExport.js"
+  "listExport.js",
+  "nonFoodCatalog.js",
+  "quantityParser.js",
+  "consumptionModel.js",
+  "rateLearner.js",
+  "intervalTracker.js",
+  "basePrice.js",
+  "stockUpAdvisor.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt

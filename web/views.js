@@ -139,6 +139,39 @@ function emptyView(text, actionLabel, onAction) {
   return c;
 }
 
+
+/**
+ * Konfidenzmarke. Grundsatz aus der Spezifikation: nie eine Zahl ohne
+ * sie, und bei UNSICHER gar keine Zahl. Ein gefüllter Punkt heißt
+ * gelernt, ein hohler geschätzt.
+ */
+function confidenceMark(confidence) {
+  const map = {
+    GELERNT: ["dot full", "aus deinen Käufen gelernt"],
+    VORLAEUFIG: ["dot half", "vorläufig"],
+    REFERENZ: ["dot", "Schätzwert"],
+    UNSICHER: ["dot none", "unregelmäßig"],
+    UNREGELMAESSIG: ["dot none", "unregelmäßig"]
+  };
+  const [cls, label] = map[confidence] || map.REFERENZ;
+  const e = el("span", cls);
+  e.setAttribute("title", label);
+  e.setAttribute("aria-label", label);
+  return e;
+}
+
+/** Reichweite mit Konfidenz — oder ein Strich, wenn nichts zu sagen ist. */
+function supplyValue(sup) {
+  const w = el("span", "supplyVal");
+  if (sup.daysOfSupply === null || sup.confidence === "UNSICHER") {
+    w.append(el("span", "rowValue", "—"));
+  } else {
+    w.append(el("span", "rowValue", `${Math.round(sup.daysOfSupply)} T`));
+  }
+  w.append(confidenceMark(sup.confidence));
+  return w;
+}
+
 /* ================================================================
    Detail-Blatt: alles, was sonst als Fließtext auf der Liste stünde
    ================================================================ */
@@ -161,29 +194,79 @@ function productSheet(productId, ctx) {
     facts.append(el("dt", null, esc(k)), el("dd", null, esc(v)));
   };
 
+  // Haushaltsprodukte rechnen anders — und zeigen deshalb andere
+  // Fakten. Ein Kaufrhythmus wäre dort irreführend (die Menge zählt,
+  // nicht der Abstand), und die Lebensmittel-Bestandsschätzung liefert
+  // bei einer Haltbarkeit von zehn Jahren „noch 3633 Tage".
+  const nf = nonFoodFor(productId);
+
   fact("Kategorie", p.category);
-  fact("Rhythmus", r && r.rhythmDays ? `alle ${r.rhythmDays} Tage · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
+  if (!nf) {
+    fact("Rhythmus", r && r.rhythmDays ? `alle ${r.rhythmDays} Tage · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
+  }
   fact("Zuletzt", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
-  fact("Haltbarkeit", p.isFood
-    ? `${p.shelfLifeDays} Tage${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
-    : null);
+  if (!nf) {
+    fact("Haltbarkeit", p.isFood
+      ? `${p.shelfLifeDays} Tage${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
+      : null);
+  }
   fact("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
   fact("Preis", pm
     ? `zuletzt ${eur(pm.last)} · üblich ${eur(pm.usual)} · Spanne ${eur(pm.lowest)}–${eur(pm.highest)}`
     : `üblich ${eur(p.typicalPrice)}`);
-  fact("Bestand", inv
-    ? `${de(inv.remainingUnits.toFixed(1))} · noch ${inv.daysLeft} Tage · Sicherheit ${pct(inv.confidence)}`
-    : "nicht schätzbar");
-  fact("Reichweite", range ? `${de(range.days)} Tage · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
-  fact("Verlust", st && st.wastedEuros > 0
-    ? `${eur(st.wastedEuros)} über ${st.purchased} Käufe (${pct(st.wasteRate)})`
-    : "keiner erkannt");
-  fact("Datenqualität", {
-    regulatorisch: "regulatorisch (BZfE)",
-    leitlinie: "Leitlinie (BZfE)",
-    schaetzwert: "Schätzwert ohne amtliche Quelle"
-  }[p.quality]);
+  if (!nf) {
+    fact("Bestand", inv
+      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${inv.daysLeft} Tage · Sicherheit ${pct(inv.confidence)}`
+      : "nicht schätzbar");
+    fact("Reichweite", range ? `${de(range.days)} Tage · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
+    fact("Verlust", st && st.wastedEuros > 0
+      ? `${eur(st.wastedEuros)} über ${st.purchased} Käufe (${pct(st.wasteRate)})`
+      : "keiner erkannt");
+    fact("Datenqualität", {
+      regulatorisch: "regulatorisch (BZfE)",
+      leitlinie: "Leitlinie (BZfE)",
+      schaetzwert: "Schätzwert ohne amtliche Quelle"
+    }[p.quality]);
+  }
+  if (nf) {
+    const sup = ctx.supplies.find((x) => x.productId === productId);
+    const swap = ctx.swapsDue.find((x) => x.productId === productId);
+    const rate = ctx.nonFoodRates.get(productId);
+    const CLASS_LABEL = {
+      RATE: "wird aufgebraucht", INTERVAL: "wird ausgetauscht",
+      SPORADIC: "unregelmäßig", DATED: "hat ein Ablaufdatum"
+    };
+    fact("Verbrauchsart", CLASS_LABEL[nf.consumptionClass]);
+    fact("Packung", `${de(nf.package.value)} ${nf.package.unit}`);
+    if (rate) fact("Verbrauch", `${de(rate.rate)} ${nf.package.unit}/Tag · ${rate.label}`);
+    if (sup && sup.daysOfSupply !== null && sup.confidence !== "UNSICHER") {
+      fact("Reicht noch", `${de(sup.daysOfSupply)} Tage`);
+    }
+    if (swap) {
+      fact("Austausch", `alle ${swap.intervalDays} Tage · ${swap.source}` +
+        (swap.hardnessAdjusted ? " · an die Wasserhärte angepasst" : ""));
+      fact("Im Einsatz", `${swap.inUse} Tage`);
+    }
+    const bp = ctx.basePrices && ctx.basePrices.get(productId);
+    if (bp) fact("Grundpreis", bp.message);
+    if (nf.paoMonths) fact("Nach dem Öffnen", `${nf.paoMonths} Monate haltbar`);
+    fact("Quelle", nf.rateSource || nf.intervalSource || nf.datedSource);
+    fact("In der WG", nf.sharedByDefault ? "geteilt" : "persönlich");
+    if (nf.requiresDevice) fact("Braucht", {
+      hasDishwasher: "Spülmaschine", hasWashingMachine: "Waschmaschine",
+      hasCoffeeMachine: "Kaffeemaschine", hasWaterFilter: "Wasserfilter"
+    }[nf.requiresDevice]);
+  }
   body.append(facts);
+
+  if (nf && nf.paoMonths) {
+    body.append(el("div", "note gold",
+      `Die Frist läuft ab dem Öffnen. Die App kennt dieses Datum nicht und rechnet ab dem Kauf — das ist eine Annahme, keine Messung.`));
+  }
+  if (nf && nf.consumptionClass === "SPORADIC") {
+    body.append(el("div", "note",
+      "Für dieses Produkt macht die App keine Vorhersage. Der Kaufabstand lässt kein Muster erkennen."));
+  }
 
   if (p.safetyCritical) {
     body.append(el("div", "note red",
@@ -243,7 +326,9 @@ function viewListe(ctx, app) {
   const sumOn = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
 
   const list = uiGroup("Fällig",
-    "Vorgeschlagen wird, was nach dem gelernten Rhythmus dran ist, zuzüglich der eingestellten Vorausschau.\n\n" +
+    "Lebensmittel: was nach dem gelernten Kaufrhythmus dran ist, zuzüglich der eingestellten Vorausschau.\n\n" +
+    "Haushaltsprodukte: was nach der Verbrauchsrate zur Neige geht. Sie verderben nicht, also entspricht " +
+    "die gekaufte Menge der verbrauchten — ein Kaufrhythmus wäre dort das falsche Maß.\n\n" +
     "Der Rechenweg jeder Position steht in ihrem Detail-Blatt — Zeile antippen.");
 
   if (ctx.budgetResult.removed.length) {
@@ -258,9 +343,17 @@ function viewListe(ctx, app) {
       ctx.vacation.skip.map((s) => s.name).join(", "), null, { value: "− " + eur(ctx.vacation.savedEuros) }));
   }
 
+  // Zwei Sektionen statt zweier Tabs: ein zweiter Tab erzeugte zwei
+  // mentale Modelle und halbierte die Nutzung beider.
+  const food = ctx.items.filter((i) => !isNonFood(i.productId));
+  const home = ctx.items.filter((i) => isNonFood(i.productId));
+
   const ul = el("ul", "items");
   if (!ctx.items.length) ul.append(el("li", "item", '<p class="empty">Nichts fällig.</p>'));
-  ctx.items.forEach((it) => ul.append(listItem(it, ctx, app)));
+  if (home.length && food.length) ul.append(el("li", "sectionRow", "Lebensmittel"));
+  food.forEach((it) => ul.append(listItem(it, ctx, app)));
+  if (home.length && food.length) ul.append(el("li", "sectionRow", "Haushalt"));
+  home.forEach((it) => ul.append(listItem(it, ctx, app)));
   list.body.append(ul);
 
   const full = ctx.items.reduce((a, i) => a + i.price, 0);
@@ -468,13 +561,118 @@ function listItem(it, ctx, app) {
   return li;
 }
 
+
+/* ================================================================
+   Fällig — Austausch und Nachschub bei Haushaltsprodukten
+   ================================================================
+   Die Klasse INTERVAL braucht kein Verbrauchsmodell und keine
+   Historie: Kaufdatum plus Intervall genügt. Das Ergebnis sind
+   Handlungen, keine Käufe — „getauscht" setzt den Zähler zurück,
+   ohne dass etwas gekauft wurde.
+   ================================================================ */
+function viewFaellig(ctx, app) {
+  const c = frag();
+
+  const due = ctx.swapsDue.filter((x) => x.due);
+  const soon = ctx.swapsDue.filter((x) => !x.due);
+  const lowSupply = ctx.supplies.filter((x) => x.dueForPurchase);
+
+  if (!ctx.swapsDue.length && !lowSupply.length) {
+    c.append(emptyView(
+      ctx.nonFoodEntries.length
+        ? "Nichts fällig. Alles im Rhythmus."
+        : "Noch keine Haushaltsprodukte erfasst.",
+      ctx.nonFoodEntries.length ? null : "Einkauf erfassen",
+      () => app.goto("erfassen")));
+    return c;
+  }
+
+  /* --- Austausch: die eigentliche Neuerung --- */
+  if (due.length) {
+    const g = uiGroup("Jetzt tauschen",
+      "Austausch nach Zeit, unabhängig vom Verbrauch — meist hygienisch begründet. " +
+      "Ein Tippen auf „Getauscht\" setzt den Zähler zurück, auch ohne Kauf.");
+    due.forEach((x) => g.body.append(swapRow(x, ctx, app)));
+    c.append(g);
+  }
+  if (soon.length) {
+    const g = uiGroup("Demnächst");
+    soon.forEach((x) => g.body.append(swapRow(x, ctx, app)));
+    c.append(g);
+  }
+
+  /* --- Nachschub: hier geht etwas aus --- */
+  if (lowSupply.length) {
+    const g = uiGroup("Geht aus",
+      "Geschätzt aus Packungsmenge und gelerntem Verbrauch. Die Vorwarnzeit richtet sich nach deinem " +
+      "eigenen Einkaufsrhythmus: wer selten einkauft, bekommt früher Bescheid.");
+    lowSupply.forEach((sup) => {
+      const r = el("button", "row");
+      r.append(el("div", "rowMain",
+        `<div class="rowTitle">${esc(sup.name)}</div>` +
+        `<div class="rowSub">${esc(supplyText(sup))}</div>`));
+      r.append(supplyValue(sup));
+      r.append(el("div", "chev"));
+      r.addEventListener("click", () => productSheet(sup.productId, ctx));
+      g.body.append(r);
+    });
+    c.append(g);
+  }
+
+  /* --- Bevorratung: nur bei gutem Preis UND gelernter Rate --- */
+  if (ctx.stockUp.length) {
+    const g = uiGroup("Günstig bevorraten",
+      "Haushaltsprodukte verderben nicht — Vorrat bei gutem Preis ist sinnvoll. Der Vorschlag " +
+      "erscheint nur, wenn der Verbrauch gelernt ist und der Grundpreis unter deinem üblichen liegt.");
+    ctx.stockUp.forEach((a) => g.body.append(uiRow(a.name, a.message, null, {
+      value: `${a.units}×`,
+      onClick: () => app.notice(a.name, a.message +
+        (a.cappedByLimit ? `\n\nBegrenzt auf ${a.storageLimit} Packungen Lagerplatz.` : "") +
+        (a.cycleLearned ? "\n\nAktionszyklus aus deiner Preishistorie gelernt." : "\n\nAktionszyklus als Vorgabewert."))
+    })));
+    c.append(g);
+  }
+
+  return c;
+}
+
+/** Restlaufzeit als Satz, mit richtigem Numerus. */
+function supplyText(sup) {
+  if (sup.daysOfSupply === null || sup.confidence === "UNSICHER") return "unregelmäßig";
+  const d = Math.round(sup.daysOfSupply);
+  if (d <= 0) return "vermutlich leer";
+  return d === 1 ? "reicht noch einen Tag" : `reicht noch ${d} Tage`;
+}
+
+/**
+ * Eine Austauschzeile. Der Name führt zum Detail-Blatt, rechts steht
+ * die eine Handlung, um die es geht.
+ */
+function swapRow(x, ctx, app) {
+  const r = el("div", "row");
+  const main = el("button", "rowMain plainBtn");
+  main.setAttribute("aria-label", `Details zu ${x.name}`);
+  main.innerHTML =
+    `<div class="rowTitle">${esc(x.name)}</div>` +
+    `<div class="rowSub">${esc(x.due
+      ? `seit ${x.inUse} ${x.inUse === 1 ? "Tag" : "Tagen"} im Einsatz`
+      : `fällig in ${x.daysLeft} ${x.daysLeft === 1 ? "Tag" : "Tagen"}`)}</div>`;
+  main.addEventListener("click", () => productSheet(x.productId, ctx));
+  r.append(main);
+
+  const swap = el("button", "pillBtn" + (x.due ? " on" : ""), "Getauscht");
+  swap.addEventListener("click", () => app.swap(x.productId, x.name));
+  r.append(swap);
+  return r;
+}
+
 /* ================================================================
    2. Bestand
    ================================================================ */
 function viewBestand(ctx, app) {
   const c = frag();
 
-  if (!ctx.inventory.length) {
+  if (!ctx.inventory.length && !ctx.supplies.length) {
     c.append(emptyView("Kein Bestand schätzbar.", "Einkauf erfassen", () => app.goto("erfassen")));
     return c;
   }
@@ -517,6 +715,28 @@ function viewBestand(ctx, app) {
     inv.body.append(r);
   });
   c.append(inv);
+
+  /* --- Haushaltsprodukte: eigene Rechnung, eigene Gruppe --- */
+  if (ctx.supplies.length) {
+    const g = uiGroup("Haushalt",
+      "Andere Rechnung als bei Lebensmitteln: Haushaltsprodukte verderben nicht, also entspricht die " +
+      "gekaufte Menge der verbrauchten. Deshalb eine Verbrauchsrate statt eines Kaufrhythmus.\n\n" +
+      "Der Punkt hinter der Zahl zeigt, worauf sie beruht: gefüllt heißt aus deinen Käufen gelernt, " +
+      "hohl heißt Schätzwert. Bei unregelmäßigem Kauf steht ein Strich statt einer Zahl.");
+    ctx.supplies.forEach((sup) => {
+      const r = el("button", "row");
+      r.append(el("div", "rowMain",
+        `<div class="rowTitle">${esc(sup.name)}</div>` +
+        `<div class="rowSub">${esc(sup.daysOfSupply === null || sup.confidence === "UNSICHER"
+          ? "unregelmäßig"
+          : `${de(Math.round(sup.remaining))} ${sup.unit} übrig`)}</div>`));
+      r.append(supplyValue(sup));
+      r.append(el("div", "chev"));
+      r.addEventListener("click", () => productSheet(sup.productId, ctx));
+      g.body.append(r);
+    });
+    c.append(g);
+  }
 
   /* --- Rezepte --- */
   const rec = suggestRecipes(toRecipeStock(ctx.inventory), { maxResults: 5 });
@@ -871,6 +1091,19 @@ function viewZahlen(ctx, app) {
     `<div style="text-align:right"><div class="big">${Math.round(wk * 52)} €</div><div class="l">im Jahr</div></div>`));
   c.append(sc);
 
+  /* --- Ersparnis bei Haushaltsprodukten: getrennt ausweisen --- */
+  if (ctx.nonFoodSaved.total > 0) {
+    const g = uiGroup("Günstig eingekauft",
+      "Realisierte Ersparnis: du hast weniger gezahlt als deinen üblichen Grundpreis. Getrennt von der " +
+      "Lebensmittel-Ersparnis, denn die ist kontrafaktisch — dort geht es um Verderb, der nicht eingetreten ist. " +
+      "Beides zu addieren wäre irreführend.");
+    g.body.append(uiRow("Haushaltsprodukte", ctx.nonFoodSaved.basis, null,
+      { value: eur(ctx.nonFoodSaved.total) }));
+    ctx.nonFoodSaved.byProduct.slice(0, 5).forEach((x) =>
+      g.body.append(uiRow(x.name, `${x.purchases} Käufe`, null, { value: eur(x.saved) })));
+    c.append(g);
+  }
+
   /* --- Packungsgrößen --- */
   if (ctx.packs.length) {
     const g = uiGroup("Packungsgrößen", "Der Grundpreis allein täuscht, wenn die große Packung halb weggeworfen wird.");
@@ -947,6 +1180,26 @@ function viewMehr(ctx, app) {
       (v) => app.set((s) => { s.settings.textScale = v; }), "Schriftgröße"), { stacked: true }));
   c.append(look);
 
+  /* --- Haushalt: bestimmt Verbrauchsraten und filtert Produkte --- */
+  const hh = uiGroup("Haushalt",
+    "Diese Angaben steuern die Verbrauchsraten der Haushaltsprodukte. Fehlt ein Gerät, verschwinden " +
+    "die zugehörigen Produkte ganz — ein Entkalker-Vorschlag ohne Kaffeemaschine kostet mehr Vertrauen als er nützt.\n\n" +
+    "Die Wasserhärte steht auf der Rechnung deines Wasserversorgers. Sie ist in Deutschland gesetzlich in " +
+    "drei Bereiche eingeteilt und bestimmt, wie oft entkalkt und wie hoch dosiert werden muss.");
+  hh.body.append(uiRow("Wasserhärte", HARDNESS_LABEL[S.household.waterHardness],
+    segmented([["weich", "Weich"], ["mittel", "Mittel"], ["hart", "Hart"]], S.household.waterHardness,
+      (v) => app.set((st) => { st.household.waterHardness = v; }), "Wasserhärte"), { stacked: true }));
+  [
+    ["hasWashingMachine", "Waschmaschine"],
+    ["hasDishwasher", "Spülmaschine"],
+    ["hasCoffeeMachine", "Kaffeemaschine"],
+    ["hasWaterFilter", "Wasserfilter"]
+  ].forEach(([key, label]) => {
+    hh.body.append(uiRow(label, null,
+      toggle(S.household[key], (on) => app.set((st) => { st.household[key] = on; }), label)));
+  });
+  c.append(hh);
+
   /* --- Gangreihenfolge --- */
   const aisles = relevantAisles(ctx.aisleList, ctx.items);
   if (aisles.length > 1) {
@@ -1013,7 +1266,7 @@ function viewMehr(ctx, app) {
   const m = uiGroup("Rechenweg");
   m.body.append(uiRow("Wie die App rechnet", "kein KI-Modell", null, {
     onClick: () => app.notice("Rechenweg", [
-      "Bonzeile → Produkt: Alias-Tabelle, sonst Token- und Levenshtein-Vergleich. 65–85 % werden gefragt statt geraten.",
+      "Bonzeile → Produkt: Alias-Tabelle, sonst Token- und Levenshtein-Vergleich. 65–85 % werden gefragt statt geraten. Der Steuersatz auf dem Bon ist ein Vorfilter (7 % meist Lebensmittel, 19 % meist Haushalt), kein Ersatz für den Abgleich.",
       "Rhythmus: Median der Kaufabstände je Einheit. Pausen über dem Dreifachen ausgeschlossen.",
       "Vertrauen: Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung.",
       "Bestand: gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit).",
@@ -1021,7 +1274,10 @@ function viewMehr(ctx, app) {
       "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2.",
       "Budget: erst Verschwender halbieren, dann Süßes und Alkohol. Grundnahrung nie.",
       "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet.",
-      "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen."
+      "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen.",
+      "Haushaltsprodukte rechnen anders: sie verderben nicht, also entspricht die gekaufte Menge der verbrauchten. Statt eines Kaufrhythmus gilt eine Verbrauchsrate, skaliert mit der Haushaltsgröße hoch einem Exponenten je Produkt — Zahnpasta linear, Waschmittel degressiv, Allzweckreiniger gar nicht.",
+      "Rate: Referenzwert als Prior, Beobachtung über ein 180-Tage-Fenster als Posterior, gewichtet mit min(Käufe, 6) gegen 2. Nach sechs Käufen bestimmt die Beobachtung drei Viertel.",
+      "Austausch: Kaufdatum plus Intervall, ohne Verbrauchsmodell. Bei unregelmäßigem Kauf (Variationskoeffizient ab 0,35) sagt die App gar nichts statt etwas Falsches."
     ].join("\n\n"))
   }));
 

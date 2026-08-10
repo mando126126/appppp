@@ -334,9 +334,9 @@ group("Haushalt", "Drogerie", STORAGE.NONE, [
   ["klopapier","Toilettenpapier",N,3650,3650,EST,3.99,1000,["TOILETTENPAPIER","KLOPAPIER"]],
   ["kuechenrolle","Küchenrolle",N,3650,3650,EST,1.99,500,["KUECHENROLLE","HAUSHALTSROLLE"]],
   ["muellbeutel","Müllbeutel",N,3650,3650,EST,2.49,300,["MUELLBEUTEL","MUELLSAECKE"]],
-  ["alufolie","Alufolie",N,3650,3650,EST,1.99,200,["ALUFOLIE","FRISCHHALTEFOLIE","BACKPAPIER"]],
+  ["alufolie","Alufolie",N,3650,3650,EST,1.99,200,["ALUFOLIE","ALU FOLIE","ALUMINIUMFOLIE"]],
   ["zahnpasta","Zahnpasta",N,1095,365,EST,1.79,75,["ZAHNPASTA","ZAHNCREME"]],
-  ["duschgel","Duschgel",N,1095,365,EST,1.99,300,["DUSCHGEL","SHAMPOO","SEIFE"]],
+  ["duschgel","Duschgel",N,1095,365,EST,1.99,300,["DUSCHGEL","DUSCHBAD","SHOWER GEL"]],
   ["deo","Deodorant",N,1095,365,EST,2.49,150,["DEO","DEODORANT"]],
   ["putztuecher","Reinigungstücher",N,1095,365,EST,1.49,200,["PUTZTUECHER","SCHWAMM","MIKROFASERTUCH"]],
   ["tierfutter","Tierfutter",M,540,3,EST,1.29,400,["HUNDEFUTTER","KATZENFUTTER","TIERFUTTER"]],
@@ -382,6 +382,58 @@ group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
 
 group("Haushalt", "Drogerie", STORAGE.NONE, [
   ["tragetasche","Tragetasche",N,3650,3650,EST,0.59,80,["PERM. TRAGETASC","TRAGETASCHE","PERMANENTTRAGETASCHE","EINKAUFSTASCHE"]]
+], { isFood: false, freezable: false });
+
+// ===================== NON-FOOD, ERWEITERT =======================
+// Die Verbrauchsklassen, Raten und Austauschintervalle stehen NICHT
+// hier, sondern in nonFoodCatalog.js — dieser Katalog bleibt die eine
+// Quelle für Name, Schreibweisen, Preis und Gewicht, auch für Non-Food.
+// Ein zweiter Produktkatalog wäre genau die Doppelpflege, gegen die
+// der Bündel-Build gebaut ist.
+//
+// dateType ist N (kein Datum): Non-Food verdirbt nicht. Die wenigen
+// Ausnahmen mit echtem Verfalls- oder Öffnungsdatum tragen ihre Frist
+// in nonFoodCatalog.js, nicht als MHD.
+
+group("Körperpflege", "Drogerie", STORAGE.NONE, [
+  ["shampoo","Shampoo",N,1095,1095,EST,2.49,300,["SHAMPOO","HAARSHAMPOO","SHAMPOO 300ML"]],
+  ["handseife","Handseife",N,1095,1095,EST,1.49,250,["HANDSEIFE","FLUESSIGSEIFE","SEIFENSPENDER","CREMESEIFE","SEIFE"]],
+  ["zahnbuerste","Zahnbürste",N,3650,3650,EST,1.95,30,["ZAHNBUERSTE","ZAHNBUERSTEN","HANDZAHNBUERSTE"]],
+  ["aufsteckbuersten","Aufsteckbürsten",N,3650,3650,EST,9.99,60,["AUFSTECKBUERSTEN","BUERSTENKOEPFE","ERSATZBUERSTEN"]],
+  ["rasierklingen","Rasierklingen",N,3650,3650,EST,8.99,50,["RASIERKLINGEN","RASIERER KLINGEN","SYSTEMKLINGEN"]],
+  ["duschschwamm","Duschschwamm",N,3650,3650,EST,1.99,40,["DUSCHSCHWAMM","MASSAGESCHWAMM","DUSCHHANDSCHUH"]],
+  ["sonnencreme","Sonnencreme",N,1095,365,EST,7.99,200,["SONNENCREME","SONNENMILCH","SONNENSCHUTZ","LSF"]],
+  ["mascara","Mascara",N,1095,180,EST,5.99,10,["MASCARA","WIMPERNTUSCHE"]],
+  ["kontaktlinsenloesung","Kontaktlinsenlösung",N,1095,90,EST,4.99,360,["KONTAKTLINSENLOESUNG","PFLEGEMITTEL LINSEN","ALL IN ONE LOESUNG"]],
+  ["desinfektionsmittel","Desinfektionsmittel",N,1095,365,EST,3.49,250,["DESINFEKTION","HAENDEDESINFEKTION","DESINFEKTIONSMITTEL"]]
+], { isFood: false, freezable: false });
+
+group("Waschen & Reinigen", "Drogerie", STORAGE.NONE, [
+  ["weichspueler","Weichspüler",N,1095,1095,EST,2.29,1000,["WEICHSPUELER","WEICHSPUEHLER"]],
+  ["spuelmaschinentabs","Spülmaschinentabs",N,1095,1095,EST,7.99,800,["SPUELMASCHINENTABS","GESCHIRRSPUELTABS","TABS ALL IN 1","SPUELTABS"]],
+  ["allzweckreiniger","Allzweckreiniger",N,1095,1095,EST,1.49,750,["ALLZWECKREINIGER","UNIVERSALREINIGER","ALLESREINIGER"]],
+  ["waschmaschinenreiniger","Waschmaschinenreiniger",N,1095,1095,EST,3.99,250,["WASCHMASCHINENREINIGER","MASCHINENPFLEGE","WM REINIGER"]],
+  ["entkalker","Entkalker",N,1095,1095,EST,3.49,500,["ENTKALKER","KALKLOESER","ENTKALKUNG"]],
+  ["kuechenschwamm","Küchenschwamm",N,3650,3650,EST,1.49,50,["KUECHENSCHWAMM","TOPFSCHWAMM","SCHWAMMTUCH","SPUELSCHWAMM"]],
+  ["spuelbuerste","Spülbürste",N,3650,3650,EST,1.29,60,["SPUELBUERSTE","ABWASCHBUERSTE"]],
+  ["wischbezug","Wischbezug",N,3650,3650,EST,3.99,150,["WISCHBEZUG","WISCHMOPP","MOPPBEZUG","BODENWISCHER"]],
+  ["staubsaugerbeutel","Staubsaugerbeutel",N,3650,3650,EST,6.99,120,["STAUBSAUGERBEUTEL","FILTERBEUTEL"]],
+  ["wasserfilter","Wasserfilterkartusche",N,1095,1095,EST,4.49,100,["WASSERFILTER","FILTERKARTUSCHE","KARTUSCHE"]]
+], { isFood: false, freezable: false });
+
+group("Papier & Folie", "Drogerie", STORAGE.NONE, [
+  ["taschentuecher","Taschentücher",N,3650,3650,EST,1.19,120,["TASCHENTUECHER","TEMPO","PAPIERTASCHENTUECHER"]],
+  ["frischhaltefolie","Frischhaltefolie",N,3650,3650,EST,1.79,200,["FRISCHHALTEFOLIE","KLARSICHTFOLIE"]],
+  ["backpapier","Backpapier",N,3650,3650,EST,1.49,200,["BACKPAPIER","BACKTRENNPAPIER"]],
+  ["gefrierbeutel","Gefrierbeutel",N,3650,3650,EST,1.99,150,["GEFRIERBEUTEL","GEFRIERBEUTEL 3L","TIEFKUEHLBEUTEL"]]
+], { isFood: false, freezable: false });
+
+group("Haushaltszubehör", "Drogerie", STORAGE.NONE, [
+  ["batterien","Batterien",N,3650,3650,EST,4.99,100,["BATTERIEN","AA BATTERIEN","AAA BATTERIEN","MIGNON"]],
+  ["gluehbirne","Leuchtmittel",N,3650,3650,EST,3.99,50,["GLUEHBIRNE","LED LAMPE","LEUCHTMITTEL","BIRNE E27"]],
+  ["kerzen","Kerzen",N,3650,3650,EST,2.99,300,["KERZEN","TEELICHTER","STUMPENKERZE"]],
+  ["klebeband","Klebeband",N,3650,3650,EST,1.99,80,["KLEBEBAND","PAKETBAND","TESAFILM"]],
+  ["schuhcreme","Schuhcreme",N,3650,3650,EST,2.49,75,["SCHUHCREME","SCHUHPFLEGE","LEDERPFLEGE"]]
 ], { isFood: false, freezable: false });
 
 // ---- Zugriffsfunktionen ----------------------------------------

@@ -9,6 +9,13 @@ const NAV = [
     icon: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6.2l1.3 1.3 2.4-2.6"/><path d="M3.5 12.2l1.3 1.3 2.4-2.6"/><path d="M3.5 18.2l1.3 1.3 2.4-2.6"/>'
   },
   {
+    // Austausch-Produkte sind HANDLUNGEN, keine Käufe — und der
+    // wahrscheinlichste tägliche Öffnungsgrund der App. Deshalb ein
+    // eigener Platz in der Leiste statt einer Sektion weiter unten.
+    id: "faellig", label: "Fällig", title: "Fällig", view: viewFaellig,
+    icon: '<circle cx="12" cy="12.5" r="8"/><path d="M12 8.5v4.2l2.8 1.7"/><path d="M9 3h6"/>'
+  },
+  {
     id: "bestand", label: "Bestand", title: "Bestand", view: viewBestand,
     icon: '<rect x="3.5" y="7.5" width="17" height="12.5" rx="2.5"/><path d="M3.5 12.5h17"/><path d="M9 7.5V5.5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 5.5v2"/>'
   },
@@ -53,6 +60,12 @@ const App = {
       if (s.listWeek !== App.ctx.weekKey) { s.listWeek = App.ctx.weekKey; s.listChoices = {}; }
       s.listChoices[productId] = { ...(s.listChoices[productId] || {}), on: true, extra: true, reason: null };
     });
+  },
+
+  /** Austausch eintragen — setzt den Zähler zurück, ohne Kauf. */
+  swap(productId, name) {
+    Data.recordSwapFor(productId);
+    App.toast(`${name} getauscht`);
   },
 
   /** Hinweis für diese Woche wegtippen. */
@@ -285,7 +298,7 @@ const App = {
       b.addEventListener("click", () => App.openStore());
       actions.append(b);
     }
-    if (App.tab === "zahlen" || App.tab === "bestand") {
+    if (App.tab === "zahlen" || App.tab === "bestand" || App.tab === "faellig") {
       const b = el("button", "barBtn", "Erfassen");
       b.addEventListener("click", () => App.goto("erfassen"));
       actions.append(b);

@@ -61,6 +61,16 @@ function emptyState() {
       textScale: 1,             // Schriftgröße 1 | 1.15 | 1.3
       demo: false
     },
+    // Haushaltsprofil: bestimmt Verbrauchsraten und filtert Produkte,
+    // für die das Gerät fehlt. Ohne Kaffeemaschine kein Entkalker.
+    household: {
+      waterHardness: "mittel",   // weich | mittel | hart
+      hasDishwasher: true,
+      hasWashingMachine: true,
+      hasCoffeeMachine: true,
+      hasWaterFilter: false
+    },
+    swaps: {},                  // productId -> { lastSwap, history:[Datum] }
     aisleOrders: {},            // Markt -> Gangreihenfolge
     opened: [],                 // angebrochene Packungen [{productId, openedDate}]
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
@@ -95,7 +105,7 @@ const listeners = new Set();
 function merge(parsed) {
   const base = emptyState();
   const out = { ...base, ...parsed };
-  for (const key of ["settings", "dismissed"]) {
+  for (const key of ["settings", "dismissed", "household"]) {
     out[key] = { ...base[key], ...(parsed[key] || {}) };
   }
   out.settings.vacation = { ...base.settings.vacation, ...(parsed.settings || {}).vacation };
@@ -207,6 +217,19 @@ function toggleOpened(productId) {
   });
 }
 
+/**
+ * Austausch eines INTERVAL-Produkts protokollieren. Das ist eine
+ * HANDLUNG, kein Kauf: eine Packung mit vier Aufsteckbürsten trägt
+ * vier Tauschvorgänge.
+ */
+function recordSwapFor(productId) {
+  update((s) => {
+    const cur = s.swaps[productId] || { lastSwap: null, history: [] };
+    const t = today();
+    s.swaps[productId] = { lastSwap: t, history: [...cur.history, t] };
+  });
+}
+
 function learnAlias(rawLine, productId) {
   update((s) => { s.aliases[normalizeRaw(rawLine)] = productId; });
 }
@@ -301,10 +324,27 @@ function buildDemoHistory(ref = today()) {
   series("wasser", 7, { lastGap: 4, qty: 6, priceLate: 0.39 });
   series("bier", 14, { lastGap: 9, qty: 6, priceLate: 0.85, priceEarly: 0.79 });
 
-  // Non-Food fürs Archiv und den Grundpreisvergleich
-  series("klopapier", 30, { lastGap: 12, priceLate: 4.29, priceEarly: 3.99 });
-  series("spuelmittel", 45, { lastGap: 20, priceLate: 1.39, priceEarly: 1.29 });
   series("schokolade", 9, { lastGap: 2, qty: 2, priceLate: 1.29, priceEarly: 1.19 });
+
+  // Haushaltsprodukte: eigene Rechnung (Rate statt Kaufabstand), also
+  // auch eigene Muster. Klopapier knapp, Waschmittel mit Preiswellen
+  // für den Grundpreisvergleich, Zahnbürste überfällig.
+  series("klopapier", 40, { lastGap: 34, priceLate: 4.29, priceEarly: 3.99 });
+  series("spuelmittel", 45, { lastGap: 40, priceLate: 1.39, priceEarly: 1.29 });
+  series("zahnpasta", 25, { lastGap: 22, priceLate: 1.95, priceEarly: 1.79 });
+  series("waschmittel", 20, { lastGap: 17, priceLate: 6.99, priceEarly: 5.99 });
+  series("kuechenrolle", 35, { lastGap: 30, priceLate: 2.19, priceEarly: 1.99 });
+  series("muellbeutel", 50, { lastGap: 44, priceLate: 2.69, priceEarly: 2.49 });
+  series("duschgel", 15, { lastGap: 12, priceLate: 2.19, priceEarly: 1.99 });
+
+  // INTERVAL: der Tausch ist überfällig, ohne dass etwas fehlt.
+  series("zahnbuerste", 95, { lastGap: 97, priceLate: 1.95 });
+  series("kuechenschwamm", 30, { lastGap: 14, qty: 1, priceLate: 1.49 });
+  series("wasserfilter", 30, { lastGap: 25, priceLate: 4.49 });
+
+  // SPORADIC: unregelmäßig, damit die App zeigen kann, dass sie schweigt.
+  [-140, -95, -30].forEach((o) => H.push(
+    { productId: "batterien", date: plusDays(ref, o), quantity: 1, unitPrice: 4.99, weightG: null }));
 
   // Packungsgrößen-Vergleich Kaffee: klein oft, groß selten
   [120, 90].forEach((o) => H.push({ productId: "kaffee", date: plusDays(ref, -o), quantity: 1, unitPrice: 3.99, weightG: 250 }));
@@ -415,14 +455,95 @@ function compute() {
   // Angebrochenes hält kürzer als die Packung — die Korrektur muss vor
   // Reichweite und Rezepten greifen, sonst rechnen beide mit der Frist
   // der ungeöffneten Ware.
-  const inventory = applyOpened(estimateInventory(history, rhythms, ref), s.opened, ref);
+  const inventory = applyOpened(estimateInventory(history, rhythms, ref), s.opened, ref)
+    .filter((i) => !isNonFood(i.productId));
   const opened = openedItems(s.opened, ref);
 
+  /* --- Haushaltsprodukte -------------------------------------------
+   * Andere Rechnung als bei Lebensmitteln: Non-Food verdirbt nicht,
+   * also entspricht die gekaufte Menge der verbrauchten und man kann
+   * über eine Rate rechnen statt über Kaufabstände.                  */
+  const pattern = shoppingPattern(s.receipts, ref);
+
+  // Urlaubstage, die schon vergangen sind — nur die zählen als Pause.
+  const vac = s.settings.vacation;
+  let pausedDays = 0;
+  if (vac.active && vac.from && vac.to) {
+    const from = vac.from < ref ? vac.from : ref;
+    const to = vac.to < ref ? vac.to : ref;
+    pausedDays = Math.max(0, daysBetween(from, to));
+  }
+
+  const profile = {
+    ...s.household,
+    personCount: s.settings.household,
+    shoppingIntervalDays: pattern ? Math.round(7 / Math.max(0.5, pattern.perWeek)) : 7
+  };
+
+  // Kaufhistorie je Haushaltsprodukt, mit Packungsmenge aus dem Bon,
+  // sonst aus dem Katalog.
+  const nonFoodEntries = [];
+  for (const pid of new Set(s.purchases.map((x) => x.productId))) {
+    if (!isNonFood(pid)) continue;
+    const rows = s.purchases
+      .filter((x) => x.productId === pid)
+      .map((x) => ({
+        date: x.date,
+        quantity: x.quantity,
+        price: x.unitPrice * x.quantity,
+        packageValue: x.packageValue || null
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const swap = s.swaps[pid] || {};
+    nonFoodEntries.push({
+      productId: pid,
+      purchases: rows,
+      lastSwap: swap.lastSwap || null,
+      swaps: swap.history || [],
+      pausedDays
+    });
+  }
+
+  const nonFoodRates = learnAllRates(nonFoodEntries, ref, profile);
+  const supplies = supplyOverview(nonFoodEntries, ref, profile, nonFoodRates);
+  const swapsDue = dueSwaps(nonFoodEntries, ref, profile, pausedDays);
+  const nonFoodSaved = nonFoodSavings(nonFoodEntries, ref);
+
+  // Grundpreis-Einschätzung des letzten Kaufs, für das Detail-Blatt.
+  const basePrices = new Map();
+  for (const entry of nonFoodEntries) {
+    if (!entry.purchases.length) continue;
+    const last = entry.purchases[entry.purchases.length - 1];
+    const bp = basePrice(entry.productId, last.price, last.packageValue, last.quantity);
+    if (!bp) continue;
+    const pct2 = pricePercentile(entry.productId, bp.value, entry.purchases);
+    basePrices.set(entry.productId, pct2 && pct2.percentile !== null ? pct2 : { message: bp.display });
+  }
+
+  // Bevorratung nur, wo Preis UND Rate belastbar sind.
+  const stockUp = [];
+  for (const sup of supplies) {
+    const entry = nonFoodEntries.find((e) => e.productId === sup.productId);
+    if (!entry || !entry.purchases.length) continue;
+    const last = entry.purchases[entry.purchases.length - 1];
+    const advice = stockUpAdvice(sup, {
+      history: entry.purchases,
+      currentPrice: last.price,
+      currentPackage: last.packageValue,
+      profile
+    });
+    if (advice && advice.units > 0) stockUp.push(advice);
+  }
   /* --- Vorschlagsliste: gelernte Rhythmen, sonst Kategorie-Annahmen --- */
   let base = [];
   const lookahead = Math.max(0, Number(s.settings.lookaheadDays) || 0);
   if (stage.stage >= 3) {
     for (const [pid, r] of rhythms) {
+      // Haushaltsprodukte laufen NICHT über den Kaufrhythmus. Bei
+      // ihnen entspricht die gekaufte Menge der verbrauchten, also
+      // rechnet das Verbrauchsmodell weiter unten — mit der Reichweite
+      // als Auslöser statt mit dem Kaufabstand.
+      if (isNonFood(pid)) continue;
       if (!r.rhythmDays || !r.lastPurchaseDate || r.confidence < 0.4) continue;
       const since = daysBetween(r.lastPurchaseDate, ref);
       const dueIn = r.rhythmDays - since;   // negativ = überfällig
@@ -454,6 +575,28 @@ function compute() {
   // Haushaltsgröße skaliert die Mengen (Bezugsgröße: 2 Personen)
   const scale = s.settings.household / 2;
   base = base.map((b) => ({ ...b, price: Math.round(b.price * scale * 100) / 100 }));
+
+  // Haushaltsprodukte kommen über ihre Reichweite auf die Liste. Die
+  // Menge skaliert hier NICHT mit der Haushaltsgröße — das steckt
+  // schon in der Verbrauchsrate. UNSICHER und SPORADIC liefern
+  // `dueForPurchase: false` und tauchen deshalb gar nicht erst auf.
+  for (const sup of supplies) {
+    if (!sup.dueForPurchase) continue;
+    const p = byId(sup.productId);
+    if (!p) continue;
+    base.push({
+      productId: sup.productId, name: p.name, category: p.category, aisle: p.aisle,
+      price: p.typicalPrice,
+      rhythmDays: null, confidence: null,
+      daysSince: daysBetween(sup.lastPurchase, ref),
+      dueIn: Math.round(sup.daysOfSupply),
+      wasteRate: 0, riskFlag: false,
+      shelfLifeDays: p.shelfLifeDays, perishable: false,
+      basis: "verbrauch",
+      supply: sup
+    });
+  }
+  base.sort((a, b) => (a.dueIn ?? 99) - (b.dueIn ?? 99));
 
   // Urlaubsmodus
   let vacation = null;
@@ -568,7 +711,6 @@ function compute() {
 
   const safety = safetyAlert(items.filter((i) => i.on));
 
-  const pattern = shoppingPattern(s.receipts, ref);
   const season = offSeason(items.filter((i) => i.on), ref);
   const seasonNow = inSeasonNow(ref);
 
@@ -588,6 +730,7 @@ function compute() {
     inflation,
     range, prices, forgotten, freeze, safety,
     opened, pattern, season, seasonNow,
+    profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     store, aisleList,
     ethylene: checkEthyleneConflicts(items.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
@@ -668,7 +811,7 @@ function searchProducts(query, limit = 12) {
 const Data = {
   STORE_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
-  addReceipt, removeReceipt, learnAlias, toggleOpened,
+  addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor,
   loadDemo, buildDemoHistory, buildFirstReceipt,
   exportJson, importJson,
   compute, parseReceiptText, searchProducts,

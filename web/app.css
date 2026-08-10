@@ -654,3 +654,41 @@ button.hero:active{opacity:.7}
 
 /* Karten ohne Titel brauchen oben keinen Extraabstand */
 .card:empty{display:none}
+
+
+/* ================================================================
+   Haushaltsprodukte: Konfidenzmarken, Sektionen, sechs Tabs
+   ================================================================ */
+
+/* Nie eine Zahl ohne Konfidenzmarke — gefüllt heißt gelernt. */
+.supplyVal{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.dot{
+  width:9px;height:9px;flex:0 0 auto;border-radius:99px;
+  border:1.5px solid var(--ink-3);background:transparent;
+}
+.dot.full{background:var(--accent);border-color:var(--accent)}
+.dot.half{background:linear-gradient(90deg,var(--accent) 50%,transparent 50%);border-color:var(--accent)}
+.dot.none{border-style:dashed;opacity:.5}
+
+/* Sektionsüberschrift innerhalb einer Positionsliste */
+.sectionRow{
+  padding:9px 16px 7px;font-size:12.5px;font-weight:600;
+  color:var(--ink-2);text-transform:uppercase;letter-spacing:.05em;
+  background:var(--surface-2);position:relative;
+}
+
+/* Sechs Tabs statt fünf: „Fällig" braucht einen eigenen Platz. */
+.nav button{font-size:9.5px}
+.nav button svg{width:24px;height:24px}
+@media (max-width:360px){
+  .nav button{font-size:9px}
+  .nav button svg{width:22px;height:22px}
+}
+@media (min-width:900px){
+  .nav button{font-size:15px}
+  .nav button svg{width:22px;height:22px}
+}
+
+/* Zeilentext als Knopf, ohne wie einer auszusehen */
+.plainBtn{text-align:left;padding:0;background:none;display:block}
+.plainBtn:active{opacity:.55}

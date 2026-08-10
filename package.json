@@ -8,8 +8,8 @@
     "build": "node build.js",
     "start": "node tools/serve.js",
     "dev": "node build.js && node tools/serve.js",
-    "test": "node test/tests.js && node test/stresstest.js && node test/features.js && node build.js --quiet && node test/uitest.js",
-    "test:algo": "node test/tests.js && node test/stresstest.js && node test/features.js",
+    "test": "node test/tests.js && node test/stresstest.js && node test/features.js && node test/nonfood.js && node build.js --quiet && node test/uitest.js",
+    "test:algo": "node test/tests.js && node test/stresstest.js && node test/features.js && node test/nonfood.js",
     "test:ui": "node build.js && node test/uitest.js",
     "icons": "node tools/iconGen.js"
   },

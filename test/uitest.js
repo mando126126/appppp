@@ -113,7 +113,7 @@ ready.then(() => {
 console.log("\n--- Start ---");
 ok("App startet ohne Laufzeitfehler", errors.length === 0, errors[0]);
 const App = T.App;
-ok("Navigation ist aufgebaut", $("nav").children.length === 5);
+ok("Navigation ist aufgebaut", $("nav").children.length === 6, $("nav").children.length);
 ok("Großer Titel ist gesetzt", !!$("largeTitle").querySelector("h1"));
 ok("Leerer Start zeigt keine erfundenen Zahlen", !$("main").querySelector(".hero,.tile"));
 ok("Bauversion ist eingesetzt", /^[a-z0-9]+$/.test(String(window.__BUILD__)), String(window.__BUILD__));
@@ -137,7 +137,7 @@ ok("Wochenschnitt ist plausibel", ctx.totals.spendPerWeek > 5 && ctx.totals.spen
 ok("Demo-Historie liegt in der Vergangenheit", ctx.totals.firstDate < D.today());
 
 console.log("\n--- Alle Bereiche durchklicken ---");
-["liste", "bestand", "erfassen", "zahlen", "mehr"].forEach((tab) => {
+["liste", "faellig", "bestand", "erfassen", "zahlen", "mehr"].forEach((tab) => {
   const before = errors.length;
   App.goto(tab);
   ok(`Bereich "${tab}" rendert`, errors.length === before && $("main").children.length > 0, errors[before]);
@@ -269,7 +269,7 @@ ok("Sicherung stellt alles wieder her", restored === countBefore, `${restored} v
 console.log("\n--- Kaltstart: leerer Zustand ---");
 D.reset();
 const b4empty = errors.length;
-["liste", "bestand", "erfassen", "zahlen", "mehr"].forEach((tab) => App.goto(tab));
+["liste", "faellig", "bestand", "erfassen", "zahlen", "mehr"].forEach((tab) => App.goto(tab));
 ok("Alle Bereiche halten den leeren Zustand aus", errors.length === b4empty, errors[b4empty]);
 App.goto("liste");
 ok("Leerer Start erklärt den nächsten Schritt", /Einkauf erfassen|Beispieldaten/.test($("main").textContent));
@@ -279,7 +279,7 @@ D.loadDemo("first");
 const c1 = D.compute();
 ok("Stufe 1 wird erkannt", c1.stage.stage === 1, "Stufe " + c1.stage.stage);
 const b4cold = errors.length;
-["liste", "bestand", "zahlen", "mehr"].forEach((tab) => App.goto(tab));
+["liste", "faellig", "bestand", "zahlen", "mehr"].forEach((tab) => App.goto(tab));
 ok("Ansichten laufen auch mit einem einzigen Bon", errors.length === b4cold, errors[b4cold]);
 
 console.log("\n--- Sicherheitsregel ---");
@@ -460,6 +460,129 @@ console.log("\n--- Weitere neue Funktionen ---");
     errors[b4]);
   App.goto("mehr");
   ok("Ansicht rendert danach fehlerfrei", errors.length === b4 && $("main").children.length > 0);
+}
+
+console.log("\n--- Haushaltsprodukte ---");
+D.loadDemo("full");
+App.goto("liste");
+const cn = App.ctx;
+ok("Haushaltsprodukte werden erkannt", cn.nonFoodEntries.length > 5, `${cn.nonFoodEntries.length} Produkte`);
+ok("Reichweiten werden gerechnet", cn.supplies.length > 0, `${cn.supplies.length}`);
+ok("Jede Reichweite trägt eine Konfidenz", cn.supplies.every((x) => !!x.confidence));
+ok("Austauschprodukte werden verfolgt", cn.swapsDue.length > 0, `${cn.swapsDue.length}`);
+ok("Haushaltsprofil fließt in die Rechnung",
+  cn.profile.personCount === D.get().settings.household && !!cn.profile.waterHardness);
+
+{
+  // Liste: zwei Sektionen statt zweier Tabs
+  const sections = [...$("main").querySelectorAll(".sectionRow")].map((x) => x.textContent);
+  ok("Liste trennt Lebensmittel und Haushalt",
+    sections.length === 0 || (sections.includes("Lebensmittel") && sections.includes("Haushalt")),
+    sections.join(" / "));
+}
+{
+  App.goto("faellig");
+  const b4 = errors.length;
+  ok("Fällig-Ansicht rendert", errors.length === b4 && $("main").children.length > 0, errors[b4]);
+  ok("Fällige Austausche werden gezeigt", /Zahnbürste|Küchenschwamm|Wasserfilter/.test($("main").textContent));
+
+  const swapBtn = [...$("main").querySelectorAll("button")].find((b) => b.textContent === "Getauscht");
+  ok("Getauscht-Knopf ist da", !!swapBtn);
+  if (swapBtn) {
+    const before = App.ctx.swapsDue.find((x) => x.due);
+    click(swapBtn);
+    const after = App.ctx.swapsDue.find((x) => x.productId === before.productId);
+    ok("Tausch setzt den Zähler zurück", after.inUse === 0 && after.due === false,
+      `${before.inUse} -> ${after.inUse}`);
+    ok("Tausch wird gespeichert", !!D.get().swaps[before.productId].lastSwap);
+    ok("Tausch ist kein Kauf", !D.get().purchases.some((p) =>
+      p.productId === before.productId && p.date === D.today()));
+  }
+}
+{
+  // Konfidenzmarken: nie eine Zahl ohne, bei UNSICHER keine Zahl
+  App.goto("bestand");
+  const dots = $("main").querySelectorAll(".supplyVal .dot");
+  const vals = $("main").querySelectorAll(".supplyVal .rowValue");
+  ok("Jede Reichweite hat eine Konfidenzmarke", dots.length === vals.length && dots.length > 0,
+    `${vals.length} Werte, ${dots.length} Marken`);
+  const unsure = App.ctx.supplies.filter((x) => x.daysOfSupply === null || x.confidence === "UNSICHER");
+  ok("Unregelmäßiges zeigt einen Strich statt einer Zahl",
+    unsure.length === 0 || [...vals].some((v) => v.textContent === "—"),
+    unsure.map((x) => x.name).join());
+}
+{
+  // Detail-Blatt eines Haushaltsprodukts
+  const sup = App.ctx.supplies.find((x) => x.consumptionClass === "RATE");
+  App.goto("bestand");
+  const row = [...$("main").querySelectorAll("button.row")]
+    .find((r) => r.textContent.includes(sup.name));
+  if (row) {
+    click(row);
+    const txt = $("sheet").textContent;
+    ok("Detail nennt die Verbrauchsart", /aufgebraucht|ausgetauscht|unregelmäßig/.test(txt));
+    ok("Detail nennt Packung und Verbrauch", /Packung/.test(txt) && /Verbrauch/.test(txt));
+    ok("Detail nennt die WG-Zuordnung", /geteilt|persönlich/.test(txt));
+    App.closeSheet();
+  } else {
+    ok("Detail nennt die Verbrauchsart", false, "Zeile nicht gefunden");
+    ok("Detail nennt Packung und Verbrauch", false);
+    ok("Detail nennt die WG-Zuordnung", false);
+  }
+}
+{
+  // Haushaltsprofil: Gerät abschalten filtert Produkte hart aus
+  App.goto("mehr");
+  const before = App.ctx.supplies.length + App.ctx.swapsDue.length;
+  App.set((st) => { st.household.hasWashingMachine = false; st.household.hasCoffeeMachine = false; });
+  const after = App.ctx.supplies.length + App.ctx.swapsDue.length;
+  ok("Fehlende Geräte filtern Produkte aus", after < before, `${before} -> ${after}`);
+  ok("Waschmittel verschwindet ohne Waschmaschine",
+    !App.ctx.supplies.some((x) => x.productId === "waschmittel"));
+  App.set((st) => { st.household.hasWashingMachine = true; st.household.hasCoffeeMachine = true; });
+  ok("Und kommt zurück", App.ctx.supplies.some((x) => x.productId === "waschmittel"));
+}
+{
+  // Wasserhärte wirkt auf Verbrauch und Intervall
+  App.set((st) => { st.household.waterHardness = "weich"; });
+  const soft = App.ctx.supplies.find((x) => x.productId === "waschmittel");
+  App.set((st) => { st.household.waterHardness = "hart"; });
+  const hard = App.ctx.supplies.find((x) => x.productId === "waschmittel");
+  ok("Wasserhärte wirkt auf die Rechnung",
+    !soft || !hard || soft.dailyUsage !== hard.dailyUsage || soft.confidence === "GELERNT",
+    soft && hard ? `${soft.dailyUsage} vs ${hard.dailyUsage}` : "kein Waschmittel");
+  App.set((st) => { st.household.waterHardness = "mittel"; });
+}
+{
+  // Urlaub: Zahnbürste altert weiter, Küchenschwamm nicht
+  const brushBefore = App.ctx.swapsDue.find((x) => x.productId === "zahnbuerste");
+  const spongeBefore = App.ctx.swapsDue.find((x) => x.productId === "kuechenschwamm");
+  App.set((st) => {
+    st.settings.vacation = { active: true, from: D.plusDays(D.today(), -14), to: D.today() };
+  });
+  const brushAfter = App.ctx.swapsDue.find((x) => x.productId === "zahnbuerste");
+  const spongeAfter = App.ctx.swapsDue.find((x) => x.productId === "kuechenschwamm");
+  if (brushBefore && brushAfter) {
+    ok("Zahnbürste altert auch im Urlaub", brushAfter.inUse === brushBefore.inUse,
+      `${brushBefore.inUse} -> ${brushAfter.inUse}`);
+  } else ok("Zahnbürste altert auch im Urlaub", true, "übersprungen");
+  if (spongeBefore && spongeAfter) {
+    ok("Küchenschwamm pausiert im Urlaub", spongeAfter.inUse < spongeBefore.inUse,
+      `${spongeBefore.inUse} -> ${spongeAfter.inUse}`);
+  } else ok("Küchenschwamm pausiert im Urlaub", true, "übersprungen");
+  App.set((st) => { st.settings.vacation = { active: false, from: null, to: null }; });
+}
+{
+  // Alte Sicherung ohne Haushaltsprofil bleibt lesbar
+  const old2 = JSON.parse(D.exportJson());
+  delete old2.household;
+  delete old2.swaps;
+  const b4 = errors.length;
+  D.importJson(JSON.stringify(old2));
+  ok("Sicherung ohne Haushaltsprofil bekommt die Vorgaben",
+    D.get().household.waterHardness === "mittel" && errors.length === b4, errors[b4]);
+  App.goto("faellig");
+  ok("Fällig rendert auch danach", errors.length === b4 && $("main").children.length > 0);
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 328 Tests: Module, Grenzfälle, Funktionen, Oberfläche
+npm test        # 480 Tests: Module, Grenzfälle, Funktionen, Haushalt, Oberfläche
 ```
 
 ---
@@ -63,6 +63,70 @@ Dazu in der Oberfläche: helles und dunkles Erscheinungsbild, drei
 Schriftgrößen, und Hinweise lassen sich für eine Woche wegtippen statt
 dauerhaft zu verschwinden.
 
+### Haushaltsprodukte rechnen anders
+
+Non-Food ist nicht dieselbe Aufgabe mit anderen Produkten, sondern ein
+anderes Problem:
+
+| | Lebensmittel | Haushalt |
+|---|---|---|
+| Feind | Verderb — zu viel gekauft | Leerstand — zu spät gekauft |
+| Kaufabstand ≈ Verbrauch? | nein, Verderb verzerrt | **ja**, sauberes Signal |
+| Bevorratung | schädlich | rational |
+| Fehler spürbar? | nein | **sofort** |
+
+Deshalb ein eigenes Modell: eine **Verbrauchsrate** statt eines
+Kaufrhythmus, skaliert mit der Haushaltsgröße hoch einem Exponenten je
+Produkt — Zahnpasta linear, Waschmittel degressiv, Allzweckreiniger gar
+nicht. Vier Verbrauchsklassen bestimmen, was gerechnet wird:
+
+| Klasse | Modell | Beispiele |
+|---|---|---|
+| `RATE` | Menge nimmt linear ab | Zahnpasta, Waschmittel, Klopapier |
+| `INTERVAL` | Austausch nach Zeit, unabhängig von der Menge | Zahnbürste (90 T), Küchenschwamm (10 T) |
+| `SPORADIC` | **keine Prognose** — nur Historie | Batterien, Glühbirnen |
+| `DATED` | echtes Verfalls- oder Öffnungsdatum | Sonnencreme, Mascara |
+
+Sieben Module: `nonFoodCatalog`, `consumptionModel`, `rateLearner`,
+`intervalTracker`, `basePrice`, `stockUpAdvisor`, `quantityParser`.
+
+**Das Kaltstartproblem ist hier größer** — Zahnpasta wird alle sieben
+Wochen gekauft, drei Datenpunkte brauchen fünf Monate. Deshalb
+Referenzwert als Prior, Beobachtung als Posterior: nach sechs Käufen
+bestimmt die Beobachtung drei Viertel. Der Nutzer sieht immer, worauf
+eine Zahl beruht — gefüllter Punkt heißt gelernt, hohler heißt
+Schätzwert. Bei unregelmäßigem Kauf (Variationskoeffizient ab 0,35)
+steht ein Strich statt einer Zahl.
+
+`INTERVAL` ist die Klasse mit dem schnellsten Nutzen: kein Kaltstart,
+keine Historie, kein Lernen. Kaufdatum plus Intervall genügt, und
+niemand denkt nach drei Monaten von selbst an die Zahnbürste. Sie hat
+deshalb einen eigenen Bereich **Fällig** — das sind Handlungen, keine
+Käufe: „Getauscht" setzt den Zähler zurück, ohne dass etwas gekauft
+wurde.
+
+Weitere Entscheidungen, alle bewusst zurückhaltend:
+
+- **Bevorratung nur bei gelernter Rate.** Ein Vorratsstapel, der nach
+  vierzehn Monaten noch steht, ist ein Vertrauensverlust.
+- **Preisvergleich nur gegen die eigene Historie.** Keine Preis-API,
+  keine Fremddaten. Mindestens vier Datenpunkte, sonst keine Aussage —
+  nicht etwa Perzentil 0.
+- **Ersparnis getrennt ausgewiesen.** Die Non-Food-Ersparnis ist
+  realisiert (weniger gezahlt), die Lebensmittel-Ersparnis
+  kontrafaktisch (nicht verdorben). Beides zu addieren wäre irreführend.
+- **Gerätebesitz filtert hart.** Ohne Kaffeemaschine kein Entkalker.
+- **Wasserhärte** wirkt auf Entkalkungsintervall und Waschmitteldosis;
+  manuell wählbar, keine Ableitung aus der Postleitzahl.
+- **Urlaub je Produkt.** Eine Zahnbürste altert im Urlaub weiter, ein
+  Küchenschwamm nicht.
+- **Ein Tab, zwei Sektionen.** Kein zweiter Tab für Haushalt — das
+  erzeugte zwei mentale Modelle und halbierte die Nutzung beider.
+
+Der Steuersatz auf dem Bon (7 % meist Lebensmittel, 19 % meist
+Haushalt) ist ein Vorfilter mit Ausnahmelisten in beide Richtungen,
+kein Ersatz für den Produktabgleich.
+
 ### Gestaltung: die Fläche zeigt Zahlen, nicht Erklärungen
 
 Jede Erklärung sitzt hinter einem (i) neben der Gruppenüberschrift oder
@@ -98,7 +162,7 @@ Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 ## Aufbau
 
 ```
-src/algo/        30 Node-Module — 20 unverändert aus der Vorlage, 10 neue
+src/algo/        37 Node-Module — 20 unverändert aus der Vorlage, 17 neue
 src/ui/
   index.html     Gerüst
   app.css        eine Gestaltung für Telefon und Rechner
@@ -120,15 +184,16 @@ Namens ging im Browser zufällig gut und war trotzdem ein Fehler.
 Verzeichnis ohne Node-Installation ausliefern. Nach Änderungen in `src/`
 gehört `npm run build` in denselben Commit.
 
-## Die fünf Bereiche
+## Die sechs Bereiche
 
 | Bereich | Was drin steckt |
 |---|---|
 | **Liste** | Vorrats-Reichweite als Ring, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
-| **Bestand** | geschätzter Vorrat, angebrochene Packungen, Rezepte nach gerettetem Betrag, Einräumhilfe nach Kühlzonen, Aufbrauchplan vor der Reise |
+| **Fällig** | Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
+| **Bestand** | geschätzter Vorrat, Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
 | **Zahlen** | eigener Einkaufsrhythmus, Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
-| **Mehr** | Erscheinungsbild, Schriftgröße, Ladenweg je Markt, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
+| **Mehr** | Erscheinungsbild, Schriftgröße, Haushaltsprofil (Wasserhärte, Geräte), Ladenweg je Markt, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
 
 Dazu der **Ladenmodus** als Vollbild: nach Gängen sortiert, große
 Ziele, am Ende ein Knopf, der den Einkauf in die Historie schreibt.
@@ -155,9 +220,9 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 328
-npm run test:algo # 57 Regressions- + 85 Stress- + 93 Funktionstests
-npm run test:ui   # 93 Oberflächentests in jsdom
+npm test          # alle 480
+npm run test:algo # 57 Regressions- + 85 Stress- + 93 Funktions- + 126 Haushaltstests
+npm run test:ui   # 119 Oberflächentests in jsdom
 ```
 
 Der Oberflächentest fährt die **gebaute** App in einem simulierten
@@ -181,11 +246,18 @@ erledigt:
    App unter *Mehr → Rechenweg*.
 2. **Der Bon-Parser ist an einem einzigen echten Bon kalibriert** (Lidl,
    22.07.2026). REWE, EDEKA und Kaufland folgen demselben Aufbau, sind
-   aber nicht geprüft.
-3. **Die Markenliste in `productMatcher2.js` ist Pflegearbeit.**
+   aber nicht geprüft. Das betrifft die Haushaltsprodukt-Erweiterung
+   besonders: sie baut vollständig auf dem Parser auf, und die
+   Mengenangabe im Artikelnamen („20WL", „75ML") ist dort die
+   entscheidende Zahl. Ohne sie greift der Katalogwert — gekennzeichnet
+   als Referenz, aber eben nicht gemessen.
+3. **Die Verbrauchsraten in `nonFoodCatalog.js` sind Schätzungen.**
+   Systematische Abweichung in eine Richtung heißt: Referenztabelle
+   korrigieren, nicht das Modell.
+4. **Die Markenliste in `productMatcher2.js` ist Pflegearbeit.**
    Kandidaten liefert die Auswertung nicht zugeordneter Bon-Zeilen — die
    App merkt sich bestätigte Schreibweisen inzwischen selbst.
-4. **Schwellenwerte sind Startwerte**, keine geprüften Konstanten.
+5. **Schwellenwerte sind Startwerte**, keine geprüften Konstanten.
 
 ### Sicherheitsregel (nicht verhandelbar)
 

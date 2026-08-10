@@ -1,4 +1,4 @@
-/* Gebündelt aus 30 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 37 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
 
 /* ===== foodDatabase.js ===== */
@@ -338,9 +338,9 @@ group("Haushalt", "Drogerie", STORAGE.NONE, [
   ["klopapier","Toilettenpapier",N,3650,3650,EST,3.99,1000,["TOILETTENPAPIER","KLOPAPIER"]],
   ["kuechenrolle","Küchenrolle",N,3650,3650,EST,1.99,500,["KUECHENROLLE","HAUSHALTSROLLE"]],
   ["muellbeutel","Müllbeutel",N,3650,3650,EST,2.49,300,["MUELLBEUTEL","MUELLSAECKE"]],
-  ["alufolie","Alufolie",N,3650,3650,EST,1.99,200,["ALUFOLIE","FRISCHHALTEFOLIE","BACKPAPIER"]],
+  ["alufolie","Alufolie",N,3650,3650,EST,1.99,200,["ALUFOLIE","ALU FOLIE","ALUMINIUMFOLIE"]],
   ["zahnpasta","Zahnpasta",N,1095,365,EST,1.79,75,["ZAHNPASTA","ZAHNCREME"]],
-  ["duschgel","Duschgel",N,1095,365,EST,1.99,300,["DUSCHGEL","SHAMPOO","SEIFE"]],
+  ["duschgel","Duschgel",N,1095,365,EST,1.99,300,["DUSCHGEL","DUSCHBAD","SHOWER GEL"]],
   ["deo","Deodorant",N,1095,365,EST,2.49,150,["DEO","DEODORANT"]],
   ["putztuecher","Reinigungstücher",N,1095,365,EST,1.49,200,["PUTZTUECHER","SCHWAMM","MIKROFASERTUCH"]],
   ["tierfutter","Tierfutter",M,540,3,EST,1.29,400,["HUNDEFUTTER","KATZENFUTTER","TIERFUTTER"]],
@@ -386,6 +386,58 @@ group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
 
 group("Haushalt", "Drogerie", STORAGE.NONE, [
   ["tragetasche","Tragetasche",N,3650,3650,EST,0.59,80,["PERM. TRAGETASC","TRAGETASCHE","PERMANENTTRAGETASCHE","EINKAUFSTASCHE"]]
+], { isFood: false, freezable: false });
+
+// ===================== NON-FOOD, ERWEITERT =======================
+// Die Verbrauchsklassen, Raten und Austauschintervalle stehen NICHT
+// hier, sondern in nonFoodCatalog.js — dieser Katalog bleibt die eine
+// Quelle für Name, Schreibweisen, Preis und Gewicht, auch für Non-Food.
+// Ein zweiter Produktkatalog wäre genau die Doppelpflege, gegen die
+// der Bündel-Build gebaut ist.
+//
+// dateType ist N (kein Datum): Non-Food verdirbt nicht. Die wenigen
+// Ausnahmen mit echtem Verfalls- oder Öffnungsdatum tragen ihre Frist
+// in nonFoodCatalog.js, nicht als MHD.
+
+group("Körperpflege", "Drogerie", STORAGE.NONE, [
+  ["shampoo","Shampoo",N,1095,1095,EST,2.49,300,["SHAMPOO","HAARSHAMPOO","SHAMPOO 300ML"]],
+  ["handseife","Handseife",N,1095,1095,EST,1.49,250,["HANDSEIFE","FLUESSIGSEIFE","SEIFENSPENDER","CREMESEIFE","SEIFE"]],
+  ["zahnbuerste","Zahnbürste",N,3650,3650,EST,1.95,30,["ZAHNBUERSTE","ZAHNBUERSTEN","HANDZAHNBUERSTE"]],
+  ["aufsteckbuersten","Aufsteckbürsten",N,3650,3650,EST,9.99,60,["AUFSTECKBUERSTEN","BUERSTENKOEPFE","ERSATZBUERSTEN"]],
+  ["rasierklingen","Rasierklingen",N,3650,3650,EST,8.99,50,["RASIERKLINGEN","RASIERER KLINGEN","SYSTEMKLINGEN"]],
+  ["duschschwamm","Duschschwamm",N,3650,3650,EST,1.99,40,["DUSCHSCHWAMM","MASSAGESCHWAMM","DUSCHHANDSCHUH"]],
+  ["sonnencreme","Sonnencreme",N,1095,365,EST,7.99,200,["SONNENCREME","SONNENMILCH","SONNENSCHUTZ","LSF"]],
+  ["mascara","Mascara",N,1095,180,EST,5.99,10,["MASCARA","WIMPERNTUSCHE"]],
+  ["kontaktlinsenloesung","Kontaktlinsenlösung",N,1095,90,EST,4.99,360,["KONTAKTLINSENLOESUNG","PFLEGEMITTEL LINSEN","ALL IN ONE LOESUNG"]],
+  ["desinfektionsmittel","Desinfektionsmittel",N,1095,365,EST,3.49,250,["DESINFEKTION","HAENDEDESINFEKTION","DESINFEKTIONSMITTEL"]]
+], { isFood: false, freezable: false });
+
+group("Waschen & Reinigen", "Drogerie", STORAGE.NONE, [
+  ["weichspueler","Weichspüler",N,1095,1095,EST,2.29,1000,["WEICHSPUELER","WEICHSPUEHLER"]],
+  ["spuelmaschinentabs","Spülmaschinentabs",N,1095,1095,EST,7.99,800,["SPUELMASCHINENTABS","GESCHIRRSPUELTABS","TABS ALL IN 1","SPUELTABS"]],
+  ["allzweckreiniger","Allzweckreiniger",N,1095,1095,EST,1.49,750,["ALLZWECKREINIGER","UNIVERSALREINIGER","ALLESREINIGER"]],
+  ["waschmaschinenreiniger","Waschmaschinenreiniger",N,1095,1095,EST,3.99,250,["WASCHMASCHINENREINIGER","MASCHINENPFLEGE","WM REINIGER"]],
+  ["entkalker","Entkalker",N,1095,1095,EST,3.49,500,["ENTKALKER","KALKLOESER","ENTKALKUNG"]],
+  ["kuechenschwamm","Küchenschwamm",N,3650,3650,EST,1.49,50,["KUECHENSCHWAMM","TOPFSCHWAMM","SCHWAMMTUCH","SPUELSCHWAMM"]],
+  ["spuelbuerste","Spülbürste",N,3650,3650,EST,1.29,60,["SPUELBUERSTE","ABWASCHBUERSTE"]],
+  ["wischbezug","Wischbezug",N,3650,3650,EST,3.99,150,["WISCHBEZUG","WISCHMOPP","MOPPBEZUG","BODENWISCHER"]],
+  ["staubsaugerbeutel","Staubsaugerbeutel",N,3650,3650,EST,6.99,120,["STAUBSAUGERBEUTEL","FILTERBEUTEL"]],
+  ["wasserfilter","Wasserfilterkartusche",N,1095,1095,EST,4.49,100,["WASSERFILTER","FILTERKARTUSCHE","KARTUSCHE"]]
+], { isFood: false, freezable: false });
+
+group("Papier & Folie", "Drogerie", STORAGE.NONE, [
+  ["taschentuecher","Taschentücher",N,3650,3650,EST,1.19,120,["TASCHENTUECHER","TEMPO","PAPIERTASCHENTUECHER"]],
+  ["frischhaltefolie","Frischhaltefolie",N,3650,3650,EST,1.79,200,["FRISCHHALTEFOLIE","KLARSICHTFOLIE"]],
+  ["backpapier","Backpapier",N,3650,3650,EST,1.49,200,["BACKPAPIER","BACKTRENNPAPIER"]],
+  ["gefrierbeutel","Gefrierbeutel",N,3650,3650,EST,1.99,150,["GEFRIERBEUTEL","GEFRIERBEUTEL 3L","TIEFKUEHLBEUTEL"]]
+], { isFood: false, freezable: false });
+
+group("Haushaltszubehör", "Drogerie", STORAGE.NONE, [
+  ["batterien","Batterien",N,3650,3650,EST,4.99,100,["BATTERIEN","AA BATTERIEN","AAA BATTERIEN","MIGNON"]],
+  ["gluehbirne","Leuchtmittel",N,3650,3650,EST,3.99,50,["GLUEHBIRNE","LED LAMPE","LEUCHTMITTEL","BIRNE E27"]],
+  ["kerzen","Kerzen",N,3650,3650,EST,2.99,300,["KERZEN","TEELICHTER","STUMPENKERZE"]],
+  ["klebeband","Klebeband",N,3650,3650,EST,1.99,80,["KLEBEBAND","PAKETBAND","TESAFILM"]],
+  ["schuhcreme","Schuhcreme",N,3650,3650,EST,2.49,75,["SCHUHCREME","SCHUHPFLEGE","LEDERPFLEGE"]]
 ], { isFood: false, freezable: false });
 
 // ---- Zugriffsfunktionen ----------------------------------------
@@ -4173,4 +4225,1175 @@ function listAsText(items, opts = {}) {
 function listAsLine(items) {
   if (!items.length) return "Nichts auf der Liste.";
   return items.map((i) => i.name).join(", ");
+}
+
+/* ===== nonFoodCatalog.js ===== */
+/**
+ * nonFoodCatalog.js — Verbrauchsmodell für Haushaltsprodukte
+ * ================================================================
+ * Haushaltsprodukte sind ein anderes Problem als Lebensmittel:
+ *
+ *   Lebensmittel    Feind ist Verderb — zu viel gekauft.
+ *   Haushalt        Feind ist Leerstand — zu spät gekauft.
+ *
+ * Daraus folgt alles Weitere. Bei Lebensmitteln verzerrt Verschwendung
+ * das Signal, deshalb der Median über Kaufabstände. Bei Non-Food gibt
+ * es keinen Verderb: die gekaufte Menge wird tatsächlich verbraucht,
+ * das Signal ist sauber, und man kann über eine Rate rechnen.
+ *
+ * Bevorratung ist hier rational statt schädlich — begrenzt nur durch
+ * Lagerplatz und Kapitalbindung.
+ *
+ * Dieser Katalog trägt AUSSCHLIESSLICH das Verbrauchsmodell. Name,
+ * Schreibweisen, Preis und Gewicht stehen weiter in foodDatabase.js;
+ * verknüpft wird über die Produktkennung. Ein zweiter Produktkatalog
+ * wäre genau die Doppelpflege, gegen die der Bündel-Build gebaut ist.
+ *
+ * ALLE Raten und Intervalle sind Startwerte. Die Quelle steht an
+ * jedem Eintrag und wird in der Oberfläche angezeigt — dasselbe
+ * Prinzip wie bei den Haltbarkeitsdaten: lieber eine ehrlich als
+ * Schätzung gekennzeichnete Zahl als eine, die Genauigkeit vortäuscht.
+ * ================================================================ */
+
+
+
+/* ---------- Verbrauchsklassen ---------- */
+const CLASS = {
+  // Menge nimmt näherungsweise linear ab — Prognose über eine Rate.
+  RATE: "RATE",
+  // Austausch nach Zeit, unabhängig von der Menge. Meist hygienisch
+  // begründet. Braucht kein Verbrauchsmodell und keine Historie:
+  // Kaufdatum plus Intervall genügt.
+  INTERVAL: "INTERVAL",
+  // Kein Muster ableitbar. Die App zeigt Historie, aber KEINE
+  // Prognose. Diese Klasse existiert, damit nicht geraten wird.
+  SPORADIC: "SPORADIC",
+  // Echtes Verfalls- oder Öffnungsdatum.
+  DATED: "DATED"
+};
+
+const SOURCE = {
+  SCHAETZUNG: "Schätzung",
+  HERSTELLER: "Herstellerangabe",
+  FACH: "Fachempfehlung",
+  HYGIENE: "Hygieneempfehlung"
+};
+
+/* ---------- Haushaltsskalierung (§5.2) ---------------------------
+ * Nicht alles skaliert linear mit der Haushaltsgröße. Zahnpasta schon
+ * — jede Person putzt. Waschmittel nicht: bei vier Personen läuft die
+ * Maschine voller, nicht viermal so oft.
+ *
+ *   f(n) = n ^ alpha
+ * ---------------------------------------------------------------- */
+const ALPHA = {
+  PER_PERSON: 1.0,     // Zahnpasta, Duschgel, Shampoo, Deo
+  SLIGHT: 0.75,        // Klopapier, Taschentücher, Handseife
+  DEGRESSIVE: 0.65,    // Waschmittel, Spülmittel, Müllbeutel
+  PER_HOUSEHOLD: 0.0   // Entkalker, Allzweckreiniger — einmal je Haushalt
+};
+
+/* ---------- Normeinheiten für den Grundpreis (§8.1) ---------- */
+const NORM = {
+  ML100: { unit: "ml", per: 100, label: "100 ml" },
+  G100: { unit: "g", per: 100, label: "100 g" },
+  WL: { unit: "WL", per: 1, label: "Waschladung" },
+  ROLLE: { unit: "Rolle", per: 1, label: "Rolle" },
+  BLATT100: { unit: "Blatt", per: 100, label: "100 Blatt" },
+  TAB: { unit: "Tab", per: 1, label: "Tab" },
+  STUECK: { unit: "Stück", per: 1, label: "Stück" },
+  METER: { unit: "m", per: 1, label: "Meter" },
+  TUCH: { unit: "Tuch", per: 100, label: "100 Tücher" }
+};
+
+/* ---------- Geräte, die ein Produkt voraussetzt ----------
+ * Ohne Kaffeemaschine keine Entkalker-Vorschläge. Ein Vorschlag für
+ * ein Gerät, das der Haushalt nicht hat, kostet mehr Vertrauen als
+ * er Nutzen bringt.                                                  */
+const DEVICE = {
+  DISHWASHER: "hasDishwasher",
+  WASHER: "hasWashingMachine",
+  COFFEE: "hasCoffeeMachine",
+  WATERFILTER: "hasWaterFilter"
+};
+
+/* ================================================================
+   Der Katalog
+   ================================================================ */
+const NONFOOD = {};
+
+function rate(id, opts) {
+  NONFOOD[id] = {
+    id,
+    consumptionClass: CLASS.RATE,
+    baseRatePerPersonPerDay: opts.rate,
+    scalingExponent: opts.alpha,
+    rateSource: opts.source || SOURCE.SCHAETZUNG,
+    package: { value: opts.pack, unit: opts.norm.unit, norm: opts.norm },
+    storageLimitDefault: opts.storage ?? 2,
+    promoCycleDaysDefault: opts.promo ?? 56,
+    sharedByDefault: opts.shared !== false,
+    pausesOnVacation: opts.pausesOnVacation !== false,
+    requiresDevice: opts.device || null,
+    hardnessSensitive: opts.hardness === true
+  };
+}
+
+function interval(id, opts) {
+  NONFOOD[id] = {
+    id,
+    consumptionClass: CLASS.INTERVAL,
+    replacementIntervalDays: opts.days,
+    intervalSource: opts.source || SOURCE.SCHAETZUNG,
+    package: { value: opts.pack ?? 1, unit: "Stück", norm: NORM.STUECK },
+    storageLimitDefault: opts.storage ?? 2,
+    promoCycleDaysDefault: opts.promo ?? 56,
+    sharedByDefault: opts.shared !== false,
+    // Eine Zahnbürste altert auch im Urlaub — sie wird mitgenommen.
+    // Ein Küchenschwamm liegt derweil trocken. Deshalb je Produkt.
+    pausesOnVacation: opts.pausesOnVacation === true,
+    requiresDevice: opts.device || null,
+    hardnessSensitive: opts.hardness === true
+  };
+}
+
+function sporadic(id, opts = {}) {
+  NONFOOD[id] = {
+    id,
+    consumptionClass: CLASS.SPORADIC,
+    package: { value: opts.pack ?? 1, unit: opts.unit || "Stück", norm: opts.norm || NORM.STUECK },
+    storageLimitDefault: opts.storage ?? 1,
+    promoCycleDaysDefault: opts.promo ?? 56,
+    sharedByDefault: opts.shared !== false,
+    pausesOnVacation: true,
+    requiresDevice: null,
+    hardnessSensitive: false
+  };
+}
+
+function dated(id, opts) {
+  NONFOOD[id] = {
+    id,
+    consumptionClass: CLASS.DATED,
+    // PAO = Period After Opening. Gilt ab dem Öffnen, und das Datum
+    // kennt die App nicht. Das Kaufdatum ist ein Behelf und wird als
+    // solcher gekennzeichnet — keine stille Schätzung.
+    paoMonths: opts.pao ?? null,
+    hasHardExpiry: opts.hardExpiry === true,
+    package: { value: opts.pack ?? 1, unit: opts.norm ? opts.norm.unit : "Stück", norm: opts.norm || NORM.STUECK },
+    storageLimitDefault: 1,
+    promoCycleDaysDefault: 56,
+    sharedByDefault: opts.shared !== false,
+    pausesOnVacation: false,   // eine Frist läuft im Urlaub weiter
+    requiresDevice: null,
+    hardnessSensitive: false,
+    datedSource: opts.source || SOURCE.HERSTELLER
+  };
+}
+
+/* ---------- RATE: kontinuierlicher Verbrauch (§7.1) ---------- */
+// Körperpflege ist persönlich — in einer WG teilt das niemand.
+rate("zahnpasta", { rate: 1.5, alpha: ALPHA.PER_PERSON, pack: 75, norm: NORM.ML100, shared: false });
+rate("duschgel", { rate: 10, alpha: ALPHA.PER_PERSON, pack: 300, norm: NORM.ML100, shared: false });
+rate("shampoo", { rate: 3.5, alpha: ALPHA.PER_PERSON, pack: 300, norm: NORM.ML100, shared: false });
+rate("deo", { rate: 0.7, alpha: ALPHA.PER_PERSON, pack: 50, norm: NORM.ML100, shared: false });
+rate("handseife", { rate: 8, alpha: ALPHA.SLIGHT, pack: 250, norm: NORM.ML100 });
+
+rate("klopapier", { rate: 0.14, alpha: ALPHA.SLIGHT, pack: 10, norm: NORM.ROLLE, storage: 3 });
+rate("kuechenrolle", { rate: 0.07, alpha: ALPHA.DEGRESSIVE, pack: 4, norm: NORM.ROLLE, storage: 3 });
+rate("taschentuecher", { rate: 0.3, alpha: ALPHA.SLIGHT, pack: 60, norm: NORM.TUCH });
+
+rate("waschmittel", { rate: 1.0, alpha: ALPHA.DEGRESSIVE, pack: 20, norm: NORM.WL, device: DEVICE.WASHER, hardness: true });
+rate("weichspueler", { rate: 0.6, alpha: ALPHA.DEGRESSIVE, pack: 30, norm: NORM.WL, device: DEVICE.WASHER });
+rate("spuelmittel", { rate: 6, alpha: ALPHA.DEGRESSIVE, pack: 500, norm: NORM.ML100 });
+rate("spuelmaschinentabs", { rate: 0.5, alpha: ALPHA.DEGRESSIVE, pack: 40, norm: NORM.TAB, device: DEVICE.DISHWASHER });
+rate("muellbeutel", { rate: 0.25, alpha: ALPHA.DEGRESSIVE, pack: 20, norm: NORM.STUECK });
+rate("allzweckreiniger", { rate: 5, alpha: ALPHA.PER_HOUSEHOLD, pack: 750, norm: NORM.ML100 });
+
+rate("alufolie", { rate: 0.15, alpha: ALPHA.DEGRESSIVE, pack: 20, norm: NORM.METER });
+rate("frischhaltefolie", { rate: 0.2, alpha: ALPHA.DEGRESSIVE, pack: 30, norm: NORM.METER });
+rate("backpapier", { rate: 0.1, alpha: ALPHA.DEGRESSIVE, pack: 20, norm: NORM.METER });
+rate("gefrierbeutel", { rate: 0.4, alpha: ALPHA.DEGRESSIVE, pack: 50, norm: NORM.STUECK });
+
+/* ---------- INTERVAL: zeitbasierter Austausch (§7.2) ----------
+ * Die schnellste Wirkung im ganzen Modell: kein Kaltstart, keine
+ * Historie, kein Lernen. Niemand denkt nach drei Monaten von selbst
+ * an die Zahnbürste.                                                */
+interval("zahnbuerste", { days: 90, source: SOURCE.FACH, shared: false, pausesOnVacation: false });
+interval("aufsteckbuersten", { days: 90, source: SOURCE.FACH, pack: 4, shared: false, pausesOnVacation: false });
+interval("kuechenschwamm", { days: 10, source: SOURCE.HYGIENE, pack: 5, pausesOnVacation: true });
+interval("spuelbuerste", { days: 60, source: SOURCE.HYGIENE, pausesOnVacation: true });
+interval("wischbezug", { days: 120, pausesOnVacation: true });
+interval("wasserfilter", { days: 28, source: SOURCE.HERSTELLER, device: DEVICE.WATERFILTER, hardness: true, pausesOnVacation: false });
+interval("rasierklingen", { days: 21, pack: 4, shared: false, pausesOnVacation: false });
+interval("duschschwamm", { days: 45, source: SOURCE.HYGIENE, shared: false, pausesOnVacation: true });
+interval("staubsaugerbeutel", { days: 45, pack: 4, pausesOnVacation: true });
+interval("waschmaschinenreiniger", { days: 60, source: SOURCE.HERSTELLER, device: DEVICE.WASHER, hardness: true, pausesOnVacation: true });
+interval("entkalker", { days: 90, source: SOURCE.HERSTELLER, device: DEVICE.COFFEE, hardness: true, pausesOnVacation: true });
+
+/* ---------- SPORADIC: kein Muster (§3.3) ---------- */
+sporadic("batterien", { pack: 4 });
+sporadic("gluehbirne");
+sporadic("kerzen", { pack: 6 });
+sporadic("klebeband");
+sporadic("schuhcreme", { pack: 75, unit: "ml", norm: NORM.ML100, shared: false });
+sporadic("tragetasche");
+sporadic("putztuecher", { pack: 30, unit: "Tuch", norm: NORM.TUCH });
+
+/* ---------- DATED: echtes Verfalls- oder Öffnungsdatum (§7.4) ---------- */
+dated("sonnencreme", { pao: 12, pack: 200, norm: NORM.ML100, shared: false });
+dated("kontaktlinsenloesung", { pao: 3, pack: 360, norm: NORM.ML100, shared: false });
+dated("desinfektionsmittel", { pao: 12, pack: 250, norm: NORM.ML100 });
+dated("mascara", { pao: 6, pack: 10, norm: NORM.ML100, shared: false });
+
+/* ---------- Wasserhärte (§7.3) ----------------------------------
+ * In Deutschland gesetzlich in drei Härtebereiche eingeteilt. Härteres
+ * Wasser heißt häufiger entkalken und mehr Waschmittel je Ladung.
+ * Der Wert kommt vom örtlichen Versorger; die App fragt ihn ab, statt
+ * ihn aus der Postleitzahl zu raten.                                 */
+const HARDNESS_FACTOR = { weich: 1.6, mittel: 1.0, hart: 0.6 };
+const HARDNESS_LABEL = {
+  weich: "weich (unter 8,4 °dH)",
+  mittel: "mittel (8,4–14 °dH)",
+  hart: "hart (über 14 °dH)"
+};
+
+/* ---------- Zugriff ---------- */
+
+/** Verbrauchsmodell eines Produkts, sonst null. */
+const nonFoodFor = (productId) => NONFOOD[productId] || null;
+
+/** Ist das ein Haushaltsprodukt mit Verbrauchsmodell? */
+const isNonFood = (productId) => !!NONFOOD[productId];
+
+/** Alle Produkte einer Verbrauchsklasse. */
+function byClass(consumptionClass) {
+  return Object.values(NONFOOD).filter((x) => x.consumptionClass === consumptionClass);
+}
+
+/**
+ * Gilt das Produkt für diesen Haushalt? Fehlt das nötige Gerät, wird
+ * es hart ausgefiltert statt schwach gewichtet.
+ */
+function appliesTo(productId, profile = {}) {
+  const e = NONFOOD[productId];
+  if (!e) return false;
+  if (!e.requiresDevice) return true;
+  return profile[e.requiresDevice] === true;
+}
+
+/** Katalogeintrag und Verbrauchsmodell in einem Objekt. */
+function fullProduct(productId) {
+  const p = byId(productId);
+  const n = NONFOOD[productId];
+  if (!p || !n) return null;
+  return { ...p, ...n, domain: "NONFOOD" };
+}
+
+/** Bericht über die Belastbarkeit der Non-Food-Daten. */
+function nonFoodQualityReport() {
+  const all = Object.values(NONFOOD);
+  const bySource = {};
+  all.forEach((x) => {
+    const src = x.rateSource || x.intervalSource || x.datedSource || "—";
+    bySource[src] = (bySource[src] || 0) + 1;
+  });
+  const inCatalog = all.filter((x) => byId(x.id)).length;
+  return {
+    total: all.length,
+    inCatalog,
+    missing: all.filter((x) => !byId(x.id)).map((x) => x.id),
+    rate: byClass(CLASS.RATE).length,
+    interval: byClass(CLASS.INTERVAL).length,
+    sporadic: byClass(CLASS.SPORADIC).length,
+    datedCount: byClass(CLASS.DATED).length,
+    bySource,
+    anteilGeschaetzt: Math.round(((bySource[SOURCE.SCHAETZUNG] || 0) / all.length) * 100)
+  };
+}
+
+/* ===== quantityParser.js ===== */
+/**
+ * quantityParser.js — Menge und Domäne aus der Bonzeile
+ * ================================================================
+ * Non-Food-Positionen tragen die Menge fast immer im Artikelnamen:
+ * „WASCHMITTEL 20WL", „ZAHNPASTA 75ML", „TOILETTENPAPIER 10ER".
+ * Ohne diese Zahl ist kein Grundpreis und keine Reichweite zu rechnen,
+ * und der Katalogwert wäre bei jeder abweichenden Packungsgröße falsch.
+ *
+ * Zweitens die Steuersatz-Heuristik: deutsche Kassenbons weisen den
+ * Satz je Position aus. 7 % ist überwiegend Lebensmittel, 19 %
+ * überwiegend Non-Food — ein starkes und kostenloses Signal.
+ *
+ * Es ist aber ein VORFILTER, kein Ersatz für den Produktabgleich. Die
+ * Ausnahmen sind zu zahlreich: Getränke, Spirituosen, Tabak und
+ * Tiernahrung stehen auf 19 %, Schnittblumen und Zeitschriften auf
+ * 7 %. Deshalb greift die Heuristik erst, wenn der Abgleich nichts
+ * gefunden hat, und dann nur als Vorschlag zur Bestätigung.
+ * ================================================================
+ */
+
+
+
+
+// Einheiten, wie sie auf deutschen Bons vorkommen.
+const UNIT_ALIASES = {
+  ML: "ml", L: "l", CL: "cl",
+  G: "g", GR: "g", KG: "kg",
+  WL: "WL", WG: "WL",
+  ER: "Stück", ST: "Stück", STK: "Stück", STCK: "Stück", STUECK: "Stück",
+  BL: "Blatt", BLATT: "Blatt",
+  M: "m", METER: "m",
+  TAB: "Tab", TABS: "Tab",
+  ROLLE: "Rolle", ROLLEN: "Rolle", RL: "Rolle",
+  TUCH: "Tuch", TUECHER: "Tuch"
+};
+
+const RE_QUANTITY = /(\d+(?:[.,]\d+)?)\s*(ML|CL|L|KG|GR|G|WL|WG|ER|STK|STCK|STUECK|ST|BLATT|BL|METER|M|TABS|TAB|ROLLEN|ROLLE|RL|TUECHER|TUCH)\b/i;
+
+/** Normalisiert Umlaute und Sonderzeichen wie im Produktabgleich. */
+const norm = (t) => String(t).toUpperCase()
+  .replace(/Ä/g, "AE").replace(/Ö/g, "OE").replace(/Ü/g, "UE").replace(/ß/g, "SS");
+
+/**
+ * Menge aus einem Artikelnamen ziehen.
+ * @returns {null|{value, unit, raw}}
+ */
+function parseQuantity(text) {
+  const m = norm(text).match(RE_QUANTITY);
+  if (!m) return null;
+
+  const value = parseFloat(m[1].replace(",", "."));
+  if (!Number.isFinite(value) || value <= 0) return null;
+
+  let unit = UNIT_ALIASES[m[2].toUpperCase()] || m[2].toLowerCase();
+  let out = value;
+
+  // Auf die Basiseinheit bringen, in der der Katalog rechnet.
+  if (unit === "l") { out = value * 1000; unit = "ml"; }
+  else if (unit === "cl") { out = value * 10; unit = "ml"; }
+  else if (unit === "kg") { out = value * 1000; unit = "g"; }
+
+  return { value: Math.round(out * 100) / 100, unit, raw: m[0] };
+}
+
+/**
+ * Packungsmenge für eine Bonposition: erst aus dem Text, sonst aus dem
+ * Katalog. Woher der Wert stammt, wird mitgeliefert — ein Katalogwert
+ * darf nicht als gemessen durchgehen.
+ */
+function packageValueFor(productId, rawText) {
+  const e = nonFoodFor(productId);
+  if (!e) return null;
+
+  const parsed = parseQuantity(rawText || "");
+  if (parsed && compatibleUnit(parsed.unit, e.package.unit)) {
+    return { value: parsed.value, unit: parsed.unit, source: "bon", confidence: "GEMESSEN" };
+  }
+  return { value: e.package.value, unit: e.package.unit, source: "katalog", confidence: "REFERENZ" };
+}
+
+/** Passt die gefundene Einheit zu der, in der das Produkt rechnet? */
+function compatibleUnit(found, expected) {
+  if (!found || !expected) return false;
+  if (found === expected) return true;
+  // „10ER" bei Klopapier meint zehn Rollen, „50ER" bei Gefrierbeuteln
+  // fünfzig Stück — Stück und Rolle sind hier dasselbe Zählmaß.
+  const countUnits = new Set(["Stück", "Rolle", "Tab", "Blatt", "Tuch"]);
+  return countUnits.has(found) && countUnits.has(expected);
+}
+
+/* ---------- Steuersatz-Heuristik (§9.1) ---------- */
+
+const VAT = { REDUCED: 7, FULL: 19 };
+
+// 19 %, aber trotzdem kein Haushaltsprodukt.
+const FULL_RATE_BUT_FOOD = [
+  "WASSER", "COLA", "LIMO", "SAFT", "BIER", "WEIN", "SEKT", "SPIRITUOSE",
+  "SCHNAPS", "VODKA", "WHISKY", "GIN", "RUM", "LIKOER", "ENERGY", "EISTEE",
+  "TABAK", "ZIGARETTEN", "HUNDEFUTTER", "KATZENFUTTER", "TIERFUTTER", "PFAND"
+];
+
+// 7 %, aber trotzdem kein Lebensmittel.
+const REDUCED_RATE_BUT_NONFOOD = ["BLUMEN", "ZEITSCHRIFT", "ZEITUNG", "BUCH", "PFLANZE"];
+
+/**
+ * Einschätzung der Domäne einer Bonzeile.
+ * @returns {{domain, confidence, reason}}  domain: FOOD | NONFOOD | UNKLAR
+ */
+function guessDomain(rawText, taxClass, vatPercent) {
+  const text = norm(rawText || "");
+
+  // Steuerkennzeichen A/B, wie auf Lidl-Bons: A ermäßigt, B voll.
+  let vat = vatPercent;
+  if (!vat && taxClass) vat = String(taxClass).toUpperCase() === "A" ? VAT.REDUCED : VAT.FULL;
+
+  if (REDUCED_RATE_BUT_NONFOOD.some((w) => text.includes(w))) {
+    return { domain: "NONFOOD", confidence: 0.7, reason: "Ausnahme: Non-Food zum ermäßigten Satz" };
+  }
+  if (FULL_RATE_BUT_FOOD.some((w) => text.includes(w))) {
+    return { domain: "FOOD", confidence: 0.7, reason: "Ausnahme: Lebensmittel zum vollen Satz" };
+  }
+  if (vat === VAT.REDUCED) return { domain: "FOOD", confidence: 0.75, reason: "ermäßigter Steuersatz" };
+  if (vat === VAT.FULL) return { domain: "NONFOOD", confidence: 0.6, reason: "voller Steuersatz" };
+  return { domain: "UNKLAR", confidence: 0, reason: "kein Steuersatz auf der Zeile" };
+}
+
+/**
+ * Anreicherung einer bereits zugeordneten Bonposition. Ist ein Produkt
+ * erkannt, gilt der Katalog — die Heuristik ist nur für das, was übrig
+ * bleibt.
+ */
+function enrichLine(line) {
+  const productId = line.productId;
+  const known = productId ? byId(productId) : null;
+
+  if (known) {
+    const e = nonFoodFor(productId);
+    return {
+      ...line,
+      domain: known.isFood ? "FOOD" : "NONFOOD",
+      domainConfidence: 1,
+      domainReason: "im Katalog",
+      consumptionClass: e ? e.consumptionClass : null,
+      packaging: e ? packageValueFor(productId, line.raw) : null
+    };
+  }
+
+  const guess = guessDomain(line.raw, line.taxClass, line.vatPercent);
+  return {
+    ...line,
+    domain: guess.domain,
+    domainConfidence: guess.confidence,
+    domainReason: guess.reason,
+    consumptionClass: null,
+    packaging: null,
+    // Eine Vermutung wird vorgeschlagen, nicht gebucht.
+    needsConfirmation: true
+  };
+}
+
+/* ===== consumptionModel.js ===== */
+/**
+ * consumptionModel.js — Reichweite von Haushaltsprodukten
+ * ================================================================
+ * Die Rechnung für `RATE`-Produkte:
+ *
+ *   tagesverbrauch  = rate × haushaltsgröße^alpha × härtefaktor
+ *   restmenge(t)    = letzte Kaufmenge − verbrauchte Tage × verbrauch
+ *   reichweite      = restmenge / tagesverbrauch
+ *
+ * Der Unterschied zur Lebensmittel-Bestandsschätzung ist nicht die
+ * Formel, sondern die Datenlage: Non-Food verdirbt nicht, also
+ * entspricht die gekaufte Menge tatsächlich der verbrauchten. Bei
+ * Lebensmitteln verzerrt der Verderb genau dieses Signal.
+ *
+ * Die Vorwarnzeit ist NICHT konstant, sondern folgt dem gelernten
+ * Einkaufsrhythmus des Haushalts. Wer alle drei Tage einkauft,
+ * braucht sieben Tage Vorlauf; wer alle zwei Wochen einkauft, 23.
+ * ================================================================
+ */
+
+
+
+
+
+/**
+ * Tagesverbrauch eines Produkts in Packungseinheiten — für den GANZEN
+ * Haushalt, nicht je Person.
+ *
+ * `learnedRate` ist bereits eine Haushaltsrate: rateLearner beobachtet,
+ * was tatsächlich gekauft wurde, und das ist der Verbrauch aller
+ * Personen zusammen. Sie darf deshalb NICHT ein zweites Mal mit der
+ * Haushaltsgröße multipliziert werden — genau dieser Fehler ließ in
+ * einem Zweipersonenhaushalt jede Packung doppelt so schnell leer
+ * erscheinen. Skaliert wird nur der Katalogwert, der pro Person gilt.
+ */
+function dailyUsage(productId, profile = {}, learnedRate = null) {
+  const e = nonFoodFor(productId);
+  if (!e || e.consumptionClass !== CLASS.RATE) return null;
+
+  if (learnedRate !== null && learnedRate > 0) {
+    return Math.round(learnedRate * 1000) / 1000;
+  }
+
+  // Haushaltsgröße 0 ist kein sinnvoller Zustand, käme über eine
+  // fehlerhafte Sicherung aber durch — und 0^0 wäre 1, also eine
+  // stille Falschaussage statt eines Fehlers.
+  const persons = Math.max(1, Number(profile.personCount) || 1);
+  const scale = Math.pow(persons, e.scalingExponent);
+
+  // Härteres Wasser heißt mehr Waschmittel je Ladung. Der Faktor
+  // wirkt umgekehrt zum Entkalkungsintervall: 0,6 verkürzt dort das
+  // Intervall, hier erhöht er den Verbrauch — deshalb der Kehrwert.
+  const hardness = e.hardnessSensitive
+    ? 1 / (HARDNESS_FACTOR[profile.waterHardness] || 1)
+    : 1;
+
+  const usage = e.baseRatePerPersonPerDay * scale * hardness;
+  return usage > 0 ? Math.round(usage * 1000) / 1000 : null;
+}
+
+/**
+ * Reichweite eines Produkts.
+ * @param {object} entry   { productId, purchases:[{date, quantity, packageValue}] }
+ * @param {string} today
+ * @param {object} profile Haushaltsprofil
+ * @param {object} opts    { learnedRate, confidence, pausedDays }
+ */
+function supplyFor(entry, today, profile = {}, opts = {}) {
+  const productId = entry.productId;
+  const e = nonFoodFor(productId);
+  const p = byId(productId);
+  if (!e || !p) return null;
+  if (!appliesTo(productId, profile)) return null;
+
+  // SPORADIC darf NIE eine Reichweite ausgeben. Lieber keine Aussage
+  // als eine schlechte — das ist der Zweck dieser Klasse.
+  if (e.consumptionClass === CLASS.SPORADIC) {
+    return {
+      productId, name: p.name, consumptionClass: e.consumptionClass,
+      daysOfSupply: null, remaining: null, confidence: "UNREGELMAESSIG",
+      dueForPurchase: false,
+      message: `${p.name} kaufst du unregelmäßig — keine Vorhersage.`
+    };
+  }
+  if (e.consumptionClass !== CLASS.RATE) return null;
+
+  const purchases = (entry.purchases || [])
+    .filter((x) => x.date && x.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!purchases.length) return null;
+
+  const usage = dailyUsage(productId, profile, opts.learnedRate);
+  if (!usage) return null;
+
+  const last = purchases[purchases.length - 1];
+  const packageValue = Number(last.packageValue) || e.package.value;
+  const bought = packageValue * (Number(last.quantity) || 1);
+
+  // Urlaubstage zählen nicht als Verbrauchstage.
+  const elapsed = Math.max(0, daysBetween(last.date, today) - (opts.pausedDays || 0));
+  const remaining = Math.max(0, bought - elapsed * usage);
+  const daysOfSupply = Math.round((remaining / usage) * 10) / 10;
+
+  const lead = leadTime(profile);
+  const confidence = opts.confidence || "REFERENZ";
+
+  return {
+    productId,
+    name: p.name,
+    consumptionClass: e.consumptionClass,
+    dailyUsage: usage,
+    unit: e.package.unit,
+    packageValue,
+    bought,
+    remaining: Math.round(remaining * 10) / 10,
+    daysOfSupply,
+    lastPurchase: last.date,
+    leadTime: lead,
+    // Bei UNSICHER wird gar nichts vorhergesagt — auch kein Nachkauf.
+    dueForPurchase: confidence !== "UNSICHER" && daysOfSupply <= lead,
+    confidence,
+    estimated: true,
+    message: confidence === "UNSICHER"
+      ? `${p.name} kaufst du unregelmäßig — keine Vorhersage.`
+      : daysOfSupply <= 0
+        ? `${p.name} ist vermutlich leer.`
+        : `${p.name} reicht noch etwa ${Math.round(daysOfSupply)} ${Math.round(daysOfSupply) === 1 ? "Tag" : "Tage"}.`
+  };
+}
+
+/**
+ * Vorwarnzeit aus dem eigenen Einkaufsrhythmus (§5.3).
+ * Ohne gelernten Rhythmus ein Wochenrhythmus als Annahme.
+ */
+function leadTime(profile = {}) {
+  const interval = Number(profile.shoppingIntervalDays) || 7;
+  return Math.round(interval * 1.5 + 2);
+}
+
+/** Alle Haushaltsprodukte eines Haushalts auswerten. */
+function supplyOverview(entries, today, profile = {}, rates = new Map()) {
+  const out = [];
+  for (const entry of entries) {
+    const r = rates.get(entry.productId) || {};
+    const s = supplyFor(entry, today, profile, {
+      learnedRate: r.rate ?? null,
+      confidence: r.confidence,
+      pausedDays: entry.pausedDays || 0
+    });
+    if (s) out.push(s);
+  }
+  // Das Knappste zuerst; ohne Vorhersage ans Ende.
+  return out.sort((a, b) => {
+    if (a.daysOfSupply === null) return 1;
+    if (b.daysOfSupply === null) return -1;
+    return a.daysOfSupply - b.daysOfSupply;
+  });
+}
+
+/* ===== rateLearner.js ===== */
+/**
+ * rateLearner.js — Verbrauchsrate aus der eigenen Historie
+ * ================================================================
+ * Das Kaltstartproblem ist bei Haushaltsprodukten größer als bei
+ * Lebensmitteln: Zahnpasta wird alle sieben Wochen gekauft, für drei
+ * Datenpunkte braucht es fünf Monate. Reines Lernen aus Kaufabständen
+ * ist für den Einstieg damit unbrauchbar.
+ *
+ * Deshalb Referenzwert als Prior, Beobachtung als Posterior:
+ *
+ *   rate = (w_prior × referenz + w_daten × beobachtet) / (w_prior + w_daten)
+ *   w_daten = min(anzahl_käufe, 6),  w_prior = 2
+ *
+ * Nach sechs Käufen bestimmt die Beobachtung drei Viertel des Werts.
+ * Kein externes Modell, keine Bibliothek, jeder Schritt nachrechenbar.
+ *
+ * Die beobachtete Rate wird über ein gleitendes Fenster gebildet, NICHT
+ * über einzelne Kaufabstände: sonst zerstört jeder Vorratskauf die
+ * Schätzung. Wer drei Packungen auf einmal kauft, hat nicht plötzlich
+ * den dreifachen Verbrauch — er hat länger Ruhe.
+ * ================================================================
+ */
+
+
+
+
+const WINDOW_DAYS = 180;
+// Heißt nicht MIN_PURCHASES — den Namen vergibt priceMemory.js, und
+// beide teilen sich im Bündel denselben Namensraum.
+const MIN_PURCHASES_FOR_RATE = 2;
+const W_PRIOR = 2;
+const MAX_W_DATA = 6;
+const VK_THRESHOLD = 0.35;     // darüber: unregelmäßig, keine Prognose
+
+const CONFIDENCE = {
+  REFERENZ: "REFERENZ",
+  VORLAEUFIG: "VORLAEUFIG",
+  GELERNT: "GELERNT",
+  UNSICHER: "UNSICHER"
+};
+
+const CONFIDENCE_LABEL = {
+  REFERENZ: "Schätzwert — noch nicht an dich angepasst",
+  VORLAEUFIG: "Vorläufig",
+  GELERNT: "Aus deinen Käufen gelernt",
+  UNSICHER: "Du kaufst das unregelmäßig"
+};
+
+/** Variationskoeffizient der Kaufabstände: Streuung geteilt durch Mittel. */
+function variationCoefficient(intervals) {
+  if (intervals.length < 2) return 0;
+  const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+  if (mean <= 0) return 0;
+  const variance = intervals.reduce((a, b) => a + (b - mean) ** 2, 0) / intervals.length;
+  return Math.sqrt(variance) / mean;
+}
+
+/**
+ * Rate für ein Produkt.
+ * @param {string} productId
+ * @param {Array}  purchases [{date, quantity, packageValue}]
+ * @param {string} today
+ * @param {object} profile   Haushaltsprofil (nur für den Prior)
+ * @returns {{rate, confidence, label, observed, reference, purchases, vk, windowDays}}
+ */
+function learnRate(productId, purchases, today, profile = {}) {
+  const e = nonFoodFor(productId);
+  if (!e || e.consumptionClass !== CLASS.RATE) return null;
+
+  const persons = Math.max(1, Number(profile.personCount) || 1);
+  // Der Prior ist die Referenzrate FÜR DIESEN HAUSHALT — sonst
+  // mischte man eine Pro-Kopf-Zahl mit einer Haushaltsbeobachtung.
+  const reference = e.baseRatePerPersonPerDay * Math.pow(persons, e.scalingExponent);
+
+  const rows = (purchases || [])
+    .filter((x) => x.date && x.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const base = {
+    productId, reference: Math.round(reference * 1000) / 1000,
+    purchases: rows.length, windowDays: WINDOW_DAYS
+  };
+
+  if (rows.length < MIN_PURCHASES_FOR_RATE) {
+    return {
+      ...base, rate: Math.round(reference * 1000) / 1000, observed: null, vk: null,
+      confidence: CONFIDENCE.REFERENZ, label: CONFIDENCE_LABEL.REFERENZ
+    };
+  }
+
+  // Gleitendes Fenster: alles, was innerhalb der letzten 180 Tage
+  // gekauft wurde. Der letzte Kauf zählt NICHT mit — er ist noch nicht
+  // verbraucht, sonst rechnete man ihn als schon konsumiert.
+  const windowStart = new Date(new Date(today + "T12:00:00Z").getTime() - WINDOW_DAYS * 86400000)
+    .toISOString().slice(0, 10);
+  const inWindow = rows.filter((r) => r.date >= windowStart);
+  const consumed = inWindow.slice(0, -1);
+
+  let observed = null;
+  if (consumed.length >= 1) {
+    const first = consumed[0].date;
+    const lastDate = inWindow[inWindow.length - 1].date;
+    const span = Math.max(1, daysBetween(first, lastDate));
+    const amount = consumed.reduce(
+      (a, r) => a + (Number(r.packageValue) || e.package.value) * (Number(r.quantity) || 1), 0);
+    observed = amount / span;
+  }
+
+  const intervals = [];
+  for (let i = 1; i < rows.length; i++) intervals.push(daysBetween(rows[i - 1].date, rows[i].date));
+  const vk = Math.round(variationCoefficient(intervals) * 100) / 100;
+
+  const wData = Math.min(rows.length, MAX_W_DATA);
+  const rate = observed !== null && observed > 0
+    ? (W_PRIOR * reference + wData * observed) / (W_PRIOR + wData)
+    : reference;
+
+  let confidence;
+  if (rows.length >= 4 && vk >= VK_THRESHOLD) confidence = CONFIDENCE.UNSICHER;
+  else if (rows.length >= 4) confidence = CONFIDENCE.GELERNT;
+  else confidence = CONFIDENCE.VORLAEUFIG;
+
+  return {
+    ...base,
+    rate: Math.round(rate * 1000) / 1000,
+    observed: observed !== null ? Math.round(observed * 1000) / 1000 : null,
+    vk,
+    confidence,
+    label: confidence === CONFIDENCE.VORLAEUFIG
+      ? `Vorläufig, basiert auf ${rows.length} Käufen`
+      : CONFIDENCE_LABEL[confidence]
+  };
+}
+
+/** Raten für alle Produkte eines Haushalts. */
+function learnAllRates(entries, today, profile = {}) {
+  const out = new Map();
+  for (const entry of entries) {
+    const r = learnRate(entry.productId, entry.purchases, today, profile);
+    if (r) out.set(entry.productId, r);
+  }
+  return out;
+}
+
+/* ===== intervalTracker.js ===== */
+/**
+ * intervalTracker.js — zeitbasierter Austausch
+ * ================================================================
+ * Zahnbürste, Küchenschwamm, Wasserfilter: ersetzt wird nach Zeit,
+ * unabhängig von der verbrauchten Menge. Meist hygienisch begründet.
+ *
+ * Das ist die Klasse mit dem schnellsten Nutzen im ganzen Modell:
+ * kein Verbrauchsmodell, kein Lernen, keine Historie. Kaufdatum plus
+ * Intervall genügt, und die App weiß etwas, an das von selbst niemand
+ * denkt — nach drei Monaten fällt keine Zahnbürste durch Nachdenken
+ * auf.
+ *
+ * Das Ergebnis sind HANDLUNGEN, keine Käufe: „getauscht" setzt den
+ * Zähler zurück, ohne dass etwas gekauft wurde. Wer eine Packung mit
+ * vier Aufsteckbürsten kauft, tauscht viermal aus einem Kauf.
+ * ================================================================
+ */
+
+
+
+
+
+/** Intervall eines Produkts, ggf. an die Wasserhärte angepasst. */
+function intervalFor(productId, profile = {}) {
+  const e = nonFoodFor(productId);
+  if (!e || e.consumptionClass !== CLASS.INTERVAL) return null;
+  const factor = e.hardnessSensitive
+    ? (HARDNESS_FACTOR[profile.waterHardness] || 1)
+    : 1;
+  return Math.max(1, Math.round(e.replacementIntervalDays * factor));
+}
+
+/**
+ * Fälligkeit eines Austausch-Produkts.
+ * @param {object} entry  { productId, lastSwap, purchases }
+ * @param {string} today
+ * @param {object} profile
+ * @param {number} pausedDays  Urlaubstage, sofern das Produkt pausiert
+ */
+function swapStatus(entry, today, profile = {}, pausedDays = 0) {
+  const e = nonFoodFor(entry.productId);
+  const p = byId(entry.productId);
+  if (!e || !p || e.consumptionClass !== CLASS.INTERVAL) return null;
+  if (!appliesTo(entry.productId, profile)) return null;
+
+  // Bezugspunkt ist der letzte Tausch, ersatzweise der letzte Kauf.
+  const purchases = (entry.purchases || [])
+    .filter((x) => x.date && x.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const lastPurchase = purchases.length ? purchases[purchases.length - 1].date : null;
+  const since = entry.lastSwap || lastPurchase;
+  if (!since) return null;
+
+  const interval = intervalFor(entry.productId, profile);
+
+  // Eine Zahnbürste altert auch im Urlaub — sie wird mitgenommen.
+  // Ein Küchenschwamm liegt trocken und altert nicht. Deshalb steht
+  // `pausesOnVacation` am Produkt und nicht am Modus.
+  const paused = e.pausesOnVacation ? Math.max(0, pausedDays) : 0;
+  const inUse = Math.max(0, daysBetween(since, today) - paused);
+  const daysLeft = interval - inUse;
+
+  return {
+    productId: p.id,
+    name: p.name,
+    consumptionClass: CLASS.INTERVAL,
+    since,
+    fromSwap: !!entry.lastSwap,
+    inUse,
+    intervalDays: interval,
+    baseIntervalDays: e.replacementIntervalDays,
+    hardnessAdjusted: e.hardnessSensitive && interval !== e.replacementIntervalDays,
+    source: e.intervalSource,
+    daysLeft,
+    due: daysLeft <= 0,
+    soon: daysLeft > 0 && daysLeft <= 7,
+    pausesOnVacation: e.pausesOnVacation,
+    pausedDays: paused,
+    message: daysLeft <= 0
+      ? `${p.name} seit ${inUse} Tagen im Einsatz — tauschen.`
+      : `${p.name} fällig in ${daysLeft} ${daysLeft === 1 ? "Tag" : "Tagen"}.`
+  };
+}
+
+/** Alle Austausch-Produkte, das Überfälligste zuerst. */
+function dueSwaps(entries, today, profile = {}, pausedDays = 0) {
+  const out = [];
+  for (const entry of entries) {
+    const s = swapStatus(entry, today, profile, entry.pausedDays ?? pausedDays);
+    if (s) out.push(s);
+  }
+  return out.sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
+/**
+ * Nach dem Tausch: neuer Bezugspunkt. Reine Funktion, damit der Aufrufer
+ * entscheidet, wann gespeichert wird.
+ */
+function recordSwap(entry, today) {
+  return { ...entry, lastSwap: today };
+}
+
+/**
+ * Braucht der Haushalt Nachschub? Ein Tausch verbraucht ein Stück aus
+ * der Packung — bei vier Aufsteckbürsten reicht ein Kauf für vier
+ * Tauschvorgänge.
+ */
+function needsRestock(entry, today, profile = {}) {
+  const e = nonFoodFor(entry.productId);
+  if (!e || e.consumptionClass !== CLASS.INTERVAL) return false;
+
+  const purchases = (entry.purchases || []).filter((x) => x.date && x.date <= today);
+  if (!purchases.length) return false;
+
+  const packSize = e.package.value || 1;
+  const bought = purchases.reduce((a, r) => a + packSize * (Number(r.quantity) || 1), 0);
+  const swaps = (entry.swaps || []).filter((d) => d <= today).length;
+  return bought - swaps <= 0;
+}
+
+/* ===== basePrice.js ===== */
+/**
+ * basePrice.js — Grundpreis und persönliches Preisperzentil
+ * ================================================================
+ * Bei Haushaltsprodukten ist der Preisvergleich deutlich wertvoller
+ * als bei Lebensmitteln: die Packungsgrößen streuen extrem (20 gegen
+ * 80 Waschladungen) und die Werbung arbeitet mit Absolutpreisen. Der
+ * Grundpreis ist die einzige Zahl, die vergleichbar ist.
+ *
+ * Bewertet wird AUSSCHLIESSLICH gegen die eigene Kaufhistorie. Keine
+ * Preis-API, keine Fremddaten, kein Vergleich über Haushalte hinweg —
+ * das wäre Wartungslast und Rechtsrisiko für eine Aussage, die lokal
+ * genauso gut zu haben ist: ob dieser Preis für DICH gut ist.
+ * ================================================================
+ */
+
+
+
+
+// Darunter keine Aussage — nicht etwa Perzentil 0.
+const MIN_PRICE_POINTS = 4;
+
+/**
+ * Grundpreis je Normeinheit.
+ * @returns {null|{value, label, display, packageValue, unit}}
+ */
+function basePrice(productId, price, packageValue, quantity = 1) {
+  const e = nonFoodFor(productId);
+  if (!e) return null;
+
+  // Fehlend und ungültig sind zweierlei:
+  //   undefined/null = keine Angabe  -> Katalogwert als Behelf
+  //   0 oder negativ = falsche Angabe -> gar kein Grundpreis
+  // Ohne diese Trennung würde eine „0 ml"-Zeile still mit der
+  // Katalogmenge weitergerechnet und sähe aus wie eine Messung.
+  const givenAmount = packageValue === undefined || packageValue === null || packageValue === ""
+    ? e.package.value
+    : Number(packageValue);
+  const qty = quantity === undefined || quantity === null ? 1 : Number(quantity);
+
+  if (price === undefined || price === null || price === "") return null;
+  const total = Number(price);
+
+  // Sonst entstünde hier NaN oder Infinity und wanderte durch alle
+  // Folgerechnungen bis in die Anzeige.
+  if (!Number.isFinite(total) || total <= 0) return null;
+  if (!Number.isFinite(givenAmount) || givenAmount <= 0) return null;
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+  const amount = givenAmount;
+
+  const norm = e.package.norm;
+  const units = (amount * qty) / norm.per;
+  if (!Number.isFinite(units) || units <= 0) return null;
+
+  const value = total / units;
+  if (!Number.isFinite(value)) return null;
+
+  return {
+    productId,
+    value: Math.round(value * 1000) / 1000,
+    label: norm.label,
+    display: `${value.toFixed(2).replace(".", ",")} € je ${norm.label}`,
+    packageValue: amount,
+    unit: e.package.unit
+  };
+}
+
+/**
+ * Einordnung eines Grundpreises in die eigene Historie.
+ * @param {Array} history [{price, packageValue, quantity, date}]
+ * @returns {null|{percentile, verdict, median, lowest, highest, points, message}}
+ */
+function pricePercentile(productId, current, history) {
+  const p = byId(productId);
+  if (!p) return null;
+
+  const points = (history || [])
+    .map((h) => basePrice(productId, h.price, h.packageValue, h.quantity))
+    .filter((x) => x && x.value > 0)
+    .map((x) => x.value);
+
+  // Unter vier Datenpunkten ist „günstig" eine Behauptung.
+  if (points.length < MIN_PRICE_POINTS || !Number.isFinite(current) || current <= 0) {
+    return {
+      productId, percentile: null, verdict: "unbekannt",
+      median: null, lowest: null, highest: null, points: points.length,
+      message: `Noch zu wenig Historie für eine Preisaussage (${points.length} von ${MIN_PRICE_POINTS}).`
+    };
+  }
+
+  const sorted = [...points].sort((a, b) => a - b);
+  const below = sorted.filter((v) => v < current).length;
+  const percentile = below / sorted.length;
+
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+
+  const verdict = percentile < 0.25 ? "günstig" : percentile > 0.75 ? "teuer" : "normal";
+  const eur = (n) => n.toFixed(2).replace(".", ",") + " €";
+  const norm = nonFoodFor(productId).package.norm;
+
+  return {
+    productId,
+    percentile: Math.round(percentile * 100) / 100,
+    verdict,
+    median: Math.round(median * 1000) / 1000,
+    lowest: sorted[0],
+    highest: sorted[sorted.length - 1],
+    points: sorted.length,
+    message: verdict === "günstig"
+      ? `${eur(current)} je ${norm.label} — günstig für dich (sonst ${eur(median)}).`
+      : verdict === "teuer"
+        ? `${eur(current)} je ${norm.label} — teuer für dich (sonst ${eur(median)}).`
+        : `${eur(current)} je ${norm.label} — normal für dich.`
+  };
+}
+
+/**
+ * Ersparnis aus günstigen Einkäufen (§8.3).
+ *
+ * Getrennt von der Lebensmittel-Ersparnis auszuweisen: die eine Zahl
+ * ist realisiert (du hast weniger gezahlt), die andere kontrafaktisch
+ * (du hättest sonst weggeworfen). Beides zu addieren wäre irreführend.
+ */
+function nonFoodSavings(entries, today) {
+  let total = 0;
+  const byProduct = [];
+
+  for (const entry of entries) {
+    const e = nonFoodFor(entry.productId);
+    const p = byId(entry.productId);
+    if (!e || !p) continue;
+
+    const rows = (entry.purchases || []).filter((x) => x.date && x.date <= today);
+    const prices = rows
+      .map((h) => ({ h, bp: basePrice(entry.productId, h.price, h.packageValue, h.quantity) }))
+      .filter((x) => x.bp);
+    if (prices.length < MIN_PRICE_POINTS) continue;
+
+    const sorted = prices.map((x) => x.bp.value).sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+
+    // Nur Käufe UNTER dem Median zählen als Ersparnis. Käufe darüber
+    // gegenzurechnen wäre eine Strafe für normales Einkaufen.
+    let saved = 0;
+    for (const { h, bp } of prices) {
+      if (bp.value >= median) continue;
+      const units = ((Number(h.packageValue) || e.package.value) * (Number(h.quantity) || 1)) / e.package.norm.per;
+      saved += (median - bp.value) * units;
+    }
+    if (saved <= 0.01) continue;
+
+    total += saved;
+    byProduct.push({
+      productId: entry.productId, name: p.name,
+      saved: Math.round(saved * 100) / 100,
+      median: Math.round(median * 1000) / 1000,
+      purchases: prices.length
+    });
+  }
+
+  return {
+    total: Math.round(total * 100) / 100,
+    byProduct: byProduct.sort((a, b) => b.saved - a.saved),
+    basis: "eigene Kaufhistorie, Median als Bezug",
+    realised: true
+  };
+}
+
+/* ===== stockUpAdvisor.js ===== */
+/**
+ * stockUpAdvisor.js — Bevorratung bei gutem Preis
+ * ================================================================
+ * Non-Food verdirbt nicht: Vorrat bei gutem Preis ist rational, aber
+ * durch Lagerplatz und Kapitalbindung begrenzt. Sinnvolle Zielgröße
+ * ist der eigene Aktionszyklus — so viel, dass es bis zum nächsten
+ * günstigen Angebot reicht, nicht mehr.
+ *
+ * BEWUSSTE ZURÜCKHALTUNG: Ein Vorschlag zum Mehrkauf setzt eine
+ * GELERNTE Verbrauchsrate voraus. Ein Vorratsstapel, der nach vierzehn
+ * Monaten noch steht, ist ein Vertrauensverlust und genau das
+ * Gegenteil des Produktversprechens. Im Zweifel schweigt die App.
+ * ================================================================
+ */
+
+
+
+
+
+
+
+
+const MIN_CYCLE_POINTS = 6;   // darunter der Vorgabewert statt eines gelernten
+
+/**
+ * Aktionszyklus aus der eigenen Grundpreishistorie: mittlerer Abstand
+ * zwischen lokalen Minima. Erst ab sechs Datenpunkten.
+ */
+function learnPromoCycle(productId, history) {
+  const e = nonFoodFor(productId);
+  if (!e) return null;
+
+  const points = (history || [])
+    .map((h) => ({ date: h.date, bp: basePrice(productId, h.price, h.packageValue, h.quantity) }))
+    .filter((x) => x.date && x.bp)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (points.length < MIN_CYCLE_POINTS) {
+    return { days: e.promoCycleDaysDefault, learned: false, points: points.length };
+  }
+
+  const minima = [];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (points[i].bp.value < points[i - 1].bp.value && points[i].bp.value <= points[i + 1].bp.value) {
+      minima.push(points[i].date);
+    }
+  }
+  if (minima.length < 2) {
+    return { days: e.promoCycleDaysDefault, learned: false, points: points.length };
+  }
+
+  const gaps = [];
+  for (let i = 1; i < minima.length; i++) gaps.push(daysBetween(minima[i - 1], minima[i]));
+  const mean = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+
+  return { days: Math.max(7, mean), learned: true, points: points.length, minima: minima.length };
+}
+
+/**
+ * Bevorratungsempfehlung.
+ * @param {object} supply   Ergebnis aus consumptionModel.supplyFor
+ * @param {object} opts     { history, currentPrice, currentPackage, profile, storageLimit }
+ * @returns {null|{units, targetDays, reason, percentile, message}}
+ */
+function stockUpAdvice(supply, opts = {}) {
+  if (!supply || supply.consumptionClass !== CLASS.RATE) return null;
+
+  const e = nonFoodFor(supply.productId);
+  const p = byId(supply.productId);
+  if (!e || !p) return null;
+
+  // Ohne gelernte Rate kein Mehrkauf-Vorschlag. Das ist die wichtigste
+  // Bremse in diesem Modul.
+  if (supply.confidence !== CONFIDENCE.GELERNT) {
+    return {
+      productId: supply.productId, name: p.name, units: 0,
+      reason: "rate_unsicher",
+      message: "Für einen Vorratskauf ist der Verbrauch noch nicht sicher genug gelernt."
+    };
+  }
+
+  const current = basePrice(supply.productId, opts.currentPrice, opts.currentPackage);
+  if (!current) return null;
+
+  const pct = pricePercentile(supply.productId, current.value, opts.history || []);
+  if (!pct || pct.percentile === null) {
+    return {
+      productId: supply.productId, name: p.name, units: 0,
+      reason: "preis_unbekannt", percentile: null,
+      message: pct ? pct.message : "Noch keine Preishistorie."
+    };
+  }
+  if (pct.verdict !== "günstig") {
+    return {
+      productId: supply.productId, name: p.name, units: 0,
+      reason: "preis_normal", percentile: pct.percentile,
+      message: pct.message
+    };
+  }
+
+  const cycle = learnPromoCycle(supply.productId, opts.history || []);
+  const usage = supply.dailyUsage || dailyUsage(supply.productId, opts.profile || {});
+  if (!usage || usage <= 0) return null;
+
+  const packageValue = Number(opts.currentPackage) || e.package.value;
+  const need = cycle.days * usage - (supply.remaining || 0);
+  const raw = Math.ceil(need / packageValue);
+  const limit = Number.isFinite(opts.storageLimit) ? opts.storageLimit : e.storageLimitDefault;
+  const units = Math.min(Math.max(raw, 0), limit);
+
+  const eur = (n) => n.toFixed(2).replace(".", ",") + " €";
+  return {
+    productId: supply.productId,
+    name: p.name,
+    units,
+    targetDays: cycle.days,
+    cycleLearned: cycle.learned,
+    storageLimit: limit,
+    cappedByLimit: raw > limit,
+    percentile: pct.percentile,
+    reason: units > 0 ? "guenstig" : "vorrat_reicht",
+    message: units > 0
+      ? `${units} ${units === 1 ? "Packung" : "Packungen"} decken ${cycle.days} Tage — ` +
+        `${eur(current.value)} je ${current.label} statt ${eur(pct.median)}.`
+      : `Preis ist günstig, aber dein Vorrat reicht noch über den Aktionszyklus.`
+  };
 }
