@@ -31,8 +31,19 @@ const deDate = (d) => {
   return `${dd}.${m}.${y}`;
 };
 
+/* Die vier Antworten sind bewusst so gewählt, dass zwei davon den
+   Rhythmus korrigieren und zwei ihn ausdrücklich in Ruhe lassen:
+
+     „Hab noch“        Vorschlag kam zu früh  -> Rhythmus verlängern
+     „War schon alle“  Vorschlag kam zu spät  -> Rhythmus verkürzen
+     „Verbraucht“      sagt nichts über den Takt
+     „Diese Woche nicht“ bewusste Pause
+
+   Ohne die zweite Antwort könnte der Nutzer nur in eine Richtung
+   korrigieren, und die App bliebe systematisch zu spät dran. */
 const REASONS = [
   { key: "have", label: "Hab noch" },
+  { key: "empty", label: "War schon alle" },
   { key: "consumed", label: "Verbraucht" },
   { key: "skip", label: "Diese Woche nicht" }
 ];
@@ -203,6 +214,18 @@ function productSheet(productId, ctx) {
   fact("Kategorie", p.category);
   if (!nf) {
     fact("Rhythmus", r && r.rhythmDays ? `alle ${r.rhythmDays} Tage · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
+    // Was der rohe Median sagte, bevor Bruch, Saison und Rückmeldungen
+    // darauf gewirkt haben. Ohne diese Zeile wäre die Zahl oben eine
+    // Behauptung ohne Herkunft.
+    if (r && r.baseRhythmDays && r.baseRhythmDays !== r.rhythmDays) {
+      fact("davor gelernt", `alle ${r.baseRhythmDays} Tage`);
+    }
+    if (r && r.feedback && r.feedback.signals) {
+      fact("Rückmeldungen", `${r.feedback.signals} · ${r.feedback.applied ? "wirken auf den Rhythmus" : "noch ohne Wirkung"}`);
+    }
+    if (r && r.season && r.season.applied) fact("Saison", r.season.message);
+    const chg = ctx.changes && ctx.changes.get(productId);
+    if (chg && chg.found) fact("Verhalten geändert", chg.message);
   }
   fact("Zuletzt", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
   if (!nf) {
@@ -268,6 +291,13 @@ function productSheet(productId, ctx) {
       "Für dieses Produkt macht die App keine Vorhersage. Der Kaufabstand lässt kein Muster erkennen."));
   }
 
+  if (!nf && r && r.feedback && r.feedback.message) {
+    body.append(el("div", "note", esc(r.feedback.message)));
+  }
+  if (!nf) {
+    const chg = ctx.changes && ctx.changes.get(productId);
+    if (chg && chg.found) body.append(el("div", "note blue", esc(chg.message)));
+  }
   if (p.safetyCritical) {
     body.append(el("div", "note red",
       "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. Die App verlängert diese Frist nie."));

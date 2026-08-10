@@ -1,4 +1,4 @@
-/* Gebündelt aus 37 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 40 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
 
 /* ===== foodDatabase.js ===== */
@@ -5399,4 +5399,564 @@ function stockUpAdvice(supply, opts = {}) {
         `${eur(current.value)} je ${current.label} statt ${eur(pct.median)}.`
       : `Preis ist günstig, aber dein Vorrat reicht noch über den Aktionszyklus.`
   };
+}
+
+/* ===== feedbackLearner.js ===== */
+/**
+ * feedbackLearner.js — aus Rückmeldungen lernen
+ * ================================================================
+ * Bisher war die Rückmeldung des Nutzers folgenlos: „Hab noch da"
+ * hat die Position abgewählt und war danach vergessen. Wer dreimal
+ * hintereinander sagt, dass Klopapier noch reicht, bekommt es beim
+ * vierten Mal wieder vorgeschlagen. Das fühlt sich an wie Ignorieren
+ * — und ist der teuerste Fehler, den eine App machen kann, die
+ * behauptet zu lernen.
+ *
+ * WAS EIN SIGNAL IST UND WAS NICHT
+ *
+ *   „Hab noch da"        Vorschlag kam ZU FRÜH.  -> Rhythmus verlängern
+ *   Kauf vor Fälligkeit  Vorschlag kam ZU SPÄT.  -> Rhythmus verkürzen
+ *   „Verbraucht"         sagt nichts über den Rhythmus, nur über den
+ *                        Bestand. Bewusst NEUTRAL — die Oberfläche
+ *                        verspricht genau das: „Rhythmus bleibt".
+ *   „Diese Woche nicht"  bewusste Pause, kein Verhaltensmuster.
+ *                        Ebenfalls neutral.
+ *
+ * WARUM NICHT EINFACH MITTELN
+ *
+ * Der Median über die Kaufabstände ist die tragende Idee des ganzen
+ * Rhythmusmodells: er macht das Lernen unempfindlich gegen einzelne
+ * Ausreißer. Ein Feedback-Mechanismus, der auf den Mittelwert setzt,
+ * würde genau diese Eigenschaft wieder zerstören — ein versehentlicher
+ * Tap könnte den Rhythmus kippen. Also auch hier: Median über die
+ * Einzelkorrekturen, Mindestanzahl, Deckelung, Verfall.
+ *
+ * WAS DIESES MODUL NICHT TUT
+ *
+ * Es fasst die Rohdaten nicht an. Käufe bleiben Käufe. Die Korrektur
+ * ist ein eigener, jederzeit abschaltbarer Faktor auf das Ergebnis —
+ * und sie ist im Detail-Blatt sichtbar, samt Anzahl der Rückmeldungen,
+ * auf denen sie beruht.
+ * ================================================================
+ */
+
+
+
+const REASON = {
+  HAVE: "have",           // „Hab noch da"       -> zu früh vorgeschlagen
+  EMPTY: "empty",         // „War schon alle"    -> zu spät vorgeschlagen
+  CONSUMED: "consumed",   // „Verbraucht"        -> neutral
+  SKIP: "skip"            // „Diese Woche nicht" -> neutral
+};
+
+const MAX_AGE_DAYS = 180;        // älteres Feedback beschreibt einen alten Haushalt
+const MIN_SIGNALS = 3;           // darunter wird nichts korrigiert
+const MAX_ADJUST = 0.4;          // Korrektur nie über ±40 %
+const MAX_WEIGHT_SIGNALS = 8;    // ab hier wächst der Einfluss nicht weiter
+const DISAGREEMENT_THRESHOLD = 0.3;  // Streuung, ab der die Korrektur schrumpft
+// Kleinster Rhythmus, mit dem dieses Modul überhaupt rechnet. Alles
+// darunter ist kein Einkaufsrhythmus, sondern ein Fehler weiter oben.
+const MIN_VALID_RHYTHM_DAYS = 1;
+// Alle Signale stammen jetzt aus Nutzeraussagen und wiegen gleich.
+// Eine Gewichtung gegen abgeleitete Signale ist nicht mehr nötig —
+// abgeleitete gibt es keine mehr (siehe unten).
+const EXPLICIT_WEIGHT = 1;
+
+/** Median einer Zahlenliste. Heißt nicht `medianOf` — den Namen
+    vergibt priceMemory.js, und beide teilen sich im Bündel denselben
+    Namensraum. */
+function medianOfSignals(values) {
+  if (!values.length) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Ein einzelnes Feedback in eine relative Korrektur übersetzen.
+ *
+ * `dueIn` ist die Fälligkeit zum Zeitpunkt der Rückmeldung: 0 heißt
+ * „heute fällig", negativ heißt „war schon überfällig". Je überfälliger
+ * ein Produkt war, als der Nutzer „hab noch da" sagte, desto stärker
+ * lag der Rhythmus daneben.
+ *
+ * @returns {null|number} relative Korrektur, z. B. +0.2 = 20 % länger
+ */
+function signalFor(entry, rhythmDays) {
+  if (!rhythmDays || rhythmDays <= 0) return null;
+
+  if (entry.reason === REASON.HAVE) {
+    // Der Vorschlag kam zu früh. Wie viel zu früh, lässt sich nicht
+    // messen — der Nutzer sagt nur „noch da", nicht „noch fünf Tage".
+    // Ein überfälliges Produkt, das noch da ist, liegt weiter daneben
+    // als ein gerade erst fälliges.
+    const overdue = Math.max(0, -(Number(entry.dueIn) || 0));
+    const relative = (rhythmDays * 0.15 + overdue) / rhythmDays;
+    return Math.min(MAX_ADJUST, relative);
+  }
+
+  if (entry.reason === REASON.EMPTY) {
+    // Der Vorschlag kam zu spät: das Produkt war schon aufgebraucht.
+    // Je später er kam, desto weiter lag der Rhythmus daneben — hier
+    // ist `dueIn` positiv, das Produkt war also noch gar nicht fällig.
+    const late = Math.max(0, Number(entry.dueIn) || 0);
+    const relative = (rhythmDays * 0.15 + late) / rhythmDays;
+    return -Math.min(MAX_ADJUST, relative);
+  }
+
+  // „Verbraucht" und „Diese Woche nicht" sagen nichts über den
+  // Rhythmus. Sie werden protokolliert, aber nicht verrechnet.
+  return null;
+}
+
+/**
+ * Korrektur für ein Produkt aus seinem Feedback-Protokoll.
+ *
+ * @param {Array}  log         [{productId, date, reason, dueIn}]
+ * @param {number} rhythmDays  bisher gelernter Rhythmus
+ * @param {string} today
+ * @returns {{factor, adjustedDays, signals, considered, neutral, disagreement, applied, reason, message}}
+ */
+function feedbackAdjustment(log, rhythmDays, today) {
+  const base = {
+    factor: 1,
+    adjustedDays: rhythmDays,
+    signals: 0,
+    considered: 0,
+    neutral: 0,
+    disagreement: 0,
+    applied: false,
+    reason: "kein_feedback",
+    message: null
+  };
+
+  // Ungültiger Rhythmus kommt unverändert zurück — dieses Modul ist
+  // nicht die Stelle, an der so etwas repariert wird. „Alle 0,5 Tage"
+  // ist kein Einkaufsrhythmus, sondern ein Rechenfehler weiter oben;
+  // ihn hier auf 1 zu runden würde ihn verstecken.
+  if (!rhythmDays || !Number.isFinite(rhythmDays) || rhythmDays < MIN_VALID_RHYTHM_DAYS) {
+    return { ...base, adjustedDays: rhythmDays, reason: "kein_rhythmus" };
+  }
+  if (!Array.isArray(log) || !log.length) return base;
+
+  // Nur Rückmeldungen aus dem Beobachtungszeitraum. Was jemand vor
+  // einem Jahr angetippt hat, beschreibt einen anderen Haushalt.
+  const fresh = log.filter((e) => {
+    if (!e || !e.date || e.date > today) return false;
+    return daysBetween(e.date, today) <= MAX_AGE_DAYS;
+  });
+  if (!fresh.length) return { ...base, reason: "nur_altes_feedback" };
+
+  // Gewichtung über Mehrfachnennung: das ist ein gewichteter Median,
+  // ohne dafür eine eigene Implementierung zu brauchen.
+  const adjustments = [];
+  const rawSignals = [];
+  let neutral = 0;
+  let explicitCount = 0;
+  for (const e of fresh) {
+    const s = signalFor(e, rhythmDays);
+    if (s === null || !Number.isFinite(s)) { neutral++; continue; }
+    rawSignals.push(s);
+    explicitCount++;
+    adjustments.push(s);
+  }
+
+  // Nach außen zählt die Zahl der Rückmeldungen, nicht die der Gewichte
+  // — „6 Rückmeldungen" wäre eine Lüge, wenn es drei waren.
+  const signalCount = fresh.length - neutral;
+
+  if (signalCount < MIN_SIGNALS) {
+    return {
+      ...base,
+      considered: fresh.length,
+      signals: signalCount,
+      neutral,
+      reason: "zu_wenig_signale",
+      message: signalCount
+        ? `${signalCount} von ${MIN_SIGNALS} Rückmeldungen — noch keine Anpassung.`
+        : null
+    };
+  }
+
+  // Median statt Mittelwert: ein einzelner Fehltipp darf den Rhythmus
+  // nicht kippen. Genau dieselbe Überlegung wie im Rhythmusmodell.
+  const central = medianOfSignals(adjustments);
+
+  // Widerspruch messen: streuen die Rückmeldungen stark (mal zu früh,
+  // mal zu spät), ist der Rhythmus schlicht unregelmäßig. Dann wird
+  // die Korrektur gedämpft statt beherzt in eine Richtung gezogen.
+  // Gemessen wird an den UNGEWICHTETEN Signalen — der Widerspruch ist
+  // eine Eigenschaft dessen, was gesagt wurde, nicht seiner Gewichte.
+  const rawCentre = medianOfSignals(rawSignals);
+  const spread = medianOfSignals(rawSignals.map((a) => Math.abs(a - rawCentre))) || 0;
+  const disagreement = Math.min(1, spread / Math.max(0.01, MAX_ADJUST));
+  const damping = disagreement > DISAGREEMENT_THRESHOLD ? 1 - disagreement : 1;
+
+  // Einfluss wächst mit der Zahl der Rückmeldungen, aber gedeckelt.
+  const weight = Math.min(signalCount, MAX_WEIGHT_SIGNALS) / MAX_WEIGHT_SIGNALS;
+
+  const raw = central * weight * damping;
+  const clamped = Math.max(-MAX_ADJUST, Math.min(MAX_ADJUST, raw));
+  const factor = 1 + clamped;
+
+  // Mindestens ein Tag: ein Rhythmus von null Tagen wäre sinnlos und
+  // führte weiter unten zu Division durch null.
+  const adjustedDays = Math.max(1, Math.round(rhythmDays * factor));
+
+  const percent = Math.round((factor - 1) * 100);
+  const message = adjustedDays === rhythmDays
+    ? `${signalCount} Rückmeldungen — Rhythmus bleibt bei ${rhythmDays} Tagen.`
+    : percent > 0
+      ? `${explicitCount || signalCount}× „hab noch da" — Rhythmus von ${rhythmDays} auf ${adjustedDays} Tage verlängert.`
+      : `Du kaufst früher als vorhergesagt — Rhythmus von ${rhythmDays} auf ${adjustedDays} Tage verkürzt.`;
+
+  return {
+    factor: Math.round(factor * 1000) / 1000,
+    adjustedDays,
+    signals: signalCount,
+    explicitSignals: explicitCount,
+    considered: fresh.length,
+    neutral,
+    disagreement: Math.round(disagreement * 100) / 100,
+    applied: adjustedDays !== rhythmDays,
+    reason: "angewandt",
+    message
+  };
+}
+
+/* ---------------------------------------------------------------
+ * ENTFERNT: das implizite Gegensignal aus den Kaufdaten.
+ *
+ * Die Idee war, Käufe zu zählen, die vor der vorhergesagten Fälligkeit
+ * lagen, und daraus auf einen zu langen Rhythmus zu schließen. Sie hat
+ * einen strukturellen Fehler: der Rhythmus IST der Median der
+ * Kaufabstände, also liegt per Konstruktion die Hälfte aller Abstände
+ * darunter. Jede Streuung — auch reines Rauschen aus dem Einkaufstag-
+ * Raster — erzeugte damit ein einseitiges Verkürzungssignal.
+ *
+ * In der Demo-Historie feuerten bei völlig stabilem Verhalten (Median
+ * exakt 7 Tage) neun Signale, alle in dieselbe Richtung. Der Rhythmus
+ * wurde von 7 auf 4 Tage gezogen, und die echten Rückmeldungen des
+ * Nutzers kämpften anschließend gegen dieses Phantom an.
+ *
+ * Dieselben Daten ein zweites Mal auszuwerten kann keine neue
+ * Information liefern — nur einen zusätzlichen Fehler. Die Gegenrichtung
+ * kommt jetzt dort her, wo sie hingehört: aus einer Aussage des Nutzers
+ * („War schon alle").
+ * --------------------------------------------------------------- */
+
+/**
+ * Rhythmus eines Produkts mit Rückmeldungen korrigieren.
+ * Liefert ein neues Objekt; das Original bleibt unangetastet.
+ */
+function applyFeedback(rhythm, log, today, opts = {}) {
+  if (!rhythm) return rhythm;
+
+  const adj = feedbackAdjustment(log || [], rhythm.rhythmDays, today);
+
+  // Widersprüchliche Rückmeldungen senken das Vertrauen, statt den
+  // Rhythmus mit falscher Sicherheit zu verschieben.
+  const confidence = adj.signals >= MIN_SIGNALS && adj.disagreement > DISAGREEMENT_THRESHOLD
+    ? Math.max(0, Math.round(rhythm.confidence * (1 - adj.disagreement * 0.5) * 100) / 100)
+    : rhythm.confidence;
+
+  return {
+    ...rhythm,
+    rhythmDays: adj.adjustedDays,
+    baseRhythmDays: rhythm.rhythmDays,
+    confidence,
+    feedback: adj
+  };
+}
+
+/* ===== seasonalRhythm.js ===== */
+/**
+ * seasonalRhythm.js — Saison aus der EIGENEN Historie
+ * ================================================================
+ * `seasonCalendar.js` weiß, wann Erdbeeren in Deutschland Saison
+ * haben. Das ist Allgemeinwissen und beantwortet nicht die Frage, um
+ * die es hier geht: kaufst DU im Sommer mehr Grillfleisch?
+ *
+ * Der gelernte Rhythmus ist bisher ein einziger Wert über den ganzen
+ * Beobachtungszeitraum. Wer im Juli wöchentlich grillt und im Januar
+ * gar nicht, bekommt das Mittel aus beidem — im Januar zu oft
+ * vorgeschlagen, im Juli zu selten.
+ *
+ * VORSICHT IST HIER WICHTIGER ALS GENAUIGKEIT. Ein Jahresmuster aus
+ * elf Monaten Daten zu lesen ist Kaffeesatz. Deshalb:
+ *
+ *   - mindestens 12 Monate Historie, sonst gar kein Faktor
+ *   - mindestens 8 Käufe, verteilt über mindestens 6 Monate
+ *   - Faktor gedeckelt auf ±35 %
+ *   - Quartale statt Monate: ein einzelner Monat hat zu wenig Käufe,
+ *     um ein Muster von Zufall zu unterscheiden
+ *
+ * Reicht die Datenlage nicht, liefert das Modul den Faktor 1 und sagt
+ * warum. Kein Muster zu behaupten ist hier die richtige Antwort.
+ * ================================================================
+ */
+
+
+
+const MIN_HISTORY_DAYS = 365;
+// Heißt nicht MIN_PURCHASES_FOR_SEASON — den Namen vergibt priceMemory.js.
+const MIN_PURCHASES_FOR_SEASON = 8;
+const MIN_QUARTERS = 3;
+const MAX_SEASONAL_ADJUST = 0.35;
+// Quartale sind unterschiedlich lang (90–92 Tage). Ein festes Kaufraster
+// verteilt sich darüber nie exakt gleichmäßig, und schon das ergibt
+// Abweichungen um 5–8 %. Erst ab 12 % ist es ein Muster und kein
+// Rechenartefakt.
+const MIN_SEASONAL_SIGNAL = 0.12;
+
+const QUARTER_NAMES = ["Winter (Jan–Mär)", "Frühjahr (Apr–Jun)", "Sommer (Jul–Sep)", "Herbst (Okt–Dez)"];
+
+const quarterOf = (dateStr) => Math.floor(new Date(dateStr + "T12:00:00Z").getUTCMonth() / 3);
+
+/**
+ * Saisonfaktor eines Produkts für den aktuellen Zeitpunkt.
+ *
+ * Faktor < 1 heißt: in dieser Jahreszeit wird HÄUFIGER gekauft, der
+ * Rhythmus ist also kürzer. Faktor > 1 heißt seltener.
+ *
+ * @returns {{factor, quarter, quarterName, applied, reason, message, byQuarter, purchases, spanDays}}
+ */
+function seasonalFactor(purchases, today) {
+  const rows = (purchases || [])
+    .filter((p) => p && p.date && p.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const quarter = quarterOf(today);
+  const base = {
+    factor: 1, quarter, quarterName: QUARTER_NAMES[quarter],
+    applied: false, byQuarter: [], purchases: rows.length, spanDays: 0,
+    reason: "zu_wenig_daten", message: null
+  };
+
+  if (rows.length < MIN_PURCHASES_FOR_SEASON) return base;
+
+  const spanDays = daysBetween(rows[0].date, today);
+  base.spanDays = spanDays;
+
+  // Ohne ein volles Jahr gibt es kein Jahresmuster. Punkt.
+  if (spanDays < MIN_HISTORY_DAYS) {
+    return { ...base, reason: "unter_einem_jahr" };
+  }
+
+  // Käufe je Quartal, normiert auf die Tage, die in diesem Quartal
+  // überhaupt beobachtet wurden — sonst zählt ein Quartal doppelt,
+  // nur weil die Historie dort zweimal hindurchläuft.
+  const counts = [0, 0, 0, 0];
+  const observedDays = [0, 0, 0, 0];
+
+  rows.forEach((p) => { counts[quarterOf(p.date)]++; });
+
+  // Beobachtete Tage je Quartal auszählen, Tag für Tag über den
+  // gesamten Zeitraum. Bei wenigen Jahren ist das billig und exakt.
+  const startMs = new Date(rows[0].date + "T12:00:00Z").getTime();
+  const endMs = new Date(today + "T12:00:00Z").getTime();
+  for (let t = startMs; t <= endMs; t += 86400000) {
+    observedDays[Math.floor(new Date(t).getUTCMonth() / 3)]++;
+  }
+
+  const rates = counts.map((c, i) => (observedDays[i] > 0 ? c / observedDays[i] : null));
+  const active = rates.filter((r) => r !== null && r > 0);
+  if (active.length < MIN_QUARTERS) {
+    return { ...base, reason: "zu_wenige_quartale", byQuarter: buildByQuarter(counts, observedDays, rates) };
+  }
+
+  const overall = rows.length / Math.max(1, spanDays);
+  const here = rates[quarter];
+  const byQuarter = buildByQuarter(counts, observedDays, rates);
+
+  if (!here || here <= 0 || !overall || overall <= 0) {
+    return { ...base, reason: "kein_kauf_in_dieser_saison", byQuarter };
+  }
+
+  // Häufiger gekauft = kürzerer Rhythmus. Der Faktor wirkt auf die
+  // Tage, also der Kehrwert der Rate.
+  const raw = overall / here;
+  const clamped = Math.max(1 - MAX_SEASONAL_ADJUST, Math.min(1 + MAX_SEASONAL_ADJUST, raw));
+  const percent = Math.round((clamped - 1) * 100);
+
+  return {
+    factor: Math.round(clamped * 1000) / 1000,
+    quarter,
+    quarterName: QUARTER_NAMES[quarter],
+    applied: Math.abs(percent) >= MIN_SEASONAL_SIGNAL * 100,
+    byQuarter,
+    purchases: rows.length,
+    spanDays,
+    reason: "angewandt",
+    message: Math.abs(percent) < MIN_SEASONAL_SIGNAL * 100
+      ? `Kein Saisonmuster im ${QUARTER_NAMES[quarter]}.`
+      : percent < 0
+        ? `Im ${QUARTER_NAMES[quarter]} kaufst du das häufiger — Rhythmus um ${Math.abs(percent)} % verkürzt.`
+        : `Im ${QUARTER_NAMES[quarter]} kaufst du das seltener — Rhythmus um ${percent} % verlängert.`
+  };
+}
+
+function buildByQuarter(counts, observedDays, rates) {
+  return counts.map((c, i) => ({
+    quarter: i, name: QUARTER_NAMES[i], purchases: c,
+    observedDays: observedDays[i],
+    ratePerDay: rates[i] !== null ? Math.round(rates[i] * 10000) / 10000 : null
+  }));
+}
+
+/** Rhythmus mit dem Saisonfaktor korrigieren. */
+function applySeason(rhythm, purchases, today) {
+  if (!rhythm || !rhythm.rhythmDays) return rhythm;
+  const season = seasonalFactor(purchases, today);
+  if (!season.applied) return { ...rhythm, season };
+  return {
+    ...rhythm,
+    rhythmDays: Math.max(1, Math.round(rhythm.rhythmDays * season.factor)),
+    seasonBaseDays: rhythm.rhythmDays,
+    season
+  };
+}
+
+/* ===== changeDetector.js ===== */
+/**
+ * changeDetector.js — Strukturbruch im Kaufverhalten
+ * ================================================================
+ * Ein Mitbewohner zieht aus. Ein Kind kommt in die Kita. Jemand
+ * hört auf, Kaffee zu trinken. In allen drei Fällen ändert sich der
+ * Verbrauch nicht allmählich, sondern von einem Tag auf den anderen —
+ * und der Median über sechs Monate mittelt diesen Bruch weg. Die App
+ * braucht danach Monate, um aufzuholen, und liegt die ganze Zeit
+ * daneben.
+ *
+ * `rhythmEngine2` hat bereits eine Trenderkennung. Sie meldet, DASS
+ * sich etwas verschoben hat, rechnet aber weiter mit allen Daten.
+ * Dieses Modul beantwortet die andere Frage: AB WANN gilt das Neue?
+ *
+ * Verfahren: für jeden möglichen Trennpunkt die Mediane davor und
+ * danach vergleichen und den Punkt mit dem größten Unterschied
+ * suchen. Kein Modell, keine Bibliothek — dieselbe robuste Statistik
+ * wie im Rest des Systems.
+ *
+ * ZURÜCKHALTUNG IST HIER ENTSCHEIDEND. Einen Bruch zu behaupten, wo
+ * keiner ist, verwirft gute Daten und macht die Vorhersage schlechter.
+ * Deshalb: genug Punkte auf beiden Seiten, deutlicher Unterschied,
+ * und die Änderung muss nach dem Bruch ANHALTEN — ein einzelner
+ * Ausreißer ist kein Strukturbruch, sondern genau das, wogegen der
+ * Median ohnehin schützt.
+ * ================================================================
+ */
+
+
+
+const MIN_SIDE = 3;              // Intervalle je Seite
+const MIN_RELATIVE_CHANGE = 0.4; // unter 40 % ist es Rauschen
+const MIN_AGE_DAYS = 14;         // ein Bruch von gestern ist eine Vermutung
+const MAX_LOOKBACK_DAYS = 540;
+
+/**
+ * Bruchpunkt in einer Kaufreihe suchen.
+ *
+ * @param {Array} purchases [{date, quantity}]
+ * @param {string} today
+ * @returns {{found, date, index, before, after, changePercent, direction, intervals, message}}
+ */
+function detectChange(purchases, today) {
+  const rows = (purchases || [])
+    .filter((p) => p && p.date && p.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .filter((p) => daysBetween(p.date, today) <= MAX_LOOKBACK_DAYS);
+
+  const none = {
+    found: false, date: null, index: null,
+    before: null, after: null, changePercent: 0,
+    direction: null, intervals: 0, message: null, reason: "zu_wenig_daten"
+  };
+
+  if (rows.length < MIN_SIDE * 2 + 1) return none;
+
+  // Abstände je Einheit — dieselbe Bezugsgröße wie im Rhythmusmodell,
+  // sonst liest sich ein Vorratskauf als Verhaltensänderung.
+  const intervals = [];
+  for (let i = 1; i < rows.length; i++) {
+    const gap = daysBetween(rows[i - 1].date, rows[i].date);
+    const qty = Math.max(1, Number(rows[i - 1].quantity) || 1);
+    intervals.push({ perUnit: gap / qty, date: rows[i].date });
+  }
+  if (intervals.length < MIN_SIDE * 2) return { ...none, intervals: intervals.length };
+
+  let best = null;
+  for (let split = MIN_SIDE; split <= intervals.length - MIN_SIDE; split++) {
+    const before = median(intervals.slice(0, split).map((x) => x.perUnit));
+    const after = median(intervals.slice(split).map((x) => x.perUnit));
+    if (!before || !after || before <= 0) continue;
+
+    const change = Math.abs(after - before) / before;
+    // Bei gleichwertigen Trennpunkten gewinnt der SPÄTERE. Der Median
+    // verträgt bis zur Hälfte alte Werte im „danach“-Block, ohne dass
+    // sich das Änderungsmaß bewegt — die Trennung ist dann mehrdeutig,
+    // und mit „größer“ landete man systematisch zu früh. Gemeldet würde
+    // ein Datum, an dem das alte Verhalten noch galt.
+    if (!best || change > best.change + 1e-9 || Math.abs(change - best.change) <= 1e-9) {
+      best = { split, before, after, change, date: intervals[split].date };
+    }
+  }
+
+  if (!best) return { ...none, intervals: intervals.length, reason: "kein_trennpunkt" };
+
+  const ageDays = daysBetween(best.date, today);
+
+  if (best.change < MIN_RELATIVE_CHANGE) {
+    return {
+      ...none, intervals: intervals.length,
+      changePercent: Math.round(best.change * 100),
+      reason: "unter_schwelle"
+    };
+  }
+  // Ein Bruch, der erst gestern lag, ist noch nicht bestätigt. Erst
+  // wenn das neue Verhalten eine Weile anhält, ist es eines.
+  if (ageDays < MIN_AGE_DAYS) {
+    return {
+      ...none, intervals: intervals.length,
+      changePercent: Math.round(best.change * 100),
+      reason: "zu_frisch"
+    };
+  }
+
+  const direction = best.after > best.before ? "seltener" : "haeufiger";
+  const percent = Math.round(((best.after - best.before) / best.before) * 100);
+
+  return {
+    found: true,
+    date: best.date,
+    index: best.split,
+    before: Math.round(best.before * 10) / 10,
+    after: Math.round(best.after * 10) / 10,
+    changePercent: percent,
+    direction,
+    intervals: intervals.length,
+    ageDays,
+    reason: "erkannt",
+    message: direction === "seltener"
+      ? `Seit ${formatDate(best.date)} kaufst du das seltener — alle ${Math.round(best.after)} statt alle ${Math.round(best.before)} Tage.`
+      : `Seit ${formatDate(best.date)} kaufst du das häufiger — alle ${Math.round(best.after)} statt alle ${Math.round(best.before)} Tage.`
+  };
+}
+
+const formatDate = (d) => {
+  const [y, m, dd] = String(d).split("-");
+  return `${dd}.${m}.${y}`;
+};
+
+/**
+ * Käufe ab dem Bruchpunkt. Ohne erkannten Bruch bleibt alles.
+ *
+ * Ein Puffer von einem Kauf VOR dem Bruch bleibt stehen, damit der
+ * erste Abstand nach dem Bruch überhaupt berechenbar ist.
+ */
+function purchasesSinceChange(purchases, change) {
+  if (!change || !change.found) return purchases;
+  const rows = [...(purchases || [])].sort((a, b) => a.date.localeCompare(b.date));
+  const idx = rows.findIndex((p) => p.date >= change.date);
+  if (idx <= 0) return rows;
+  return rows.slice(Math.max(0, idx - 1));
 }

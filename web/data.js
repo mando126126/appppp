@@ -71,6 +71,10 @@ function emptyState() {
       hasWaterFilter: false
     },
     swaps: {},                  // productId -> { lastSwap, history:[Datum] }
+    // Rückmeldungen dauerhaft. `listChoices` wird bei jedem Einkauf
+    // geleert und ist deshalb nur der Zustand der laufenden Woche —
+    // zum Lernen braucht es ein Protokoll, das bleibt.
+    feedbackLog: [],            // [{productId, date, reason, dueIn}]
     aisleOrders: {},            // Markt -> Gangreihenfolge
     opened: [],                 // angebrochene Packungen [{productId, openedDate}]
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
@@ -214,6 +218,26 @@ function toggleOpened(productId) {
     const i = s.opened.findIndex((o) => o.productId === productId);
     if (i >= 0) s.opened.splice(i, 1);
     else s.opened.push({ productId, openedDate: today() });
+  });
+}
+
+/**
+ * Eine Rückmeldung dauerhaft festhalten. `dueIn` sagt, wie weit die
+ * Vorhersage danebenlag: 0 heißt „heute fällig", negativ „war schon
+ * überfällig". Ohne diesen Bezug ließe sich später nicht mehr sagen,
+ * wie stark der Rhythmus verschoben werden muss.
+ */
+function recordFeedback(productId, reason, dueIn) {
+  update((s) => {
+    s.feedbackLog.push({
+      productId, reason,
+      date: today(),
+      dueIn: Number.isFinite(dueIn) ? dueIn : 0
+    });
+    // Das Protokoll wächst sonst unbegrenzt. Älteres als ein Jahr
+    // wertet ohnehin kein Modul mehr aus.
+    const cutoff = plusDays(today(), -365);
+    s.feedbackLog = s.feedbackLog.filter((e) => e.date >= cutoff);
   });
 }
 
@@ -434,7 +458,36 @@ function compute() {
     weightG: p.weightG
   }));
 
-  const rhythms = computeAllRhythms(history);
+  /* --- Rhythmen, dreifach nachgeschärft ---------------------------
+   * Reihenfolge ist nicht beliebig:
+   *   1. Strukturbruch  — welche Daten gelten überhaupt noch?
+   *   2. Rhythmus       — aus genau diesen Daten
+   *   3. Saison         — wirkt auf den gelernten Wert
+   *   4. Rückmeldungen  — korrigieren zuletzt, weil sie die direkteste
+   *                       Aussage des Nutzers sind
+   * Jede Stufe hängt ihre Begründung ans Ergebnis, damit im Detail-Blatt
+   * nachvollziehbar bleibt, warum eine Zahl von der rohen abweicht.   */
+  const byProduct = new Map();
+  history.forEach((h) => {
+    if (!byProduct.has(h.productId)) byProduct.set(h.productId, []);
+    byProduct.get(h.productId).push(h);
+  });
+
+  const changes = new Map();
+  const rhythms = new Map();
+  for (const [pid, rows] of byProduct) {
+    const change = detectChange(rows, ref);
+    changes.set(pid, change);
+
+    // Nach einem Bruch zählt nur das neue Verhalten. Vorher mittelte
+    // der Median monatelang über zwei verschiedene Haushalte.
+    const relevant = purchasesSinceChange(rows, change);
+    let r = computeRhythm(relevant);
+
+    r = applySeason(r, rows, ref);
+    r = applyFeedback(r, s.feedbackLog.filter((f) => f.productId === pid), ref, { purchases: relevant });
+    rhythms.set(pid, r);
+  }
   const stage = determineStage(history, rhythms);
   const { chronic, anomalies } = inferWaste(history, rhythms);
 
@@ -731,6 +784,7 @@ function compute() {
     range, prices, forgotten, freeze, safety,
     opened, pattern, season, seasonNow,
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
+    changes, feedbackLog: s.feedbackLog,
     store, aisleList,
     ethylene: checkEthyleneConflicts(items.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
@@ -811,7 +865,7 @@ function searchProducts(query, limit = 12) {
 const Data = {
   STORE_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
-  addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor,
+  addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
   loadDemo, buildDemoHistory, buildFirstReceipt,
   exportJson, importJson,
   compute, parseReceiptText, searchProducts,

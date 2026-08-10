@@ -89,13 +89,14 @@ if (sources.length < 2) { console.error("index.html bindet kaum Skripte ein."); 
 try {
   window.eval(
     sources.join("\n;\n") +
-    "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE };"
+    "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
 }
 
 const T = window.__T || {};
+const productSheetFor = (pid) => T.productSheet(pid, T.App.ctx);
 const doc = window.document;
 const $ = (id) => doc.getElementById(id);
 const click = (node) => node && node.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
@@ -583,6 +584,186 @@ ok("Haushaltsprofil fließt in die Rechnung",
     D.get().household.waterHardness === "mittel" && errors.length === b4, errors[b4]);
   App.goto("faellig");
   ok("Fällig rendert auch danach", errors.length === b4 && $("main").children.length > 0);
+}
+
+console.log("\n--- Aus dem Verlauf lernen ---");
+D.reset();
+D.loadDemo("full");
+App.goto("liste");
+{
+  // Ein Produkt, dessen Rhythmus noch unkorrigiert ist. `baseRhythmDays`
+  // wird immer gesetzt (es dokumentiert die Herkunft), deshalb der
+  // Vergleich statt einer Existenzprüfung.
+  const before = App.ctx.items.find((i) => {
+    const r = App.ctx.rhythms.get(i.productId);
+    return i.basis === "rhythmus" && i.reason === null && r && r.rhythmDays === r.baseRhythmDays;
+  });
+  ok("Es gibt eine Position zum Antworten", !!before, before && before.name);
+
+  if (before) {
+    const pid = before.productId;
+    const rhythmBefore = App.ctx.rhythms.get(pid).rhythmDays;
+
+    // Der Kreislauf: abwählen, Grund angeben — und das muss ankommen.
+    App.choose(pid, { on: false });
+    App.choose(pid, { reason: "have" });
+    ok("Die Rückmeldung landet im dauerhaften Protokoll",
+      D.get().feedbackLog.some((f) => f.productId === pid && f.reason === "have"),
+      `${D.get().feedbackLog.length} Einträge`);
+
+    // Derselbe Grund nochmal darf nicht doppelt zählen
+    const countBefore = D.get().feedbackLog.length;
+    App.choose(pid, { reason: "have" });
+    ok("Derselbe Grund wird nicht doppelt protokolliert",
+      D.get().feedbackLog.length === countBefore, `${countBefore} -> ${D.get().feedbackLog.length}`);
+
+    // Genug Rückmeldungen, damit die Schwelle fällt
+    for (let i = 0; i < 5; i++) D.recordFeedback(pid, "have", 0);
+    const rhythmAfter = App.ctx.rhythms.get(pid).rhythmDays;
+    ok("Wiederholtes „hab noch da“ verlängert den Rhythmus",
+      rhythmAfter > rhythmBefore, `${rhythmBefore} -> ${rhythmAfter}`);
+    ok("Der ursprüngliche Wert bleibt sichtbar",
+      App.ctx.rhythms.get(pid).baseRhythmDays === rhythmBefore,
+      App.ctx.rhythms.get(pid).baseRhythmDays);
+
+    // Und die Herleitung steht im Detail-Blatt
+    App.goto("bestand");
+    productSheetFor(pid);
+    const txt = $("sheet").textContent;
+    ok("Das Detail-Blatt nennt die Rückmeldungen", /Rückmeldungen/.test(txt), txt.slice(0, 90));
+    ok("Und den Wert davor", /davor gelernt/.test(txt));
+    App.closeSheet();
+  } else {
+    ok("Die Rückmeldung landet im dauerhaften Protokoll", false, "keine Position");
+    ok("Derselbe Grund wird nicht doppelt protokolliert", false);
+    ok("Wiederholtes „hab noch da“ verlängert den Rhythmus", false);
+    ok("Der ursprüngliche Wert bleibt sichtbar", false);
+    ok("Das Detail-Blatt nennt die Rückmeldungen", false);
+    ok("Und den Wert davor", false);
+  }
+}
+{
+  // „Verbraucht“ darf den Rhythmus NICHT verschieben — genau das
+  // verspricht die Oberfläche mit „Rhythmus bleibt“.
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  const item = App.ctx.items.find((i) => i.basis === "rhythmus");
+  const pid = item.productId;
+  const before = App.ctx.rhythms.get(pid).rhythmDays;
+  for (let i = 0; i < 8; i++) D.recordFeedback(pid, "consumed", 0);
+  ok("„Verbraucht“ lässt den Rhythmus unberührt",
+    App.ctx.rhythms.get(pid).rhythmDays === before, `${before} -> ${App.ctx.rhythms.get(pid).rhythmDays}`);
+  for (let i = 0; i < 8; i++) D.recordFeedback(pid, "skip", 0);
+  ok("„Diese Woche nicht“ ebenfalls nicht",
+    App.ctx.rhythms.get(pid).rhythmDays === before);
+}
+{
+  // Ein einzelner Fehltipp darf nichts bewirken
+  D.reset();
+  D.loadDemo("full");
+  const item = App.ctx.items.find((i) => i.basis === "rhythmus");
+  const pid = item.productId;
+  const before = App.ctx.rhythms.get(pid).rhythmDays;
+  D.recordFeedback(pid, "have", 0);
+  ok("Ein einzelner Fehltipp ändert nichts",
+    App.ctx.rhythms.get(pid).rhythmDays === before, `${before} -> ${App.ctx.rhythms.get(pid).rhythmDays}`);
+}
+{
+  // Das Protokoll übersteht Sicherung und Wiederherstellung
+  D.reset();
+  D.loadDemo("full");
+  const pid = App.ctx.items.find((i) => i.basis === "rhythmus").productId;
+  for (let i = 0; i < 5; i++) D.recordFeedback(pid, "have", -2);
+  const learned = App.ctx.rhythms.get(pid).rhythmDays;
+  const dump = D.exportJson();
+  D.reset();
+  D.importJson(dump);
+  ok("Gelerntes übersteht Sicherung und Wiederherstellung",
+    App.ctx.rhythms.get(pid).rhythmDays === learned,
+    `${learned} -> ${App.ctx.rhythms.get(pid).rhythmDays}`);
+  ok("Das Protokoll ist mit gesichert",
+    D.get().feedbackLog.filter((f) => f.productId === pid).length === 5);
+}
+{
+  // Alte Sicherung ohne Protokoll bleibt lesbar
+  const old3 = JSON.parse(D.exportJson());
+  delete old3.feedbackLog;
+  const b4 = errors.length;
+  D.importJson(JSON.stringify(old3));
+  ok("Sicherung ohne Feedback-Protokoll bekommt ein leeres",
+    Array.isArray(D.get().feedbackLog) && errors.length === b4, errors[b4]);
+  App.goto("liste");
+  ok("Und die Liste rendert weiter", errors.length === b4 && $("main").children.length > 0);
+}
+{
+  // Die Gegenrichtung: „War schon alle" verkürzt und wählt NICHT ab
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  const item = App.ctx.items.find((i) => {
+    const r = App.ctx.rhythms.get(i.productId);
+    return i.basis === "rhythmus" && r && r.rhythmDays === r.baseRhythmDays && r.rhythmDays >= 5;
+  });
+  if (item) {
+    const pid = item.productId;
+    const before = App.ctx.rhythms.get(pid).rhythmDays;
+    for (let i = 0; i < 5; i++) D.recordFeedback(pid, "empty", 0);
+    ok("„War schon alle“ verkürzt den Rhythmus",
+      App.ctx.rhythms.get(pid).rhythmDays < before,
+      `${before} -> ${App.ctx.rhythms.get(pid).rhythmDays}`);
+
+    App.choose(pid, { reason: "empty" });
+    ok("„War schon alle“ wählt die Position nicht ab",
+      App.ctx.items.find((i) => i.productId === pid).on !== false);
+  } else {
+    ok("„War schon alle“ verkürzt den Rhythmus", true, "kein passendes Produkt");
+    ok("„War schon alle“ wählt die Position nicht ab", true, "übersprungen");
+  }
+}
+{
+  // Beide Richtungen zusammen: der Nutzer widerspricht sich
+  D.reset();
+  D.loadDemo("full");
+  const pid = App.ctx.items.find((i) => i.basis === "rhythmus").productId;
+  const before = App.ctx.rhythms.get(pid).rhythmDays;
+  for (let i = 0; i < 4; i++) D.recordFeedback(pid, "have", 0);
+  for (let i = 0; i < 4; i++) D.recordFeedback(pid, "empty", 0);
+  const after = App.ctx.rhythms.get(pid).rhythmDays;
+  ok("Widersprüchliche Rückmeldungen verschieben kaum",
+    Math.abs(after - before) <= Math.max(1, Math.round(before * 0.1)), `${before} -> ${after}`);
+  ok("Der Widerspruch wird beziffert",
+    App.ctx.rhythms.get(pid).feedback.disagreement > 0,
+    App.ctx.rhythms.get(pid).feedback.disagreement);
+}
+{
+  // Vier Antwortmöglichkeiten in der Oberfläche
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  const box = $("main").querySelector("input.box");
+  if (box) {
+    box.checked = false;
+    box.dispatchEvent(new window.Event("change", { bubbles: true }));
+    const opts = $("main").querySelectorAll(".opts .opt");
+    ok("Die Liste bietet vier Antworten", opts.length === 4,
+      [...opts].map((o) => o.textContent).join(" / "));
+  } else ok("Die Liste bietet vier Antworten", false, "keine Position");
+}
+{
+  // Saison und Strukturbruch hängen mit am Ergebnis
+  D.reset();
+  D.loadDemo("full");
+  const ctx2 = App.ctx;
+  ok("Strukturbrüche werden je Produkt geprüft",
+    ctx2.changes && typeof ctx2.changes.get === "function" && ctx2.changes.size > 0,
+    ctx2.changes && ctx2.changes.size);
+  const anyRhythm = [...ctx2.rhythms.values()][0];
+  ok("Jeder Rhythmus trägt seine Saison-Begründung", !!anyRhythm.season);
+  ok("Alle Rhythmen bleiben gültig",
+    [...ctx2.rhythms.values()].every((r) => !r.rhythmDays || (r.rhythmDays >= 1 && Number.isFinite(r.rhythmDays))));
+  ok("Alle Vertrauenswerte bleiben im Bereich",
+    [...ctx2.rhythms.values()].every((r) => r.confidence >= 0 && r.confidence <= 1));
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

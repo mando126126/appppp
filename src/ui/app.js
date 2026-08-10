@@ -44,12 +44,26 @@ const App = {
 
   /** Eine Wochenentscheidung zu einer Position festhalten. */
   choose(productId, patch) {
+    // Ein neu gesetzter Grund wird dauerhaft protokolliert, nicht nur
+    // für diese Woche. Ohne das war die Rückmeldung folgenlos: wer
+    // dreimal „hab noch da" sagte, bekam das Produkt beim vierten Mal
+    // wieder vorgeschlagen.
+    const previous = (Data.get().listChoices[productId] || {}).reason || null;
+    if (patch.reason && patch.reason !== previous) {
+      const item = App.ctx.items.find((i) => i.productId === productId);
+      Data.recordFeedback(productId, patch.reason, item ? item.dueIn : 0);
+    }
+
     Data.update((s) => {
       if (s.listWeek !== App.ctx.weekKey) { s.listWeek = App.ctx.weekKey; s.listChoices = {}; }
       const cur = s.listChoices[productId] || {};
       const next = { ...cur, ...patch };
       if (patch.on === true) next.reason = null;
-      if (patch.reason !== undefined && patch.on === undefined) next.on = false;
+      // „War schon alle“ ist kein Abwahlgrund — das Produkt wird ja
+      // gebraucht. Es korrigiert nur den Takt und bleibt auf der Liste.
+      if (patch.reason !== undefined && patch.on === undefined) {
+        next.on = patch.reason === "empty" ? cur.on !== false : false;
+      }
       s.listChoices[productId] = next;
     });
   },

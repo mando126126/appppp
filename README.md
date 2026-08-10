@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 480 Tests: Module, Grenzfälle, Funktionen, Haushalt, Oberfläche
+npm test        # 589 Tests + Zwei-Jahres-Simulation
 ```
 
 ---
@@ -62,6 +62,59 @@ also steht sie dort und nicht in der Oberfläche.
 Dazu in der Oberfläche: helles und dunkles Erscheinungsbild, drei
 Schriftgrößen, und Hinweise lassen sich für eine Woche wegtippen statt
 dauerhaft zu verschwinden.
+
+### Aus dem Verlauf lernen
+
+Der Rhythmus kam bisher allein aus den Kaufabständen. Drei Dinge fehlten:
+
+**1. Rückmeldungen waren folgenlos.** „Hab noch da" hat die Position
+abgewählt und war danach vergessen — `listChoices` wird bei jedem
+Einkauf geleert. Wer dreimal sagte, dass Klopapier noch reicht, bekam
+es beim vierten Mal wieder vorgeschlagen. Jetzt gibt es ein dauerhaftes
+Protokoll und vier Antworten statt drei:
+
+| Antwort | Bedeutung | Wirkung |
+|---|---|---|
+| „Hab noch" | Vorschlag kam zu früh | Rhythmus verlängern |
+| „War schon alle" | Vorschlag kam zu spät | Rhythmus verkürzen |
+| „Verbraucht" | sagt nichts über den Takt | **keine** |
+| „Diese Woche nicht" | bewusste Pause | **keine** |
+
+Die vierte Antwort ist neu und nötig: ohne sie könnte man nur in eine
+Richtung korrigieren, und die App bliebe systematisch zu spät dran.
+
+Die Korrektur ist nach denselben Grundsätzen gebaut wie der Rhythmus
+selbst — Median statt Mittelwert, mindestens drei Signale, gedeckelt
+auf ±40 %, Verfall nach 180 Tagen. Ein einzelner Fehltipp bewirkt
+nichts. Widersprechen sich die Rückmeldungen, wird die Korrektur
+gedämpft und das Vertrauen gesenkt, statt beherzt in eine Richtung zu
+ziehen. Die Rohdaten bleiben unangetastet; die Korrektur ist ein
+eigener Faktor, und das Detail-Blatt zeigt den Wert davor.
+
+**2. Keine Saisonalität im gelernten Wert.** Wer im Juli wöchentlich
+grillt und im Januar gar nicht, bekam das Mittel aus beidem.
+`seasonalRhythm.js` liest das Muster aus der **eigenen** Historie —
+aber erst ab einem vollen Jahr, mit mindestens acht Käufen über drei
+Quartale, gedeckelt auf ±35 %. Reicht die Datenlage nicht, gibt es
+keinen Faktor und die App sagt warum.
+
+**3. Kein Bruch bei Haushaltsänderungen.** Zieht jemand aus, mittelt der
+Median den Sprung über Monate weg. `changeDetector.js` sucht den
+Trennpunkt und rechnet ab dort neu — aber nur bei mindestens 40 %
+Unterschied, genug Punkten auf beiden Seiten und wenn die Änderung
+mindestens 14 Tage anhält. Ein einzelner Ausreißer ist kein Bruch.
+
+**Ein Ansatz, den ich verworfen habe:** Zuerst hatte ich ein implizites
+Gegensignal eingebaut — Käufe, die vor der vorhergesagten Fälligkeit
+lagen, sollten auf einen zu langen Rhythmus schließen lassen. Das hat
+einen strukturellen Fehler: der Rhythmus *ist* der Median der
+Kaufabstände, also liegt per Konstruktion die Hälfte darunter. In der
+Demo-Historie feuerten bei völlig stabilem Verhalten neun Signale, alle
+in dieselbe Richtung; der Rhythmus wurde von 7 auf 4 Tage gezogen, und
+die echten Rückmeldungen kämpften anschließend gegen dieses Phantom an.
+Dieselben Daten ein zweites Mal auszuwerten liefert keine neue
+Information — nur einen zusätzlichen Fehler. Die Gegenrichtung kommt
+jetzt aus einer Aussage des Nutzers.
 
 ### Haushaltsprodukte rechnen anders
 
@@ -162,7 +215,7 @@ Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 ## Aufbau
 
 ```
-src/algo/        37 Node-Module — 20 unverändert aus der Vorlage, 17 neue
+src/algo/        40 Node-Module — 20 unverändert aus der Vorlage, 20 neue
 src/ui/
   index.html     Gerüst
   app.css        eine Gestaltung für Telefon und Rechner
@@ -220,10 +273,18 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 480
-npm run test:algo # 57 Regressions- + 85 Stress- + 93 Funktions- + 126 Haushaltstests
-npm run test:ui   # 119 Oberflächentests in jsdom
+npm test          # alle 589
+npm run test:algo # 57 Regressions- + 85 Stress- + 94 Funktions- + 126 Haushalts- + 85 Lerntests
+npm run test:ui   # 142 Oberflächentests in jsdom
 ```
+
+`test/simulation.js` lässt einen simulierten Haushalt zwei Jahre lang
+Tag für Tag einkaufen und antworten. Einzeltests prüfen einen Zustand;
+sie können nicht sagen, ob ein Regelkreis aus Vorhersage und
+Rückmeldung konvergiert oder langsam wegdriftet. Vier Szenarien:
+stabiler Takt, langer Takt, Bruch nach einem Jahr, Saisonmuster. Bei
+stabilem Verhalten bleibt die Vorhersage trotz 46 Rückmeldungen exakt
+auf 7 Tagen — kein Aufschaukeln.
 
 Der Oberflächentest fährt die **gebaute** App in einem simulierten
 Browser hoch, lädt Beispieldaten, klickt jeden Bereich durch, wählt

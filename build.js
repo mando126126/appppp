@@ -69,7 +69,10 @@ const MODULES = [
   "rateLearner.js",
   "intervalTracker.js",
   "basePrice.js",
-  "stockUpAdvisor.js"
+  "stockUpAdvisor.js",
+  "feedbackLearner.js",
+  "seasonalRhythm.js",
+  "changeDetector.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt
