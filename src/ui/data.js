@@ -57,7 +57,15 @@ function emptyState() {
       // steht die Hälfte des Bedarfs erst übermorgen auf der Liste.
       lookaheadDays: 3,
       vacation: { active: false, from: null, to: null },
+      theme: "system",          // system | hell | dunkel
       demo: false
+    },
+    aisleOrders: {},            // Markt -> Gangreihenfolge
+    lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
+    dismissed: {                // weggetippte Hinweise, je Woche
+      week: null,
+      forgotten: [],
+      freeze: []
     },
     purchases: [],        // {id, productId, date, quantity, unitPrice, weightG, store}
     receipts: [],         // {id, date, store, total, itemCount}
@@ -74,6 +82,24 @@ function emptyState() {
 let state = emptyState();
 const listeners = new Set();
 
+/**
+ * Gespeicherten Stand auf den aktuellen Grundzustand legen. Nötig,
+ * weil neue Fassungen Felder ergänzen: ein flaches Überschreiben
+ * würde eine alte Sicherung ohne `settings.theme` mit einem
+ * undefinierten Wert zurücklassen. Nur eine Ebene tief — tiefer wird
+ * hier nichts verschachtelt, und ein allgemeiner Tiefmerge wäre mehr
+ * Code als Nutzen.
+ */
+function merge(parsed) {
+  const base = emptyState();
+  const out = { ...base, ...parsed };
+  for (const key of ["settings", "dismissed"]) {
+    out[key] = { ...base[key], ...(parsed[key] || {}) };
+  }
+  out.settings.vacation = { ...base.settings.vacation, ...(parsed.settings || {}).vacation };
+  return out;
+}
+
 function load() {
   let raw = null;
   try {
@@ -86,7 +112,7 @@ function load() {
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.schema === SCHEMA) state = { ...emptyState(), ...parsed };
+      if (parsed && parsed.schema === SCHEMA) state = merge(parsed);
     } catch (e) {
       console.warn("Gespeicherte Daten unlesbar — starte leer.", e);
     }
@@ -336,7 +362,7 @@ function importJson(text) {
   if (!parsed || typeof parsed !== "object") throw new Error("Keine gültige Sicherung.");
   if (parsed.schema !== SCHEMA) throw new Error(`Sicherung hat Fassung ${parsed.schema}, erwartet ${SCHEMA}.`);
   if (!Array.isArray(parsed.purchases)) throw new Error("Sicherung enthält keine Käufe.");
-  state = { ...emptyState(), ...parsed };
+  state = merge(parsed);
   save();
   listeners.forEach((l) => l());
   return state.purchases.length;
@@ -504,6 +530,33 @@ function compute() {
       )
     : null;
 
+  /* --- Neue Auswertungen: alle aus vorhandenen Daten, kein neues Feld --- */
+  const range = stockRange(inventory, rhythms);
+  const prices = allPriceMemories(history);
+
+  // Weggetippte Hinweise gelten eine Woche, danach kommen sie wieder.
+  const dis = s.dismissed.week === wk ? s.dismissed : { forgotten: [], freeze: [] };
+
+  const onList = new Set(items.filter((i) => i.on).map((i) => i.productId));
+  const forgotten = findForgotten(rhythms, ref, { exclude: onList })
+    .filter((f) => !dis.forgotten.includes(f.productId));
+
+  // Einfrieren bezieht sich auf das, was gerade gekauft wird.
+  const freeze = freezeSuggestions(
+    items.filter((i) => i.on).map((i) => ({
+      productId: i.productId,
+      quantity: i.halved ? 0.5 : 1,
+      unitPrice: (byId(i.productId) || {}).typicalPrice
+    })),
+    rhythms
+  ).filter((f) => !dis.freeze.includes(f.productId));
+
+  const safety = safetyAlert(items.filter((i) => i.on));
+
+  // Gangreihenfolge des zuletzt benutzten Markts
+  const store = s.lastStore || (s.receipts.length ? s.receipts[s.receipts.length - 1].store : "");
+  const aisleList = orderFor(store, s.aisleOrders);
+
   const spend = history.reduce((a, h) => a + h.unitPrice * h.quantity, 0);
   const weeks = Math.max(1, Math.round(spanDays / 7) || 1);
   const wastedEuros = [...wasteStats.values()].reduce((a, x) => a + x.wastedEuros, 0);
@@ -514,6 +567,8 @@ function compute() {
     items, duplicates, budgetResult, vacation, savings,
     deposit, depositEntries, openDepositEntries: openEntries, archive,
     inflation,
+    range, prices, forgotten, freeze, safety,
+    store, aisleList,
     ethylene: checkEthyleneConflicts(items.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
     impact: wasteInKilograms(

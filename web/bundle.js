@@ -1,4 +1,4 @@
-/* Gebündelt aus 20 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 26 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
 
 /* ===== foodDatabase.js ===== */
@@ -3326,4 +3326,523 @@ function parseLidlReceipt(text, opts = {}) {
     sum: Math.round(sum * 100) / 100,
     warnings
   };
+}
+
+/* ===== stockRange.js ===== */
+/**
+ * stockRange.js — Vorrats-Reichweite
+ * ================================================================
+ * Beantwortet die Frage, die vor jedem Einkauf im Kopf steht:
+ * „Wie lange komme ich noch ohne Einkauf aus?"
+ *
+ * Zwei Grenzen, und die kleinere gewinnt:
+ *   1. MENGE   — wann ist das Produkt aufgebraucht (aus perUnitDays)
+ *   2. FRISCHE — wann verdirbt es (aus daysLeft der Bestandsschätzung)
+ *
+ * Der Unterschied ist wichtig: „reicht noch 4 Tage, weil es alle
+ * wird" ist eine Einkaufsplanung, „reicht noch 4 Tage, weil es
+ * schlecht wird" ist eine Verlustwarnung. Wer beides in eine Zahl
+ * wirft, verschenkt die Handlungsoption.
+ *
+ * Betrachtet werden nur Grundnahrungsmittel — Schokolade geht aus,
+ * aber niemand plant deshalb einen Einkauf.
+ * ================================================================
+ */
+
+
+
+// Produkte, deren Fehlen tatsächlich einen Einkauf auslöst.
+const STAPLE_CATEGORIES = ["Milchprodukte", "Backwaren", "Obst", "Gemüse", "Fleisch/Fisch", "Trocken/Vorrat"];
+
+const LIMIT = { QUANTITY: "menge", FRESHNESS: "frische" };
+
+/**
+ * @param {Array} inventory  aus estimateInventory
+ * @param {Map}   rhythms    aus computeAllRhythms
+ * @param {object} opts      { minConfidence }
+ * @returns {{days, limitedBy, limiting, byProduct, confidence, estimated, message}}
+ */
+function stockRange(inventory, rhythms, opts = {}) {
+  const minConfidence = opts.minConfidence ?? 0.4;
+
+  const byProduct = [];
+  for (const item of inventory) {
+    const p = byId(item.productId);
+    if (!p || !p.isFood) continue;
+    if (!STAPLE_CATEGORIES.includes(p.category)) continue;
+
+    const r = rhythms.get(item.productId);
+    if (!r || r.confidence < minConfidence) continue;
+
+    // Menge: Restmenge × Tage je Einheit. Ohne perUnitDays keine Aussage.
+    const byQuantity = r.perUnitDays
+      ? Math.round(item.remainingUnits * r.perUnitDays * 10) / 10
+      : null;
+    const byFreshness = Number.isFinite(item.daysLeft) ? item.daysLeft : null;
+
+    if (byQuantity === null && byFreshness === null) continue;
+
+    const candidates = [byQuantity, byFreshness].filter((x) => x !== null);
+    const days = Math.max(0, Math.min(...candidates));
+    const limitedBy = byFreshness !== null && (byQuantity === null || byFreshness < byQuantity)
+      ? LIMIT.FRESHNESS
+      : LIMIT.QUANTITY;
+
+    byProduct.push({
+      productId: item.productId,
+      name: p.name,
+      days,
+      byQuantity,
+      byFreshness,
+      limitedBy,
+      safetyCritical: p.safetyCritical,
+      confidence: Math.round(Math.min(r.confidence, item.confidence) * 100) / 100
+    });
+  }
+
+  byProduct.sort((a, b) => a.days - b.days);
+
+  if (!byProduct.length) {
+    return {
+      days: null, limitedBy: null, limiting: [], byProduct: [],
+      confidence: 0, estimated: true,
+      message: "Noch keine Reichweite schätzbar — dafür braucht es Bestand mit gelerntem Verbrauch."
+    };
+  }
+
+  // Die Reichweite des Haushalts ist die des knappsten Grundnahrungsmittels.
+  const days = byProduct[0].days;
+  const limiting = byProduct.filter((x) => x.days <= days + 0.5);
+  const confidence = Math.round(
+    (limiting.reduce((s, x) => s + x.confidence, 0) / limiting.length) * 100
+  ) / 100;
+
+  const names = limiting.slice(0, 2).map((x) => x.name).join(" und ");
+  const rounded = Math.round(days);
+  const message = rounded <= 0
+    ? `${names} ${limiting.length > 1 ? "sind" : "ist"} vermutlich schon alle.`
+    : `Dein Vorrat reicht noch etwa ${rounded} ${rounded === 1 ? "Tag" : "Tage"} — dann ${limiting.length > 1 ? "fehlen" : "fehlt"} ${names}.`;
+
+  return {
+    days: Math.round(days * 10) / 10,
+    limitedBy: byProduct[0].limitedBy,
+    limiting,
+    byProduct,
+    confidence,
+    estimated: true,
+    message
+  };
+}
+
+/* ===== freezeAdvisor.js ===== */
+/**
+ * freezeAdvisor.js — Einfrier-Empfehlung im richtigen Moment
+ * ================================================================
+ * Beim Einräumen, nicht drei Tage später: „Von den 400 g Hähnchen
+ * die Hälfte sofort einfrieren — sonst sind in zwei Tagen 3,50 €
+ * weg."
+ *
+ * Der Moment ist der Punkt. Eine Erinnerung am Tag vor dem Ablauf
+ * kommt zu spät (das Fleisch liegt dann schon zwei Tage im
+ * Kühlschrank), eine allgemeine Belehrung über Tiefkühlen ändert
+ * nichts. Direkt nach dem Einkauf ist die Packung in der Hand.
+ *
+ * Bedingungen, alle drei müssen gelten:
+ *   - `freezable: true` in der Datenbank
+ *   - Haltbarkeit kürzer als der gelernte Verbrauch der Menge
+ *   - Lebensmittel (Non-Food friert niemand ein)
+ *
+ * SICHERHEIT: Produkte mit Verbrauchsdatum bekommen die Empfehlung
+ * ausdrücklich AUCH — Einfrieren ist bei Hackfleisch und Geflügel
+ * die richtige Antwort, solange es SOFORT geschieht. Was die App
+ * für diese Produkte nie tut, ist eine Verlängerung nach Ablauf
+ * anbieten. Der Unterschied steht in `beforeExpiry`.
+ * ================================================================
+ */
+
+
+
+/**
+ * @param {Array} items    gekaufte Positionen [{productId, quantity, unitPrice}]
+ * @param {Map}   rhythms  aus computeAllRhythms
+ * @returns {Array} Empfehlungen, teuerste zuerst
+ */
+function freezeSuggestions(items, rhythms = new Map()) {
+  const out = [];
+
+  for (const item of items) {
+    const p = byId(item.productId);
+    if (!p || !p.isFood || !p.freezable) continue;
+
+    const quantity = Math.max(1, Number(item.quantity) || 1);
+    const r = rhythms.get(item.productId);
+
+    // Wie lange wird diese Menge im Haushalt gebraucht?
+    // Ohne Rhythmus wird angenommen, dass eine Packung die Haltbarkeit
+    // knapp übersteht — dann gibt es keine Empfehlung, nur bei belegtem
+    // Überschuss. Lieber schweigen als jeden Einkauf kommentieren.
+    if (!r || !r.perUnitDays) continue;
+
+    const daysNeeded = r.perUnitDays * quantity;
+    if (daysNeeded <= p.shelfLifeDays) continue;   // wird rechtzeitig verbraucht
+
+    // Anteil, der es nicht schafft — aufgerundet auf halbe Packungen,
+    // weil niemand 0,37 Packungen einfriert.
+    const surplusDays = daysNeeded - p.shelfLifeDays;
+    const rawShare = Math.min(0.75, surplusDays / daysNeeded);
+    const share = Math.round(rawShare * 2) / 2 || 0.5;
+
+    const unitPrice = Number(item.unitPrice) || p.typicalPrice || 0;
+    const valueAtRisk = Math.round(unitPrice * quantity * share * 100) / 100;
+    if (valueAtRisk < 0.5) continue;               // Kleinbeträge sind kein Hinweis wert
+
+    const amount = share === 0.5 ? "die Hälfte" : `etwa ${Math.round(share * 100)} %`;
+    const grams = p.typicalWeightG ? Math.round(p.typicalWeightG * quantity * share) : null;
+
+    out.push({
+      productId: p.id,
+      name: p.name,
+      share,
+      valueAtRisk,
+      shelfLifeDays: p.shelfLifeDays,
+      daysNeeded: Math.round(daysNeeded),
+      safetyCritical: p.safetyCritical,
+      // Bei Verbrauchsdatum gilt: einfrieren nur VOR Ablauf, sofort.
+      beforeExpiry: p.safetyCritical,
+      message:
+        `Von ${quantity > 1 ? quantity + "× " : ""}${p.name} ${amount}` +
+        (grams ? ` (rund ${grams} g)` : "") +
+        (p.safetyCritical ? " sofort einfrieren" : " einfrieren") +
+        ` — sonst sind in ${p.shelfLifeDays} Tagen etwa ` +
+        `${valueAtRisk.toFixed(2).replace(".", ",")} € weg.` +
+        (p.safetyCritical ? " Verbrauchsdatum: nur frisch einfrieren, nie nach Ablauf." : ""),
+      estimated: true
+    });
+  }
+
+  return out.sort((a, b) => b.valueAtRisk - a.valueAtRisk);
+}
+
+/* ===== priceMemory.js ===== */
+/**
+ * priceMemory.js — Preis-Gedächtnis je Produkt
+ * ================================================================
+ * „Butter kostet heute 2,79 €, im Schnitt zahlst du 2,29 €."
+ *
+ * Ausdrücklich KEIN Preisvergleich zwischen Händlern — dafür fehlen
+ * die Daten, und fremde Preisdaten wären erfunden. Verglichen wird
+ * nur mit der eigenen Historie. Das bleibt lokal und ist trotzdem
+ * die Zahl, die im Laden zählt: ob dieser Preis für DICH gut ist.
+ *
+ * Der Median statt des Mittelwerts, aus demselben Grund wie im
+ * Rhythmus: ein einzelner Angebotspreis oder ein Fehlkauf soll den
+ * Bezugswert nicht verschieben.
+ * ================================================================
+ */
+
+
+
+const MIN_PURCHASES = 3;      // darunter ist „üblich" eine Behauptung
+const NOTABLE_CHANGE = 0.08;  // 8 % — darunter ist es Rauschen
+
+function medianOf(values) {
+  if (!values.length) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Preisgedächtnis für ein Produkt.
+ * @returns {null|{productId, name, usual, last, lowest, highest, purchases, changePercent, verdict, message}}
+ */
+function priceMemory(productId, history) {
+  const rows = history
+    .filter((h) => h.productId === productId && Number.isFinite(h.unitPrice) && h.unitPrice > 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (rows.length < MIN_PURCHASES) return null;
+
+  const prices = rows.map((r) => r.unitPrice);
+  const usual = medianOf(prices);
+  const last = prices[prices.length - 1];
+  const lowest = Math.min(...prices);
+  const highest = Math.max(...prices);
+  const change = usual > 0 ? (last - usual) / usual : 0;
+
+  let verdict = "üblich";
+  if (change <= -NOTABLE_CHANGE) verdict = "günstig";
+  else if (change >= NOTABLE_CHANGE) verdict = "teuer";
+
+  const p = byId(productId);
+  const eur = (n) => n.toFixed(2).replace(".", ",") + " €";
+
+  const message =
+    verdict === "üblich"
+      ? `${eur(last)} — dein üblicher Preis.`
+      : verdict === "günstig"
+        ? `${eur(last)} statt sonst ${eur(usual)} — ${Math.abs(Math.round(change * 100))} % günstiger als üblich.`
+        : `${eur(last)} statt sonst ${eur(usual)} — ${Math.round(change * 100)} % über deinem üblichen Preis.`;
+
+  return {
+    productId,
+    name: p ? p.name : productId,
+    usual: Math.round(usual * 100) / 100,
+    last: Math.round(last * 100) / 100,
+    lowest: Math.round(lowest * 100) / 100,
+    highest: Math.round(highest * 100) / 100,
+    purchases: rows.length,
+    changePercent: Math.round(change * 1000) / 10,
+    verdict,
+    message,
+    lastDate: rows[rows.length - 1].date
+  };
+}
+
+/** Preisgedächtnis für alle Produkte mit genug Historie. */
+function allPriceMemories(history) {
+  const out = new Map();
+  for (const pid of new Set(history.map((h) => h.productId))) {
+    const m = priceMemory(pid, history);
+    if (m) out.set(pid, m);
+  }
+  return out;
+}
+
+/* ===== forgottenDetector.js ===== */
+/**
+ * forgottenDetector.js — Vergessens-Detektor
+ * ================================================================
+ * „Zahnpasta zuletzt vor 9 Wochen — normalerweise alle 5."
+ *
+ * Fängt genau die Zwischenkäufe ab, die das Kernversprechen
+ * ruinieren: Ein Produkt fällt aus dem Blick, irgendwann fehlt es
+ * mitten in der Woche, und es wird ein Extraweg daraus.
+ *
+ * Der Unterschied zur normalen Liste: dort steht, was FÄLLIG ist.
+ * Hier steht, was AUFFÄLLIG lange fehlt — also deutlich über dem
+ * Rhythmus liegt und trotzdem nicht auf der Liste gelandet ist,
+ * weil das Vertrauen unter der Schwelle blieb oder weil es
+ * abgewählt wurde.
+ *
+ * Non-Food ist ausdrücklich dabei. Klopapier und Zahnpasta sind die
+ * klassischen Vergessenskandidaten, gerade weil sie selten sind.
+ * ================================================================
+ */
+
+
+
+
+const OVERDUE_FACTOR = 1.6;      // ab dem 1,6-fachen des Rhythmus auffällig
+const MIN_CONFIDENCE = 0.35;     // darunter ist der Rhythmus selbst fraglich
+const MAX_FACTOR = 6;            // darüber: aufgegeben, nicht vergessen
+
+/**
+ * @param {Map} rhythms   aus computeAllRhythms
+ * @param {string} today  ISO-Datum
+ * @param {object} opts   { exclude: Set<productId> — steht schon auf der Liste }
+ */
+function findForgotten(rhythms, today, opts = {}) {
+  const exclude = opts.exclude || new Set();
+  const factor = opts.overdueFactor ?? OVERDUE_FACTOR;
+  const out = [];
+
+  for (const [productId, r] of rhythms) {
+    if (exclude.has(productId)) continue;
+    if (!r.rhythmDays || !r.lastPurchaseDate) continue;
+    if (r.confidence < MIN_CONFIDENCE) continue;
+
+    const since = daysBetween(r.lastPurchaseDate, today);
+    const ratio = since / r.rhythmDays;
+    if (ratio < factor || ratio > MAX_FACTOR) continue;
+
+    const p = byId(productId);
+    if (!p) continue;
+
+    const weeksSince = Math.round(since / 7);
+    const rhythmWeeks = Math.round(r.rhythmDays / 7);
+
+    // Wochen lesen sich bei langen Rhythmen besser, Tage bei kurzen.
+    const sinceText = since >= 21 ? `vor ${weeksSince} Wochen` : `vor ${since} Tagen`;
+    const rhythmText = r.rhythmDays >= 21
+      ? `sonst alle ${rhythmWeeks} Wochen`
+      : `sonst alle ${r.rhythmDays} Tage`;
+
+    out.push({
+      productId,
+      name: p.name,
+      category: p.category,
+      aisle: p.aisle,
+      isFood: p.isFood,
+      daysSince: since,
+      rhythmDays: r.rhythmDays,
+      ratio: Math.round(ratio * 10) / 10,
+      confidence: r.confidence,
+      typicalPrice: p.typicalPrice,
+      message: `${p.name} zuletzt ${sinceText} — ${rhythmText}.`,
+      estimated: true
+    });
+  }
+
+  // Am auffälligsten zuerst, aber Häufiges vor Seltenem: ein Produkt
+  // mit 5-Tage-Rhythmus, das 3 Wochen fehlt, ist dringender als eins
+  // mit 90-Tage-Rhythmus beim gleichen Verhältnis.
+  return out.sort((a, b) => b.ratio - a.ratio || a.rhythmDays - b.rhythmDays);
+}
+
+/* ===== safetyAlert.js ===== */
+/**
+ * safetyAlert.js — Sofortwarnung nach dem Einkauf
+ * ================================================================
+ * Enthält der Einkauf ein Produkt mit Verbrauchsdatum, kommt beim
+ * Verlassen des Ladens eine kurze Meldung: „Hackfleisch dabei —
+ * direkt kühlen."
+ *
+ * Kein Verkaufsargument, aber der einzige Punkt, an dem die App
+ * echte Sicherheitsrelevanz hat. Laut BZfE gehören diese Produkte
+ * nach Ablauf in den Müll, weil sie Keime enthalten können, die man
+ * weder sieht noch riecht noch schmeckt — die Kühlkette davor ist
+ * entsprechend das Einzige, was der Nutzer beeinflussen kann.
+ *
+ * Bewusst knapp und selten: eine Warnung, die bei jedem Einkauf
+ * erscheint, wird nach zwei Wochen weggetippt. Deshalb nur
+ * Verbrauchsdatum-Produkte, nicht „alles Gekühlte".
+ * ================================================================
+ */
+
+
+
+/**
+ * @param {Array} items gekaufte Positionen [{productId, quantity}]
+ * @returns {null|{products, coldestZone, message, source}}
+ */
+function safetyAlert(items) {
+  const critical = [];
+  const seen = new Set();
+
+  for (const item of items) {
+    const p = byId(item.productId);
+    if (!p || !p.safetyCritical || seen.has(p.id)) continue;
+    seen.add(p.id);
+    critical.push({
+      productId: p.id,
+      name: p.name,
+      shelfLifeDays: p.shelfLifeDays,
+      storage: p.storage
+    });
+  }
+
+  if (!critical.length) return null;
+
+  const names = critical.map((c) => c.name);
+  const list = names.length === 1
+    ? names[0]
+    : names.slice(0, -1).join(", ") + " und " + names[names.length - 1];
+
+  const shortest = Math.min(...critical.map((c) => c.shelfLifeDays));
+
+  return {
+    products: critical,
+    coldestZone: STORAGE.FRIDGE_BOTTOM,
+    // Kurzfassung für die Liste, wo der Hinweis dauerhaft steht: ein
+    // Satz. Die Langfassung ist für den Moment nach dem Einkauf — da
+    // liegt die Packung in der Hand und der Hinweis erscheint einmal.
+    short: `${list} direkt kühlen — ${STORAGE.FRIDGE_BOTTOM}.`,
+    message:
+      `${list} ${names.length === 1 ? "trägt" : "tragen"} ein Verbrauchsdatum. ` +
+      `Zu Hause zuerst in die kälteste Zone: ${STORAGE.FRIDGE_BOTTOM}. ` +
+      `Haltbar ${shortest} ${shortest === 1 ? "Tag" : "Tage"}; nach Ablauf gehört das in den Müll, ` +
+      `auch wenn es unauffällig aussieht und riecht.`,
+    source: "BZfE/BLE, Haltbarkeit von Lebensmitteln, Stand 20.02.2025"
+  };
+}
+
+/* ===== aisleOrder.js ===== */
+/**
+ * aisleOrder.js — Gangreihenfolge je Markt
+ * ================================================================
+ * Die Reihenfolge der Gänge ist in jedem Markt anders. Wer die Liste
+ * in der falschen Reihenfolge abarbeitet, läuft den Laden zweimal ab.
+ * Der Nutzer sortiert einmal, die App merkt es sich je Filiale.
+ *
+ * Bewusst einfach gehalten: eine Liste von Gangnamen je Markt. Kein
+ * Kartenmaterial, keine Koordinaten — das wäre Pflegearbeit ohne
+ * Ende und für den Nutzen nicht nötig.
+ *
+ * Neue Gänge, die in der gespeicherten Reihenfolge fehlen, fallen
+ * ans Ende statt raus. Ein Sortierschritt, der Positionen verschluckt,
+ * ist im Laden schlimmer als eine falsche Reihenfolge.
+ * ================================================================
+ */
+
+// Voreinstellung: der Weg durch einen typischen deutschen Supermarkt.
+// Frische zuerst, Tiefkühl zuletzt — damit das Eis nicht taut.
+const DEFAULT_AISLE_ORDER = [
+  "Obst & Gemüse",
+  "Backwaren",
+  "Kühlregal",
+  "Fleisch & Fisch",
+  "Konserven",
+  "Trockenware",
+  "Süßwaren",
+  "Getränke",
+  "Drogerie",
+  "Tiefkühl"
+];
+
+/** Die gespeicherte Reihenfolge eines Markts, sonst die Voreinstellung. */
+function orderFor(store, saved = {}) {
+  const custom = saved[normalizeStore(store)];
+  return Array.isArray(custom) && custom.length ? custom : DEFAULT_AISLE_ORDER;
+}
+
+const normalizeStore = (s) => String(s || "").trim().toLowerCase() || "standard";
+
+/**
+ * Positionen nach Gängen gruppieren, in der Reihenfolge des Markts.
+ * @returns {Array<{aisle, items}>}
+ */
+function groupByAisle(items, order = DEFAULT_AISLE_ORDER) {
+  const groups = new Map();
+  for (const item of items) {
+    const aisle = item.aisle || "Sonstiges";
+    if (!groups.has(aisle)) groups.set(aisle, []);
+    groups.get(aisle).push(item);
+  }
+
+  const out = [];
+  for (const aisle of order) {
+    if (groups.has(aisle)) {
+      out.push({ aisle, items: groups.get(aisle) });
+      groups.delete(aisle);
+    }
+  }
+  // Was in der Reihenfolge nicht vorkommt, hängt hinten an — nie weglassen.
+  for (const [aisle, group] of groups) out.push({ aisle, items: group });
+  return out;
+}
+
+/**
+ * Einen Gang um eine Position verschieben. Liefert eine neue Liste;
+ * unbekannte Gänge oder Züge über den Rand hinaus ändern nichts.
+ */
+function moveAisle(order, aisle, direction) {
+  const list = [...order];
+  const from = list.indexOf(aisle);
+  if (from === -1) return list;
+  const to = from + (direction < 0 ? -1 : 1);
+  if (to < 0 || to >= list.length) return list;
+  [list[from], list[to]] = [list[to], list[from]];
+  return list;
+}
+
+/**
+ * Reihenfolge aus den tatsächlich benutzten Gängen aufbauen, damit
+ * der Nutzer nur sortiert, was er auch kauft.
+ */
+function relevantAisles(order, items) {
+  const used = new Set(items.map((i) => i.aisle || "Sonstiges"));
+  const known = order.filter((a) => used.has(a));
+  const extra = [...used].filter((a) => !order.includes(a));
+  return [...known, ...extra];
 }

@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 198 Tests: Module, Grenzfälle, Oberfläche
+npm test        # 267 Tests: Module, Grenzfälle, neue Funktionen, Oberfläche
 ```
 
 ---
@@ -40,7 +40,35 @@ bündelt die Node-Module für den Browser und bricht ab, wenn zwei Module
 denselben Namen auf oberster Ebene vergeben. Es gibt eine Quelle, keine
 Handkopie.
 
-Zwei Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
+### Sechs neue Module
+
+Alle rechnen aus Daten, die schon da waren — kein neues Feld in der
+Datenbank, keine fremde Datenquelle. Fachlogik gehört nach `src/algo`,
+also steht sie dort und nicht in der Oberfläche.
+
+| Modul | Was es beantwortet |
+|---|---|
+| `stockRange.js` | „Wie lange komme ich ohne Einkauf aus?" Kleinerer Wert aus Menge (Restbestand × Verbrauch) und Frische (Resthaltbarkeit) — und die App sagt, welche der beiden Grenzen greift. |
+| `freezeAdvisor.js` | „Von den 400 g Hähnchen die Hälfte sofort einfrieren." Nur wenn die gekaufte Menge die Haltbarkeit überschreitet, nur bei `freezable`, mit beziffertem Betrag. |
+| `priceMemory.js` | „2,99 € statt sonst 2,29 €." Median der eigenen Kaufpreise. Kein Vergleich zwischen Händlern — dafür fehlen die Daten. |
+| `forgottenDetector.js` | „Zahnpasta zuletzt vor 9 Wochen — sonst alle 5." Fängt die Zwischenkäufe ab. Ab dem 1,6-fachen Rhythmus, über dem 6-fachen nicht mehr: das ist abgesetzt, nicht vergessen. |
+| `safetyAlert.js` | Beim Verlassen des Ladens: „Hähnchenbrust direkt kühlen." Nur Verbrauchsdatum-Produkte — eine Warnung bei jedem Einkauf würde weggetippt. |
+| `aisleOrder.js` | Gangreihenfolge je Markt, im Ladenmodus angewandt. Unbekannte Gänge fallen ans Ende, nie raus. |
+
+Dazu in der Oberfläche: helles und dunkles Erscheinungsbild (System,
+Hell, Dunkel), und Hinweise lassen sich für eine Woche wegtippen statt
+dauerhaft zu verschwinden.
+
+### Gestaltung
+
+Orientierung ist iOS: großer Titel, der beim Scrollen in die Leiste
+zusammenfällt; gruppierte Listen mit Einzug statt Karten mit Schatten;
+Materials mit Unschärfe für Leisten und Blätter; Systemschriften statt
+Webfonts. Farben stehen ausschließlich als Variablen und existieren
+doppelt — wer eine Farbe fest ins Regelwerk schreibt, bricht einen der
+beiden Modi.
+
+Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 
 - **Vorausschau (Vorgabe 3 Tage).** Die Vorlage schlug nur vor, was
   *heute* fällig ist — bei einem festen Demo-Datum fiel das nicht auf,
@@ -55,7 +83,7 @@ Zwei Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 ## Aufbau
 
 ```
-src/algo/        20 Node-Module — die Fachlogik, unverändert aus der Vorlage
+src/algo/        26 Node-Module — 20 unverändert aus der Vorlage, 6 neue
 src/ui/
   index.html     Gerüst
   app.css        eine Gestaltung für Telefon und Rechner
@@ -68,6 +96,11 @@ test/            Modultests, Stresstests, Oberflächentest
 web/             Bauergebnis — das, was auf den Server kommt
 ```
 
+`build.js` prüft auch, dass Bündel und Oberfläche keine Namen doppelt
+vergeben — beide werden als `<script>` in denselben Namensraum geladen.
+Ein `group()` in `foodDatabase.js` gegen einen Layout-Helfer gleichen
+Namens ging im Browser zufällig gut und war trotzdem ein Fehler.
+
 `web/` ist erzeugt und liegt trotzdem im Git: so lässt sich das
 Verzeichnis ohne Node-Installation ausliefern. Nach Änderungen in `src/`
 gehört `npm run build` in denselben Commit.
@@ -76,11 +109,11 @@ gehört `npm run build` in denselben Commit.
 
 | Bereich | Was drin steckt |
 |---|---|
-| **Liste** | Vorschlag mit Rechenweg je Zeile, Budgetdeckel, Haushaltsgröße, Vorausschau, Urlaubsmodus, Doppelkauf-Warnung, Lagerhinweis |
+| **Liste** | Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Rechenweg je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Budgetdeckel, Haushaltsgröße, Vorausschau, Urlaubsmodus, Lagerhinweis |
 | **Bestand** | geschätzter Vorrat mit Sicherheitsangabe, Rezepte nach gerettetem Betrag, Einräumhilfe nach Kühlzonen, Aufbrauchplan vor der Reise |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
-| **Zahlen** | Ausgaben je Monat, persönliche Inflation, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
-| **Mehr** | Pfand, Bon-Archiv mit Gewährleistungsfristen, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
+| **Zahlen** | Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
+| **Mehr** | Erscheinungsbild, Gangreihenfolge je Markt, Pfand, Bon-Archiv mit Gewährleistungsfristen, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
 
 Dazu der **Ladenmodus** als Vollbild: nach Gängen sortiert, große
 Ziele, am Ende ein Knopf, der den Einkauf in die Historie schreibt.
@@ -107,9 +140,9 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 198
-npm run test:algo # 57 Regressions- + 85 Stresstests (nur Module)
-npm run test:ui   # 56 Oberflächentests in jsdom
+npm test          # alle 267
+npm run test:algo # 57 Regressions- + 85 Stress- + 54 Funktionstests
+npm run test:ui   # 71 Oberflächentests in jsdom
 ```
 
 Der Oberflächentest fährt die **gebaute** App in einem simulierten

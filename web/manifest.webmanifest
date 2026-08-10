@@ -5,8 +5,8 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#12352A",
-  "theme_color": "#12352A",
+  "background_color": "#F2F2F7",
+  "theme_color": "#F2F2F7",
   "lang": "de",
   "categories": ["food", "productivity", "lifestyle"],
   "icons": [

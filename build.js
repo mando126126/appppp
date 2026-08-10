@@ -52,7 +52,13 @@ const MODULES = [
   "receiptArchive.js",
   "expiryWarning.js",
   "savingsEngine.js",
-  "lidlParser.js"
+  "lidlParser.js",
+  "stockRange.js",
+  "freezeAdvisor.js",
+  "priceMemory.js",
+  "forgottenDetector.js",
+  "safetyAlert.js",
+  "aisleOrder.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt
@@ -129,9 +135,25 @@ function build({ quiet = false } = {}) {
   const bundle = buildBundle();
   fs.writeFileSync(path.join(OUT, "bundle.js"), bundle, "utf8");
 
-  const uiSources = UI_SCRIPTS.filter((f) => f !== "bundle.js").map((f) =>
-    fs.readFileSync(path.join(UI, f), "utf8")
-  );
+  const uiFiles = UI_SCRIPTS.filter((f) => f !== "bundle.js");
+  const uiSources = uiFiles.map((f) => fs.readFileSync(path.join(UI, f), "utf8"));
+
+  // Die Oberfläche teilt sich den Namensraum mit dem Bündel — sie wird
+  // als weitere <script>-Datei geladen, nicht als Modul. Ein Name, den
+  // beide vergeben, überschreibt still den anderen: `group` aus
+  // foodDatabase.js gegen einen Layout-Helfer gleichen Namens war genau
+  // das, und im Browser ging es zufällig gut, weil bundle.js zuerst
+  // lief. Deshalb hier dieselbe Prüfung wie für die Module.
+  const uiCollisions = checkCollisions([
+    { file: "bundle.js", code: bundle },
+    ...uiFiles.map((f, i) => ({ file: f, code: uiSources[i] }))
+  ]);
+  if (uiCollisions.length) {
+    console.error("Namenskonflikte zwischen Bündel und Oberfläche — Build abgebrochen:");
+    uiCollisions.forEach((c) => console.error("  " + c));
+    process.exit(1);
+  }
+
   const version = fingerprint([bundle, ...uiSources]);
 
   UI_SCRIPTS.filter((f) => f !== "bundle.js").forEach((f, i) => {

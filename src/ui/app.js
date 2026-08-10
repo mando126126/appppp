@@ -5,24 +5,24 @@
 
 const NAV = [
   {
-    id: "liste", label: "Liste", view: viewListe,
-    icon: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6l1.5 1.5L7 5"/><path d="M3 12l1.5 1.5L7 11"/><path d="M3 18l1.5 1.5L7 17"/>'
+    id: "liste", label: "Liste", title: "Liste", view: viewListe,
+    icon: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6.2l1.3 1.3 2.4-2.6"/><path d="M3.5 12.2l1.3 1.3 2.4-2.6"/><path d="M3.5 18.2l1.3 1.3 2.4-2.6"/>'
   },
   {
-    id: "bestand", label: "Bestand", view: viewBestand,
-    icon: '<path d="M4 7h16v13H4z"/><path d="M4 12h16"/><path d="M9 7V4h6v3"/>'
+    id: "bestand", label: "Bestand", title: "Bestand", view: viewBestand,
+    icon: '<rect x="3.5" y="7.5" width="17" height="12.5" rx="2.5"/><path d="M3.5 12.5h17"/><path d="M9 7.5V5.5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 5.5v2"/>'
   },
   {
-    id: "erfassen", label: "Erfassen", view: viewErfassen,
-    icon: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'
+    id: "erfassen", label: "Erfassen", title: "Einkauf erfassen", view: viewErfassen,
+    icon: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8.2v7.6M8.2 12h7.6"/>'
   },
   {
-    id: "zahlen", label: "Zahlen", view: viewZahlen,
-    icon: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'
+    id: "zahlen", label: "Zahlen", title: "Zahlen", view: viewZahlen,
+    icon: '<path d="M4 20.5V12M9.3 20.5V4.5M14.7 20.5v-5.5M20 20.5V8.5"/>'
   },
   {
-    id: "mehr", label: "Mehr", view: viewMehr,
-    icon: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>'
+    id: "mehr", label: "Mehr", title: "Mehr", view: viewMehr,
+    icon: '<circle cx="12" cy="6.5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17.5" r="1.6"/>'
   }
 ];
 
@@ -47,11 +47,55 @@ const App = {
     });
   },
 
+  /** Vergessenes Produkt nachträglich auf die Liste holen. */
+  addToList(productId) {
+    Data.update((s) => {
+      if (s.listWeek !== App.ctx.weekKey) { s.listWeek = App.ctx.weekKey; s.listChoices = {}; }
+      s.listChoices[productId] = { ...(s.listChoices[productId] || {}), on: true, extra: true, reason: null };
+    });
+  },
+
+  /** Hinweis für diese Woche wegtippen. */
+  dismiss(kind, productId) {
+    Data.update((s) => {
+      if (s.dismissed.week !== App.ctx.weekKey) {
+        s.dismissed = { week: App.ctx.weekKey, forgotten: [], freeze: [] };
+      }
+      if (!s.dismissed[kind].includes(productId)) s.dismissed[kind].push(productId);
+    });
+  },
+
+  /** Gang im Ladenweg des aktuellen Markts verschieben. */
+  moveAisle(aisle, direction) {
+    const store = App.ctx.store;
+    Data.update((s) => {
+      const key = normalizeStore(store);
+      const current = orderFor(store, s.aisleOrders);
+      s.aisleOrders[key] = moveAisle(current, aisle, direction);
+    });
+  },
+
   goto(tab) {
     App.tab = tab;
     if (location.hash !== "#" + tab) location.hash = tab;
     window.scrollTo(0, 0);
     App.render();
+  },
+
+  /* ---------- Erscheinungsbild ---------- */
+  applyTheme() {
+    const theme = Data.get().settings.theme || "system";
+    const root = document.documentElement;
+    if (theme === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", theme);
+
+    // Die Statusleiste des Systems soll zur Seite passen.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      const dark = theme === "dunkel" ||
+        (theme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      meta.setAttribute("content", dark ? "#000000" : "#F2F2F7");
+    }
   },
 
   /* ---------- Rückmeldungen ---------- */
@@ -101,18 +145,11 @@ const App = {
     const body = document.getElementById("storeBody");
     body.innerHTML = "";
 
-    const seen = new Set();
-    const aisles = [...AISLE_ORDER, ...active.map((i) => i.aisle)].filter((a) => {
-      if (!a || seen.has(a)) return false;
-      seen.add(a);
-      return true;
-    });
-
-    aisles.forEach((aisle) => {
-      const group = active.filter((i) => i.aisle === aisle);
-      if (!group.length) return;
+    // Gangreihenfolge kommt aus dem Modul, nicht aus einer Liste hier.
+    groupByAisle(active, ctx.aisleList).forEach(({ aisle, items }) => {
       body.append(el("div", "aisle", esc(aisle)));
-      group.forEach((i) => {
+      const box = el("div", "aisleGroup");
+      items.forEach((i) => {
         const done = S.storeChecked.includes(i.productId);
         const dup = ctx.duplicates.find((d) => d.productId === i.productId);
         const b = el("button", "sItem" + (done ? " done" : ""));
@@ -128,8 +165,9 @@ const App = {
               : [...s.storeChecked, i.productId];
           });
         });
-        body.append(b);
+        box.append(b);
       });
+      body.append(box);
     });
 
     if (!active.length) body.append(el("p", "empty", "Nichts auf der Liste."));
@@ -144,78 +182,81 @@ const App = {
     const done = document.getElementById("storeDone");
     done.disabled = !inCart.length;
     done.textContent = inCart.length ? `${inCart.length} buchen` : "buchen";
-    done.onclick = () => {
-      App.confirm(
-        "Einkauf buchen?",
-        `${inCart.length} Positionen für ${eur(sum)} kommen in die Historie. Daraus lernt die App die Rhythmen.`,
-        () => {
-          const n = Data.addReceipt({
-            date: Data.today(),
-            store: "Einkauf",
-            items: inCart.map((i) => ({
-              productId: i.productId,
-              quantity: 1,
-              unitPrice: i.halved ? i.price / 2 : i.price
-            }))
-          });
-          App.closeStore();
-          App.toast(`${n} Positionen gebucht`);
-        },
-        "Buchen"
-      );
-    };
+    done.onclick = () => App.confirm(
+      "Einkauf buchen?",
+      `${inCart.length} Positionen für ${eur(sum)} kommen in die Historie. Daraus lernt die App die Rhythmen.`,
+      () => {
+        const alert = safetyAlert(inCart);
+        const n = Data.addReceipt({
+          date: Data.today(),
+          store: App.ctx.store || "Einkauf",
+          items: inCart.map((i) => ({
+            productId: i.productId,
+            quantity: 1,
+            unitPrice: i.halved ? i.price / 2 : i.price
+          }))
+        });
+        App.closeStore();
+        // Sicherheitshinweis im richtigen Moment: beim Verlassen des
+        // Ladens, nicht drei Tage später in einer Liste.
+        if (alert) App.notice("Kühlkette", alert.message);
+        else App.toast(`${n} Positionen gebucht`);
+      },
+      "Buchen"
+    );
+  },
+
+  /** Blatt ohne Rückfrage — nur zur Kenntnis. */
+  notice(title, text) {
+    const sheet = document.getElementById("sheet");
+    document.getElementById("sheetTitle").textContent = title;
+    document.getElementById("sheetSub").textContent = text;
+    document.getElementById("sheetOpts").innerHTML = "";
+    sheet.hidden = false;
+    document.getElementById("sheetCancel").focus();
   },
 
   /* ---------- Kopfbereich ---------- */
   renderBar() {
     const ctx = App.ctx;
     const S = Data.get();
+    const entry = NAV.find((n) => n.id === App.tab) || NAV[0];
+
     const bar = document.getElementById("appbar");
     bar.innerHTML = "";
+    const rowEl = el("barRow" === "" ? "div" : "div", "barRow");
+    rowEl.append(el("div", "barTitle", esc(entry.title)));
 
-    const line = el("div", "line1");
-    const titles = {
-      liste: "Deine Liste", bestand: "Bestand", erfassen: "Einkauf erfassen",
-      zahlen: "Deine Zahlen", mehr: "Mehr"
-    };
-    const sub = ctx.history.length
+    const actions = el("div", "barActions");
+    if (App.tab === "liste" && ctx.items.some((i) => i.on)) {
+      const b = el("button", "barBtn filled", "Im Laden");
+      b.addEventListener("click", () => App.openStore());
+      actions.append(b);
+    }
+    if (App.tab === "zahlen" || App.tab === "bestand") {
+      const b = el("button", "barBtn", "Erfassen");
+      b.addEventListener("click", () => App.goto("erfassen"));
+      actions.append(b);
+    }
+    rowEl.append(actions);
+    bar.append(rowEl);
+
+    // Großer Titel im Inhalt — fällt beim Scrollen in die Leiste zusammen.
+    const large = document.getElementById("largeTitle");
+    large.innerHTML = "";
+    large.append(el("h1", null, esc(entry.title)));
+    const sub = el("div", "sub");
+    sub.append(document.createTextNode(ctx.history.length
       ? `${ctx.weekday} · ${ctx.totals.receipts} Bons · ${ctx.rhythms.size} Produkte`
-      : "noch keine Daten — leg mit einem Einkauf los";
-
-    const head = el("div", null, `<h1>${esc(titles[App.tab])}</h1>`);
-    const subLine = el("div", "sub", esc(sub));
-    // Erzeugte Historie bleibt dauerhaft als solche gekennzeichnet —
-    // ein Nutzer darf nie im Zweifel sein, ob eine Zahl seine eigene ist.
+      : "noch keine Daten — leg mit einem Einkauf los"));
+    // Erzeugte Historie bleibt dauerhaft als solche gekennzeichnet.
     if (S.settings.demo) {
-      const tag = el("button", "demoTag", "Beispieldaten");
+      const tag = el("button", "pill warn", "Beispieldaten");
       tag.title = "Diese Historie ist erzeugt, nicht erfasst. Hier tippen, um sie zu ersetzen.";
       tag.addEventListener("click", () => App.goto("mehr"));
-      subLine.append(document.createTextNode(" "), tag);
+      sub.append(tag);
     }
-    head.append(subLine);
-    line.append(head);
-
-    if (App.tab === "liste" && ctx.items.some((i) => i.on)) {
-      const b = el("button", "barBtn", "Im Laden");
-      b.addEventListener("click", () => App.openStore());
-      line.append(b);
-    }
-    bar.append(line);
-
-    if (!ctx.history.length) return;
-
-    const nums = el("div", "heroNums");
-    const savings = ctx.savings.reduce((a, x) => a + x.estimatedWeeklySaving, 0);
-    const facts = [
-      { k: eur(savings), l: "pro Woche zu holen, ohne Verzicht", cls: "lime" },
-      { k: eur(ctx.totals.spendPerWeek), l: "dein Wochenschnitt" },
-      { k: String(ctx.items.filter((i) => i.on).length), l: "Positionen heute fällig" },
-      { k: String(ctx.inventory.length), l: "Positionen vermutlich noch da" },
-      { k: eur(ctx.deposit.total), l: "Pfand offen", cls: ctx.deposit.worthReturning ? "warn" : "" }
-    ];
-    facts.forEach((f) => nums.append(el("div", "heroNum",
-      `<div class="k ${f.cls || ""}">${esc(f.k)}</div><div class="l">${esc(f.l)}</div>`)));
-    bar.append(nums);
+    large.append(sub);
   },
 
   renderNav() {
@@ -230,9 +271,18 @@ const App = {
     });
   },
 
+  /** Trennlinie unter der Leiste erst zeigen, wenn Inhalt darunter läuft. */
+  onScroll() {
+    const bar = document.getElementById("appbar");
+    if (!bar) return;
+    const scrolled = window.scrollY > 26;
+    bar.classList.toggle("scrolled", scrolled);
+  },
+
   /* ---------- Hauptdurchlauf ---------- */
   render() {
     App.ctx = Data.compute();
+    App.applyTheme();
     App.renderBar();
     App.renderNav();
 
@@ -241,6 +291,7 @@ const App = {
     const entry = NAV.find((n) => n.id === App.tab) || NAV[0];
     main.append(entry.view(App.ctx, App));
 
+    App.onScroll();
     if (App.storeOpen) App.renderStore();
   }
 };
@@ -249,9 +300,6 @@ const App = {
 function boot() {
   Data.load();
 
-  // Erststart ohne Daten: sichtbar machen, dass die App etwas kann,
-  // ohne ungefragt eine erfundene Historie zu speichern. Der Nutzer
-  // entscheidet auf der Liste, ob er Beispieldaten will.
   const hash = location.hash.replace("#", "");
   if (NAV.some((n) => n.id === hash)) App.tab = hash;
 
@@ -259,6 +307,16 @@ function boot() {
     const h = location.hash.replace("#", "");
     if (NAV.some((n) => n.id === h) && h !== App.tab) { App.tab = h; App.render(); }
   });
+
+  window.addEventListener("scroll", App.onScroll, { passive: true });
+
+  // Systemweiter Wechsel hell/dunkel, solange „System" eingestellt ist.
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => { if (Data.get().settings.theme === "system") App.applyTheme(); };
+    if (mq.addEventListener) mq.addEventListener("change", onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+  }
 
   document.getElementById("storeClose").addEventListener("click", () => App.closeStore());
   document.getElementById("sheetCancel").addEventListener("click", () => App.closeSheet());

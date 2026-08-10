@@ -7,6 +7,10 @@
 /* ---------- kleine Helfer ---------- */
 const eur = (n) => (Number(n) || 0).toFixed(2).replace(".", ",") + " €";
 const pct = (n) => Math.round((Number(n) || 0) * 100) + " %";
+/** Zahl mit deutschem Dezimalkomma. Die Module liefern Zahlen, keine
+    Zeichenketten — die Schreibweise entscheidet die Oberfläche. */
+const de = (n) => String(n).replace(".", ",");
+const sign = (n) => (n > 0 ? "+" : "") + de(n);
 const el = (tag, cls, html) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -27,36 +31,55 @@ const REASONS = [
   { key: "skip", label: "Nicht diese Woche", hint: "Rhythmus pausiert" }
 ];
 
-const AISLE_ORDER = [
-  "Obst & Gemüse", "Backwaren", "Kühlregal", "Fleisch & Fisch",
-  "Trockenware", "Konserven", "Tiefkühl", "Süßwaren", "Getränke", "Drogerie"
-];
+/* ---------- Bausteine im iOS-Stil ---------- */
 
-/** Karte mit Titel und optionaler Kennzahl rechts. */
+/** Gruppierte Liste: Überschrift, Körper, Fußnote.
+    Heißt nicht `group` — diesen Namen vergibt bereits foodDatabase.js
+    im Bündel, und beide teilen sich denselben Namensraum. */
+function uiGroup(title, note) {
+  const g = el("div", "group");
+  if (title) g.append(el("div", "groupTitle", esc(title)));
+  const body = el("div", "groupBody");
+  g.append(body);
+  if (note) g.append(el("div", "groupNote", note));
+  g.body = body;
+  return g;
+}
+
+/** Eine Zeile darin. `control` steht rechts. */
+function uiRow(title, sub, control, opts = {}) {
+  const r = el(opts.onClick ? "button" : "div", "row");
+  const main = el("div", "rowMain");
+  main.append(el("div", "rowTitle", esc(title)));
+  if (sub) main.append(el("div", "rowSub", esc(sub)));
+  r.append(main);
+  if (control) r.append(control);
+  if (opts.value !== undefined) r.append(el("div", "rowValue", esc(opts.value)));
+  if (opts.onClick) { r.append(el("div", "chev")); r.addEventListener("click", opts.onClick); }
+  if (opts.stacked) r.classList.add("stacked");
+  return r;
+}
+
 function card(title, statText) {
   const c = el("div", "card");
   if (title) c.append(el("div", "headrow", `<h2>${esc(title)}</h2>${statText ? `<div class="stat">${esc(statText)}</div>` : ""}`));
   return c;
 }
 
-function settingRow(label, hint, control) {
-  const r = el("div", "setting");
-  r.append(el("div", null, `<div class="lbl">${esc(label)}</div>${hint ? `<div class="hint">${esc(hint)}</div>` : ""}`));
-  r.append(control);
-  return r;
-}
-
 function stepper(value, format, onChange, { min = 0, max = Infinity, step = 1 } = {}) {
-  const w = el("div", "stepper");
+  const wrap = el("div", null);
+  wrap.style.cssText = "display:flex;align-items:center;gap:10px;flex:0 0 auto";
+  wrap.append(el("div", "stepVal", format(value)));
+  const s = el("div", "stepper");
   const dec = el("button", null, "−"); dec.setAttribute("aria-label", "weniger");
-  const val = el("div", "val", format(value));
   const inc = el("button", null, "+"); inc.setAttribute("aria-label", "mehr");
   dec.disabled = value - step < min;
   inc.disabled = value + step > max;
   dec.addEventListener("click", () => onChange(Math.max(min, value - step)));
   inc.addEventListener("click", () => onChange(Math.min(max, value + step)));
-  w.append(dec, val, inc);
-  return w;
+  s.append(dec, inc);
+  wrap.append(s);
+  return wrap;
 }
 
 function toggle(checked, onChange, label) {
@@ -70,6 +93,20 @@ function toggle(checked, onChange, label) {
   return w;
 }
 
+function segmented(options, current, onChange, label) {
+  const s = el("div", "segmented");
+  s.setAttribute("role", "tablist");
+  if (label) s.setAttribute("aria-label", label);
+  options.forEach(([value, text]) => {
+    const b = el("button", null, esc(text));
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", current === value ? "true" : "false");
+    b.addEventListener("click", () => onChange(value));
+    s.append(b);
+  });
+  return s;
+}
+
 function tableCard(c, head, rows) {
   const wrap = el("div", "tableWrap");
   wrap.innerHTML =
@@ -79,6 +116,12 @@ function tableCard(c, head, rows) {
   return wrap;
 }
 
+function tile(label, value, note, cls) {
+  return el("div", "tile",
+    `<div class="l">${esc(label)}</div><div class="v ${cls || ""}">${esc(value)}</div>` +
+    (note ? `<div class="t">${esc(note)}</div>` : ""));
+}
+
 /* ================================================================
    1. Liste
    ================================================================ */
@@ -86,20 +129,20 @@ function viewListe(ctx, app) {
   const c = frag();
   const S = Data.get();
 
-  /* --- Datenlage zu dünn: erklären statt leere Liste zeigen --- */
+  /* --- Datenlage zu dünn --- */
   if (ctx.stage.stage <= 1) {
     const first = card("Noch keine Vorschläge", ctx.stage.label);
-    first.append(el("p", "sub", ctx.stage.hint || "Vorschläge entstehen aus wiederholten Käufen. Zwei Bons je Produkt genügen für den ersten Rhythmus."));
+    first.append(el("p", "sub", ctx.stage.hint ||
+      "Vorschläge entstehen aus wiederholten Käufen. Zwei Bons je Produkt genügen für den ersten Rhythmus."));
 
     if (ctx.history.length) {
-      const ins = firstReceiptInsights(
-        ctx.history.filter((h) => h.date === ctx.history[ctx.history.length - 1].date)
-      );
+      const last = ctx.history[ctx.history.length - 1].date;
+      const ins = firstReceiptInsights(ctx.history.filter((h) => h.date === last));
       first.append(el("div", "note green",
         `<b>${eur(ins.total)}</b> im letzten Einkauf, ${ins.positions} Positionen. ` +
         `Aufs Jahr hochgerechnet wären das <b>${ins.yearProjection} €</b>, wenn das dein Wochenschnitt ist.`));
       tableCard(first, [{ t: "Kategorie" }, { t: "Ausgabe", num: true }, { t: "Anteil", num: true }],
-        ins.categories.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${eur(x.spend)}</td><td class="num">${x.share} %</td></tr>`));
+        ins.categories.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${eur(x.spend)}</td><td class="num">${de(x.share)} %</td></tr>`));
       first.append(el("p", "srcnote", ins.hint));
     }
 
@@ -108,7 +151,7 @@ function viewListe(ctx, app) {
     first.append(go);
 
     if (!ctx.history.length) {
-      const demo = el("button", "cta light", "Beispieldaten laden (6 Monate)");
+      const demo = el("button", "cta light", "Beispieldaten laden");
       demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Beispielhistorie geladen"); });
       first.append(demo);
     }
@@ -116,44 +159,139 @@ function viewListe(ctx, app) {
     return c;
   }
 
-  /* --- Einstellungen für diese Woche --- */
-  const set = card("Diese Woche", `${ctx.weekday} · ${ctx.weekKey}`);
-  const sumOn = ctx.items.filter((i) => i.on).reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+  /* --- Vorrats-Reichweite: die Frage vor dem Einkauf --- */
+  if (ctx.range.days !== null) c.append(rangeHero(ctx));
+
+  /* --- Sicherheitswarnung: kurz, oben, nicht wegklickbar --- */
+  if (ctx.safety) {
+    const g = uiGroup("Sicherheit");
+    const r = el("div", "row");
+    r.append(el("div", "rowMain",
+      `<div class="rowTitle">${esc(ctx.safety.short)}</div>` +
+      `<div class="rowSub">Verbrauchsdatum: nach Ablauf in den Müll, auch wenn nichts auffällt.</div>`));
+    r.append(el("span", "flag f-miss", "kühlen"));
+    g.body.append(r);
+    g.append(el("div", "groupNote", esc("Quelle: " + ctx.safety.source)));
+    c.append(g);
+  }
+
+  /* --- Die Liste --- */
+  const listGroup = uiGroup("Vorschlag für heute", esc(
+    ctx.budgetResult.removed.length
+      ? `${ctx.budgetResult.advice} Gestrichen: ${ctx.budgetResult.removed.map((r) => r.name).join(", ")}. Brot, Milch und Eier bleiben immer.`
+      : "Jede Position ist berechnet. Der Rechenweg steht unter jeder Zeile."));
+
+  if (ctx.vacation && ctx.vacation.skip.length) {
+    const n = el("div", "note blue");
+    n.style.margin = "0";
+    n.innerHTML = `<b>Urlaubsmodus:</b> ${ctx.vacation.skip.length} Frischeposition(en) zurückgestellt — ` +
+      `${eur(ctx.vacation.savedEuros)} gespart. ${esc(ctx.vacation.skip.map((s) => s.name).join(", "))}`;
+    listGroup.body.append(n);
+  }
+
+  const ul = el("ul", "items");
+  if (!ctx.items.length) ul.append(el("li", "item", '<p class="empty">Diese Woche ist nichts fällig. Alles im Rhythmus.</p>'));
+  ctx.items.forEach((it) => ul.append(listItem(it, ctx, app)));
+  listGroup.body.append(ul);
+
+  const on = ctx.items.filter((i) => i.on);
+  const sumOn = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+  const full = ctx.items.reduce((a, i) => a + i.price, 0);
+  const tot = el("div", "totals");
+  tot.innerHTML =
+    `<div><div class="l">${on.length} Positionen</div><div class="big">${eur(sumOn)}</div></div>` +
+    `<div class="saved">${full > sumOn ? "− " + eur(full - sumOn) + " gegenüber allem" : ""}</div>`;
+  listGroup.body.append(tot);
+  c.append(listGroup);
+
+  const cta = el("button", "cta", "Einkaufen starten");
+  cta.disabled = !on.length;
+  cta.addEventListener("click", () => app.openStore());
+  c.append(cta);
+
+  /* --- Vergessens-Detektor --- */
+  if (ctx.forgotten.length) {
+    const g = uiGroup("Fehlt dir das?", "Produkte, die deutlich über ihrem Rhythmus liegen und nicht auf der Liste stehen.");
+    ctx.forgotten.slice(0, 5).forEach((f) => {
+      const r = el("div", "row");
+      const main = el("div", "rowMain");
+      main.append(el("div", "rowTitle", esc(f.name)));
+      main.append(el("div", "rowSub", esc(`zuletzt vor ${f.daysSince} Tagen · sonst alle ${f.rhythmDays} Tage`)));
+      r.append(main);
+
+      const add = el("button", "pillBtn", "Dazu");
+      add.addEventListener("click", () => { app.addToList(f.productId); app.toast(`${f.name} auf der Liste`); });
+      const no = el("button", "pillBtn", "Nein");
+      no.setAttribute("aria-label", `${f.name} nicht mehr vorschlagen`);
+      no.addEventListener("click", () => app.dismiss("forgotten", f.productId));
+      const acts = el("div");
+      acts.style.cssText = "display:flex;gap:7px;flex:0 0 auto";
+      acts.append(add, no);
+      r.append(acts);
+      g.body.append(r);
+    });
+    c.append(g);
+  }
+
+  /* --- Einfrier-Empfehlungen --- */
+  if (ctx.freeze.length) {
+    const g = uiGroup("Gleich einfrieren", "Nur, wo die gekaufte Menge die Haltbarkeit überschreitet.");
+    ctx.freeze.slice(0, 4).forEach((f) => {
+      const r = el("div", "row");
+      const main = el("div", "rowMain");
+      main.append(el("div", "rowTitle", esc(f.name)));
+      main.append(el("div", "rowSub", esc(f.message)));
+      r.append(main);
+      const done = el("button", "pillBtn", "Erledigt");
+      done.addEventListener("click", () => app.dismiss("freeze", f.productId));
+      r.append(done);
+      g.body.append(r);
+    });
+    c.append(g);
+  }
+
+  /* --- Lagerhinweis --- */
+  if (ctx.ethylene) {
+    const g = uiGroup("Lagerhinweis", esc("Quelle: " + ctx.ethylene.source));
+    const n = el("div", "note gold");
+    n.style.margin = "0";
+    n.innerHTML = `<b>${esc(ctx.ethylene.message)}</b>`;
+    g.body.append(n);
+    c.append(g);
+  }
+
+  /* --- Einstellungen dieser Woche --- */
+  const set = uiGroup("Diese Woche");
   const rest = S.settings.budget - sumOn;
-  set.append(settingRow(
-    "Wochenbudget",
+  set.body.append(uiRow("Wochenbudget",
     S.settings.budget ? (rest >= 0 ? `noch ${eur(rest)} Luft` : `${eur(-rest)} darüber`) : "kein Deckel gesetzt",
-    stepper(S.settings.budget, (v) => (v ? eur(v) : "aus"), (v) => app.set((s) => { s.settings.budget = v; }), { min: 0, max: 400, step: 5 })
-  ));
-  set.append(settingRow(
-    "Personen im Haushalt",
-    "skaliert alle Mengen",
-    stepper(S.settings.household, (v) => String(v), (v) => app.set((s) => { s.settings.household = v; }), { min: 1, max: 8, step: 1 })
-  ));
-  set.append(settingRow(
-    "Vorausschau",
-    "wie viele Tage der Einkauf mitabdecken soll",
+    stepper(S.settings.budget, (v) => (v ? eur(v) : "aus"),
+      (v) => app.set((s) => { s.settings.budget = v; }), { min: 0, max: 400, step: 5 })));
+  set.body.append(uiRow("Personen im Haushalt", "skaliert alle Mengen",
+    stepper(S.settings.household, String,
+      (v) => app.set((s) => { s.settings.household = v; }), { min: 1, max: 8, step: 1 })));
+  set.body.append(uiRow("Vorausschau", "wie viele Tage der Einkauf mitabdecken soll",
     stepper(S.settings.lookaheadDays, (v) => (v ? `${v} Tage` : "nur fällig"),
-      (v) => app.set((s) => { s.settings.lookaheadDays = v; }), { min: 0, max: 7, step: 1 })
-  ));
+      (v) => app.set((s) => { s.settings.lookaheadDays = v; }), { min: 0, max: 7, step: 1 })));
 
   const v = S.settings.vacation;
-  set.append(settingRow(
-    "Urlaubsmodus",
+  set.body.append(uiRow("Urlaubsmodus",
     v.active && v.from ? `${deDate(v.from)} bis ${deDate(v.to)}` : "hält Frischware vor der Abreise zurück",
-    toggle(v.active, (on) => app.set((s) => {
-      s.settings.vacation.active = on;
-      if (on && !s.settings.vacation.from) {
+    toggle(v.active, (onOff) => app.set((s) => {
+      s.settings.vacation.active = onOff;
+      if (onOff && !s.settings.vacation.from) {
         s.settings.vacation.from = Data.plusDays(Data.today(), 2);
         s.settings.vacation.to = Data.plusDays(Data.today(), 16);
       }
-    }), "Urlaubsmodus")
-  ));
+    }), "Urlaubsmodus")));
 
   if (v.active) {
-    const f = el("div", "row2");
+    const f = el("div");
+    f.style.cssText = "padding:12px 16px;display:flex;gap:10px";
     [["from", "Abreise"], ["to", "Rückkehr"]].forEach(([key, label]) => {
       const w = el("label", "field", `<span class="lbl">${label}</span>`);
+      w.style.margin = "0";
+      w.style.flex = "1";
       const i = el("input");
       i.type = "date";
       i.value = v[key] || "";
@@ -161,125 +299,119 @@ function viewListe(ctx, app) {
       w.append(i);
       f.append(w);
     });
-    set.append(f);
+    set.body.append(f);
   }
   c.append(set);
-
-  /* --- Die Liste --- */
-  const list = card("Vorschlag für heute", ctx.stage.label);
-  list.append(el("p", "sub", 'Jede Position ist berechnet. Der Rechenweg steht unter jeder Zeile.'));
-
-  if (ctx.budgetResult.removed.length) {
-    list.append(el("div", "note gold",
-      `<b>${esc(ctx.budgetResult.advice)}</b> Gestrichen: ${ctx.budgetResult.removed.map((r) => esc(r.name)).join(", ")}. ` +
-      `Brot, Milch und Eier bleiben immer auf der Liste.`));
-  }
-  if (ctx.vacation && ctx.vacation.skip.length) {
-    list.append(el("div", "note blue",
-      `<b>Urlaubsmodus:</b> ${ctx.vacation.skip.length} Frischeposition(en) zurückgestellt — ${eur(ctx.vacation.savedEuros)} gespart. ` +
-      ctx.vacation.skip.map((s) => esc(s.name)).join(", ")));
-  }
-
-  const ul = el("ul", "items");
-  if (!ctx.items.length) {
-    ul.append(el("li", "item", '<p class="empty">Diese Woche ist nichts fällig. Alles im Rhythmus.</p>'));
-  }
-
-  ctx.items.forEach((it) => {
-    const p = byId(it.productId) || {};
-    const li = el("li", "item" + (it.on ? "" : " off"));
-
-    const top = el("div", "top");
-    const cb = el("input");
-    cb.type = "checkbox"; cb.className = "box"; cb.checked = it.on;
-    cb.setAttribute("aria-label", it.name + " auf die Liste");
-    cb.addEventListener("change", () => app.choose(it.productId, { on: cb.checked, reason: cb.checked ? null : undefined }));
-
-    const main = el("div", "main");
-    const nm = el("div", "nm", esc(it.name));
-    if (it.dueIn !== undefined && it.dueIn > 0) nm.append(el("span", "pill", `in ${it.dueIn} Tagen fällig`));
-    else if (it.dueIn !== undefined && it.dueIn < 0) nm.append(el("span", "pill warn", `${-it.dueIn} Tage überfällig`));
-    if (it.rhythmDays) nm.append(el("span", "pill rh", `alle ${it.rhythmDays} Tage`));
-    if (it.basis === "annahme") nm.append(el("span", "pill warn", "Annahme"));
-    if (it.riskFlag) nm.append(el("span", "pill risk", `${pct(it.wasteRate)} bleibt übrig`));
-    if (p.safetyCritical) nm.append(el("span", "pill safety", "Verbrauchsdatum"));
-    const dup = ctx.duplicates.find((d) => d.productId === it.productId);
-    if (dup) nm.append(el("span", "pill dup", dup.level === "info" ? "doppelt?" : "kürzlich gekauft"));
-    if (!it.on && it.reason) {
-      const r = REASONS.find((x) => x.key === it.reason);
-      if (r) nm.append(el("span", "pill state", r.label));
-    }
-    main.append(nm);
-
-    const up = unitPrice({ productId: it.productId, unitPrice: p.typicalPrice, quantity: 1 });
-    const price = el("div", "price",
-      eur(it.halved ? it.price / 2 : it.price) + (up ? `<small>${esc(up.display)}</small>` : ""));
-
-    top.append(cb, main, price);
-    li.append(top);
-
-    li.append(el("div", "calc", it.basis === "annahme"
-      ? `Kategorie-Annahme ${it.rhythmDays} Tage · noch keine eigene Historie`
-      : `zuletzt vor ${it.daysSince} Tagen · Rhythmus ${it.rhythmDays} Tage · Vertrauen ${pct(it.confidence)}`));
-
-    const why = el("div", "why");
-    if (dup) why.append(el("div", "note blue", esc(dup.message)));
-
-    if (it.on && it.riskFlag) {
-      const w = buildExpiryWarning(it.productId, it.name, it.price, ctx.wasteStats.get(it.productId));
-      if (w) {
-        const n = el("div", "note gold", `<b>${esc(w.message)}</b>`);
-        const h = el("button", "ghost" + (it.halved ? " on" : ""), it.halved ? "✓ halbe Menge" : "Halbe Menge");
-        h.setAttribute("aria-pressed", it.halved ? "true" : "false");
-        h.style.marginTop = "8px";
-        h.addEventListener("click", () => app.choose(it.productId, { halved: !it.halved }));
-        n.append(el("div", null, ""), h);
-        why.append(n);
-      }
-    }
-    if (why.childNodes.length) li.append(why);
-
-    if (!it.on && (it.perishable || it.price > 3)) {
-      const box = el("div", "reasons");
-      box.append(el("div", "q", "Warum nicht?"));
-      const opts = el("div", "opts");
-      REASONS.forEach((r) => {
-        const b = el("button", "opt", `<span>${r.label}</span><small>${r.hint}</small>`);
-        b.setAttribute("aria-pressed", it.reason === r.key ? "true" : "false");
-        b.addEventListener("click", () => app.choose(it.productId, { reason: r.key }));
-        opts.append(b);
-      });
-      box.append(opts);
-      if (it.reason === "have") box.append(el("div", "out watch", `Beobachtet: <b>${esc(it.name)}</b> hält typischerweise ${it.shelfLifeDays} Tage.`));
-      if (it.reason === "consumed") box.append(el("div", "out", `Als verbraucht notiert. Rhythmus bleibt bei ${it.rhythmDays} Tagen.`));
-      if (it.reason === "skip") box.append(el("div", "out", "Übersprungen. Der Rhythmus pausiert."));
-      li.append(box);
-    }
-    ul.append(li);
-  });
-  list.append(ul);
-
-  const on = ctx.items.filter((i) => i.on);
-  const full = ctx.items.reduce((a, i) => a + i.price, 0);
-  const tot = el("div", "totals");
-  tot.innerHTML =
-    `<div><div class="l">${on.length} Positionen</div><div class="big">${eur(sumOn)}</div></div>` +
-    `<div class="saved">${full > sumOn ? "− " + eur(full - sumOn) + " gegenüber allem" : ""}</div>`;
-  list.append(tot);
-
-  const cta = el("button", "cta", "Einkaufen starten →");
-  cta.disabled = !on.length;
-  cta.addEventListener("click", () => app.openStore());
-  list.append(cta);
-  c.append(list);
-
-  if (ctx.ethylene) {
-    const e = card("Lagerhinweis für diesen Einkauf");
-    e.append(el("div", "note gold", `<b>${esc(ctx.ethylene.message)}</b>`));
-    e.append(el("p", "srcnote", "Quelle: " + esc(ctx.ethylene.source)));
-    c.append(e);
-  }
   return c;
+}
+
+/** Ring mit der Vorrats-Reichweite. */
+function rangeHero(ctx) {
+  const r = ctx.range;
+  const days = Math.max(0, Math.round(r.days));
+  const full = 7;                                   // Ring füllt sich über eine Woche
+  const frac = Math.min(1, days / full);
+  const C = 2 * Math.PI * 31;
+  const color = days <= 1 ? "var(--red)" : days <= 3 ? "var(--amber)" : "var(--accent)";
+
+  const h = el("div", "hero");
+  h.append(el("div", "heroRing",
+    `<svg viewBox="0 0 74 74" aria-hidden="true">
+       <circle cx="37" cy="37" r="31" fill="none" stroke="var(--fill)" stroke-width="7"/>
+       <circle cx="37" cy="37" r="31" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
+               stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}"/>
+     </svg>
+     <div class="val"><div class="n">${days}</div><div class="u">${days === 1 ? "Tag" : "Tage"}</div></div>`));
+
+  const txt = el("div", "txt");
+  txt.append(el("b", null, "Vorrat reicht noch"));
+  txt.append(el("small", null, esc(r.message) +
+    ` Geschätzt aus Bestand und Verbrauch, Sicherheit ${pct(r.confidence)}.`));
+  h.append(txt);
+  return h;
+}
+
+/** Eine Position der Vorschlagsliste. */
+function listItem(it, ctx, app) {
+  const p = byId(it.productId) || {};
+  const li = el("li", "item" + (it.on ? "" : " off"));
+
+  const top = el("div", "top");
+  const cb = el("input");
+  cb.type = "checkbox"; cb.className = "box"; cb.checked = it.on;
+  cb.setAttribute("aria-label", it.name + " auf die Liste");
+  cb.addEventListener("change", () => app.choose(it.productId, { on: cb.checked, reason: cb.checked ? null : undefined }));
+
+  const main = el("div", "main");
+  const nm = el("div", "nm", esc(it.name));
+  // Bewusst wenige Marken je Zeile: der Rhythmus steht ohnehin im
+  // Rechenweg darunter, und drei gestapelte Pillen lesen sich als Lärm.
+  if (it.dueIn !== undefined && it.dueIn < 0) nm.append(el("span", "pill warn", `${-it.dueIn} Tage überfällig`));
+  else if (it.dueIn > 0) nm.append(el("span", "pill", `in ${it.dueIn} Tagen`));
+  if (it.basis === "annahme") nm.append(el("span", "pill warn", "Annahme"));
+  if (it.riskFlag) nm.append(el("span", "pill risk", `${pct(it.wasteRate)} bleibt übrig`));
+  if (p.safetyCritical) nm.append(el("span", "pill safety", "Verbrauchsdatum"));
+
+  // Preis-Gedächtnis: nur melden, wenn es abweicht.
+  const pm = ctx.prices.get(it.productId);
+  if (pm && pm.verdict !== "üblich") {
+    nm.append(el("span", "pill " + (pm.verdict === "günstig" ? "cheap" : "warn"),
+      pm.verdict === "günstig" ? `sonst ${eur(pm.usual)}` : `sonst nur ${eur(pm.usual)}`));
+  }
+
+  const dup = ctx.duplicates.find((d) => d.productId === it.productId);
+  if (dup) nm.append(el("span", "pill dup", dup.level === "info" ? "doppelt?" : "kürzlich gekauft"));
+  if (!it.on && it.reason) {
+    const rr = REASONS.find((x) => x.key === it.reason);
+    if (rr) nm.append(el("span", "pill state", rr.label));
+  }
+  main.append(nm);
+
+  const up = unitPrice({ productId: it.productId, unitPrice: p.typicalPrice, quantity: 1 });
+  const price = el("div", "price",
+    eur(it.halved ? it.price / 2 : it.price) + (up ? `<small>${esc(up.display)}</small>` : ""));
+
+  top.append(cb, main, price);
+  li.append(top);
+
+  li.append(el("div", "calc", it.basis === "annahme"
+    ? `Kategorie-Annahme ${it.rhythmDays} Tage · noch keine eigene Historie`
+    : `zuletzt vor ${it.daysSince} Tagen · Rhythmus ${it.rhythmDays} Tage · Vertrauen ${pct(it.confidence)}`));
+
+  const why = el("div", "why");
+  if (dup) why.append(el("div", "note blue", esc(dup.message)));
+
+  if (it.on && it.riskFlag) {
+    const w = buildExpiryWarning(it.productId, it.name, it.price, ctx.wasteStats.get(it.productId));
+    if (w) {
+      const n = el("div", "note gold", `<b>${esc(w.message)}</b>`);
+      const h = el("button", "pillBtn" + (it.halved ? " on" : ""), it.halved ? "✓ halbe Menge" : "Halbe Menge");
+      h.setAttribute("aria-pressed", it.halved ? "true" : "false");
+      h.style.marginTop = "9px";
+      h.addEventListener("click", () => app.choose(it.productId, { halved: !it.halved }));
+      n.append(el("div"), h);
+      why.append(n);
+    }
+  }
+  if (why.childNodes.length) li.append(why);
+
+  if (!it.on && (it.perishable || it.price > 3)) {
+    const box = el("div", "reasons");
+    box.append(el("div", "q", "Warum nicht?"));
+    const opts = el("div", "opts");
+    REASONS.forEach((rr) => {
+      const b = el("button", "opt", `<span>${rr.label}</span><small>${rr.hint}</small>`);
+      b.setAttribute("aria-pressed", it.reason === rr.key ? "true" : "false");
+      b.addEventListener("click", () => app.choose(it.productId, { reason: rr.key }));
+      opts.append(b);
+    });
+    box.append(opts);
+    if (it.reason === "have") box.append(el("div", "out watch", `Beobachtet: <b>${esc(it.name)}</b> hält typischerweise ${it.shelfLifeDays} Tage.`));
+    if (it.reason === "consumed") box.append(el("div", "out", `Als verbraucht notiert. Rhythmus bleibt bei ${it.rhythmDays} Tagen.`));
+    if (it.reason === "skip") box.append(el("div", "out", "Übersprungen. Der Rhythmus pausiert."));
+    li.append(box);
+  }
+  return li;
 }
 
 /* ================================================================
@@ -288,27 +420,37 @@ function viewListe(ctx, app) {
 function viewBestand(ctx, app) {
   const c = frag();
 
-  const inv = card("Vermutlich noch da", `${ctx.inventory.length} Positionen`);
-  inv.append(el("p", "sub", "Geschätzt aus Einkauf minus Verbrauch — ohne dass du etwas pflegst. Deshalb mit Sicherheitsangabe."));
+  if (ctx.range.days !== null) c.append(rangeHero(ctx));
+
+  const inv = uiGroup("Vermutlich noch da",
+    "Geschätzt aus Einkauf minus Verbrauch — ohne dass du etwas pflegst. Deshalb mit Sicherheitsangabe.");
+
   if (!ctx.inventory.length) {
-    inv.append(el("p", "empty", "Kein Bestand schätzbar. Dafür braucht es mindestens zwei Käufe je Produkt."));
+    inv.body.append(el("p", "empty", "Kein Bestand schätzbar. Dafür braucht es mindestens zwei Käufe je Produkt."));
   } else {
-    tableCard(inv,
-      [{ t: "Produkt" }, { t: "Rest", num: true }, { t: "hält noch", num: true }, { t: "Wert", num: true }],
-      ctx.inventory.slice(0, 20).map((i) => {
-        const p = byId(i.productId) || {};
-        // Haltbarkeit in Tagen ist nur für Frisches eine Aussage.
-        // „3640 Tage" bei Klopapier ist rechnerisch richtig und als
-        // Angabe trotzdem wertlos — dann lieber gar keine Zahl.
-        const longLived = !p.isFood || i.daysLeft > 120;
-        const cls = i.daysLeft <= 2 ? "f-miss" : i.daysLeft <= 5 ? "f-gold" : "f-ok";
-        const left = longLived
-          ? `<span class="flag f-ok">unkritisch</span>`
-          : `<span class="flag ${cls}">${i.daysLeft} T</span>`;
-        const rest = i.remainingUnits.toFixed(1).replace(".", ",");
-        return `<tr><td>${esc(i.name)}<br><small style="color:var(--muted)">Sicherheit ${pct(i.confidence)}</small></td>` +
-          `<td class="num">${rest}</td><td class="num">${left}</td><td class="num">${eur(i.value)}</td></tr>`;
-      }));
+    ctx.inventory.slice(0, 20).forEach((i) => {
+      const p = byId(i.productId) || {};
+      // Haltbarkeit in Tagen ist nur für Frisches eine Aussage.
+      // „3640 Tage" bei Klopapier ist richtig gerechnet und wertlos.
+      const longLived = !p.isFood || i.daysLeft > 120;
+      const range = ctx.range.byProduct.find((x) => x.productId === i.productId);
+
+      const r = el("div", "row");
+      const main = el("div", "rowMain");
+      main.append(el("div", "rowTitle", esc(i.name)));
+      const parts = [`${i.remainingUnits.toFixed(1).replace(".", ",")} übrig`, `Sicherheit ${pct(i.confidence)}`];
+      if (range) parts.push(range.limitedBy === "frische" ? "Frische begrenzt" : "Menge begrenzt");
+      main.append(el("div", "rowSub", parts.join(" · ")));
+      r.append(main);
+
+      const flagCls = i.daysLeft <= 2 ? "f-miss" : i.daysLeft <= 5 ? "f-gold" : "f-ok";
+      const right = el("div");
+      right.style.cssText = "display:flex;align-items:center;gap:10px;flex:0 0 auto";
+      right.append(el("span", "flag " + (longLived ? "f-ok" : flagCls), longLived ? "unkritisch" : `${i.daysLeft} T`));
+      right.append(el("span", "rowValue", eur(i.value)));
+      r.append(right);
+      inv.body.append(r);
+    });
   }
   c.append(inv);
 
@@ -323,7 +465,7 @@ function viewBestand(ctx, app) {
   rec.forEach((x) => rl.append(el("li", null,
     `<span class="flag ${x.rescuedValue > 0 ? "f-ok" : "f-new"}">${x.rescuedValue > 0 ? eur(x.rescuedValue) : x.minutes + " Min"}</span>` +
     `<span><b>${esc(x.name)}</b> · ${x.minutes} Min${x.complete ? "" : " · fehlt: " + esc(x.missing.join(", "))}<br>` +
-    `<small style="color:var(--muted)">nutzt: ${esc(x.usesFromStock.join(", ")) || "—"}</small></span>`)));
+    `<small style="color:var(--ink-2)">nutzt: ${esc(x.usesFromStock.join(", ")) || "—"}</small></span>`)));
   r.append(rl);
   c.append(r);
 
@@ -347,10 +489,8 @@ function viewBestand(ctx, app) {
     const p = card("Vor der Abreise", `${plan.daysUntilDeparture} Tage`);
     p.append(el("p", "sub", esc(plan.summary)));
     const pl = el("ul", "plain");
-    plan.mustUse.forEach((x) => pl.append(el("li", null,
-      `<span class="flag f-gold">aufbrauchen</span><span>${esc(x.hint)}</span>`)));
-    plan.freeze.forEach((x) => pl.append(el("li", null,
-      `<span class="flag f-new">einfrieren</span><span>${esc(x.hint)}</span>`)));
+    plan.mustUse.forEach((x) => pl.append(el("li", null, `<span class="flag f-gold">aufbrauchen</span><span>${esc(x.hint)}</span>`)));
+    plan.freeze.forEach((x) => pl.append(el("li", null, `<span class="flag f-new">einfrieren</span><span>${esc(x.hint)}</span>`)));
     if (!pl.childNodes.length) pl.append(el("li", null, '<span class="empty">Nichts, was die Reise nicht übersteht.</span>'));
     p.append(pl);
     c.append(p);
@@ -359,50 +499,44 @@ function viewBestand(ctx, app) {
 }
 
 /* ================================================================
-   3. Erfassen — der Punkt, an dem die App eigene Daten bekommt
+   3. Erfassen
    ================================================================ */
 function viewErfassen(ctx, app) {
   const c = frag();
   const cap = app.capture;
 
-  const tabs = el("div", "capTabs");
-  [["scan", "Bon einlesen"], ["manual", "Von Hand"]].forEach(([k, label]) => {
-    const b = el("button", null, label);
-    b.setAttribute("aria-selected", cap.tab === k ? "true" : "false");
-    b.addEventListener("click", () => { cap.tab = k; app.render(); });
-    tabs.append(b);
-  });
+  const tabs = el("div", "group");
+  tabs.append(segmented([["scan", "Bon einlesen"], ["manual", "Von Hand"]], cap.tab,
+    (k) => { cap.tab = k; app.render(); }, "Erfassungsart"));
+  c.append(tabs);
 
   const box = card();
-  box.prepend(tabs);
-
   if (cap.tab === "scan") renderScan(box, cap, app);
   else renderManual(box, cap, app);
-
   c.append(box);
 
   /* --- Bisher erfasste Bons --- */
   const S = Data.get();
   if (S.receipts.length) {
-    const h = card("Erfasste Bons", `${S.receipts.length} gesamt`);
-    const ul = el("ul", "plain");
+    const g = uiGroup("Erfasste Bons", `${S.receipts.length} gesamt`);
     [...S.receipts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12).forEach((rec) => {
-      const li = el("li");
-      li.append(el("span", "flag f-ok", eur(rec.total)));
-      li.append(el("span", null, `<b>${esc(rec.store)}</b> · ${deDate(rec.date)}<br><small style="color:var(--muted)">${rec.itemCount} Positionen</small>`));
+      const r = el("div", "row");
+      const main = el("div", "rowMain");
+      main.append(el("div", "rowTitle", esc(rec.store)));
+      main.append(el("div", "rowSub", `${deDate(rec.date)} · ${rec.itemCount} Positionen`));
+      r.append(main);
+      r.append(el("div", "rowValue", eur(rec.total)));
       const del = el("button", "del", "×");
-      del.setAttribute("aria-label", "Bon löschen");
-      del.style.marginLeft = "auto";
+      del.setAttribute("aria-label", `Bon vom ${deDate(rec.date)} löschen`);
       del.addEventListener("click", () => app.confirm(
         "Bon löschen?",
-        `${esc(rec.store)} vom ${deDate(rec.date)} — alle Positionen dieses Tages werden aus der Historie entfernt.`,
+        `${rec.store} vom ${deDate(rec.date)} — alle Positionen dieses Tages werden aus der Historie entfernt.`,
         () => { Data.removeReceipt(rec.id); app.toast("Bon gelöscht"); }
       ));
-      li.append(del);
-      ul.append(li);
+      r.append(del);
+      g.body.append(r);
     });
-    h.append(ul);
-    c.append(h);
+    c.append(g);
   }
   return c;
 }
@@ -451,36 +585,30 @@ function renderScan(box, cap, app) {
 
   if (!cap.parsed) return;
 
-  /* --- Ergebnis der Auswertung --- */
   const p = cap.parsed;
   box.append(el("div", "note " + (p.open ? "gold" : "green"),
     `<b>${p.rows.length} Positionen erkannt.</b> ${p.sure} sicher zugeordnet` +
     (p.open ? `, <b>${p.open} brauchen eine Antwort</b> — sonst entstehen falsche Rhythmen.` : ".") +
     (p.discountTotal ? ` Rabatte: ${eur(p.discountTotal)}.` : "")));
-
   p.warnings.forEach((w) => box.append(el("div", "note red", esc(w))));
 
   const rows = el("div");
-  p.rows.forEach((row, idx) => {
+  p.rows.forEach((rowData, idx) => {
     const r = el("div", "matchRow");
     const left = el("div", "raw");
-    left.append(el("div", "r", esc(row.raw)));
-    left.append(el("div", "n", row.productName ? esc(row.productName) : "— nicht zugeordnet —"));
+    left.append(el("div", "r", esc(rowData.raw)));
+    left.append(el("div", "n", rowData.productName ? esc(rowData.productName) : "— nicht zugeordnet —"));
 
-    if (row.needsConfirmation) {
+    if (rowData.needsConfirmation) {
       const sel = el("select");
-      sel.setAttribute("aria-label", `Zuordnung für ${row.raw}`);
-      const opts = [`<option value="">— nicht buchen —</option>`];
-      const cands = Data.searchProducts(row.raw.split(/\s+/)[0] || "", 8);
+      sel.setAttribute("aria-label", `Zuordnung für ${rowData.raw}`);
       const pool = new Map();
-      if (row.productId && byId(row.productId)) pool.set(row.productId, byId(row.productId));
-      cands.forEach((x) => pool.set(x.id, x));
+      if (rowData.productId && byId(rowData.productId)) pool.set(rowData.productId, byId(rowData.productId));
+      Data.searchProducts(rowData.raw.split(/\s+/)[0] || "", 8).forEach((x) => pool.set(x.id, x));
       FOOD_DATABASE.forEach((x) => { if (!pool.has(x.id)) pool.set(x.id, x); });
-      [...pool.values()].forEach((x) => {
-        opts.push(`<option value="${x.id}"${x.id === row.productId ? " selected" : ""}>${esc(x.name)} · ${esc(x.category)}</option>`);
-      });
-      sel.innerHTML = opts.join("");
-      sel.value = row.productId || "";
+      sel.innerHTML = `<option value="">— nicht buchen —</option>` +
+        [...pool.values()].map((x) => `<option value="${x.id}">${esc(x.name)} · ${esc(x.category)}</option>`).join("");
+      sel.value = rowData.productId || "";
       sel.addEventListener("change", () => {
         p.rows[idx].productId = sel.value || null;
         p.rows[idx].productName = sel.value ? byId(sel.value).name : null;
@@ -491,21 +619,22 @@ function renderScan(box, cap, app) {
         app.render();
       });
       left.append(sel);
-      left.append(el("div", "r", row.confidence
-        ? `bester Treffer ${pct(row.confidence)} — unter der Schwelle, deshalb die Frage`
+      left.append(el("div", "r", rowData.confidence
+        ? `bester Treffer ${pct(rowData.confidence)} — unter der Schwelle, deshalb die Frage`
         : "kein Treffer im Katalog"));
     } else {
-      left.append(el("div", "r", `${esc(row.method)} · ${pct(row.confidence)}`));
+      left.append(el("div", "r", `${esc(rowData.method)} · ${pct(rowData.confidence)}`));
     }
 
-    const amt = el("div", "amt", `${eur(row.unitPrice * row.quantity)}<small>${row.quantity}× ${eur(row.unitPrice)}</small>`);
-    r.append(left, amt);
+    r.append(left, el("div", "amt",
+      `${eur(rowData.unitPrice * rowData.quantity)}<small>${rowData.quantity}× ${eur(rowData.unitPrice)}</small>`));
     rows.append(r);
   });
   box.append(rows);
 
   if (p.deposits.length) {
-    box.append(el("p", "srcnote", `${p.deposits.length} Pfandzeile(n) erkannt und getrennt gebucht — Pfand ist kein Lebensmittel.`));
+    box.append(el("p", "srcnote",
+      `${p.deposits.length} Pfandzeile(n) erkannt und getrennt gebucht — Pfand ist kein Lebensmittel.`));
   }
 
   const save = el("button", "cta", `${p.rows.filter((r) => r.productId).length} Positionen übernehmen`);
@@ -521,7 +650,8 @@ function renderScan(box, cap, app) {
 }
 
 function renderManual(box, cap, app) {
-  box.append(el("p", "sub", "Produkt suchen, Menge und Preis prüfen, in den Korb legen. Der Preis kommt aus dem Katalog und lässt sich überschreiben."));
+  box.append(el("p", "sub",
+    "Produkt suchen, Menge und Preis prüfen, in den Korb legen. Der Preis kommt aus dem Katalog und lässt sich überschreiben."));
 
   const f = el("label", "field", '<span class="lbl">Produkt suchen</span>');
   const inp = el("input");
@@ -537,11 +667,11 @@ function renderManual(box, cap, app) {
 
   function renderResults() {
     results.innerHTML = "";
-    const hits = Data.searchProducts(cap.query || "", 10);
     if (!cap.query) { results.classList.add("hide"); return; }
     results.classList.remove("hide");
+    const hits = Data.searchProducts(cap.query, 10);
     if (!hits.length) {
-      results.append(el("li", null, '<div style="padding:12px 13px;font-size:13px;color:var(--muted)">Nichts gefunden.</div>'));
+      results.append(el("li", null, '<div style="padding:13px 14px;font-size:15px;color:var(--ink-2)">Nichts gefunden.</div>'));
       return;
     }
     hits.forEach((p) => {
@@ -561,61 +691,60 @@ function renderManual(box, cap, app) {
   }
   renderResults();
 
-  if (cap.basket.length) {
-    box.append(el("h3", null, "Korb"));
-    const ul = el("ul", "basket");
-    cap.basket.forEach((b, i) => {
-      const li = el("li");
-      li.append(el("span", "bn", esc(b.name)));
+  if (!cap.basket.length) return;
 
-      const st = stepper(b.quantity, (v) => String(v), (v) => { cap.basket[i].quantity = v; app.render(); }, { min: 1, max: 99, step: 1 });
-      li.append(st);
+  box.append(el("h3", null, "Korb"));
+  const ul = el("ul", "basket");
+  cap.basket.forEach((b, i) => {
+    const li = el("li");
+    li.append(el("span", "bn", esc(b.name)));
+    li.append(stepper(b.quantity, String, (v) => { cap.basket[i].quantity = v; app.render(); }, { min: 1, max: 99, step: 1 }));
 
-      const pi = el("input");
-      pi.type = "number"; pi.step = "0.01"; pi.min = "0"; pi.value = b.unitPrice.toFixed(2);
-      pi.setAttribute("aria-label", `Preis für ${b.name}`);
-      pi.style.cssText = "width:84px;padding:8px;border:1px solid var(--hair);border-radius:9px;text-align:right";
-      pi.addEventListener("change", () => { cap.basket[i].unitPrice = parseFloat(pi.value) || 0; app.render(); });
-      li.append(pi);
+    const pi = el("input");
+    pi.type = "number"; pi.step = "0.01"; pi.min = "0"; pi.value = b.unitPrice.toFixed(2);
+    pi.setAttribute("aria-label", `Preis für ${b.name}`);
+    pi.style.cssText = "width:88px;padding:9px;border:none;border-radius:9px;background:var(--surface-2);text-align:right";
+    pi.addEventListener("change", () => { cap.basket[i].unitPrice = parseFloat(pi.value) || 0; app.render(); });
+    li.append(pi);
 
-      const del = el("button", "del", "×");
-      del.setAttribute("aria-label", `${b.name} entfernen`);
-      del.addEventListener("click", () => { cap.basket.splice(i, 1); app.render(); });
-      li.append(del);
-      ul.append(li);
-    });
-    box.append(ul);
+    const del = el("button", "del", "×");
+    del.setAttribute("aria-label", `${b.name} entfernen`);
+    del.addEventListener("click", () => { cap.basket.splice(i, 1); app.render(); });
+    li.append(del);
+    ul.append(li);
+  });
+  box.append(ul);
 
-    const total = cap.basket.reduce((a, b) => a + b.unitPrice * b.quantity, 0);
-    const tot = el("div", "totals");
-    tot.innerHTML = `<div><div class="l">${cap.basket.length} Positionen</div><div class="big">${eur(total)}</div></div>`;
-    box.append(tot);
+  const total = cap.basket.reduce((a, b) => a + b.unitPrice * b.quantity, 0);
+  const tot = el("div", "totals");
+  tot.style.padding = "14px 0 0";
+  tot.innerHTML = `<div><div class="l">${cap.basket.length} Positionen</div><div class="big">${eur(total)}</div></div>`;
+  box.append(tot);
 
-    const meta = el("div", "row2");
-    const df = el("label", "field", '<span class="lbl">Datum</span>');
-    const di = el("input"); di.type = "date"; di.value = cap.date || Data.today();
-    di.addEventListener("change", () => { cap.date = di.value; });
-    df.append(di);
-    const sf = el("label", "field", '<span class="lbl">Markt</span>');
-    const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "z. B. REWE";
-    si.addEventListener("input", () => { cap.store = si.value; });
-    sf.append(si);
-    meta.append(df, sf);
-    box.append(meta);
+  const meta = el("div", "row2");
+  const df = el("label", "field", '<span class="lbl">Datum</span>');
+  const di = el("input"); di.type = "date"; di.value = cap.date || Data.today();
+  di.addEventListener("change", () => { cap.date = di.value; });
+  df.append(di);
+  const sf = el("label", "field", '<span class="lbl">Markt</span>');
+  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "z. B. REWE";
+  si.addEventListener("input", () => { cap.store = si.value; });
+  sf.append(si);
+  meta.append(df, sf);
+  box.append(meta);
 
-    const save = el("button", "cta", "Einkauf buchen");
-    save.addEventListener("click", () => {
-      const n = Data.addReceipt({ date: di.value, store: si.value.trim() || "Unbekannt", items: cap.basket });
-      cap.basket = [];
-      app.toast(`${n} Positionen gebucht`);
-      app.goto("liste");
-    });
-    box.append(save);
-  }
+  const save = el("button", "cta", "Einkauf buchen");
+  save.addEventListener("click", () => {
+    const n = Data.addReceipt({ date: di.value, store: si.value.trim() || "Unbekannt", items: cap.basket });
+    cap.basket = [];
+    app.toast(`${n} Positionen gebucht`);
+    app.goto("liste");
+  });
+  box.append(save);
 }
 
 /* ================================================================
-   4. Zahlen — Verlauf, Sparen, Wirkung
+   4. Zahlen
    ================================================================ */
 function viewZahlen(ctx, app) {
   const c = frag();
@@ -632,30 +761,51 @@ function viewZahlen(ctx, app) {
   }
 
   const savingsTotal = ctx.savings.reduce((a, x) => a + x.estimatedWeeklySaving, 0);
-  const k = el("div", "kpis");
-  k.innerHTML =
-    `<div class="kpi"><div class="l">Ø pro Woche</div><div class="v">${eur(t.spendPerWeek)}</div><div class="t">aus ${t.receipts} Bons</div></div>` +
-    `<div class="kpi"><div class="l">zu holen</div><div class="v good">${eur(savingsTotal)}</div><div class="t">pro Woche, ohne Verzicht</div></div>` +
-    `<div class="kpi"><div class="l">Verlust geschätzt</div><div class="v warn">${eur(t.wastedPerWeek)}</div><div class="t">${ctx.impact.kg} kg gesamt</div></div>` +
-    `<div class="kpi"><div class="l">Rhythmen gelernt</div><div class="v">${[...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length}</div><div class="t">von ${ctx.rhythms.size} Produkten</div></div>`;
-  c.append(k);
+  const s = el("div", "scroller");
+  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), `aus ${t.receipts} Bons`));
+  s.append(tile("zu holen", eur(savingsTotal), "pro Woche, ohne Verzicht", "good"));
+  s.append(tile("Verlust geschätzt", eur(t.wastedPerWeek), `${ctx.impact.kg} kg gesamt`, "warn"));
+  s.append(tile("Rhythmen", String([...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length),
+    `von ${ctx.rhythms.size} Produkten`));
+  c.append(s);
 
-  c.append(el("div", "sectionTitle", "Verlauf"));
   c.append(chartCard(ctx));
 
   if (ctx.inflation && ctx.inflation.productsCompared) {
     const inf = ctx.inflation;
     const ic = card("Deine persönliche Inflation", `${inf.productsCompared} Produkte verglichen`);
     ic.append(el("p", "sub",
-      `Dein Warenkorb heute gegenüber dem Anfang der Historie: <b style="font-size:17px">${inf.changePercent > 0 ? "+" : ""}${inf.changePercent} %</b>`));
+      `Dein Warenkorb heute gegenüber dem Anfang der Historie: <b style="font-size:19px">${sign(inf.changePercent)} %</b>`));
     if (inf.biggestIncreases.length) {
       tableCard(ic, [{ t: "Produkt" }, { t: "vorher", num: true }, { t: "jetzt", num: true }, { t: "Änderung", num: true }],
         inf.biggestIncreases.map((i) =>
           `<tr><td>${esc(i.name)}</td><td class="num">${eur(i.basePrice)}</td><td class="num">${eur(i.currentPrice)}</td>` +
-          `<td class="num" style="color:${i.changePercent > 0 ? "var(--coral)" : "var(--green)"}">${i.changePercent > 0 ? "+" : ""}${i.changePercent} %</td></tr>`));
+          `<td class="num" style="color:${i.changePercent > 0 ? "var(--red)" : "var(--green)"}">${sign(i.changePercent)} %</td></tr>`));
     }
     ic.append(el("p", "srcnote", esc(inf.caveat)));
     c.append(ic);
+  }
+
+  /* --- Preis-Gedächtnis --- */
+  if (ctx.prices.size) {
+    const notable = [...ctx.prices.values()]
+      .filter((m) => m.verdict !== "üblich")
+      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+    const pc = card("Preis-Gedächtnis", `${ctx.prices.size} Produkte`);
+    pc.append(el("p", "sub",
+      "Was du zuletzt gezahlt hast, gegen deinen üblichen Preis (Median). Kein Vergleich zwischen Händlern — nur deine eigene Historie."));
+    if (!notable.length) {
+      pc.append(el("p", "empty", "Alle letzten Preise lagen im üblichen Rahmen."));
+    } else {
+      tableCard(pc, [{ t: "Produkt" }, { t: "üblich", num: true }, { t: "zuletzt", num: true }, { t: "Spanne", num: true }],
+        notable.slice(0, 12).map((m) =>
+          `<tr><td>${esc(m.name)}<br><small style="color:var(--ink-2)">${m.purchases} Käufe</small></td>` +
+          `<td class="num">${eur(m.usual)}</td>` +
+          `<td class="num" style="color:${m.verdict === "teuer" ? "var(--red)" : "var(--green)"}">${eur(m.last)}<br>` +
+          `<small>${sign(m.changePercent)} %</small></td>` +
+          `<td class="num"><small>${eur(m.lowest)}<br>${eur(m.highest)}</small></td></tr>`));
+    }
+    c.append(pc);
   }
 
   const rc = card("Gelernte Rhythmen");
@@ -671,24 +821,22 @@ function viewZahlen(ctx, app) {
   c.append(rc);
 
   /* --- Sparen --- */
-  c.append(el("div", "sectionTitle", "Sparen"));
-  const sc = card("Was wirklich etwas bringt", `${ctx.savings.length} Vorschläge`);
-  sc.append(el("p", "sub", "Aus deinen eigenen Zahlen abgeleitet, nicht aus allgemeinen Tipps."));
-  if (!ctx.savings.length) sc.append(el("p", "empty", "Noch keine Vorschläge — dafür braucht es mehr Historie."));
-  ctx.savings.forEach((s) => {
+  const sc = uiGroup("Was wirklich etwas bringt", "Aus deinen eigenen Zahlen abgeleitet, nicht aus allgemeinen Tipps.");
+  if (!ctx.savings.length) sc.body.append(el("p", "empty", "Noch keine Vorschläge — dafür braucht es mehr Historie."));
+  ctx.savings.forEach((x) => {
     const d = el("div", "save",
-      `<div class="amt">${eur(s.estimatedWeeklySaving)}</div>` +
-      `<div class="txt"><b>${esc(s.title)}</b><small>${esc(s.detail)}</small></div>`);
-    const b = el("button", "ghost" + (s.on ? " on" : ""), s.on ? "✓ übernommen" : "übernehmen");
-    b.setAttribute("aria-pressed", s.on ? "true" : "false");
+      `<div class="amt">${eur(x.estimatedWeeklySaving)}</div>` +
+      `<div class="txt"><b>${esc(x.title)}</b><small>${esc(x.detail)}</small></div>`);
+    const b = el("button", "pillBtn" + (x.on ? " on" : ""), x.on ? "✓ übernommen" : "übernehmen");
+    b.setAttribute("aria-pressed", x.on ? "true" : "false");
     b.addEventListener("click", () => app.set((st) => {
-      st.savingsAccepted = s.on ? st.savingsAccepted.filter((x) => x !== s.id) : [...st.savingsAccepted, s.id];
+      st.savingsAccepted = x.on ? st.savingsAccepted.filter((y) => y !== x.id) : [...st.savingsAccepted, x.id];
     }));
     d.append(b);
-    sc.append(d);
+    sc.body.append(d);
   });
-  const wk = ctx.savings.filter((s) => s.on).reduce((a, s) => a + s.estimatedWeeklySaving, 0);
-  sc.append(el("div", "strip",
+  const wk = ctx.savings.filter((x) => x.on).reduce((a, x) => a + x.estimatedWeeklySaving, 0);
+  sc.body.append(el("div", "strip",
     `<div><div class="big">${eur(wk)}</div><div class="l">pro Woche übernommen</div></div>` +
     `<div style="text-align:right"><div class="big">${Math.round(wk * 52)} €</div><div class="l">auf zwölf Monate</div></div>`));
   c.append(sc);
@@ -698,7 +846,7 @@ function viewZahlen(ctx, app) {
     p.append(el("p", "sub", "Der Grundpreis allein täuscht, wenn die große Packung halb weggeworfen wird."));
     const ul = el("ul", "plain");
     ctx.packs.forEach((x) => ul.append(el("li", null,
-      `<span class="flag ${x.riskyRecommendation ? "f-gold" : "f-ok"}">${x.savingPercent} %</span><span>${esc(x.recommendation)}</span>`)));
+      `<span class="flag ${x.riskyRecommendation ? "f-gold" : "f-ok"}">${de(x.savingPercent)} %</span><span>${esc(x.recommendation)}</span>`)));
     p.append(ul);
     c.append(p);
   }
@@ -736,62 +884,93 @@ function chartCard(ctx) {
 
   let grid = "", bars = "";
   [0, max / 2, max].forEach((tv) => {
-    grid += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(tv).toFixed(1)}" y2="${y(tv).toFixed(1)}" stroke="#DDE3DA"/>` +
-      `<text x="${pad.l - 8}" y="${(y(tv) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#59655C">${tv.toFixed(0)}</text>`;
+    grid += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(tv).toFixed(1)}" y2="${y(tv).toFixed(1)}" stroke="currentColor" opacity=".14"/>` +
+      `<text x="${pad.l - 8}" y="${(y(tv) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="currentColor" opacity=".55">${tv.toFixed(0)}</text>`;
   });
   months.forEach((m, i) => {
-    const x = pad.l + i * bw + bw * 0.22, w = bw * 0.56;
+    const x = pad.l + i * bw + bw * 0.24, w = bw * 0.52;
     const top = y(m[1]), base = y(0);
-    bars += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(base - top).toFixed(1)}" fill="#1C4B3B" rx="4"/>` +
-      `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(2, (base - top) * wasteShare).toFixed(1)}" fill="#DC4A1B" rx="4"/>` +
-      `<text x="${(x + w / 2).toFixed(1)}" y="${H - pad.b + 17}" text-anchor="middle" font-size="10" fill="#59655C">${m[0].slice(5)}</text>`;
+    bars += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(base - top).toFixed(1)}" fill="var(--accent)" rx="5"/>` +
+      `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(2, (base - top) * wasteShare).toFixed(1)}" fill="var(--red)" rx="5"/>` +
+      `<text x="${(x + w / 2).toFixed(1)}" y="${H - pad.b + 18}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".55">${m[0].slice(5)}</text>`;
   });
 
   ch.append(el("div", null,
     `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ausgaben je Monat">${grid}${bars}</svg>`));
   ch.append(el("div", "legend",
-    `<span><i style="background:#1C4B3B"></i>gegessen</span><span><i style="background:#DC4A1B"></i>vermutlich verdorben (Schätzung)</span>`));
+    `<span><i style="background:var(--accent)"></i>gegessen</span><span><i style="background:var(--red)"></i>vermutlich verdorben (Schätzung)</span>`));
   return ch;
 }
 
 /* ================================================================
-   5. Mehr — Pfand, Archiv, Rechenweg, Daten
+   5. Mehr
    ================================================================ */
 function viewMehr(ctx, app) {
   const c = frag();
   const S = Data.get();
 
-  /* --- Pfand --- */
-  c.append(el("div", "sectionTitle", "Pfand"));
-  const d = ctx.deposit;
-  const p = card("Offenes Pfand", `${d.units} Gebinde`);
-  p.append(el("p", "sub", esc(d.message)));
-  const pl = el("ul", "plain");
-  d.byType.forEach((t) => pl.append(el("li", null,
-    `<span class="flag ${t.label.includes("Einweg") ? "f-new" : "f-gold"}">${eur(t.amount)}</span><span>${t.count}× ${esc(t.label)}</span>`)));
-  if (!d.byType.length) pl.append(el("li", null, '<span class="empty">Kein offenes Pfand.</span>'));
-  p.append(pl);
-  if (ctx.openDepositEntries.length) {
-    const back = el("button", "cta light", "Alles zurückgegeben");
-    back.addEventListener("click", () => app.set((s) => {
-      s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
-    }));
-    p.append(back);
+  /* --- Darstellung --- */
+  const look = uiGroup("Darstellung");
+  look.body.append(uiRow("Erscheinungsbild", null,
+    segmented([["system", "System"], ["hell", "Hell"], ["dunkel", "Dunkel"]], S.settings.theme,
+      (v) => app.set((s) => { s.settings.theme = v; }), "Erscheinungsbild"), { stacked: true }));
+  c.append(look);
+
+  /* --- Gangreihenfolge --- */
+  const aisles = relevantAisles(ctx.aisleList, ctx.items);
+  if (aisles.length > 1) {
+    const g = uiGroup("Gangreihenfolge" + (ctx.store ? ` · ${ctx.store}` : ""),
+      "So läufst du im Ladenmodus durch den Markt. Die Reihenfolge wird je Markt gemerkt.");
+    aisles.forEach((aisle, i) => {
+      const r = el("div", "row");
+      r.append(el("div", "rowMain", `<div class="rowTitle">${esc(aisle)}</div>`));
+      const acts = el("div");
+      acts.style.cssText = "display:flex;gap:6px;flex:0 0 auto";
+      [["↑", -1, i === 0], ["↓", 1, i === aisles.length - 1]].forEach(([sym, dir, disabled]) => {
+        const b = el("button", "pillBtn", sym);
+        b.setAttribute("aria-label", `${aisle} nach ${dir < 0 ? "oben" : "unten"}`);
+        b.disabled = disabled;
+        if (disabled) b.style.opacity = ".3";
+        else b.addEventListener("click", () => app.moveAisle(aisle, dir));
+        acts.append(b);
+      });
+      r.append(acts);
+      g.body.append(r);
+    });
+    c.append(g);
   }
-  p.append(el("p", "srcnote",
-    "Einwegpfand 0,25 € ist gesetzlich einheitlich. Mehrwegsätze sind herstellerabhängig — die Beträge sind übliche Sätze, keine Zusicherung."));
-  c.append(p);
+
+  /* --- Pfand --- */
+  const d = ctx.deposit;
+  const pg = uiGroup("Pfand",
+    "Einwegpfand 0,25 € ist gesetzlich einheitlich. Mehrwegsätze sind herstellerabhängig — die Beträge sind übliche Sätze, keine Zusicherung.");
+  if (!d.byType.length) {
+    pg.body.append(uiRow("Kein offenes Pfand", null, null, { value: "0,00 €" }));
+  } else {
+    d.byType.forEach((t) => pg.body.append(uiRow(t.label, `${t.count} Gebinde`, null, { value: eur(t.amount) })));
+    const back = el("button", "row");
+    back.style.color = "var(--accent)";
+    back.append(el("div", "rowMain", `<div class="rowTitle" style="color:var(--accent)">Alles zurückgegeben</div>` +
+      `<div class="rowSub">${esc(d.message)}</div>`));
+    back.addEventListener("click", () => {
+      app.set((s) => {
+        s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
+      });
+      app.toast("Pfand als zurückgegeben notiert");
+    });
+    pg.body.append(back);
+  }
+  c.append(pg);
 
   /* --- Archiv --- */
-  c.append(el("div", "sectionTitle", "Bon-Archiv"));
   const st = archiveStats(ctx.archive);
-  const a = card("Märkte", st.receipts < Data.get().receipts.length
-    ? `letzte ${st.receipts} von ${Data.get().receipts.length} Bons`
+  const a = card("Bon-Archiv", st.receipts < S.receipts.length
+    ? `letzte ${st.receipts} von ${S.receipts.length} Bons`
     : `${st.receipts} Bons`);
   a.append(el("p", "sub", `${eur(st.totalSpend)} gesamt · ${st.warrantyRelevant} mit Garantierelevanz`));
   if (st.stores.length) {
     tableCard(a, [{ t: "Markt" }, { t: "Besuche", num: true }, { t: "Ausgaben", num: true }, { t: "Ø Korb", num: true }],
-      st.stores.map((s) => `<tr><td>${esc(s.name)}</td><td class="num">${s.visits}</td><td class="num">${eur(s.spend)}</td><td class="num">${eur(s.avgBasket)}</td></tr>`));
+      st.stores.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${x.visits}</td><td class="num">${eur(x.spend)}</td><td class="num">${eur(x.avgBasket)}</td></tr>`));
   } else {
     a.append(el("p", "empty", "Noch keine Bons erfasst."));
   }
@@ -806,7 +985,6 @@ function viewMehr(ctx, app) {
   c.append(a);
 
   /* --- Rechenweg --- */
-  c.append(el("div", "sectionTitle", "Rechenweg"));
   const m = card("Wie die App rechnet");
   m.append(el("p", "sub", "Kein KI-Modell. Robuste Statistik, Textabgleich, Schwellenwerte, Tabellen — alles nachvollziehbar."));
   tableCard(m, [{ t: "Schritt" }, { t: "Verfahren" }], [
@@ -814,8 +992,10 @@ function viewMehr(ctx, app) {
     `<tr><td>Rhythmus</td><td>Median der Kaufabstände je Einheit; Pausen über dem Dreifachen ausgeschlossen</td></tr>`,
     `<tr><td>Vertrauen</td><td>Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung</td></tr>`,
     `<tr><td>Bestand</td><td>gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit)</td></tr>`,
+    `<tr><td>Reichweite</td><td>kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit</td></tr>`,
     `<tr><td>Verschwendung</td><td>strukturell: Rhythmus &gt; Haltbarkeit · Ausreißer: einzelner Abstand &gt; Haltbarkeit × 1,2</td></tr>`,
     `<tr><td>Budget</td><td>erst Verschwender halbieren, dann Süßes und Alkohol; Grundnahrung nie</td></tr>`,
+    `<tr><td>Preis-Gedächtnis</td><td>Median der eigenen Kaufpreise; ab 8 % Abweichung wird es gemeldet</td></tr>`,
     `<tr><td>Inflation</td><td>gewichteter Preisindex über Produkte, die in beiden Zeiträumen gekauft wurden</td></tr>`
   ]);
   c.append(m);
@@ -834,77 +1014,72 @@ function viewMehr(ctx, app) {
   c.append(db);
 
   /* --- Daten --- */
-  c.append(el("div", "sectionTitle", "Deine Daten"));
-  const dat = card("Alles bleibt auf diesem Gerät");
-  dat.append(el("p", "sub",
-    "Es gibt keinen Server und kein Konto. Käufe, Einstellungen und gelernte Zuordnungen liegen im Speicher dieses Browsers. " +
-    "Das heißt auch: Browserdaten löschen löscht die App-Daten mit."));
+  const dat = uiGroup("Deine Daten",
+    "Es gibt keinen Server und kein Konto. Alles liegt im Speicher dieses Browsers — Browserdaten löschen löscht die App-Daten mit.");
+  dat.body.append(uiRow("Erfasste Käufe", S.settings.demo ? "Beispieldaten" : null, null, { value: String(S.purchases.length) }));
+  dat.body.append(uiRow("Bons", null, null, { value: String(S.receipts.length) }));
+  dat.body.append(uiRow("Gelernte Schreibweisen", null, null, { value: String(Object.keys(S.aliases).length) }));
+  c.append(dat);
 
-  const stats = el("ul", "plain");
-  stats.append(el("li", null, `<span class="flag f-ok">${S.purchases.length}</span><span>erfasste Käufe${S.settings.demo ? " (Beispieldaten)" : ""}</span>`));
-  stats.append(el("li", null, `<span class="flag f-ok">${S.receipts.length}</span><span>Bons</span>`));
-  stats.append(el("li", null, `<span class="flag f-new">${Object.keys(S.aliases).length}</span><span>gelernte Schreibweisen</span>`));
-  dat.append(stats);
-
-  const exp = el("button", "cta light", "Sicherung herunterladen");
+  const actions = uiGroup();
+  const exp = el("button", "row");
+  exp.append(el("div", "rowMain", '<div class="rowTitle" style="color:var(--accent)">Sicherung herunterladen</div>'));
   exp.addEventListener("click", () => {
     const blob = new Blob([Data.exportJson()], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a2 = document.createElement("a");
-    a2.href = url;
-    a2.download = `einkaufsanker-${Data.today()}.json`;
-    a2.click();
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `einkaufsanker-${Data.today()}.json`;
+    link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     app.toast("Sicherung erstellt");
   });
-  dat.append(exp);
+  actions.body.append(exp);
 
-  const impLabel = el("label", "cta light");
-  impLabel.style.cssText += ";display:block;text-align:center;cursor:pointer";
-  impLabel.textContent = "Sicherung einlesen";
+  const impRow = el("label", "row");
+  impRow.style.cursor = "pointer";
+  impRow.append(el("div", "rowMain", '<div class="rowTitle" style="color:var(--accent)">Sicherung einlesen</div>'));
   const impInput = el("input");
   impInput.type = "file"; impInput.accept = "application/json,.json";
   impInput.style.display = "none";
   impInput.addEventListener("change", () => {
     const file = impInput.files && impInput.files[0];
     if (!file) return;
-    const fr2 = new FileReader();
-    fr2.onload = () => {
-      try {
-        const n = Data.importJson(String(fr2.result));
-        app.toast(`${n} Käufe eingelesen`);
-      } catch (e) {
-        app.toast("Sicherung nicht lesbar");
-        console.error(e);
-      }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try { app.toast(`${Data.importJson(String(reader.result))} Käufe eingelesen`); }
+      catch (e) { app.toast("Sicherung nicht lesbar"); console.error(e); }
     };
-    fr2.readAsText(file);
+    reader.readAsText(file);
     impInput.value = "";
   });
-  impLabel.append(impInput);
-  dat.append(impLabel);
+  impRow.append(impInput);
+  actions.body.append(impRow);
 
-  const demo = el("button", "cta light", S.settings.demo ? "Beispieldaten neu laden" : "Beispieldaten laden (6 Monate)");
+  const demo = el("button", "row");
+  demo.append(el("div", "rowMain",
+    `<div class="rowTitle" style="color:var(--accent)">${S.settings.demo ? "Beispieldaten neu laden" : "Beispieldaten laden"}</div>`));
   demo.addEventListener("click", () => app.confirm(
     "Beispieldaten laden?",
     "Ersetzt alle erfassten Käufe durch eine erzeugte Historie über sechs Monate. Vorher am besten eine Sicherung herunterladen.",
     () => { Data.loadDemo("full"); app.toast("Beispielhistorie geladen"); app.goto("liste"); }
   ));
-  dat.append(demo);
+  actions.body.append(demo);
 
-  const del = el("button", "cta danger", "Alles löschen");
+  const del = el("button", "row");
+  del.append(el("div", "rowMain", '<div class="rowTitle" style="color:var(--red)">Alles löschen</div>'));
   del.addEventListener("click", () => app.confirm(
     "Wirklich alles löschen?",
     "Käufe, Bons, Einstellungen und gelernte Zuordnungen werden entfernt. Das lässt sich nicht rückgängig machen.",
     () => { Data.reset(); app.toast("Alles gelöscht"); app.goto("liste"); }
   ));
-  dat.append(del);
-  c.append(dat);
+  actions.body.append(del);
+  c.append(actions);
 
   const about = card("Über diese Fassung");
   about.append(el("p", "sub",
     `Web-App, Bauversion <span class="mono">${esc(window.__BUILD__ || "dev")}</span>. Die Algorithmen sind dieselben Node-Module, ` +
-    `die unter <span class="mono">npm test</span> mit 142 Tests geprüft werden — gebündelt, nicht abgeschrieben.`));
+    `die unter <span class="mono">npm test</span> geprüft werden — gebündelt, nicht abgeschrieben.`));
   about.append(el("p", "srcnote",
     "Quellen der Haltbarkeits- und Lagerdaten: BZfE/BLE „Haltbarkeit von Lebensmitteln\" und „Lebensmittel richtig lagern\" (Stand 20.02.2025), " +
     "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\"."));

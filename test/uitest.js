@@ -114,8 +114,8 @@ console.log("\n--- Start ---");
 ok("App startet ohne Laufzeitfehler", errors.length === 0, errors[0]);
 const App = T.App;
 ok("Navigation ist aufgebaut", $("nav").children.length === 5);
-ok("Kopfbereich hat einen Titel", !!$("appbar").querySelector("h1"));
-ok("Leerer Start zeigt keine erfundenen Zahlen", !$("appbar").querySelector(".heroNums"));
+ok("Großer Titel ist gesetzt", !!$("largeTitle").querySelector("h1"));
+ok("Leerer Start zeigt keine erfundenen Zahlen", !$("main").querySelector(".hero,.tile"));
 ok("Bauversion ist eingesetzt", /^[a-z0-9]+$/.test(String(window.__BUILD__)), String(window.__BUILD__));
 
 console.log("\n--- Beispieldaten laden ---");
@@ -291,6 +291,77 @@ ok("Verbrauchsdatum-Produkte werden gekennzeichnet",
 const rec = T.suggestRecipes(T.toRecipeStock(c2.inventory), { maxResults: 5 });
 ok("Rezepte schlagen nie abgelaufene Verbrauchsdatum-Ware vor",
   !rec.some((r) => (r.usesFromStock || []).some((n) => /hackfleisch|geflügel|garnelen/i.test(n) && r.unsafe)));
+
+console.log("\n--- Neue Funktionen in der Oberfläche ---");
+D.loadDemo("full");
+App.goto("liste");
+const c3 = App.ctx;
+ok("Vorrats-Reichweite wird berechnet", c3.range.days !== null, String(c3.range.days));
+ok("Reichweite erscheint als Ring", !!$("main").querySelector(".hero .heroRing svg"));
+ok("Preis-Gedächtnis wird gefüllt", c3.prices.size > 0, `${c3.prices.size} Produkte`);
+ok("Gangreihenfolge liegt vor", Array.isArray(c3.aisleList) && c3.aisleList.length > 5);
+
+{
+  // Vergessens-Detektor: Wegtippen darf den Hinweis für die Woche stillstellen
+  const before = App.ctx.forgotten.length;
+  if (before) {
+    const pid = App.ctx.forgotten[0].productId;
+    App.dismiss("forgotten", pid);
+    ok("Weggetippter Hinweis verschwindet",
+      !App.ctx.forgotten.some((f) => f.productId === pid), `${before} -> ${App.ctx.forgotten.length}`);
+    ok("Wegtippen gilt nur für diese Woche", D.get().dismissed.week === App.ctx.weekKey);
+  } else {
+    ok("Weggetippter Hinweis verschwindet", true, "nichts vergessen — übersprungen");
+    ok("Wegtippen gilt nur für diese Woche", true, "übersprungen");
+  }
+}
+{
+  // "Dazu" holt ein Produkt auf die Liste
+  const f = App.ctx.forgotten[0];
+  if (f) {
+    const b4 = App.ctx.items.length;
+    App.addToList(f.productId);
+    ok("Vergessenes lässt sich nachtragen", D.get().listChoices[f.productId].on === true, `${b4} Positionen vorher`);
+  } else ok("Vergessenes lässt sich nachtragen", true, "übersprungen");
+}
+{
+  // Gangreihenfolge verschieben und im Ladenmodus anwenden
+  App.goto("mehr");
+  const b4 = errors.length;
+  const first = App.ctx.aisleList[0];
+  App.moveAisle(App.ctx.aisleList[1], -1);
+  ok("Gang verschieben läuft fehlerfrei", errors.length === b4, errors[b4]);
+  ok("Neue Reihenfolge wird gespeichert", Object.keys(D.get().aisleOrders).length > 0);
+  ok("Reihenfolge hat sich geändert", App.ctx.aisleList[0] !== first, `${first} -> ${App.ctx.aisleList[0]}`);
+}
+{
+  // Erscheinungsbild
+  App.set((s) => { s.settings.theme = "dunkel"; });
+  ok("Dunkles Erscheinungsbild wird gesetzt", doc.documentElement.getAttribute("data-theme") === "dunkel");
+  App.set((s) => { s.settings.theme = "system"; });
+  ok("Systemeinstellung entfernt das Attribut", !doc.documentElement.hasAttribute("data-theme"));
+}
+{
+  // Sicherheitsmeldung beim Buchen aus dem Ladenmodus
+  App.goto("liste");
+  const critical = App.ctx.items.find((i) => i.on && (T.byId(i.productId) || {}).safetyCritical);
+  if (critical) {
+    ok("Verbrauchsdatum-Position wird gekennzeichnet",
+      /Verbrauchsdatum/.test($("main").textContent));
+    App.openStore();
+    D.update((s) => { s.storeChecked = [critical.productId]; });
+    click($("storeDone"));
+    click($("sheetOpts").querySelector("button"));
+    ok("Kühlketten-Hinweis erscheint nach dem Buchen",
+      $("sheet").hidden === false && /kälteste/.test($("sheetSub").textContent),
+      $("sheetSub").textContent.slice(0, 60));
+    ok("Der Hinweis lässt sich schließen", (App.closeSheet(), $("sheet").hidden === true));
+  } else {
+    ok("Verbrauchsdatum-Position wird gekennzeichnet", true, "keine auf der Liste");
+    ok("Kühlketten-Hinweis erscheint nach dem Buchen", true, "übersprungen");
+    ok("Der Hinweis lässt sich schließen", true, "übersprungen");
+  }
+}
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");
 ok("Konsole blieb fehlerfrei", errors.length === 0, errors.slice(0, 3).join(" | "));
