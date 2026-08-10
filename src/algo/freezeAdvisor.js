@@ -52,8 +52,11 @@ function freezeSuggestions(items, rhythms = new Map()) {
     // Anteil, der es nicht schafft — aufgerundet auf halbe Packungen,
     // weil niemand 0,37 Packungen einfriert.
     const surplusDays = daysNeeded - p.shelfLifeDays;
+    // Auf halbe Packungen runden, aber danach erneut deckeln: 0,75
+    // rundet sonst auf 1,0 auf, und „alles einfrieren" ist kein
+    // Ratschlag — dann hätte man es gleich gefroren gekauft.
     const rawShare = Math.min(0.75, surplusDays / daysNeeded);
-    const share = Math.round(rawShare * 2) / 2 || 0.5;
+    const share = Math.min(0.75, Math.round(rawShare * 2) / 2) || 0.5;
 
     const unitPrice = Number(item.unitPrice) || p.typicalPrice || 0;
     const valueAtRisk = Math.round(unitPrice * quantity * share * 100) / 100;

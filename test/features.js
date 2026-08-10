@@ -96,7 +96,8 @@ section("Einfrier-Empfehlung");
   ok("Überschuss wird erkannt", s.length === 1, s.length);
   if (s.length) {
     ok("Betrag wird beziffert", s[0].valueAtRisk > 0, s[0].valueAtRisk);
-    ok("Anteil ist eine halbe oder ganze Packung", (s[0].share * 2) % 1 === 0, s[0].share);
+    ok("Anteil ist eine halbe Packung oder weniger", (s[0].share * 4) % 1 === 0 && s[0].share <= 0.75, s[0].share);
+    ok("Nie die ganze Packung — dann hätte man gefroren gekauft", s[0].share < 1, s[0].share);
     ok("Verbrauchsdatum wird als solches benannt", s[0].safetyCritical === true && /nie nach Ablauf/.test(s[0].message));
     ok("Meldung nennt Haltbarkeit und Betrag", /Tagen/.test(s[0].message) && /€/.test(s[0].message));
   }

@@ -401,7 +401,7 @@ function viewListe(ctx, app) {
     ctx.freeze.slice(0, 3).forEach((f) => {
       const r = el("div", "row");
       r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(f.name)}: ${f.share === 0.5 ? "die Hälfte" : Math.round(f.share * 100) + " %"}</div>` +
+        `<div class="rowTitle">${esc(f.name)}: ${f.share === 0.5 ? "die Hälfte" : "ein Teil"}</div>` +
         `<div class="rowSub">rettet ${eur(f.valueAtRisk)}</div>`));
       const done = el("button", "pillBtn", "Erledigt");
       done.addEventListener("click", () => app.dismiss("freeze", f.productId));
