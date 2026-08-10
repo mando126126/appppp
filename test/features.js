@@ -294,6 +294,127 @@ section("Gangreihenfolge");
     rel.join() === "Kühlregal,Blumen", rel.join());
 }
 
+
+/* ================= seasonCalendar ================= */
+const { seasonFor, offSeason, inSeasonNow, STATUS } = require("../src/algo/seasonCalendar");
+section("Saison");
+{
+  const juni = seasonFor("erdbeeren", "2026-06-15");
+  ok("Erdbeeren im Juni: Saison", juni.status === STATUS.PEAK, juni.status);
+  const dez = seasonFor("erdbeeren", "2026-12-15");
+  ok("Erdbeeren im Dezember: Importware", dez.status === STATUS.OFF, dez.status);
+  ok("Meldung nennt die Saisonmonate", /Mai|Juni|Juli/.test(dez.message), dez.message);
+  ok("Äpfel im Januar kommen aus dem Lager", seasonFor("aepfel", "2026-01-15").status === STATUS.AVAILABLE);
+}
+{
+  ok("Produkte ohne Tabelle bekommen keinen Hinweis", seasonFor("bananen", "2026-12-15") === null);
+  ok("Unbekannte Kennung bekommt keinen Hinweis", seasonFor("gibtsnicht", "2026-12-15") === null);
+}
+{
+  const off = offSeason([{ productId: "erdbeeren" }, { productId: "bananen" }, { productId: "moehren" }], "2026-12-15");
+  ok("Nur Ware außerhalb der Saison wird gemeldet",
+    off.length === 1 && off[0].productId === "erdbeeren", off.map((o) => o.productId).join());
+}
+{
+  const now = inSeasonNow("2026-06-15");
+  ok("Was jetzt Saison hat, wird gelistet", now.length > 0, now.map((x) => x.productId).join());
+  ok("Nur Produkte aus dem Katalog", now.every((x) => !!byId(x.productId)));
+}
+
+/* ================= openedTracker ================= */
+const { openedItems, applyOpened, useUpFirst } = require("../src/algo/openedTracker");
+section("Angebrochene Packungen");
+{
+  const opened = [{ productId: "konserve_tomaten", openedDate: day(-2) }];
+  const items = openedItems(opened, day(0));
+  if (items.length) {
+    ok("Angebrochenes rechnet mit der kurzen Frist",
+      items[0].shelfLifeOpenedDays < (byId("konserve_tomaten") || {}).shelfLifeDays,
+      `${items[0].shelfLifeOpenedDays} statt ${(byId("konserve_tomaten") || {}).shelfLifeDays}`);
+    ok("Verbleibende Tage werden gerechnet", Number.isFinite(items[0].daysLeft), items[0].daysLeft);
+    ok("Meldung nennt den Namen", /Dose|Tomaten/i.test(items[0].message), items[0].message);
+  } else {
+    ok("Angebrochenes rechnet mit der kurzen Frist", false, "konserve_tomaten fehlt im Katalog");
+    ok("Verbleibende Tage werden gerechnet", false);
+    ok("Meldung nennt den Namen", false);
+  }
+}
+{
+  const opened = [{ productId: "joghurt_natur", openedDate: day(-30) }];
+  const items = openedItems(opened, day(0));
+  ok("Überfälliges wird als überfällig gemeldet", items[0].expired === true);
+  ok("Überfälliges steht vorn", items[0].daysLeft < 0);
+}
+{
+  const opened = [{ productId: "haehnchen", openedDate: day(-10) }];
+  const items = openedItems(opened, day(0));
+  ok("Verbrauchsdatum verlangt Entsorgung statt Verwertung",
+    /entsorgen/i.test(items[0].message), items[0].message);
+  ok("Abgelaufenes mit Verbrauchsdatum landet nicht im Aufbrauchplan",
+    !useUpFirst(opened, day(0)).some((x) => x.productId === "haehnchen"));
+}
+{
+  const inv = [{ productId: "joghurt_natur", name: "Naturjoghurt", daysLeft: 18, remainingUnits: 1, confidence: .8 }];
+  const applied = applyOpened(inv, [{ productId: "joghurt_natur", openedDate: day(-3) }], day(0));
+  ok("Bestandsschätzung übernimmt die kürzere Frist", applied[0].daysLeft < 18, applied[0].daysLeft);
+  ok("Der Zustand wird vermerkt", applied[0].opened === true);
+  ok("Restmenge bleibt unverändert", applied[0].remainingUnits === 1);
+  const untouched = applyOpened(inv, [], day(0));
+  ok("Ohne Angabe bleibt alles wie es war", untouched[0].daysLeft === 18 && !untouched[0].opened);
+}
+
+/* ================= shoppingDay ================= */
+const { shoppingPattern, suggestedLookahead, MIN_RECEIPTS } = require("../src/algo/shoppingDay");
+section("Einkaufsrhythmus des Haushalts");
+{
+  // Immer samstags, zehn Wochen lang
+  const receipts = [];
+  for (let i = 0; i < 10; i++) receipts.push({ date: day(-(i * 7)), total: 40 });
+  const p = shoppingPattern(receipts, day(0));
+  ok("Fester Wochentag wird erkannt", p.favouriteDay !== null, p.dayName);
+  ok("Anteil wird beziffert", p.share >= 0.9, p.share);
+  ok("Einkäufe pro Woche werden gerechnet", p.perWeek >= 0.8 && p.perWeek <= 1.3, p.perWeek);
+  ok("Durchschnittskorb wird gerechnet", p.avgBasket === 40, p.avgBasket);
+  ok("Nächster Einkaufstag wird genannt", p.daysUntilNext !== null && p.daysUntilNext >= 0, p.daysUntilNext);
+  ok("Vorausschau folgt dem Abstand", suggestedLookahead(p) >= 1);
+}
+{
+  // Gleichmäßig über alle Wochentage: kein Lieblingstag
+  const receipts = [];
+  for (let i = 0; i < 28; i++) receipts.push({ date: day(-i), total: 20 });
+  const p = shoppingPattern(receipts, day(0));
+  ok("Ohne Muster wird kein Tag behauptet", p.favouriteDay === null, p.dayName);
+  ok("Stattdessen die Häufigkeit", /pro Woche/.test(p.message), p.message);
+}
+{
+  const few = [{ date: day(-1), total: 10 }, { date: day(-8), total: 10 }];
+  ok(`Unter ${MIN_RECEIPTS} Einkäufen keine Aussage`, shoppingPattern(few, day(0)) === null);
+  ok("Ohne Muster keine Vorausschau-Empfehlung", suggestedLookahead(null) === null);
+}
+
+/* ================= listExport ================= */
+const { listAsText, listAsLine } = require("../src/algo/listExport");
+section("Liste als Text");
+{
+  const items = [
+    { productId: "bananen", name: "Bananen", aisle: "Obst & Gemüse", price: 1.79 },
+    { productId: "milch_vollmilch", name: "Vollmilch", aisle: "Kühlregal", price: 1.29, halved: true }
+  ];
+  const text = listAsText(items, { title: "Samstag" });
+  ok("Überschrift steht oben", text.startsWith("Samstag"), text.split("\n")[0]);
+  ok("Gänge werden benannt", /OBST & GEMÜSE/.test(text) && /KÜHLREGAL/.test(text));
+  ok("Jede Position bekommt ein Kästchen", (text.match(/☐/g) || []).length === 2);
+  ok("Halbe Menge wird vermerkt", /halbe Menge/.test(text));
+  ok("Summe rechnet die halbe Menge mit", /2,44 €/.test(text), text.split("\n").pop());
+  ok("Ohne Preise bleibt der Text preisfrei", !/€/.test(listAsText(items, { withPrices: false })));
+}
+{
+  ok("Leere Liste sagt das auch", /Nichts auf der Liste/.test(listAsText([])));
+  ok("Kurzfassung ist eine Zeile",
+    listAsLine([{ name: "A" }, { name: "B" }]) === "A, B");
+  ok("Leere Kurzfassung sagt das auch", /Nichts/.test(listAsLine([])));
+}
+
 console.log("\n" + "=".repeat(60));
 console.log(`NEUE FUNKTIONEN: ${pass} bestanden, ${fail} fehlgeschlagen`);
 console.log("=".repeat(60));

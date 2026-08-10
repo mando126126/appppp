@@ -50,6 +50,7 @@
   --safe-top:env(safe-area-inset-top,0px);
   --safe-bottom:env(safe-area-inset-bottom,0px);
   --nav-h:52px;
+  --text-scale:1;
   --ease:cubic-bezier(.32,.72,0,1);   /* iOS-artig: schnell an, weich aus */
 }
 
@@ -114,7 +115,7 @@ html,body{margin:0;padding:0;min-height:100%}
 body{
   background:var(--bg);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
-  font-size:17px;line-height:1.41;letter-spacing:-.01em;
+  font-size:calc(17px * var(--text-scale));line-height:1.41;letter-spacing:-.01em;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   overscroll-behavior-y:none;
 }
@@ -575,3 +576,81 @@ tbody tr:last-child td{border-bottom:none}
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important;animation:none !important}
 }
+
+
+/* ================================================================
+   Ergänzungen: Info-Knopf, Detail-Blatt, Teilen, kleine Layouts
+   ================================================================ */
+
+/* (i) neben der Gruppenüberschrift — trägt die Erklärung, die sonst
+   als Fließtext auf der Fläche stünde. */
+.groupTitle{display:flex;align-items:center;gap:7px}
+.infoBtn{
+  width:17px;height:17px;flex:0 0 auto;border-radius:99px;
+  border:1.2px solid var(--ink-3);color:var(--ink-2);
+  font-size:11px;font-weight:600;font-style:italic;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;
+  text-transform:none;letter-spacing:0;
+}
+.infoBtn:active{background:var(--fill-2)}
+
+/* Zeile mit zwei Knöpfen rechts */
+.rowActions{display:flex;gap:7px;flex:0 0 auto}
+.stepWrap{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+
+/* Der Hauptbereich einer Listenposition ist antippbar */
+.item .main{
+  flex:1;min-width:0;text-align:left;padding:0;background:none;
+  display:block;
+}
+.item .main:active{opacity:.55}
+.inlineActions{padding:0 16px 10px 54px}
+.item .opts{padding:2px 16px 12px 54px}
+
+/* Antippbare Reihe im Ladenweg / in Aktionen */
+.row.action .rowTitle{color:var(--accent)}
+.row.action.danger .rowTitle{color:var(--red)}
+button.row.action{cursor:pointer}
+label.row.action{cursor:pointer}
+
+/* Hero ist ein Knopf */
+button.hero{width:100%;text-align:left;cursor:pointer}
+button.hero:active{opacity:.7}
+.hero .chev{margin-left:auto}
+
+/* Detail-Blatt: Wertepaare */
+.facts{margin:0 0 14px;display:grid;grid-template-columns:auto 1fr;gap:0}
+.facts dt{
+  font-size:13px;color:var(--ink-2);padding:9px 14px 9px 0;
+  border-top:.5px solid var(--separator);white-space:nowrap;
+}
+.facts dd{
+  margin:0;font-size:15px;padding:9px 0;text-align:right;
+  border-top:.5px solid var(--separator);
+}
+.facts dt:first-of-type,.facts dd:first-of-type{border-top:none}
+.sheetPara{font-size:15px;line-height:1.45;color:var(--ink);margin:0 0 12px}
+.sheetPara:last-child{margin-bottom:0}
+.shareText{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.5;
+  background:var(--surface-2);border-radius:var(--r-md);padding:14px;
+  white-space:pre-wrap;word-break:break-word;margin:0 0 12px;
+}
+
+/* Zwei Knöpfe nebeneinander */
+.ctaRow{display:flex;gap:10px;margin-top:14px}
+.ctaRow .cta{margin-top:0;flex:1}
+.ctaRow .cta.light{flex:0 0 34%}
+
+/* Datumsfelder in einer Zeile der gruppierten Liste */
+.dateRow{display:flex;gap:10px;padding:12px 16px;background:var(--surface)}
+.dateRow .field{margin:0;flex:1}
+.row2{display:flex;gap:10px}
+.row2 > *{flex:1}
+.noHit{padding:13px 14px;font-size:15px;color:var(--ink-2)}
+.priceIn{width:88px;padding:9px;border:none;border-radius:var(--r-sm);background:var(--surface-2);text-align:right}
+.totals.bare{background:none;padding:14px 0 0}
+.chartBox{padding:14px 16px 16px}
+
+/* Karten ohne Titel brauchen oben keinen Extraabstand */
+.card:empty{display:none}

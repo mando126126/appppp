@@ -58,7 +58,11 @@ const MODULES = [
   "priceMemory.js",
   "forgottenDetector.js",
   "safetyAlert.js",
-  "aisleOrder.js"
+  "aisleOrder.js",
+  "seasonCalendar.js",
+  "openedTracker.js",
+  "shoppingDay.js",
+  "listExport.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt

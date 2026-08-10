@@ -84,8 +84,12 @@ const App = {
 
   /* ---------- Erscheinungsbild ---------- */
   applyTheme() {
-    const theme = Data.get().settings.theme || "system";
+    const settings = Data.get().settings;
+    const theme = settings.theme || "system";
     const root = document.documentElement;
+    // Schriftgröße als Faktor auf die Wurzel: alle Maße stehen in rem
+    // bzw. leiten sich davon ab, damit ein Wert reicht.
+    root.style.setProperty("--text-scale", String(settings.textScale || 1));
     if (theme === "system") root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", theme);
 
@@ -107,22 +111,80 @@ const App = {
     App._toastTimer = setTimeout(() => { t.hidden = true; }, ms);
   },
 
-  /** Aktionsblatt für alles, was sich nicht zurücknehmen lässt. */
-  confirm(title, text, onYes, yesLabel = "Ja, machen") {
+  /**
+   * Blatt mit beliebigem Inhalt. Es trägt die Erklärungen, die früher
+   * als Fließtext auf der Fläche standen — die Liste bleibt dadurch
+   * knapp, ohne dass Quellen oder Schätzcharakter verschwinden.
+   */
+  sheet(title, sub, content) {
     const sheet = document.getElementById("sheet");
-    document.getElementById("sheetTitle").textContent = title;
-    document.getElementById("sheetSub").textContent = text;
+    document.getElementById("sheetTitle").textContent = title || "";
+    const subEl = document.getElementById("sheetSub");
+    subEl.textContent = sub || "";
+    subEl.hidden = !sub;
     const opts = document.getElementById("sheetOpts");
     opts.innerHTML = "";
+    if (content) opts.append(content);
+    // Ein Blatt, das nur informiert, wird nicht "abgebrochen".
+    document.getElementById("sheetCancel").textContent = "Fertig";
+    sheet.hidden = false;
+    document.getElementById("sheetCancel").focus();
+  },
+
+  /** Nur zur Kenntnis: Text in Absätzen. */
+  notice(title, text) {
+    const body = document.createElement("div");
+    String(text).split("\n\n").forEach((para) => {
+      const p = document.createElement("p");
+      p.className = "sheetPara";
+      p.textContent = para;
+      body.append(p);
+    });
+    App.sheet(title, null, body);
+  },
+
+  /** Aktionsblatt für alles, was sich nicht zurücknehmen lässt. */
+  confirm(title, text, onYes, yesLabel = "Ja, machen") {
     const yes = document.createElement("button");
     yes.className = "cta danger";
     yes.textContent = yesLabel;
     yes.addEventListener("click", () => { App.closeSheet(); onYes(); });
-    opts.append(yes);
-    sheet.hidden = false;
+    App.sheet(title, text, yes);
+    document.getElementById("sheetCancel").textContent = "Abbrechen";
     yes.focus();
   },
   closeSheet() { document.getElementById("sheet").hidden = true; },
+
+  /**
+   * Liste als Text weitergeben. Web Share, wo es das gibt, sonst
+   * Zwischenablage, sonst das Blatt zum Markieren — auf einem Rechner
+   * ohne beides wäre der Knopf sonst wirkungslos.
+   */
+  shareList() {
+    const items = App.ctx.items.filter((i) => i.on);
+    const text = listAsText(items, {
+      order: App.ctx.aisleList,
+      title: `Einkauf ${App.ctx.weekday}`
+    });
+    if (navigator.share) {
+      navigator.share({ title: "Einkaufsliste", text }).catch(() => {});
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(() => App.toast("In die Zwischenablage kopiert"))
+        .catch(() => App.showListText(text));
+      return;
+    }
+    App.showListText(text);
+  },
+
+  showListText(text) {
+    const pre = document.createElement("pre");
+    pre.className = "shareText";
+    pre.textContent = text;
+    App.sheet("Einkaufsliste", null, pre);
+  },
 
   /* ---------- Ladenmodus ---------- */
   openStore() {
@@ -204,16 +266,6 @@ const App = {
       },
       "Buchen"
     );
-  },
-
-  /** Blatt ohne Rückfrage — nur zur Kenntnis. */
-  notice(title, text) {
-    const sheet = document.getElementById("sheet");
-    document.getElementById("sheetTitle").textContent = title;
-    document.getElementById("sheetSub").textContent = text;
-    document.getElementById("sheetOpts").innerHTML = "";
-    sheet.hidden = false;
-    document.getElementById("sheetCancel").focus();
   },
 
   /* ---------- Kopfbereich ---------- */

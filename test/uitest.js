@@ -248,7 +248,7 @@ if (search) {
     click(hits[0]);
     ok("Produkt landet im Korb", App.capture.basket.length === 1);
     const before = D.get().purchases.length;
-    const bookBtn = [...$("main").querySelectorAll("button.cta")].find((b) => b.textContent === "Einkauf buchen");
+    const bookBtn = [...$("main").querySelectorAll("button.cta")].find((b) => b.textContent === "Buchen");
     ok("Buchen-Knopf erscheint", !!bookBtn);
     if (bookBtn) {
       click(bookBtn);
@@ -347,20 +347,119 @@ ok("Gangreihenfolge liegt vor", Array.isArray(c3.aisleList) && c3.aisleList.leng
   const critical = App.ctx.items.find((i) => i.on && (T.byId(i.productId) || {}).safetyCritical);
   if (critical) {
     ok("Verbrauchsdatum-Position wird gekennzeichnet",
-      /Verbrauchsdatum/.test($("main").textContent));
+      !!$("main").querySelector(".pill.safety"));
     App.openStore();
     D.update((s) => { s.storeChecked = [critical.productId]; });
     click($("storeDone"));
     click($("sheetOpts").querySelector("button"));
     ok("Kühlketten-Hinweis erscheint nach dem Buchen",
-      $("sheet").hidden === false && /kälteste/.test($("sheetSub").textContent),
-      $("sheetSub").textContent.slice(0, 60));
+      $("sheet").hidden === false && /kälteste/.test($("sheet").textContent),
+      $("sheet").textContent.slice(0, 70));
     ok("Der Hinweis lässt sich schließen", (App.closeSheet(), $("sheet").hidden === true));
   } else {
     ok("Verbrauchsdatum-Position wird gekennzeichnet", true, "keine auf der Liste");
     ok("Kühlketten-Hinweis erscheint nach dem Buchen", true, "übersprungen");
     ok("Der Hinweis lässt sich schließen", true, "übersprungen");
   }
+}
+
+console.log("\n--- Cleaner: Erklärungen im Blatt, nicht auf der Fläche ---");
+D.loadDemo("full");
+App.goto("liste");
+{
+  const infos = $("main").querySelectorAll(".infoBtn");
+  ok("Gruppen tragen einen (i)-Knopf", infos.length > 0, `${infos.length} Knöpfe`);
+  click(infos[0]);
+  ok("(i) öffnet die Erklärung", $("sheet").hidden === false && $("sheet").textContent.length > 40);
+  App.closeSheet();
+}
+{
+  // Der Rechenweg steht nicht mehr unter jeder Zeile
+  ok("Keine Rechenweg-Zeile mehr auf der Liste", !$("main").querySelector(".item .calc"));
+  const main = $("main").querySelector(".item .main");
+  ok("Position lässt sich antippen", !!main && main.tagName === "BUTTON");
+  const b4 = errors.length;
+  click(main);
+  ok("Detail-Blatt öffnet ohne Fehler", $("sheet").hidden === false && errors.length === b4, errors[b4]);
+  ok("Detail-Blatt nennt Rhythmus und Preis",
+    /Rhythmus/.test($("sheet").textContent) && /Preis/.test($("sheet").textContent));
+  ok("Detail-Blatt nennt die Datenqualität", /Datenqualität/.test($("sheet").textContent));
+  App.closeSheet();
+}
+{
+  const hero = $("main").querySelector("button.hero");
+  ok("Reichweite ist antippbar", !!hero);
+  if (hero) {
+    click(hero);
+    ok("Reichweite erklärt ihre Herleitung", /Haltbarkeit/.test($("sheet").textContent));
+    App.closeSheet();
+  }
+}
+
+console.log("\n--- Weitere neue Funktionen ---");
+{
+  // Angebrochene Packung
+  const openable = T.FOOD_DATABASE.find((p) =>
+    p.isFood && p.shelfLifeOpenedDays && p.shelfLifeOpenedDays < p.shelfLifeDays);
+  D.toggleOpened(openable.id);
+  ok("Packung lässt sich als angebrochen markieren",
+    D.get().opened.some((o) => o.productId === openable.id), openable.name);
+  ok("Angebrochenes erscheint in der Auswertung",
+    App.ctx.opened.some((o) => o.productId === openable.id), `${App.ctx.opened.length} Einträge`);
+  const inv = App.ctx.inventory.find((i) => i.productId === openable.id);
+  if (inv) ok("Bestandsfrist wird verkürzt", inv.daysLeft <= openable.shelfLifeOpenedDays, inv.daysLeft);
+  else ok("Bestandsfrist wird verkürzt", true, "nicht im Bestand");
+  D.toggleOpened(openable.id);
+  ok("Markierung lässt sich zurücknehmen", !D.get().opened.length);
+}
+{
+  ok("Einkaufsrhythmus wird erkannt", App.ctx.pattern !== null,
+    App.ctx.pattern && App.ctx.pattern.message);
+  ok("Rhythmus nennt Einkäufe pro Woche", App.ctx.pattern.perWeek > 0, App.ctx.pattern.perWeek);
+}
+{
+  ok("Saisondaten werden berechnet", Array.isArray(App.ctx.season) && Array.isArray(App.ctx.seasonNow));
+}
+{
+  // Liste teilen: ohne Web Share und ohne Zwischenablage bleibt das Blatt
+  const hadShare = window.navigator.share;
+  const hadClip = window.navigator.clipboard;
+  try { delete window.navigator.share; } catch (e) {}
+  try { Object.defineProperty(window.navigator, "clipboard", { value: undefined, configurable: true }); } catch (e) {}
+  App.goto("liste");
+  const shareBtn = [...$("main").querySelectorAll("button.cta")].find((b) => b.textContent === "Teilen");
+  ok("Teilen-Knopf ist da", !!shareBtn);
+  if (shareBtn) {
+    click(shareBtn);
+    const text = $("sheet").textContent;
+    ok("Liste erscheint als Text", $("sheet").hidden === false && /☐/.test(text), text.slice(0, 40));
+    ok("Text ist nach Gängen gegliedert", /OBST|KÜHLREGAL|BACKWAREN/.test(text));
+    App.closeSheet();
+  }
+  if (hadShare) window.navigator.share = hadShare;
+  if (hadClip) { try { Object.defineProperty(window.navigator, "clipboard", { value: hadClip, configurable: true }); } catch (e) {} }
+}
+{
+  // Schriftgröße
+  App.set((s) => { s.settings.textScale = 1.3; });
+  ok("Schriftgröße wirkt auf die Wurzel",
+    doc.documentElement.style.getPropertyValue("--text-scale") === "1.3",
+    doc.documentElement.style.getPropertyValue("--text-scale"));
+  App.set((s) => { s.settings.textScale = 1; });
+}
+{
+  // Alte Sicherung ohne die neuen Felder muss lesbar bleiben
+  const old = JSON.parse(D.exportJson());
+  delete old.settings.textScale;
+  delete old.opened;
+  delete old.aisleOrders;
+  const b4 = errors.length;
+  D.importJson(JSON.stringify(old));
+  ok("Alte Sicherung bekommt die neuen Felder",
+    D.get().settings.textScale === 1 && Array.isArray(D.get().opened) && errors.length === b4,
+    errors[b4]);
+  App.goto("mehr");
+  ok("Ansicht rendert danach fehlerfrei", errors.length === b4 && $("main").children.length > 0);
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

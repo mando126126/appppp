@@ -1,4 +1,4 @@
-/* Gebündelt aus 26 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 30 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
 
 /* ===== foodDatabase.js ===== */
@@ -3747,7 +3747,7 @@ function safetyAlert(items) {
     // Kurzfassung für die Liste, wo der Hinweis dauerhaft steht: ein
     // Satz. Die Langfassung ist für den Moment nach dem Einkauf — da
     // liegt die Packung in der Hand und der Hinweis erscheint einmal.
-    short: `${list} direkt kühlen — ${STORAGE.FRIDGE_BOTTOM}.`,
+    short: `${list} direkt kühlen`,
     message:
       `${list} ${names.length === 1 ? "trägt" : "tragen"} ein Verbrauchsdatum. ` +
       `Zu Hause zuerst in die kälteste Zone: ${STORAGE.FRIDGE_BOTTOM}. ` +
@@ -3845,4 +3845,332 @@ function relevantAisles(order, items) {
   const known = order.filter((a) => used.has(a));
   const extra = [...used].filter((a) => !order.includes(a));
   return [...known, ...extra];
+}
+
+/* ===== seasonCalendar.js ===== */
+/**
+ * seasonCalendar.js — Saison für Frischware
+ * ================================================================
+ * Erdbeeren im Dezember kosten das Dreifache und schmecken
+ * schlechter. Ein Sparhinweis, der nicht nach Verzicht klingt.
+ *
+ * Die Tabelle deckt deutsche Freiland- und Lagerware ab. Sie ist
+ * ausdrücklich unvollständig: Produkte ohne Eintrag bekommen keinen
+ * Hinweis. Ein erfundener Saisoneintrag wäre schlimmer als keiner —
+ * dann stünde bei Bananen „nicht in Saison", was Unsinn ist.
+ *
+ * Grundlage: Saisonkalender des BZfE. Lagerware (Äpfel, Möhren,
+ * Kartoffeln, Zwiebeln, Kohl) gilt über die Lagermonate hinaus als
+ * verfügbar, weil sie das faktisch ist.
+ * ================================================================
+ */
+
+
+
+const MONTH_NAMES = [
+  "Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember"
+];
+
+// Monate 1–12. `peak` = Freiland-Hochsaison, `available` = zusätzlich
+// aus deutschem Lager verfügbar.
+const SEASON = {
+  erdbeeren:   { peak: [5, 6, 7], available: [] },
+  spargel:     { peak: [4, 5, 6], available: [] },
+  kirschen:    { peak: [6, 7, 8], available: [] },
+  pflaumen:    { peak: [8, 9], available: [] },
+  weintrauben: { peak: [9, 10], available: [] },
+  aepfel:      { peak: [9, 10, 11], available: [12, 1, 2, 3, 4] },
+  birnen:      { peak: [8, 9, 10], available: [11, 12] },
+  tomaten:     { peak: [7, 8, 9], available: [6, 10] },
+  gurke:       { peak: [6, 7, 8, 9], available: [5, 10] },
+  salat_kopf:  { peak: [5, 6, 7, 8, 9], available: [4, 10] },
+  paprika:     { peak: [7, 8, 9], available: [6, 10] },
+  zucchini:    { peak: [7, 8, 9], available: [6, 10] },
+  kuerbis:     { peak: [9, 10, 11], available: [8, 12] },
+  moehren:     { peak: [6, 7, 8, 9, 10], available: [11, 12, 1, 2, 3, 4, 5] },
+  kartoffeln:  { peak: [8, 9, 10], available: [11, 12, 1, 2, 3, 4, 5, 6, 7] },
+  zwiebeln:    { peak: [8, 9, 10], available: [11, 12, 1, 2, 3, 4, 5, 6, 7] },
+  lauch:       { peak: [9, 10, 11], available: [12, 1, 2, 3] },
+  brokkoli:    { peak: [6, 7, 8, 9, 10], available: [5] },
+  blumenkohl:  { peak: [6, 7, 8, 9, 10], available: [5, 11] },
+  spinat:      { peak: [4, 5, 9, 10], available: [3, 6, 11] },
+  radieschen:  { peak: [4, 5, 6, 7, 8, 9], available: [3, 10] },
+  rosenkohl:   { peak: [10, 11, 12, 1], available: [2] },
+  feldsalat:   { peak: [10, 11, 12, 1, 2], available: [3, 9] }
+};
+
+const STATUS = { PEAK: "saison", AVAILABLE: "lager", OFF: "importware" };
+
+/**
+ * @param {string} productId
+ * @param {string|Date} date  Bezugsdatum
+ * @returns {null|{productId, name, status, month, peakMonths, message}}
+ */
+function seasonFor(productId, date) {
+  const entry = SEASON[productId];
+  if (!entry) return null;                  // keine Tabelle = kein Hinweis
+
+  const d = typeof date === "string" ? new Date(date + "T12:00:00Z") : new Date(date);
+  const month = d.getUTCMonth() + 1;
+
+  const status = entry.peak.includes(month)
+    ? STATUS.PEAK
+    : entry.available.includes(month) ? STATUS.AVAILABLE : STATUS.OFF;
+
+  const p = byId(productId);
+  const name = p ? p.name : productId;
+  const peakText = entry.peak.map((m) => MONTH_NAMES[m - 1]).join(", ");
+
+  const message =
+    status === STATUS.PEAK ? `${name} hat jetzt Saison.`
+      : status === STATUS.AVAILABLE ? `${name} kommt jetzt aus dem Lager.`
+        : `${name} ist jetzt Importware — Saison ist ${peakText}.`;
+
+  return { productId, name, status, month, peakMonths: entry.peak, message };
+}
+
+/** Nur die Positionen einer Liste, die außerhalb der Saison liegen. */
+function offSeason(items, date) {
+  return items
+    .map((i) => seasonFor(i.productId, date))
+    .filter((s) => s && s.status === STATUS.OFF);
+}
+
+/** Was diesen Monat Hochsaison hat — als Anregung, nicht als Vorschlag. */
+function inSeasonNow(date, limit = 8) {
+  const d = typeof date === "string" ? new Date(date + "T12:00:00Z") : new Date(date);
+  const month = d.getUTCMonth() + 1;
+  return Object.entries(SEASON)
+    .filter(([, e]) => e.peak.includes(month))
+    .map(([id]) => ({ productId: id, name: (byId(id) || {}).name || id }))
+    .filter((x) => byId(x.productId))
+    .slice(0, limit);
+}
+
+/* ===== openedTracker.js ===== */
+/**
+ * openedTracker.js — angebrochene Packungen
+ * ================================================================
+ * Nach dem Kochen bleibt eine halbe Dose Tomaten. Die Datenbank
+ * kennt `shelfLifeOpenedDays` — eine geöffnete Dose hält 3 Tage,
+ * nicht die 1095 des ungeöffneten Produkts. Ohne diesen Zustand
+ * rechnet die Bestandsschätzung mit der falschen Zahl und die
+ * Reste verderben unbemerkt.
+ *
+ * Der Nutzer markiert „angebrochen" mit einem Tippen. Mehr Pflege
+ * darf es nicht kosten, sonst macht es niemand.
+ *
+ * SICHERHEIT: Bei Produkten mit Verbrauchsdatum wird nach Ablauf
+ * nichts verlängert und nichts vorgeschlagen — die Frist bleibt die
+ * Frist, angebrochen oder nicht.
+ * ================================================================
+ */
+
+
+
+
+/**
+ * @param {Array} opened  [{productId, openedDate}]
+ * @param {string} today
+ * @returns {Array} nach Dringlichkeit sortiert
+ */
+function openedItems(opened, today) {
+  const out = [];
+
+  for (const o of opened) {
+    const p = byId(o.productId);
+    if (!p) continue;
+
+    const days = p.shelfLifeOpenedDays || p.shelfLifeDays;
+    const age = daysBetween(o.openedDate, today);
+    const daysLeft = days - age;
+
+    out.push({
+      productId: p.id,
+      name: p.name,
+      openedDate: o.openedDate,
+      openedDays: age,
+      shelfLifeOpenedDays: days,
+      daysLeft,
+      expired: daysLeft < 0,
+      safetyCritical: p.safetyCritical,
+      value: p.typicalPrice,
+      urgent: daysLeft <= 1,
+      message: daysLeft < 0
+        ? (p.safetyCritical
+            ? `${p.name} seit ${-daysLeft} Tagen über der Frist — entsorgen.`
+            : `${p.name} ist seit ${-daysLeft} Tagen offen über der Haltbarkeit.`)
+        : daysLeft === 0
+          ? `${p.name} heute aufbrauchen.`
+          : `${p.name} noch ${daysLeft} ${daysLeft === 1 ? "Tag" : "Tage"} — angebrochen seit ${age} ${age === 1 ? "Tag" : "Tagen"}.`
+    });
+  }
+
+  return out.sort((a, b) => a.daysLeft - b.daysLeft);
+}
+
+/**
+ * Bestandsschätzung korrigieren: was angebrochen ist, hält kürzer.
+ * Die Restmenge bleibt unangetastet — nur die Frist ändert sich.
+ */
+function applyOpened(inventory, opened, today) {
+  const map = new Map(opened.map((o) => [o.productId, o]));
+  return inventory.map((item) => {
+    const o = map.get(item.productId);
+    if (!o) return item;
+    const p = byId(item.productId);
+    if (!p) return item;
+    const daysLeft = (p.shelfLifeOpenedDays || p.shelfLifeDays) - daysBetween(o.openedDate, today);
+    return {
+      ...item,
+      daysLeft: Math.min(item.daysLeft, daysLeft),
+      opened: true,
+      openedDate: o.openedDate
+    };
+  });
+}
+
+/** Was aus dem Angebrochenen zuerst weg muss — Grundlage für Rezepte. */
+function useUpFirst(opened, today, withinDays = 3) {
+  return openedItems(opened, today).filter(
+    (x) => !x.expired && x.daysLeft <= withinDays && !(x.safetyCritical && x.daysLeft < 0)
+  );
+}
+
+/* ===== shoppingDay.js ===== */
+/**
+ * shoppingDay.js — der eigene Einkaufsrhythmus
+ * ================================================================
+ * Die App lernt Produktrhythmen. Der Haushalt hat aber auch einen
+ * eigenen: die meisten kaufen an denselben Wochentagen. Daraus
+ * folgt, welcher Tag als nächstes dran ist — und damit, wie weit
+ * die Liste vorausschauen muss.
+ *
+ * Reine Auszählung über die Bontage, kein Modell. Bei zu wenig
+ * Historie gibt es kein Ergebnis statt eines geratenen.
+ * ================================================================
+ */
+
+
+
+const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const MIN_RECEIPTS = 6;
+
+const weekdayIndex = (dateStr) => new Date(dateStr + "T12:00:00Z").getUTCDay();
+
+/**
+ * @param {Array} receipts [{date, total}]
+ * @param {string} today
+ * @returns {null|{favouriteDay, dayName, share, trips, perWeek, avgBasket, nextDay, daysUntilNext, byWeekday, message}}
+ */
+function shoppingPattern(receipts, today) {
+  const days = [...new Set(receipts.map((r) => r.date))].sort();
+  if (days.length < MIN_RECEIPTS) return null;
+
+  const counts = new Array(7).fill(0);
+  days.forEach((d) => { counts[weekdayIndex(d)]++; });
+
+  const favourite = counts.indexOf(Math.max(...counts));
+  const share = counts[favourite] / days.length;
+
+  const span = Math.max(1, daysBetween(days[0], days[days.length - 1]));
+  const perWeek = Math.round((days.length / (span / 7)) * 10) / 10;
+
+  const totals = receipts.reduce((a, r) => a + (r.total || 0), 0);
+  const avgBasket = Math.round((totals / receipts.length) * 100) / 100;
+
+  // Nächster Vorkommen des Lieblingstags, heute eingeschlossen.
+  const todayIdx = weekdayIndex(today);
+  const daysUntilNext = (favourite - todayIdx + 7) % 7;
+
+  const byWeekday = counts.map((count, i) => ({
+    day: i, name: WEEKDAYS[i], count,
+    share: Math.round((count / days.length) * 100)
+  }));
+
+  // Ein Lieblingstag ist nur einer, wenn er sich abhebt. Bei sieben
+  // gleich verteilten Tagen wäre jeder „der Tag" — das ist keine Aussage.
+  const distinct = share >= 0.28;
+
+  return {
+    favouriteDay: distinct ? favourite : null,
+    dayName: distinct ? WEEKDAYS[favourite] : null,
+    share: Math.round(share * 100) / 100,
+    trips: days.length,
+    perWeek,
+    avgBasket,
+    nextDay: distinct ? WEEKDAYS[favourite] : null,
+    daysUntilNext: distinct ? daysUntilNext : null,
+    byWeekday,
+    message: distinct
+      ? (daysUntilNext === 0
+          ? `Heute ist dein üblicher Einkaufstag.`
+          : `Du kaufst meist ${WEEKDAYS[favourite]}s — das ist in ${daysUntilNext} ${daysUntilNext === 1 ? "Tag" : "Tagen"}.`)
+      : `Du kaufst etwa ${perWeek}× pro Woche, ohne festen Tag.`
+  };
+}
+
+/**
+ * Empfohlene Vorausschau: so viele Tage, wie bis zum nächsten
+ * üblichen Einkauf vergehen. Ohne erkennbaren Tag der übliche
+ * Abstand zwischen zwei Einkäufen.
+ */
+function suggestedLookahead(pattern) {
+  if (!pattern) return null;
+  if (pattern.daysUntilNext !== null) return Math.max(1, pattern.daysUntilNext);
+  return Math.max(1, Math.round(7 / Math.max(0.5, pattern.perWeek)));
+}
+
+/* ===== listExport.js ===== */
+/**
+ * listExport.js — Liste als Text
+ * ================================================================
+ * Die Liste muss den Haushalt verlassen können: an den Partner
+ * schicken, ausdrucken, in eine Notiz kopieren. Ohne das bleibt die
+ * App ein Einzelplatzwerkzeug, und beim gemeinsamen Einkauf greift
+ * doch wieder jemand zum Zettel.
+ *
+ * Reiner Text, nach Gängen sortiert. Kein eigenes Format, keine
+ * App-Bindung — was hier herauskommt, liest jedes Programm.
+ * ================================================================
+ */
+
+
+
+const eur = (n) => (Number(n) || 0).toFixed(2).replace(".", ",") + " €";
+
+/**
+ * @param {Array} items    aktive Listenpositionen
+ * @param {object} opts    { order, title, withPrices, total }
+ * @returns {string}
+ */
+function listAsText(items, opts = {}) {
+  const order = opts.order || DEFAULT_AISLE_ORDER;
+  const withPrices = opts.withPrices !== false;
+  const title = opts.title || "Einkaufsliste";
+
+  if (!items.length) return `${title}\n\nNichts auf der Liste.`;
+
+  const lines = [title, ""];
+  for (const { aisle, items: group } of groupByAisle(items, order)) {
+    lines.push(aisle.toUpperCase());
+    for (const i of group) {
+      const price = i.halved ? i.price / 2 : i.price;
+      lines.push(`  ☐ ${i.name}${withPrices ? `  ${eur(price)}` : ""}${i.halved ? "  (halbe Menge)" : ""}`);
+    }
+    lines.push("");
+  }
+
+  if (withPrices) {
+    const sum = items.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+    lines.push(`${items.length} Positionen · ${eur(sum)}`);
+  }
+  return lines.join("\n").trim();
+}
+
+/** Kurzfassung für eine Nachricht: eine Zeile, ohne Gänge. */
+function listAsLine(items) {
+  if (!items.length) return "Nichts auf der Liste.";
+  return items.map((i) => i.name).join(", ");
 }

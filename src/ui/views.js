@@ -1,11 +1,17 @@
 /* ================================================================
    views.js — die einzelnen Ansichten.
-   Enthält KEINE Fachlogik: jede Zahl kommt aus Data.compute(), das
-   wiederum ausschließlich die gebündelten Module aufruft.
+
+   Grundsatz für die Gestaltung: die Fläche zeigt Zahlen und
+   Entscheidungen, keine Erklärungen. Alles, was erklärt, steckt
+   hinter einem (i) oder im Detail-Blatt einer Zeile. Ehrlichkeit
+   geht dabei nicht verloren — Quellen, Schätzcharakter und
+   Datenqualität stehen weiterhin da, nur eine Tippgeste entfernt.
+
+   Fachlogik steht hier keine: jede Zahl kommt aus Data.compute().
    ================================================================ */
 
 /* ---------- kleine Helfer ---------- */
-const eur = (n) => (Number(n) || 0).toFixed(2).replace(".", ",") + " €";
+// eur() steht im Bündel (listExport.js) — hier nicht noch einmal.
 const pct = (n) => Math.round((Number(n) || 0) * 100) + " %";
 /** Zahl mit deutschem Dezimalkomma. Die Module liefern Zahlen, keine
     Zeichenketten — die Schreibweise entscheidet die Oberfläche. */
@@ -26,29 +32,39 @@ const deDate = (d) => {
 };
 
 const REASONS = [
-  { key: "have", label: "Hab noch da", hint: "wird bis zum Ablauf beobachtet" },
-  { key: "consumed", label: "Verbraucht", hint: "keine Erinnerung, Rhythmus bleibt" },
-  { key: "skip", label: "Nicht diese Woche", hint: "Rhythmus pausiert" }
+  { key: "have", label: "Hab noch" },
+  { key: "consumed", label: "Verbraucht" },
+  { key: "skip", label: "Diese Woche nicht" }
 ];
 
 /* ---------- Bausteine im iOS-Stil ---------- */
 
-/** Gruppierte Liste: Überschrift, Körper, Fußnote.
-    Heißt nicht `group` — diesen Namen vergibt bereits foodDatabase.js
-    im Bündel, und beide teilen sich denselben Namensraum. */
-function uiGroup(title, note) {
+/**
+ * Gruppierte Liste. `info` landet hinter einem (i) statt als Fließtext
+ * auf der Fläche — heißt nicht `group`, den Namen vergibt foodDatabase.js.
+ */
+function uiGroup(title, info) {
   const g = el("div", "group");
-  if (title) g.append(el("div", "groupTitle", esc(title)));
+  if (title || info) {
+    const head = el("div", "groupTitle");
+    head.append(el("span", null, esc(title || "")));
+    if (info) {
+      const b = el("button", "infoBtn", "i");
+      b.setAttribute("aria-label", `Erklärung: ${title || "Hinweis"}`);
+      b.addEventListener("click", () => App.notice(title || "Hinweis", info));
+      head.append(b);
+    }
+    g.append(head);
+  }
   const body = el("div", "groupBody");
   g.append(body);
-  if (note) g.append(el("div", "groupNote", note));
   g.body = body;
   return g;
 }
 
-/** Eine Zeile darin. `control` steht rechts. */
+/** Eine Zeile. `value` steht rechts, `onClick` macht sie antippbar. */
 function uiRow(title, sub, control, opts = {}) {
-  const r = el(opts.onClick ? "button" : "div", "row");
+  const r = el(opts.onClick ? "button" : "div", "row" + (opts.stacked ? " stacked" : ""));
   const main = el("div", "rowMain");
   main.append(el("div", "rowTitle", esc(title)));
   if (sub) main.append(el("div", "rowSub", esc(sub)));
@@ -56,7 +72,6 @@ function uiRow(title, sub, control, opts = {}) {
   if (control) r.append(control);
   if (opts.value !== undefined) r.append(el("div", "rowValue", esc(opts.value)));
   if (opts.onClick) { r.append(el("div", "chev")); r.addEventListener("click", opts.onClick); }
-  if (opts.stacked) r.classList.add("stacked");
   return r;
 }
 
@@ -67,8 +82,7 @@ function card(title, statText) {
 }
 
 function stepper(value, format, onChange, { min = 0, max = Infinity, step = 1 } = {}) {
-  const wrap = el("div", null);
-  wrap.style.cssText = "display:flex;align-items:center;gap:10px;flex:0 0 auto";
+  const wrap = el("div", "stepWrap");
   wrap.append(el("div", "stepVal", format(value)));
   const s = el("div", "stepper");
   const dec = el("button", null, "−"); dec.setAttribute("aria-label", "weniger");
@@ -107,19 +121,89 @@ function segmented(options, current, onChange, label) {
   return s;
 }
 
-function tableCard(c, head, rows) {
-  const wrap = el("div", "tableWrap");
-  wrap.innerHTML =
-    `<table><thead><tr>${head.map((h) => `<th${h.num ? ' class="num"' : ""}>${esc(h.t)}</th>`).join("")}</tr></thead>` +
-    `<tbody>${rows.join("")}</tbody></table>`;
-  c.append(wrap);
-  return wrap;
-}
-
 function tile(label, value, note, cls) {
   return el("div", "tile",
     `<div class="l">${esc(label)}</div><div class="v ${cls || ""}">${esc(value)}</div>` +
     (note ? `<div class="t">${esc(note)}</div>` : ""));
+}
+
+/** Leerzustand: ein Satz und ein Knopf, nicht mehr. */
+function emptyView(text, actionLabel, onAction) {
+  const c = card();
+  c.append(el("p", "empty", esc(text)));
+  if (actionLabel) {
+    const b = el("button", "cta", actionLabel);
+    b.addEventListener("click", onAction);
+    c.append(b);
+  }
+  return c;
+}
+
+/* ================================================================
+   Detail-Blatt: alles, was sonst als Fließtext auf der Liste stünde
+   ================================================================ */
+function productSheet(productId, ctx) {
+  const p = byId(productId);
+  if (!p) return;
+
+  const r = ctx.rhythms.get(productId);
+  const pm = ctx.prices.get(productId);
+  const st = ctx.wasteStats.get(productId);
+  const inv = ctx.inventory.find((i) => i.productId === productId);
+  const range = ctx.range.byProduct.find((x) => x.productId === productId);
+  const season = seasonFor(productId, ctx.ref);
+  const isOpen = Data.get().opened.some((o) => o.productId === productId);
+
+  const body = el("div");
+  const facts = el("dl", "facts");
+  const fact = (k, v) => {
+    if (v === null || v === undefined || v === "") return;
+    facts.append(el("dt", null, esc(k)), el("dd", null, esc(v)));
+  };
+
+  fact("Kategorie", p.category);
+  fact("Rhythmus", r && r.rhythmDays ? `alle ${r.rhythmDays} Tage · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
+  fact("Zuletzt", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
+  fact("Haltbarkeit", p.isFood
+    ? `${p.shelfLifeDays} Tage${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
+    : null);
+  fact("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
+  fact("Preis", pm
+    ? `zuletzt ${eur(pm.last)} · üblich ${eur(pm.usual)} · Spanne ${eur(pm.lowest)}–${eur(pm.highest)}`
+    : `üblich ${eur(p.typicalPrice)}`);
+  fact("Bestand", inv
+    ? `${de(inv.remainingUnits.toFixed(1))} · noch ${inv.daysLeft} Tage · Sicherheit ${pct(inv.confidence)}`
+    : "nicht schätzbar");
+  fact("Reichweite", range ? `${de(range.days)} Tage · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
+  fact("Verlust", st && st.wastedEuros > 0
+    ? `${eur(st.wastedEuros)} über ${st.purchased} Käufe (${pct(st.wasteRate)})`
+    : "keiner erkannt");
+  fact("Datenqualität", {
+    regulatorisch: "regulatorisch (BZfE)",
+    leitlinie: "Leitlinie (BZfE)",
+    schaetzwert: "Schätzwert ohne amtliche Quelle"
+  }[p.quality]);
+  body.append(facts);
+
+  if (p.safetyCritical) {
+    body.append(el("div", "note red",
+      "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. Die App verlängert diese Frist nie."));
+  }
+  if (season && season.status === "importware") body.append(el("div", "note gold", esc(season.message)));
+  if (p.note) body.append(el("div", "note", esc(p.note)));
+
+  // Angebrochen: ein Tippen, mehr Pflege darf es nicht kosten.
+  if (p.isFood && p.shelfLifeOpenedDays && p.shelfLifeOpenedDays < p.shelfLifeDays) {
+    const b = el("button", "cta light", isOpen ? "✓ angebrochen" : "Als angebrochen markieren");
+    b.addEventListener("click", () => {
+      Data.toggleOpened(productId);
+      App.closeSheet();
+      App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${p.shelfLifeOpenedDays} Tage`);
+    });
+    body.append(b);
+  }
+
+  App.sheet(p.name, null, body);
 }
 
 /* ================================================================
@@ -129,103 +213,88 @@ function viewListe(ctx, app) {
   const c = frag();
   const S = Data.get();
 
-  /* --- Datenlage zu dünn --- */
   if (ctx.stage.stage <= 1) {
-    const first = card("Noch keine Vorschläge", ctx.stage.label);
-    first.append(el("p", "sub", ctx.stage.hint ||
-      "Vorschläge entstehen aus wiederholten Käufen. Zwei Bons je Produkt genügen für den ersten Rhythmus."));
-
-    if (ctx.history.length) {
-      const last = ctx.history[ctx.history.length - 1].date;
-      const ins = firstReceiptInsights(ctx.history.filter((h) => h.date === last));
-      first.append(el("div", "note green",
-        `<b>${eur(ins.total)}</b> im letzten Einkauf, ${ins.positions} Positionen. ` +
-        `Aufs Jahr hochgerechnet wären das <b>${ins.yearProjection} €</b>, wenn das dein Wochenschnitt ist.`));
-      tableCard(first, [{ t: "Kategorie" }, { t: "Ausgabe", num: true }, { t: "Anteil", num: true }],
-        ins.categories.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${eur(x.spend)}</td><td class="num">${de(x.share)} %</td></tr>`));
-      first.append(el("p", "srcnote", ins.hint));
-    }
-
-    const go = el("button", "cta", "Einkauf erfassen");
-    go.addEventListener("click", () => app.goto("erfassen"));
-    first.append(go);
-
+    const e = emptyView(
+      ctx.history.length ? "Zwei Bons je Produkt, dann kommen die Vorschläge." : "Noch keine Daten.",
+      "Einkauf erfassen", () => app.goto("erfassen"));
     if (!ctx.history.length) {
       const demo = el("button", "cta light", "Beispieldaten laden");
-      demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Beispielhistorie geladen"); });
-      first.append(demo);
+      demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Geladen"); });
+      e.append(demo);
     }
-    c.append(first);
+    c.append(e);
     return c;
   }
 
-  /* --- Vorrats-Reichweite: die Frage vor dem Einkauf --- */
-  if (ctx.range.days !== null) c.append(rangeHero(ctx));
+  if (ctx.range.days !== null) c.append(rangeHero(ctx, app));
 
-  /* --- Sicherheitswarnung: kurz, oben, nicht wegklickbar --- */
+  /* --- Sicherheit: eine Zeile --- */
   if (ctx.safety) {
-    const g = uiGroup("Sicherheit");
-    const r = el("div", "row");
-    r.append(el("div", "rowMain",
-      `<div class="rowTitle">${esc(ctx.safety.short)}</div>` +
-      `<div class="rowSub">Verbrauchsdatum: nach Ablauf in den Müll, auch wenn nichts auffällt.</div>`));
-    r.append(el("span", "flag f-miss", "kühlen"));
-    g.body.append(r);
-    g.append(el("div", "groupNote", esc("Quelle: " + ctx.safety.source)));
+    const g = uiGroup("Sicherheit", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source);
+    g.body.append(uiRow(ctx.safety.short, ctx.safety.coldestZone,
+      el("span", "flag f-miss", "kühlen"), {
+        onClick: () => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
+      }));
     c.append(g);
   }
 
   /* --- Die Liste --- */
-  const listGroup = uiGroup("Vorschlag für heute", esc(
-    ctx.budgetResult.removed.length
-      ? `${ctx.budgetResult.advice} Gestrichen: ${ctx.budgetResult.removed.map((r) => r.name).join(", ")}. Brot, Milch und Eier bleiben immer.`
-      : "Jede Position ist berechnet. Der Rechenweg steht unter jeder Zeile."));
+  const on = ctx.items.filter((i) => i.on);
+  const sumOn = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
 
+  const list = uiGroup("Fällig",
+    "Vorgeschlagen wird, was nach dem gelernten Rhythmus dran ist, zuzüglich der eingestellten Vorausschau.\n\n" +
+    "Der Rechenweg jeder Position steht in ihrem Detail-Blatt — Zeile antippen.");
+
+  if (ctx.budgetResult.removed.length) {
+    list.body.append(uiRow(`${ctx.budgetResult.removed.length} wegen Budget gestrichen`,
+      ctx.budgetResult.removed.map((r) => r.name).join(", "), null, {
+        onClick: () => app.notice("Budget", ctx.budgetResult.advice +
+          " Brot, Milch und Eier bleiben immer auf der Liste.")
+      }));
+  }
   if (ctx.vacation && ctx.vacation.skip.length) {
-    const n = el("div", "note blue");
-    n.style.margin = "0";
-    n.innerHTML = `<b>Urlaubsmodus:</b> ${ctx.vacation.skip.length} Frischeposition(en) zurückgestellt — ` +
-      `${eur(ctx.vacation.savedEuros)} gespart. ${esc(ctx.vacation.skip.map((s) => s.name).join(", "))}`;
-    listGroup.body.append(n);
+    list.body.append(uiRow(`Urlaub: ${ctx.vacation.skip.length} zurückgestellt`,
+      ctx.vacation.skip.map((s) => s.name).join(", "), null, { value: "− " + eur(ctx.vacation.savedEuros) }));
   }
 
   const ul = el("ul", "items");
-  if (!ctx.items.length) ul.append(el("li", "item", '<p class="empty">Diese Woche ist nichts fällig. Alles im Rhythmus.</p>'));
+  if (!ctx.items.length) ul.append(el("li", "item", '<p class="empty">Nichts fällig.</p>'));
   ctx.items.forEach((it) => ul.append(listItem(it, ctx, app)));
-  listGroup.body.append(ul);
+  list.body.append(ul);
 
-  const on = ctx.items.filter((i) => i.on);
-  const sumOn = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
   const full = ctx.items.reduce((a, i) => a + i.price, 0);
   const tot = el("div", "totals");
   tot.innerHTML =
     `<div><div class="l">${on.length} Positionen</div><div class="big">${eur(sumOn)}</div></div>` +
-    `<div class="saved">${full > sumOn ? "− " + eur(full - sumOn) + " gegenüber allem" : ""}</div>`;
-  listGroup.body.append(tot);
-  c.append(listGroup);
+    `<div class="saved">${full > sumOn ? "− " + eur(full - sumOn) : ""}</div>`;
+  list.body.append(tot);
+  c.append(list);
 
-  const cta = el("button", "cta", "Einkaufen starten");
-  cta.disabled = !on.length;
-  cta.addEventListener("click", () => app.openStore());
-  c.append(cta);
+  const actions = el("div", "ctaRow");
+  const go = el("button", "cta", "Einkaufen");
+  go.disabled = !on.length;
+  go.addEventListener("click", () => app.openStore());
+  const share = el("button", "cta light", "Teilen");
+  share.disabled = !on.length;
+  share.addEventListener("click", () => app.shareList());
+  actions.append(go, share);
+  c.append(actions);
 
-  /* --- Vergessens-Detektor --- */
+  /* --- Vergessen --- */
   if (ctx.forgotten.length) {
-    const g = uiGroup("Fehlt dir das?", "Produkte, die deutlich über ihrem Rhythmus liegen und nicht auf der Liste stehen.");
-    ctx.forgotten.slice(0, 5).forEach((f) => {
+    const g = uiGroup("Fehlt dir das?",
+      "Produkte, die deutlich über ihrem gelernten Rhythmus liegen und nicht auf der Liste stehen.");
+    ctx.forgotten.slice(0, 4).forEach((f) => {
       const r = el("div", "row");
-      const main = el("div", "rowMain");
-      main.append(el("div", "rowTitle", esc(f.name)));
-      main.append(el("div", "rowSub", esc(`zuletzt vor ${f.daysSince} Tagen · sonst alle ${f.rhythmDays} Tage`)));
-      r.append(main);
-
-      const add = el("button", "pillBtn", "Dazu");
-      add.addEventListener("click", () => { app.addToList(f.productId); app.toast(`${f.name} auf der Liste`); });
+      r.append(el("div", "rowMain",
+        `<div class="rowTitle">${esc(f.name)}</div><div class="rowSub">${f.daysSince} statt ${f.rhythmDays} Tage</div>`));
+      const acts = el("div", "rowActions");
+      const add = el("button", "pillBtn on", "Dazu");
+      add.addEventListener("click", () => { app.addToList(f.productId); app.toast(f.name + " dazu"); });
       const no = el("button", "pillBtn", "Nein");
       no.setAttribute("aria-label", `${f.name} nicht mehr vorschlagen`);
       no.addEventListener("click", () => app.dismiss("forgotten", f.productId));
-      const acts = el("div");
-      acts.style.cssText = "display:flex;gap:7px;flex:0 0 auto";
       acts.append(add, no);
       r.append(acts);
       g.body.append(r);
@@ -233,15 +302,14 @@ function viewListe(ctx, app) {
     c.append(g);
   }
 
-  /* --- Einfrier-Empfehlungen --- */
+  /* --- Einfrieren --- */
   if (ctx.freeze.length) {
-    const g = uiGroup("Gleich einfrieren", "Nur, wo die gekaufte Menge die Haltbarkeit überschreitet.");
-    ctx.freeze.slice(0, 4).forEach((f) => {
+    const g = uiGroup("Einfrieren", "Erscheint nur, wenn die gekaufte Menge länger reicht als die Haltbarkeit.");
+    ctx.freeze.slice(0, 3).forEach((f) => {
       const r = el("div", "row");
-      const main = el("div", "rowMain");
-      main.append(el("div", "rowTitle", esc(f.name)));
-      main.append(el("div", "rowSub", esc(f.message)));
-      r.append(main);
+      r.append(el("div", "rowMain",
+        `<div class="rowTitle">${esc(f.name)}: ${f.share === 0.5 ? "die Hälfte" : Math.round(f.share * 100) + " %"}</div>` +
+        `<div class="rowSub">rettet ${eur(f.valueAtRisk)}</div>`));
       const done = el("button", "pillBtn", "Erledigt");
       done.addEventListener("click", () => app.dismiss("freeze", f.productId));
       r.append(done);
@@ -250,33 +318,40 @@ function viewListe(ctx, app) {
     c.append(g);
   }
 
-  /* --- Lagerhinweis --- */
-  if (ctx.ethylene) {
-    const g = uiGroup("Lagerhinweis", esc("Quelle: " + ctx.ethylene.source));
-    const n = el("div", "note gold");
-    n.style.margin = "0";
-    n.innerHTML = `<b>${esc(ctx.ethylene.message)}</b>`;
-    g.body.append(n);
+  /* --- Saison --- */
+  if (ctx.season.length) {
+    const g = uiGroup("Nicht in Saison", "Saisonkalender des BZfE. Produkte ohne Eintrag bekommen keinen Hinweis.");
+    ctx.season.forEach((s) => g.body.append(uiRow(s.name,
+      "Saison: " + s.peakMonths.map((m) => MONTH_NAMES[m - 1]).join(", "), null, { value: "Import" })));
     c.append(g);
   }
 
-  /* --- Einstellungen dieser Woche --- */
+  /* --- Lagerhinweis --- */
+  if (ctx.ethylene) {
+    const g = uiGroup("Lagern");
+    g.body.append(uiRow("Getrennt lagern", "Ethylen lässt die zweite Gruppe schneller verderben", null, {
+      onClick: () => app.notice("Lagern", ctx.ethylene.message + "\n\nQuelle: " + ctx.ethylene.source)
+    }));
+    c.append(g);
+  }
+
+  /* --- Einstellungen --- */
   const set = uiGroup("Diese Woche");
   const rest = S.settings.budget - sumOn;
-  set.body.append(uiRow("Wochenbudget",
-    S.settings.budget ? (rest >= 0 ? `noch ${eur(rest)} Luft` : `${eur(-rest)} darüber`) : "kein Deckel gesetzt",
+  set.body.append(uiRow("Budget",
+    S.settings.budget ? (rest >= 0 ? `${eur(rest)} Luft` : `${eur(-rest)} drüber`) : null,
     stepper(S.settings.budget, (v) => (v ? eur(v) : "aus"),
       (v) => app.set((s) => { s.settings.budget = v; }), { min: 0, max: 400, step: 5 })));
-  set.body.append(uiRow("Personen im Haushalt", "skaliert alle Mengen",
+  set.body.append(uiRow("Personen", null,
     stepper(S.settings.household, String,
       (v) => app.set((s) => { s.settings.household = v; }), { min: 1, max: 8, step: 1 })));
-  set.body.append(uiRow("Vorausschau", "wie viele Tage der Einkauf mitabdecken soll",
-    stepper(S.settings.lookaheadDays, (v) => (v ? `${v} Tage` : "nur fällig"),
+  set.body.append(uiRow("Vorausschau",
+    ctx.pattern && ctx.pattern.dayName ? `nächster Einkauf ${ctx.pattern.dayName}` : null,
+    stepper(S.settings.lookaheadDays, (v) => (v ? `${v} Tage` : "aus"),
       (v) => app.set((s) => { s.settings.lookaheadDays = v; }), { min: 0, max: 7, step: 1 })));
 
   const v = S.settings.vacation;
-  set.body.append(uiRow("Urlaubsmodus",
-    v.active && v.from ? `${deDate(v.from)} bis ${deDate(v.to)}` : "hält Frischware vor der Abreise zurück",
+  set.body.append(uiRow("Urlaub", v.active && v.from ? `${deDate(v.from)}–${deDate(v.to)}` : null,
     toggle(v.active, (onOff) => app.set((s) => {
       s.settings.vacation.active = onOff;
       if (onOff && !s.settings.vacation.from) {
@@ -286,12 +361,9 @@ function viewListe(ctx, app) {
     }), "Urlaubsmodus")));
 
   if (v.active) {
-    const f = el("div");
-    f.style.cssText = "padding:12px 16px;display:flex;gap:10px";
+    const f = el("div", "dateRow");
     [["from", "Abreise"], ["to", "Rückkehr"]].forEach(([key, label]) => {
       const w = el("label", "field", `<span class="lbl">${label}</span>`);
-      w.style.margin = "0";
-      w.style.flex = "1";
       const i = el("input");
       i.type = "date";
       i.value = v[key] || "";
@@ -305,16 +377,15 @@ function viewListe(ctx, app) {
   return c;
 }
 
-/** Ring mit der Vorrats-Reichweite. */
-function rangeHero(ctx) {
+/** Ring mit der Vorrats-Reichweite. Antippen öffnet die Herleitung. */
+function rangeHero(ctx, app) {
   const r = ctx.range;
   const days = Math.max(0, Math.round(r.days));
-  const full = 7;                                   // Ring füllt sich über eine Woche
-  const frac = Math.min(1, days / full);
+  const frac = Math.min(1, days / 7);
   const C = 2 * Math.PI * 31;
   const color = days <= 1 ? "var(--red)" : days <= 3 ? "var(--amber)" : "var(--accent)";
 
-  const h = el("div", "hero");
+  const h = el("button", "hero");
   h.append(el("div", "heroRing",
     `<svg viewBox="0 0 74 74" aria-hidden="true">
        <circle cx="37" cy="37" r="31" fill="none" stroke="var(--fill)" stroke-width="7"/>
@@ -324,14 +395,26 @@ function rangeHero(ctx) {
      <div class="val"><div class="n">${days}</div><div class="u">${days === 1 ? "Tag" : "Tage"}</div></div>`));
 
   const txt = el("div", "txt");
-  txt.append(el("b", null, "Vorrat reicht noch"));
-  txt.append(el("small", null, esc(r.message) +
-    ` Geschätzt aus Bestand und Verbrauch, Sicherheit ${pct(r.confidence)}.`));
+  txt.append(el("b", null, "Vorrat reicht"));
+  txt.append(el("small", null, esc(r.limiting.slice(0, 2).map((x) => x.name).join(", "))));
   h.append(txt);
+  h.append(el("div", "chev"));
+
+  h.addEventListener("click", () => {
+    const body = el("div");
+    const list = el("ul", "plain");
+    r.byProduct.slice(0, 10).forEach((x) => list.append(el("li", null,
+      `<span class="flag ${x.days <= 1 ? "f-miss" : x.days <= 3 ? "f-gold" : "f-ok"}">${de(Math.round(x.days))} T</span>` +
+      `<span>${esc(x.name)}<br><small>begrenzt durch ${x.limitedBy === "frische" ? "Frische" : "Menge"} · Sicherheit ${pct(x.confidence)}</small></span>`)));
+    body.append(list);
+    body.append(el("p", "srcnote",
+      "Restbestand mal gelerntem Verbrauch, begrenzt durch die verbleibende Haltbarkeit. Der kleinere der beiden Werte gilt."));
+    app.sheet("Vorrats-Reichweite", r.message, body);
+  });
   return h;
 }
 
-/** Eine Position der Vorschlagsliste. */
+/** Eine Position der Vorschlagsliste. Knapp — Details im Blatt. */
 function listItem(it, ctx, app) {
   const p = byId(it.productId) || {};
   const li = el("li", "item" + (it.on ? "" : " off"));
@@ -339,160 +422,133 @@ function listItem(it, ctx, app) {
   const top = el("div", "top");
   const cb = el("input");
   cb.type = "checkbox"; cb.className = "box"; cb.checked = it.on;
-  cb.setAttribute("aria-label", it.name + " auf die Liste");
+  cb.setAttribute("aria-label", it.name);
   cb.addEventListener("change", () => app.choose(it.productId, { on: cb.checked, reason: cb.checked ? null : undefined }));
 
-  const main = el("div", "main");
+  const main = el("button", "main");
+  main.setAttribute("aria-label", `Details zu ${it.name}`);
   const nm = el("div", "nm", esc(it.name));
-  // Bewusst wenige Marken je Zeile: der Rhythmus steht ohnehin im
-  // Rechenweg darunter, und drei gestapelte Pillen lesen sich als Lärm.
-  if (it.dueIn !== undefined && it.dueIn < 0) nm.append(el("span", "pill warn", `${-it.dueIn} Tage überfällig`));
-  else if (it.dueIn > 0) nm.append(el("span", "pill", `in ${it.dueIn} Tagen`));
-  if (it.basis === "annahme") nm.append(el("span", "pill warn", "Annahme"));
-  if (it.riskFlag) nm.append(el("span", "pill risk", `${pct(it.wasteRate)} bleibt übrig`));
-  if (p.safetyCritical) nm.append(el("span", "pill safety", "Verbrauchsdatum"));
-
-  // Preis-Gedächtnis: nur melden, wenn es abweicht.
+  if (it.dueIn < 0) nm.append(el("span", "pill warn", `${-it.dueIn} T überfällig`));
+  if (it.riskFlag) nm.append(el("span", "pill risk", pct(it.wasteRate)));
+  if (p.safetyCritical) nm.append(el("span", "pill safety", "VD"));
   const pm = ctx.prices.get(it.productId);
   if (pm && pm.verdict !== "üblich") {
-    nm.append(el("span", "pill " + (pm.verdict === "günstig" ? "cheap" : "warn"),
-      pm.verdict === "günstig" ? `sonst ${eur(pm.usual)}` : `sonst nur ${eur(pm.usual)}`));
+    nm.append(el("span", "pill " + (pm.verdict === "günstig" ? "cheap" : "warn"), sign(pm.changePercent) + " %"));
   }
-
-  const dup = ctx.duplicates.find((d) => d.productId === it.productId);
-  if (dup) nm.append(el("span", "pill dup", dup.level === "info" ? "doppelt?" : "kürzlich gekauft"));
+  if (ctx.duplicates.some((d) => d.productId === it.productId)) nm.append(el("span", "pill dup", "doppelt?"));
   if (!it.on && it.reason) {
     const rr = REASONS.find((x) => x.key === it.reason);
     if (rr) nm.append(el("span", "pill state", rr.label));
   }
   main.append(nm);
+  main.addEventListener("click", () => productSheet(it.productId, ctx));
 
-  const up = unitPrice({ productId: it.productId, unitPrice: p.typicalPrice, quantity: 1 });
-  const price = el("div", "price",
-    eur(it.halved ? it.price / 2 : it.price) + (up ? `<small>${esc(up.display)}</small>` : ""));
-
-  top.append(cb, main, price);
+  top.append(cb, main, el("div", "price", eur(it.halved ? it.price / 2 : it.price)));
   li.append(top);
 
-  li.append(el("div", "calc", it.basis === "annahme"
-    ? `Kategorie-Annahme ${it.rhythmDays} Tage · noch keine eigene Historie`
-    : `zuletzt vor ${it.daysSince} Tagen · Rhythmus ${it.rhythmDays} Tage · Vertrauen ${pct(it.confidence)}`));
-
-  const why = el("div", "why");
-  if (dup) why.append(el("div", "note blue", esc(dup.message)));
-
   if (it.on && it.riskFlag) {
-    const w = buildExpiryWarning(it.productId, it.name, it.price, ctx.wasteStats.get(it.productId));
-    if (w) {
-      const n = el("div", "note gold", `<b>${esc(w.message)}</b>`);
-      const h = el("button", "pillBtn" + (it.halved ? " on" : ""), it.halved ? "✓ halbe Menge" : "Halbe Menge");
-      h.setAttribute("aria-pressed", it.halved ? "true" : "false");
-      h.style.marginTop = "9px";
-      h.addEventListener("click", () => app.choose(it.productId, { halved: !it.halved }));
-      n.append(el("div"), h);
-      why.append(n);
-    }
+    const acts = el("div", "inlineActions");
+    const h = el("button", "pillBtn" + (it.halved ? " on" : ""), it.halved ? "✓ halbe Menge" : "Halbe Menge");
+    h.setAttribute("aria-pressed", it.halved ? "true" : "false");
+    h.addEventListener("click", () => app.choose(it.productId, { halved: !it.halved }));
+    acts.append(h);
+    li.append(acts);
   }
-  if (why.childNodes.length) li.append(why);
 
   if (!it.on && (it.perishable || it.price > 3)) {
-    const box = el("div", "reasons");
-    box.append(el("div", "q", "Warum nicht?"));
     const opts = el("div", "opts");
     REASONS.forEach((rr) => {
-      const b = el("button", "opt", `<span>${rr.label}</span><small>${rr.hint}</small>`);
+      const b = el("button", "opt", esc(rr.label));
       b.setAttribute("aria-pressed", it.reason === rr.key ? "true" : "false");
       b.addEventListener("click", () => app.choose(it.productId, { reason: rr.key }));
       opts.append(b);
     });
-    box.append(opts);
-    if (it.reason === "have") box.append(el("div", "out watch", `Beobachtet: <b>${esc(it.name)}</b> hält typischerweise ${it.shelfLifeDays} Tage.`));
-    if (it.reason === "consumed") box.append(el("div", "out", `Als verbraucht notiert. Rhythmus bleibt bei ${it.rhythmDays} Tagen.`));
-    if (it.reason === "skip") box.append(el("div", "out", "Übersprungen. Der Rhythmus pausiert."));
-    li.append(box);
+    li.append(opts);
   }
   return li;
 }
 
 /* ================================================================
-   2. Bestand und Rezepte
+   2. Bestand
    ================================================================ */
 function viewBestand(ctx, app) {
   const c = frag();
 
-  if (ctx.range.days !== null) c.append(rangeHero(ctx));
-
-  const inv = uiGroup("Vermutlich noch da",
-    "Geschätzt aus Einkauf minus Verbrauch — ohne dass du etwas pflegst. Deshalb mit Sicherheitsangabe.");
-
   if (!ctx.inventory.length) {
-    inv.body.append(el("p", "empty", "Kein Bestand schätzbar. Dafür braucht es mindestens zwei Käufe je Produkt."));
-  } else {
-    ctx.inventory.slice(0, 20).forEach((i) => {
-      const p = byId(i.productId) || {};
-      // Haltbarkeit in Tagen ist nur für Frisches eine Aussage.
-      // „3640 Tage" bei Klopapier ist richtig gerechnet und wertlos.
-      const longLived = !p.isFood || i.daysLeft > 120;
-      const range = ctx.range.byProduct.find((x) => x.productId === i.productId);
-
-      const r = el("div", "row");
-      const main = el("div", "rowMain");
-      main.append(el("div", "rowTitle", esc(i.name)));
-      const parts = [`${i.remainingUnits.toFixed(1).replace(".", ",")} übrig`, `Sicherheit ${pct(i.confidence)}`];
-      if (range) parts.push(range.limitedBy === "frische" ? "Frische begrenzt" : "Menge begrenzt");
-      main.append(el("div", "rowSub", parts.join(" · ")));
-      r.append(main);
-
-      const flagCls = i.daysLeft <= 2 ? "f-miss" : i.daysLeft <= 5 ? "f-gold" : "f-ok";
-      const right = el("div");
-      right.style.cssText = "display:flex;align-items:center;gap:10px;flex:0 0 auto";
-      right.append(el("span", "flag " + (longLived ? "f-ok" : flagCls), longLived ? "unkritisch" : `${i.daysLeft} T`));
-      right.append(el("span", "rowValue", eur(i.value)));
-      r.append(right);
-      inv.body.append(r);
-    });
+    c.append(emptyView("Kein Bestand schätzbar.", "Einkauf erfassen", () => app.goto("erfassen")));
+    return c;
   }
-  c.append(inv);
 
-  /* --- Rezepte aus dem Bestand --- */
-  const stock = toRecipeStock(ctx.inventory);
-  const rec = suggestRecipes(stock, { maxResults: 5 });
-  const r = card("Koch das, bevor es schlecht wird");
-  r.append(el("p", "sub", "Sortiert nach gerettetem Betrag, nicht nach Geschmack. Bewusst ohne Nährwerte."));
-  (rec.unsafeIngredients || []).forEach((u) => r.append(el("div", "note red", `<b>${esc(u.message)}</b>`)));
-  const rl = el("ul", "plain");
-  if (!rec.length) rl.append(el("li", null, '<span class="empty">Kein passendes Rezept im Bestand.</span>'));
-  rec.forEach((x) => rl.append(el("li", null,
-    `<span class="flag ${x.rescuedValue > 0 ? "f-ok" : "f-new"}">${x.rescuedValue > 0 ? eur(x.rescuedValue) : x.minutes + " Min"}</span>` +
-    `<span><b>${esc(x.name)}</b> · ${x.minutes} Min${x.complete ? "" : " · fehlt: " + esc(x.missing.join(", "))}<br>` +
-    `<small style="color:var(--ink-2)">nutzt: ${esc(x.usesFromStock.join(", ")) || "—"}</small></span>`)));
-  r.append(rl);
-  c.append(r);
+  if (ctx.range.days !== null) c.append(rangeHero(ctx, app));
 
-  /* --- Einräumhilfe --- */
-  const guide = buildStorageGuide(ctx.items.filter((i) => i.on));
-  if (guide.length) {
-    const g = card("Einräumen nach Kühlzonen");
-    g.append(el("p", "sub", "Reihenfolge nach der Kühlschrankgrafik des BZfE: das Kritischste zuerst."));
-    const gl = el("ul", "plain");
-    guide.forEach((z) => gl.append(el("li", null,
-      `<span class="flag f-new">${esc(z.zone.split("(")[0].trim())}</span><span>${esc(z.items.map((i) => i.name).join(", "))}</span>`)));
-    g.append(gl);
+  /* --- Angebrochen --- */
+  if (ctx.opened.length) {
+    const g = uiGroup("Angebrochen",
+      "Geöffnete Packungen halten kürzer. Ab der Markierung rechnet die Bestandsschätzung mit der kurzen Frist.");
+    ctx.opened.forEach((o) => {
+      const r = el("div", "row");
+      r.append(el("div", "rowMain",
+        `<div class="rowTitle">${esc(o.name)}</div><div class="rowSub">seit ${o.openedDays} ${o.openedDays === 1 ? "Tag" : "Tagen"}</div>`));
+      r.append(el("span", "flag " + (o.expired ? "f-miss" : o.urgent ? "f-gold" : "f-ok"),
+        o.expired ? "über Frist" : `${o.daysLeft} T`));
+      const undo = el("button", "pillBtn", "Weg");
+      undo.setAttribute("aria-label", `${o.name} nicht mehr als angebrochen führen`);
+      undo.addEventListener("click", () => { Data.toggleOpened(o.productId); app.toast("Entfernt"); });
+      r.append(undo);
+      g.body.append(r);
+    });
     c.append(g);
   }
 
-  /* --- Urlaubs-Aufbrauchplan --- */
+  /* --- Bestand --- */
+  const inv = uiGroup("Vermutlich noch da",
+    "Geschätzt aus Einkauf minus Verbrauch, ohne dass du etwas pflegst. Die Sicherheitsangabe steht im Detail-Blatt jeder Zeile.");
+  ctx.inventory.slice(0, 20).forEach((i) => {
+    const p = byId(i.productId) || {};
+    const longLived = !p.isFood || i.daysLeft > 120;
+    const flagCls = i.daysLeft <= 2 ? "f-miss" : i.daysLeft <= 5 ? "f-gold" : "f-ok";
+    const r = el("button", "row");
+    r.append(el("div", "rowMain",
+      `<div class="rowTitle">${esc(i.name)}${i.opened ? ' <span class="pill">offen</span>' : ""}</div>` +
+      `<div class="rowSub">${de(i.remainingUnits.toFixed(1))} · ${eur(i.value)}</div>`));
+    r.append(el("span", "flag " + (longLived ? "f-ok" : flagCls), longLived ? "haltbar" : `${i.daysLeft} T`));
+    r.append(el("div", "chev"));
+    r.addEventListener("click", () => productSheet(i.productId, ctx));
+    inv.body.append(r);
+  });
+  c.append(inv);
+
+  /* --- Rezepte --- */
+  const rec = suggestRecipes(toRecipeStock(ctx.inventory), { maxResults: 5 });
+  const g = uiGroup("Kochen", "Sortiert nach gerettetem Betrag, nicht nach Geschmack. Bewusst ohne Nährwerte.");
+  (rec.unsafeIngredients || []).forEach((u) => g.body.append(uiRow(u.message, null, el("span", "flag f-miss", "!"))));
+  if (!rec.length) g.body.append(el("p", "empty", "Kein passendes Rezept."));
+  rec.forEach((x) => g.body.append(uiRow(x.name,
+    `${x.minutes} Min${x.complete ? "" : " · fehlt: " + x.missing.join(", ")}`, null, {
+      value: x.rescuedValue > 0 ? eur(x.rescuedValue) : "",
+      onClick: () => app.notice(x.name,
+        `${x.minutes} Minuten.\n\nNutzt aus deinem Bestand: ${x.usesFromStock.join(", ") || "—"}` +
+        (x.complete ? "" : `\n\nFehlt: ${x.missing.join(", ")}`))
+    })));
+  c.append(g);
+
+  /* --- Einräumen --- */
+  const guide = buildStorageGuide(ctx.items.filter((i) => i.on));
+  if (guide.length) {
+    const s = uiGroup("Einräumen", "Reihenfolge nach der Kühlschrankgrafik des BZfE: das Kritischste zuerst.");
+    guide.forEach((z) => s.body.append(uiRow(z.zone.split("(")[0].trim(), z.items.map((i) => i.name).join(", "))));
+    c.append(s);
+  }
+
+  /* --- Urlaub --- */
   const S = Data.get();
   if (S.settings.vacation.active && S.settings.vacation.from) {
     const v = S.settings.vacation;
     const plan = useUpPlan(ctx.inventory, v.from, v.to, ctx.ref);
-    const p = card("Vor der Abreise", `${plan.daysUntilDeparture} Tage`);
-    p.append(el("p", "sub", esc(plan.summary)));
-    const pl = el("ul", "plain");
-    plan.mustUse.forEach((x) => pl.append(el("li", null, `<span class="flag f-gold">aufbrauchen</span><span>${esc(x.hint)}</span>`)));
-    plan.freeze.forEach((x) => pl.append(el("li", null, `<span class="flag f-new">einfrieren</span><span>${esc(x.hint)}</span>`)));
-    if (!pl.childNodes.length) pl.append(el("li", null, '<span class="empty">Nichts, was die Reise nicht übersteht.</span>'));
-    p.append(pl);
+    const p = uiGroup("Vor der Abreise", plan.summary);
+    plan.mustUse.forEach((x) => p.body.append(uiRow(x.name, `noch ${x.daysLeft} Tage`, el("span", "flag f-gold", "aufbrauchen"))));
+    plan.freeze.forEach((x) => p.body.append(uiRow(x.name, eur(x.value), el("span", "flag f-new", "einfrieren"))));
+    if (!plan.mustUse.length && !plan.freeze.length) p.body.append(el("p", "empty", "Nichts gefährdet."));
     c.append(p);
   }
   return c;
@@ -506,7 +562,7 @@ function viewErfassen(ctx, app) {
   const cap = app.capture;
 
   const tabs = el("div", "group");
-  tabs.append(segmented([["scan", "Bon einlesen"], ["manual", "Von Hand"]], cap.tab,
+  tabs.append(segmented([["scan", "Bon"], ["manual", "Von Hand"]], cap.tab,
     (k) => { cap.tab = k; app.render(); }, "Erfassungsart"));
   c.append(tabs);
 
@@ -515,24 +571,19 @@ function viewErfassen(ctx, app) {
   else renderManual(box, cap, app);
   c.append(box);
 
-  /* --- Bisher erfasste Bons --- */
   const S = Data.get();
   if (S.receipts.length) {
-    const g = uiGroup("Erfasste Bons", `${S.receipts.length} gesamt`);
-    [...S.receipts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12).forEach((rec) => {
+    const g = uiGroup("Bons");
+    [...S.receipts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).forEach((rec) => {
       const r = el("div", "row");
-      const main = el("div", "rowMain");
-      main.append(el("div", "rowTitle", esc(rec.store)));
-      main.append(el("div", "rowSub", `${deDate(rec.date)} · ${rec.itemCount} Positionen`));
-      r.append(main);
+      r.append(el("div", "rowMain",
+        `<div class="rowTitle">${esc(rec.store)}</div><div class="rowSub">${deDate(rec.date)} · ${rec.itemCount} Positionen</div>`));
       r.append(el("div", "rowValue", eur(rec.total)));
       const del = el("button", "del", "×");
       del.setAttribute("aria-label", `Bon vom ${deDate(rec.date)} löschen`);
-      del.addEventListener("click", () => app.confirm(
-        "Bon löschen?",
-        `${rec.store} vom ${deDate(rec.date)} — alle Positionen dieses Tages werden aus der Historie entfernt.`,
-        () => { Data.removeReceipt(rec.id); app.toast("Bon gelöscht"); }
-      ));
+      del.addEventListener("click", () => app.confirm("Bon löschen?",
+        `${rec.store}, ${deDate(rec.date)}`,
+        () => { Data.removeReceipt(rec.id); app.toast("Gelöscht"); }));
       r.append(del);
       g.body.append(r);
     });
@@ -542,15 +593,12 @@ function viewErfassen(ctx, app) {
 }
 
 function renderScan(box, cap, app) {
-  box.append(el("p", "sub",
-    "Bon-Text hier einfügen — aus der eBon-App, einer PDF oder abgetippt. Der Parser ist an einem echten Lidl-Bon geprüft; andere Märkte folgen demselben Aufbau."));
-
   const ta = el("textarea");
   ta.value = cap.text || "";
-  ta.placeholder = "Vollmilch 3,5%          1,29 A\nNaturjoghurt        0,55 x  2   1,10 A\n  Lidl Plus Rabatt          -0,20\nHähnchenbrust           4,58 A\n  0,199 kg x 22,99 EUR/kg";
+  ta.placeholder = "Bon-Text einfügen …";
   ta.setAttribute("aria-label", "Bon-Text");
   ta.addEventListener("input", () => { cap.text = ta.value; });
-  const f = el("label", "field", '<span class="lbl">Bon-Text</span>');
+  const f = el("label", "field");
   f.append(ta);
   box.append(f);
 
@@ -560,7 +608,7 @@ function renderScan(box, cap, app) {
   di.addEventListener("change", () => { cap.date = di.value; });
   df.append(di);
   const sf = el("label", "field", '<span class="lbl">Markt</span>');
-  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "z. B. Lidl";
+  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "Lidl";
   si.addEventListener("input", () => { cap.store = si.value; });
   sf.append(si);
   meta.append(df, sf);
@@ -569,35 +617,35 @@ function renderScan(box, cap, app) {
   const go = el("button", "cta", "Auswerten");
   go.addEventListener("click", () => {
     const text = (cap.text || "").trim();
-    if (!text) { app.toast("Kein Text eingegeben"); return; }
+    if (!text) { app.toast("Kein Text"); return; }
     try {
       cap.parsed = Data.parseReceiptText(text);
       cap.date = di.value;
       cap.store = si.value.trim() || "Unbekannt";
-      if (!cap.parsed.rows.length) app.toast("Keine Positionen erkannt");
-    } catch (e) {
-      app.toast("Bon nicht lesbar");
-      console.error(e);
-    }
+      if (!cap.parsed.rows.length) app.toast("Nichts erkannt");
+    } catch (e) { app.toast("Nicht lesbar"); console.error(e); }
     app.render();
   });
   box.append(go);
 
   if (!cap.parsed) return;
-
   const p = cap.parsed;
-  box.append(el("div", "note " + (p.open ? "gold" : "green"),
-    `<b>${p.rows.length} Positionen erkannt.</b> ${p.sure} sicher zugeordnet` +
-    (p.open ? `, <b>${p.open} brauchen eine Antwort</b> — sonst entstehen falsche Rhythmen.` : ".") +
-    (p.discountTotal ? ` Rabatte: ${eur(p.discountTotal)}.` : "")));
-  p.warnings.forEach((w) => box.append(el("div", "note red", esc(w))));
+
+  box.append(uiRow(`${p.rows.length} erkannt, ${p.sure} sicher`,
+    p.open ? "unsichere werden gefragt, nicht geraten" : null,
+    el("span", "flag " + (p.open ? "f-gold" : "f-ok"), p.open ? p.open + " offen" : "fertig")));
+
+  if (p.warnings.length) {
+    box.append(uiRow(`${p.warnings.length} Rechenprobe(n) auffällig`, null, null,
+      { onClick: () => app.notice("Rechenprobe", p.warnings.join("\n\n")) }));
+  }
 
   const rows = el("div");
   p.rows.forEach((rowData, idx) => {
     const r = el("div", "matchRow");
     const left = el("div", "raw");
+    left.append(el("div", "n", rowData.productName ? esc(rowData.productName) : "nicht zugeordnet"));
     left.append(el("div", "r", esc(rowData.raw)));
-    left.append(el("div", "n", rowData.productName ? esc(rowData.productName) : "— nicht zugeordnet —"));
 
     if (rowData.needsConfirmation) {
       const sel = el("select");
@@ -607,7 +655,7 @@ function renderScan(box, cap, app) {
       Data.searchProducts(rowData.raw.split(/\s+/)[0] || "", 8).forEach((x) => pool.set(x.id, x));
       FOOD_DATABASE.forEach((x) => { if (!pool.has(x.id)) pool.set(x.id, x); });
       sel.innerHTML = `<option value="">— nicht buchen —</option>` +
-        [...pool.values()].map((x) => `<option value="${x.id}">${esc(x.name)} · ${esc(x.category)}</option>`).join("");
+        [...pool.values()].map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
       sel.value = rowData.productId || "";
       sel.addEventListener("change", () => {
         p.rows[idx].productId = sel.value || null;
@@ -619,44 +667,32 @@ function renderScan(box, cap, app) {
         app.render();
       });
       left.append(sel);
-      left.append(el("div", "r", rowData.confidence
-        ? `bester Treffer ${pct(rowData.confidence)} — unter der Schwelle, deshalb die Frage`
-        : "kein Treffer im Katalog"));
-    } else {
-      left.append(el("div", "r", `${esc(rowData.method)} · ${pct(rowData.confidence)}`));
     }
 
     r.append(left, el("div", "amt",
-      `${eur(rowData.unitPrice * rowData.quantity)}<small>${rowData.quantity}× ${eur(rowData.unitPrice)}</small>`));
+      `${eur(rowData.unitPrice * rowData.quantity)}<small>${rowData.quantity}×</small>`));
     rows.append(r);
   });
   box.append(rows);
 
-  if (p.deposits.length) {
-    box.append(el("p", "srcnote",
-      `${p.deposits.length} Pfandzeile(n) erkannt und getrennt gebucht — Pfand ist kein Lebensmittel.`));
-  }
-
-  const save = el("button", "cta", `${p.rows.filter((r) => r.productId).length} Positionen übernehmen`);
+  const save = el("button", "cta", `${p.rows.filter((r) => r.productId).length} übernehmen`);
   save.disabled = !p.rows.some((r) => r.productId);
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
     const n = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
     cap.parsed = null; cap.text = "";
-    app.toast(`${n} Positionen gebucht`);
+    app.toast(`${n} gebucht`);
     app.goto("liste");
   });
   box.append(save);
 }
 
 function renderManual(box, cap, app) {
-  box.append(el("p", "sub",
-    "Produkt suchen, Menge und Preis prüfen, in den Korb legen. Der Preis kommt aus dem Katalog und lässt sich überschreiben."));
-
-  const f = el("label", "field", '<span class="lbl">Produkt suchen</span>');
+  const f = el("label", "field");
   const inp = el("input");
   inp.type = "search";
-  inp.placeholder = "z. B. Milch, Joghurt, Klopapier";
+  inp.placeholder = "Produkt suchen";
+  inp.setAttribute("aria-label", "Produkt suchen");
   inp.value = cap.query || "";
   inp.addEventListener("input", () => { cap.query = inp.value; renderResults(); });
   f.append(inp);
@@ -670,14 +706,10 @@ function renderManual(box, cap, app) {
     if (!cap.query) { results.classList.add("hide"); return; }
     results.classList.remove("hide");
     const hits = Data.searchProducts(cap.query, 10);
-    if (!hits.length) {
-      results.append(el("li", null, '<div style="padding:13px 14px;font-size:15px;color:var(--ink-2)">Nichts gefunden.</div>'));
-      return;
-    }
+    if (!hits.length) { results.append(el("li", null, '<div class="noHit">Nichts gefunden.</div>')); return; }
     hits.forEach((p) => {
       const li = el("li");
-      const b = el("button", null,
-        `<span class="rn">${esc(p.name)}</span><span class="rc">${esc(p.category)} · ${eur(p.typicalPrice)}</span>`);
+      const b = el("button", null, `<span class="rn">${esc(p.name)}</span><span class="rc">${eur(p.typicalPrice)}</span>`);
       b.addEventListener("click", () => {
         const ex = cap.basket.find((x) => x.productId === p.id);
         if (ex) ex.quantity += 1;
@@ -693,20 +725,16 @@ function renderManual(box, cap, app) {
 
   if (!cap.basket.length) return;
 
-  box.append(el("h3", null, "Korb"));
   const ul = el("ul", "basket");
   cap.basket.forEach((b, i) => {
     const li = el("li");
     li.append(el("span", "bn", esc(b.name)));
     li.append(stepper(b.quantity, String, (v) => { cap.basket[i].quantity = v; app.render(); }, { min: 1, max: 99, step: 1 }));
-
-    const pi = el("input");
+    const pi = el("input", "priceIn");
     pi.type = "number"; pi.step = "0.01"; pi.min = "0"; pi.value = b.unitPrice.toFixed(2);
     pi.setAttribute("aria-label", `Preis für ${b.name}`);
-    pi.style.cssText = "width:88px;padding:9px;border:none;border-radius:9px;background:var(--surface-2);text-align:right";
     pi.addEventListener("change", () => { cap.basket[i].unitPrice = parseFloat(pi.value) || 0; app.render(); });
     li.append(pi);
-
     const del = el("button", "del", "×");
     del.setAttribute("aria-label", `${b.name} entfernen`);
     del.addEventListener("click", () => { cap.basket.splice(i, 1); app.render(); });
@@ -716,8 +744,7 @@ function renderManual(box, cap, app) {
   box.append(ul);
 
   const total = cap.basket.reduce((a, b) => a + b.unitPrice * b.quantity, 0);
-  const tot = el("div", "totals");
-  tot.style.padding = "14px 0 0";
+  const tot = el("div", "totals bare");
   tot.innerHTML = `<div><div class="l">${cap.basket.length} Positionen</div><div class="big">${eur(total)}</div></div>`;
   box.append(tot);
 
@@ -727,17 +754,17 @@ function renderManual(box, cap, app) {
   di.addEventListener("change", () => { cap.date = di.value; });
   df.append(di);
   const sf = el("label", "field", '<span class="lbl">Markt</span>');
-  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "z. B. REWE";
+  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "REWE";
   si.addEventListener("input", () => { cap.store = si.value; });
   sf.append(si);
   meta.append(df, sf);
   box.append(meta);
 
-  const save = el("button", "cta", "Einkauf buchen");
+  const save = el("button", "cta", "Buchen");
   save.addEventListener("click", () => {
     const n = Data.addReceipt({ date: di.value, store: si.value.trim() || "Unbekannt", items: cap.basket });
     cap.basket = [];
-    app.toast(`${n} Positionen gebucht`);
+    app.toast(`${n} gebucht`);
     app.goto("liste");
   });
   box.append(save);
@@ -751,116 +778,115 @@ function viewZahlen(ctx, app) {
   const t = ctx.totals;
 
   if (!ctx.history.length) {
-    const e = card("Noch keine Zahlen");
-    e.append(el("p", "sub", "Sobald der erste Einkauf erfasst ist, stehen hier Ausgaben, Verlust und persönliche Inflation."));
-    const go = el("button", "cta", "Einkauf erfassen");
-    go.addEventListener("click", () => app.goto("erfassen"));
-    e.append(go);
-    c.append(e);
+    c.append(emptyView("Noch keine Zahlen.", "Einkauf erfassen", () => app.goto("erfassen")));
     return c;
   }
 
   const savingsTotal = ctx.savings.reduce((a, x) => a + x.estimatedWeeklySaving, 0);
   const s = el("div", "scroller");
-  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), `aus ${t.receipts} Bons`));
-  s.append(tile("zu holen", eur(savingsTotal), "pro Woche, ohne Verzicht", "good"));
-  s.append(tile("Verlust geschätzt", eur(t.wastedPerWeek), `${ctx.impact.kg} kg gesamt`, "warn"));
+  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), `${t.receipts} Bons`));
+  s.append(tile("zu holen", eur(savingsTotal), "ohne Verzicht", "good"));
+  s.append(tile("Verlust", eur(t.wastedPerWeek), `${de(ctx.impact.kg)} kg gesamt`, "warn"));
   s.append(tile("Rhythmen", String([...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length),
-    `von ${ctx.rhythms.size} Produkten`));
+    `von ${ctx.rhythms.size}`));
   c.append(s);
+
+  /* --- Einkaufsmuster --- */
+  if (ctx.pattern) {
+    const g = uiGroup("Dein Einkaufsrhythmus",
+      "Ausgezählt über die Bontage. Ohne erkennbaren Lieblingstag nennt die App nur die Häufigkeit.");
+    g.body.append(uiRow(ctx.pattern.dayName || "kein fester Tag",
+      ctx.pattern.dayName ? `${pct(ctx.pattern.share)} deiner Einkäufe` : null,
+      null, { value: `${de(ctx.pattern.perWeek)}×/Woche` }));
+    g.body.append(uiRow("Ø Korb", null, null, { value: eur(ctx.pattern.avgBasket) }));
+    const suggested = suggestedLookahead(ctx.pattern);
+    const cur = Data.get().settings.lookaheadDays;
+    if (suggested && suggested !== cur) {
+      g.body.append(uiRow(`Vorausschau auf ${suggested} Tage`, `aktuell ${cur}`, null, {
+        onClick: () => { app.set((st) => { st.settings.lookaheadDays = suggested; }); app.toast("Übernommen"); }
+      }));
+    }
+    c.append(g);
+  }
 
   c.append(chartCard(ctx));
 
+  /* --- Inflation --- */
   if (ctx.inflation && ctx.inflation.productsCompared) {
     const inf = ctx.inflation;
-    const ic = card("Deine persönliche Inflation", `${inf.productsCompared} Produkte verglichen`);
-    ic.append(el("p", "sub",
-      `Dein Warenkorb heute gegenüber dem Anfang der Historie: <b style="font-size:19px">${sign(inf.changePercent)} %</b>`));
-    if (inf.biggestIncreases.length) {
-      tableCard(ic, [{ t: "Produkt" }, { t: "vorher", num: true }, { t: "jetzt", num: true }, { t: "Änderung", num: true }],
-        inf.biggestIncreases.map((i) =>
-          `<tr><td>${esc(i.name)}</td><td class="num">${eur(i.basePrice)}</td><td class="num">${eur(i.currentPrice)}</td>` +
-          `<td class="num" style="color:${i.changePercent > 0 ? "var(--red)" : "var(--green)"}">${sign(i.changePercent)} %</td></tr>`));
-    }
-    ic.append(el("p", "srcnote", esc(inf.caveat)));
-    c.append(ic);
+    const g = uiGroup("Persönliche Inflation", inf.caveat);
+    g.body.append(uiRow("Dein Warenkorb", `${inf.productsCompared} Produkte verglichen`,
+      null, { value: sign(inf.changePercent) + " %" }));
+    inf.biggestIncreases.slice(0, 5).forEach((i) => g.body.append(
+      uiRow(i.name, `${eur(i.basePrice)} → ${eur(i.currentPrice)}`, null, { value: sign(i.changePercent) + " %" })));
+    c.append(g);
   }
 
   /* --- Preis-Gedächtnis --- */
-  if (ctx.prices.size) {
-    const notable = [...ctx.prices.values()]
-      .filter((m) => m.verdict !== "üblich")
-      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
-    const pc = card("Preis-Gedächtnis", `${ctx.prices.size} Produkte`);
-    pc.append(el("p", "sub",
-      "Was du zuletzt gezahlt hast, gegen deinen üblichen Preis (Median). Kein Vergleich zwischen Händlern — nur deine eigene Historie."));
-    if (!notable.length) {
-      pc.append(el("p", "empty", "Alle letzten Preise lagen im üblichen Rahmen."));
-    } else {
-      tableCard(pc, [{ t: "Produkt" }, { t: "üblich", num: true }, { t: "zuletzt", num: true }, { t: "Spanne", num: true }],
-        notable.slice(0, 12).map((m) =>
-          `<tr><td>${esc(m.name)}<br><small style="color:var(--ink-2)">${m.purchases} Käufe</small></td>` +
-          `<td class="num">${eur(m.usual)}</td>` +
-          `<td class="num" style="color:${m.verdict === "teuer" ? "var(--red)" : "var(--green)"}">${eur(m.last)}<br>` +
-          `<small>${sign(m.changePercent)} %</small></td>` +
-          `<td class="num"><small>${eur(m.lowest)}<br>${eur(m.highest)}</small></td></tr>`));
-    }
-    c.append(pc);
+  const notable = [...ctx.prices.values()]
+    .filter((m) => m.verdict !== "üblich")
+    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+  if (notable.length) {
+    const g = uiGroup("Preise", "Median der eigenen Kaufpreise. Kein Vergleich zwischen Händlern — dafür fehlen die Daten.");
+    notable.slice(0, 8).forEach((m) => g.body.append(uiRow(m.name, `üblich ${eur(m.usual)}`, null,
+      { value: eur(m.last), onClick: () => productSheet(m.productId, ctx) })));
+    c.append(g);
   }
 
-  const rc = card("Gelernte Rhythmen");
-  rc.append(el("p", "sub", "Median der Kaufabstände je Einheit. Pausen über dem Dreifachen werden ausgeschlossen statt weggemittelt."));
-  tableCard(rc, [{ t: "Produkt" }, { t: "Rhythmus", num: true }, { t: "Vertrauen", num: true }, { t: "Käufe", num: true }, { t: "Verlust", num: true }],
-    [...ctx.rhythms.entries()].sort((a, b) => b[1].confidence - a[1].confidence).slice(0, 15).map(([pid, r]) => {
-      const st = ctx.wasteStats.get(pid) || {};
-      const p = byId(pid);
-      return `<tr><td>${esc(p ? p.name : pid)}</td><td class="num">${r.rhythmDays ? "alle " + r.rhythmDays + " T" : "–"}</td>` +
-        `<td class="num">${pct(r.confidence)}</td><td class="num">${st.purchased || 0}</td>` +
-        `<td class="num">${st.wastedEuros > 0 ? eur(st.wastedEuros) : "–"}</td></tr>`;
+  /* --- Rhythmen --- */
+  const rg = uiGroup("Rhythmen",
+    "Median der Kaufabstände je Einheit. Pausen über dem Dreifachen werden ausgeschlossen statt weggemittelt.");
+  [...ctx.rhythms.entries()].sort((a, b) => b[1].confidence - a[1].confidence).slice(0, 12).forEach(([pid, r]) => {
+    const p = byId(pid);
+    if (!p) return;
+    rg.body.append(uiRow(p.name, `Vertrauen ${pct(r.confidence)}`, null, {
+      value: r.rhythmDays ? `${r.rhythmDays} T` : "–",
+      onClick: () => productSheet(pid, ctx)
     }));
-  c.append(rc);
+  });
+  c.append(rg);
 
   /* --- Sparen --- */
-  const sc = uiGroup("Was wirklich etwas bringt", "Aus deinen eigenen Zahlen abgeleitet, nicht aus allgemeinen Tipps.");
-  if (!ctx.savings.length) sc.body.append(el("p", "empty", "Noch keine Vorschläge — dafür braucht es mehr Historie."));
+  const sc = uiGroup("Sparen", "Aus deinen eigenen Zahlen abgeleitet, nicht aus allgemeinen Tipps.");
+  if (!ctx.savings.length) sc.body.append(el("p", "empty", "Noch keine Vorschläge."));
   ctx.savings.forEach((x) => {
     const d = el("div", "save",
-      `<div class="amt">${eur(x.estimatedWeeklySaving)}</div>` +
-      `<div class="txt"><b>${esc(x.title)}</b><small>${esc(x.detail)}</small></div>`);
-    const b = el("button", "pillBtn" + (x.on ? " on" : ""), x.on ? "✓ übernommen" : "übernehmen");
+      `<div class="amt">${eur(x.estimatedWeeklySaving)}</div><div class="txt"><b>${esc(x.title)}</b></div>`);
+    const b = el("button", "pillBtn" + (x.on ? " on" : ""), x.on ? "✓" : "nehmen");
     b.setAttribute("aria-pressed", x.on ? "true" : "false");
-    b.addEventListener("click", () => app.set((st) => {
-      st.savingsAccepted = x.on ? st.savingsAccepted.filter((y) => y !== x.id) : [...st.savingsAccepted, x.id];
-    }));
+    b.setAttribute("aria-label", x.title);
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      app.set((st) => {
+        st.savingsAccepted = x.on ? st.savingsAccepted.filter((y) => y !== x.id) : [...st.savingsAccepted, x.id];
+      });
+    });
+    d.addEventListener("click", () => app.notice(x.title, x.detail));
     d.append(b);
     sc.body.append(d);
   });
   const wk = ctx.savings.filter((x) => x.on).reduce((a, x) => a + x.estimatedWeeklySaving, 0);
   sc.body.append(el("div", "strip",
-    `<div><div class="big">${eur(wk)}</div><div class="l">pro Woche übernommen</div></div>` +
-    `<div style="text-align:right"><div class="big">${Math.round(wk * 52)} €</div><div class="l">auf zwölf Monate</div></div>`));
+    `<div><div class="big">${eur(wk)}</div><div class="l">pro Woche</div></div>` +
+    `<div style="text-align:right"><div class="big">${Math.round(wk * 52)} €</div><div class="l">im Jahr</div></div>`));
   c.append(sc);
 
+  /* --- Packungsgrößen --- */
   if (ctx.packs.length) {
-    const p = card("Packungsgrößen aus deiner Historie");
-    p.append(el("p", "sub", "Der Grundpreis allein täuscht, wenn die große Packung halb weggeworfen wird."));
-    const ul = el("ul", "plain");
-    ctx.packs.forEach((x) => ul.append(el("li", null,
-      `<span class="flag ${x.riskyRecommendation ? "f-gold" : "f-ok"}">${de(x.savingPercent)} %</span><span>${esc(x.recommendation)}</span>`)));
-    p.append(ul);
-    c.append(p);
+    const g = uiGroup("Packungsgrößen", "Der Grundpreis allein täuscht, wenn die große Packung halb weggeworfen wird.");
+    ctx.packs.forEach((x) => g.body.append(uiRow(x.recommendation.split(":")[0] || x.recommendation, null,
+      el("span", "flag " + (x.riskyRecommendation ? "f-gold" : "f-ok"), de(x.savingPercent) + " %"),
+      { onClick: () => app.notice("Packungsgröße", x.recommendation) })));
+    c.append(g);
   }
 
-  const im = card("Wirkung in Kilogramm");
+  /* --- Wirkung --- */
   const cmp = compareToReference(ctx.impact.kg, Data.get().settings.household);
-  im.append(el("p", "sub", `Geschätzt <b>${ctx.impact.kg} kg</b> im betrachteten Zeitraum. ${esc(cmp.framing)}`));
-  const il = el("ul", "plain");
-  ctx.impact.byProduct.slice(0, 6).forEach((x) => il.append(el("li", null,
-    `<span class="flag f-miss">${x.kg} kg</span><span>${esc(x.name)}</span>`)));
-  if (!ctx.impact.byProduct.length) il.append(el("li", null, '<span class="empty">Keine strukturelle Verschwendung erkannt.</span>'));
-  im.append(il);
-  im.append(el("p", "srcnote", esc(cmp.note)));
-  c.append(im);
+  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note);
+  ig.body.append(uiRow("Geschätzter Verlust", null, null, { value: de(ctx.impact.kg) + " kg" }));
+  ctx.impact.byProduct.slice(0, 5).forEach((x) =>
+    ig.body.append(uiRow(x.name, null, null, { value: de(x.kg) + " kg" })));
+  c.append(ig);
 
   return c;
 }
@@ -873,10 +899,11 @@ function chartCard(ctx) {
     byMonth.set(m, (byMonth.get(m) || 0) + h.unitPrice * h.quantity);
   });
   const months = [...byMonth.entries()].sort();
-  const ch = card("Ausgaben je Monat", `${months.length} Monate`);
-  if (!months.length) { ch.append(el("p", "empty", "Keine Daten.")); return ch; }
+  const g = uiGroup("Ausgaben je Monat",
+    "Der rote Anteil ist geschätzt: Rhythmus länger als Haltbarkeit, hochgerechnet auf den Zeitraum. Keine gemessene Zahl.");
+  if (!months.length) { g.body.append(el("p", "empty", "Keine Daten.")); return g; }
 
-  const W = 760, H = 230, pad = { l: 46, r: 14, t: 12, b: 30 };
+  const W = 760, H = 210, pad = { l: 44, r: 12, t: 10, b: 28 };
   const max = Math.max(...months.map((m) => m[1]), 10) * 1.15;
   const bw = (W - pad.l - pad.r) / months.length;
   const y = (v) => pad.t + (H - pad.t - pad.b) * (1 - v / max);
@@ -884,22 +911,23 @@ function chartCard(ctx) {
 
   let grid = "", bars = "";
   [0, max / 2, max].forEach((tv) => {
-    grid += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(tv).toFixed(1)}" y2="${y(tv).toFixed(1)}" stroke="currentColor" opacity=".14"/>` +
-      `<text x="${pad.l - 8}" y="${(y(tv) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="currentColor" opacity=".55">${tv.toFixed(0)}</text>`;
+    grid += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(tv).toFixed(1)}" y2="${y(tv).toFixed(1)}" stroke="currentColor" opacity=".12"/>` +
+      `<text x="${pad.l - 8}" y="${(y(tv) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="currentColor" opacity=".5">${tv.toFixed(0)}</text>`;
   });
   months.forEach((m, i) => {
-    const x = pad.l + i * bw + bw * 0.24, w = bw * 0.52;
+    const x = pad.l + i * bw + bw * 0.26, w = bw * 0.48;
     const top = y(m[1]), base = y(0);
     bars += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(base - top).toFixed(1)}" fill="var(--accent)" rx="5"/>` +
       `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(2, (base - top) * wasteShare).toFixed(1)}" fill="var(--red)" rx="5"/>` +
-      `<text x="${(x + w / 2).toFixed(1)}" y="${H - pad.b + 18}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".55">${m[0].slice(5)}</text>`;
+      `<text x="${(x + w / 2).toFixed(1)}" y="${H - pad.b + 17}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".5">${m[0].slice(5)}</text>`;
   });
 
-  ch.append(el("div", null,
-    `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ausgaben je Monat">${grid}${bars}</svg>`));
-  ch.append(el("div", "legend",
-    `<span><i style="background:var(--accent)"></i>gegessen</span><span><i style="background:var(--red)"></i>vermutlich verdorben (Schätzung)</span>`));
-  return ch;
+  const box = el("div", "chartBox");
+  box.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ausgaben je Monat">${grid}${bars}</svg>` +
+    `<div class="legend"><span><i style="background:var(--accent)"></i>gegessen</span>` +
+    `<span><i style="background:var(--red)"></i>verdorben (Schätzung)</span></div>`;
+  g.body.append(box);
+  return g;
 }
 
 /* ================================================================
@@ -914,24 +942,25 @@ function viewMehr(ctx, app) {
   look.body.append(uiRow("Erscheinungsbild", null,
     segmented([["system", "System"], ["hell", "Hell"], ["dunkel", "Dunkel"]], S.settings.theme,
       (v) => app.set((s) => { s.settings.theme = v; }), "Erscheinungsbild"), { stacked: true }));
+  look.body.append(uiRow("Schriftgröße", null,
+    segmented([[1, "Normal"], [1.15, "Groß"], [1.3, "Sehr groß"]], S.settings.textScale,
+      (v) => app.set((s) => { s.settings.textScale = v; }), "Schriftgröße"), { stacked: true }));
   c.append(look);
 
   /* --- Gangreihenfolge --- */
   const aisles = relevantAisles(ctx.aisleList, ctx.items);
   if (aisles.length > 1) {
-    const g = uiGroup("Gangreihenfolge" + (ctx.store ? ` · ${ctx.store}` : ""),
+    const g = uiGroup("Ladenweg" + (ctx.store ? ` · ${ctx.store}` : ""),
       "So läufst du im Ladenmodus durch den Markt. Die Reihenfolge wird je Markt gemerkt.");
     aisles.forEach((aisle, i) => {
       const r = el("div", "row");
       r.append(el("div", "rowMain", `<div class="rowTitle">${esc(aisle)}</div>`));
-      const acts = el("div");
-      acts.style.cssText = "display:flex;gap:6px;flex:0 0 auto";
+      const acts = el("div", "rowActions");
       [["↑", -1, i === 0], ["↓", 1, i === aisles.length - 1]].forEach(([sym, dir, disabled]) => {
         const b = el("button", "pillBtn", sym);
         b.setAttribute("aria-label", `${aisle} nach ${dir < 0 ? "oben" : "unten"}`);
         b.disabled = disabled;
-        if (disabled) b.style.opacity = ".3";
-        else b.addEventListener("click", () => app.moveAisle(aisle, dir));
+        if (!disabled) b.addEventListener("click", () => app.moveAisle(aisle, dir));
         acts.append(b);
       });
       r.append(acts);
@@ -940,90 +969,91 @@ function viewMehr(ctx, app) {
     c.append(g);
   }
 
+  /* --- Saison --- */
+  if (ctx.seasonNow.length) {
+    const g = uiGroup("Jetzt Saison", "Saisonkalender des BZfE. Anregung, kein Vorschlag.");
+    g.body.append(uiRow(ctx.seasonNow.map((x) => x.name).join(", ")));
+    c.append(g);
+  }
+
   /* --- Pfand --- */
   const d = ctx.deposit;
   const pg = uiGroup("Pfand",
     "Einwegpfand 0,25 € ist gesetzlich einheitlich. Mehrwegsätze sind herstellerabhängig — die Beträge sind übliche Sätze, keine Zusicherung.");
   if (!d.byType.length) {
-    pg.body.append(uiRow("Kein offenes Pfand", null, null, { value: "0,00 €" }));
+    pg.body.append(uiRow("Nichts offen", null, null, { value: "0,00 €" }));
   } else {
     d.byType.forEach((t) => pg.body.append(uiRow(t.label, `${t.count} Gebinde`, null, { value: eur(t.amount) })));
-    const back = el("button", "row");
-    back.style.color = "var(--accent)";
-    back.append(el("div", "rowMain", `<div class="rowTitle" style="color:var(--accent)">Alles zurückgegeben</div>` +
-      `<div class="rowSub">${esc(d.message)}</div>`));
-    back.addEventListener("click", () => {
-      app.set((s) => {
-        s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
-      });
-      app.toast("Pfand als zurückgegeben notiert");
-    });
-    pg.body.append(back);
+    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${d.daysOpen} Tagen`, null, {
+      onClick: () => {
+        app.set((s) => {
+          s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
+        });
+        app.toast("Notiert");
+      }
+    }));
   }
   c.append(pg);
 
   /* --- Archiv --- */
   const st = archiveStats(ctx.archive);
-  const a = card("Bon-Archiv", st.receipts < S.receipts.length
-    ? `letzte ${st.receipts} von ${S.receipts.length} Bons`
-    : `${st.receipts} Bons`);
-  a.append(el("p", "sub", `${eur(st.totalSpend)} gesamt · ${st.warrantyRelevant} mit Garantierelevanz`));
-  if (st.stores.length) {
-    tableCard(a, [{ t: "Markt" }, { t: "Besuche", num: true }, { t: "Ausgaben", num: true }, { t: "Ø Korb", num: true }],
-      st.stores.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${x.visits}</td><td class="num">${eur(x.spend)}</td><td class="num">${eur(x.avgBasket)}</td></tr>`));
-  } else {
-    a.append(el("p", "empty", "Noch keine Bons erfasst."));
-  }
+  const ag = uiGroup("Märkte",
+    "Die App speichert und erinnert. Sie gibt keine Rechtsauskunft — Fristen und Kulanz hängen vom Einzelfall ab.");
+  st.stores.forEach((x) => ag.body.append(uiRow(x.name, `${x.visits} Besuche · Ø ${eur(x.avgBasket)}`,
+    null, { value: eur(x.spend) })));
+  if (!st.stores.length) ag.body.append(el("p", "empty", "Noch keine Bons."));
   const fr = expiringWarranties(ctx.archive, ctx.ref, 800);
   if (fr.length) {
-    a.append(el("h3", null, "Gewährleistungsfristen"));
-    const fu = el("ul", "plain");
-    fr.slice(0, 6).forEach((f) => fu.append(el("li", null, `<span class="flag f-gold">${f.daysLeft} T</span><span>${esc(f.message)}</span>`)));
-    a.append(fu);
+    ag.body.append(uiRow(`${fr.length} Gewährleistungsfrist(en)`, fr[0].message, null,
+      { onClick: () => app.notice("Gewährleistung", fr.slice(0, 8).map((f) => f.message).join("\n\n")) }));
   }
-  a.append(el("p", "srcnote", "Die App speichert und erinnert. Sie gibt keine Rechtsauskunft — Fristen und Kulanz hängen vom Einzelfall ab."));
-  c.append(a);
+  c.append(ag);
 
   /* --- Rechenweg --- */
-  const m = card("Wie die App rechnet");
-  m.append(el("p", "sub", "Kein KI-Modell. Robuste Statistik, Textabgleich, Schwellenwerte, Tabellen — alles nachvollziehbar."));
-  tableCard(m, [{ t: "Schritt" }, { t: "Verfahren" }], [
-    `<tr><td>Bonzeile → Produkt</td><td>Alias-Tabelle, sonst Token- und Levenshtein-Vergleich; 65–85 % = nachfragen statt raten</td></tr>`,
-    `<tr><td>Rhythmus</td><td>Median der Kaufabstände je Einheit; Pausen über dem Dreifachen ausgeschlossen</td></tr>`,
-    `<tr><td>Vertrauen</td><td>Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung</td></tr>`,
-    `<tr><td>Bestand</td><td>gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit)</td></tr>`,
-    `<tr><td>Reichweite</td><td>kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit</td></tr>`,
-    `<tr><td>Verschwendung</td><td>strukturell: Rhythmus &gt; Haltbarkeit · Ausreißer: einzelner Abstand &gt; Haltbarkeit × 1,2</td></tr>`,
-    `<tr><td>Budget</td><td>erst Verschwender halbieren, dann Süßes und Alkohol; Grundnahrung nie</td></tr>`,
-    `<tr><td>Preis-Gedächtnis</td><td>Median der eigenen Kaufpreise; ab 8 % Abweichung wird es gemeldet</td></tr>`,
-    `<tr><td>Inflation</td><td>gewichteter Preisindex über Produkte, die in beiden Zeiträumen gekauft wurden</td></tr>`
-  ]);
-  c.append(m);
+  const m = uiGroup("Rechenweg");
+  m.body.append(uiRow("Wie die App rechnet", "kein KI-Modell", null, {
+    onClick: () => app.notice("Rechenweg", [
+      "Bonzeile → Produkt: Alias-Tabelle, sonst Token- und Levenshtein-Vergleich. 65–85 % werden gefragt statt geraten.",
+      "Rhythmus: Median der Kaufabstände je Einheit. Pausen über dem Dreifachen ausgeschlossen.",
+      "Vertrauen: Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung.",
+      "Bestand: gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit).",
+      "Reichweite: kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit.",
+      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2.",
+      "Budget: erst Verschwender halbieren, dann Süßes und Alkohol. Grundnahrung nie.",
+      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet.",
+      "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen."
+    ].join("\n\n"))
+  }));
 
   const q = databaseQualityReport();
-  const db = card("Datenbasis, ungeschönt");
-  db.append(el("p", "sub", `${q.total} Produkte, ${q.kategorien} Kategorien, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.`));
-  tableCard(db, [{ t: "Belastbarkeit" }, { t: "Produkte", num: true }, { t: "Bedeutung" }], [
-    `<tr><td>regulatorisch</td><td class="num">${q.regulatorisch}</td><td>Verbrauchsdatum-Pflicht, rechtlich definiert (BZfE/BLE)</td></tr>`,
-    `<tr><td>Leitlinie</td><td class="num">${q.leitlinie}</td><td>aus behördlicher Lagerempfehlung abgeleitet (BZfE/BLE)</td></tr>`,
-    `<tr><td>Schätzwert</td><td class="num">${q.schaetzwert}</td><td><b>ohne amtliche Quelle — vor Produktivbetrieb prüfen</b></td></tr>`
-  ]);
-  db.append(el("div", "note gold",
-    `<b>${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen.</b> Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten. ` +
-    `${q.safetyCritical} Produkte tragen ein Verbrauchsdatum — für sie schlägt die App nie eine Weiterverwendung vor.`));
-  c.append(db);
+  m.body.append(uiRow("Datenbasis", `${q.total} Produkte · ${q.anteilGeschaetzt} % geschätzt`, null, {
+    onClick: () => app.notice("Datenbasis, ungeschönt",
+      `${q.total} Produkte, ${q.kategorien} Kategorien, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
+      `regulatorisch: ${q.regulatorisch} — Verbrauchsdatum-Pflicht, rechtlich definiert (BZfE/BLE)\n` +
+      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE/BLE)\n` +
+      `Schätzwert: ${q.schaetzwert} — ohne amtliche Quelle, vor Produktivbetrieb prüfen\n\n` +
+      `${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen. Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten.\n\n` +
+      `${q.safetyCritical} Produkte tragen ein Verbrauchsdatum — für sie schlägt die App nie eine Weiterverwendung vor.`)
+  }));
+  m.body.append(uiRow("Über", `Bauversion ${window.__BUILD__ || "dev"}`, null, {
+    onClick: () => app.notice("Einkaufs-Anker",
+      "Alle Zahlen werden im Browser gerechnet. Kein Server, kein Konto, keine Übertragung.\n\n" +
+      "Quellen: BZfE/BLE „Haltbarkeit von Lebensmitteln\" und „Lebensmittel richtig lagern\" (20.02.2025), " +
+      "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\".")
+  }));
+  c.append(m);
 
   /* --- Daten --- */
-  const dat = uiGroup("Deine Daten",
-    "Es gibt keinen Server und kein Konto. Alles liegt im Speicher dieses Browsers — Browserdaten löschen löscht die App-Daten mit.");
-  dat.body.append(uiRow("Erfasste Käufe", S.settings.demo ? "Beispieldaten" : null, null, { value: String(S.purchases.length) }));
+  const dat = uiGroup("Daten",
+    "Alles liegt im Speicher dieses Browsers. Browserdaten löschen löscht die App-Daten mit — deshalb die Sicherung.");
+  dat.body.append(uiRow("Käufe", S.settings.demo ? "Beispieldaten" : null, null, { value: String(S.purchases.length) }));
   dat.body.append(uiRow("Bons", null, null, { value: String(S.receipts.length) }));
   dat.body.append(uiRow("Gelernte Schreibweisen", null, null, { value: String(Object.keys(S.aliases).length) }));
   c.append(dat);
 
   const actions = uiGroup();
-  const exp = el("button", "row");
-  exp.append(el("div", "rowMain", '<div class="rowTitle" style="color:var(--accent)">Sicherung herunterladen</div>'));
+  const exp = el("button", "row action");
+  exp.append(el("div", "rowMain", '<div class="rowTitle">Sicherung herunterladen</div>'));
   exp.addEventListener("click", () => {
     const blob = new Blob([Data.exportJson()], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1032,23 +1062,22 @@ function viewMehr(ctx, app) {
     link.download = `einkaufsanker-${Data.today()}.json`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    app.toast("Sicherung erstellt");
+    app.toast("Gesichert");
   });
   actions.body.append(exp);
 
-  const impRow = el("label", "row");
-  impRow.style.cursor = "pointer";
-  impRow.append(el("div", "rowMain", '<div class="rowTitle" style="color:var(--accent)">Sicherung einlesen</div>'));
+  const impRow = el("label", "row action");
+  impRow.append(el("div", "rowMain", '<div class="rowTitle">Sicherung einlesen</div>'));
   const impInput = el("input");
   impInput.type = "file"; impInput.accept = "application/json,.json";
-  impInput.style.display = "none";
+  impInput.className = "hide";
   impInput.addEventListener("change", () => {
     const file = impInput.files && impInput.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       try { app.toast(`${Data.importJson(String(reader.result))} Käufe eingelesen`); }
-      catch (e) { app.toast("Sicherung nicht lesbar"); console.error(e); }
+      catch (e) { app.toast("Nicht lesbar"); console.error(e); }
     };
     reader.readAsText(file);
     impInput.value = "";
@@ -1056,34 +1085,21 @@ function viewMehr(ctx, app) {
   impRow.append(impInput);
   actions.body.append(impRow);
 
-  const demo = el("button", "row");
+  const demo = el("button", "row action");
   demo.append(el("div", "rowMain",
-    `<div class="rowTitle" style="color:var(--accent)">${S.settings.demo ? "Beispieldaten neu laden" : "Beispieldaten laden"}</div>`));
-  demo.addEventListener("click", () => app.confirm(
-    "Beispieldaten laden?",
-    "Ersetzt alle erfassten Käufe durch eine erzeugte Historie über sechs Monate. Vorher am besten eine Sicherung herunterladen.",
-    () => { Data.loadDemo("full"); app.toast("Beispielhistorie geladen"); app.goto("liste"); }
-  ));
+    `<div class="rowTitle">${S.settings.demo ? "Beispieldaten neu laden" : "Beispieldaten laden"}</div>`));
+  demo.addEventListener("click", () => app.confirm("Beispieldaten laden?",
+    "Ersetzt alle erfassten Käufe durch sechs Monate erzeugte Historie.",
+    () => { Data.loadDemo("full"); app.toast("Geladen"); app.goto("liste"); }));
   actions.body.append(demo);
 
-  const del = el("button", "row");
-  del.append(el("div", "rowMain", '<div class="rowTitle" style="color:var(--red)">Alles löschen</div>'));
-  del.addEventListener("click", () => app.confirm(
-    "Wirklich alles löschen?",
-    "Käufe, Bons, Einstellungen und gelernte Zuordnungen werden entfernt. Das lässt sich nicht rückgängig machen.",
-    () => { Data.reset(); app.toast("Alles gelöscht"); app.goto("liste"); }
-  ));
+  const del = el("button", "row action danger");
+  del.append(el("div", "rowMain", '<div class="rowTitle">Alles löschen</div>'));
+  del.addEventListener("click", () => app.confirm("Alles löschen?",
+    "Käufe, Bons, Einstellungen und gelernte Zuordnungen. Nicht umkehrbar.",
+    () => { Data.reset(); app.toast("Gelöscht"); app.goto("liste"); }));
   actions.body.append(del);
   c.append(actions);
-
-  const about = card("Über diese Fassung");
-  about.append(el("p", "sub",
-    `Web-App, Bauversion <span class="mono">${esc(window.__BUILD__ || "dev")}</span>. Die Algorithmen sind dieselben Node-Module, ` +
-    `die unter <span class="mono">npm test</span> geprüft werden — gebündelt, nicht abgeschrieben.`));
-  about.append(el("p", "srcnote",
-    "Quellen der Haltbarkeits- und Lagerdaten: BZfE/BLE „Haltbarkeit von Lebensmitteln\" und „Lebensmittel richtig lagern\" (Stand 20.02.2025), " +
-    "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\"."));
-  c.append(about);
 
   return c;
 }

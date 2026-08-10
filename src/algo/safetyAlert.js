@@ -54,7 +54,7 @@ function safetyAlert(items) {
     // Kurzfassung für die Liste, wo der Hinweis dauerhaft steht: ein
     // Satz. Die Langfassung ist für den Moment nach dem Einkauf — da
     // liegt die Packung in der Hand und der Hinweis erscheint einmal.
-    short: `${list} direkt kühlen — ${STORAGE.FRIDGE_BOTTOM}.`,
+    short: `${list} direkt kühlen`,
     message:
       `${list} ${names.length === 1 ? "trägt" : "tragen"} ein Verbrauchsdatum. ` +
       `Zu Hause zuerst in die kälteste Zone: ${STORAGE.FRIDGE_BOTTOM}. ` +

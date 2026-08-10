@@ -27,7 +27,7 @@ const SCHEMA = 1;
 const iso = (d) => new Date(d).toISOString().slice(0, 10);
 const today = () => iso(Date.now());
 const plusDays = (dateStr, n) => iso(new Date(dateStr + "T12:00:00Z").getTime() + n * 86400000);
-const WEEKDAYS = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+// WEEKDAYS liefert shoppingDay.js aus dem Bündel — nicht doppelt führen.
 const weekdayOf = (dateStr) => WEEKDAYS[new Date(dateStr + "T12:00:00Z").getUTCDay()];
 
 /** Kalenderwoche als Schlüssel, damit Abwahl-Entscheidungen genau
@@ -58,9 +58,11 @@ function emptyState() {
       lookaheadDays: 3,
       vacation: { active: false, from: null, to: null },
       theme: "system",          // system | hell | dunkel
+      textScale: 1,             // Schriftgröße 1 | 1.15 | 1.3
       demo: false
     },
     aisleOrders: {},            // Markt -> Gangreihenfolge
+    opened: [],                 // angebrochene Packungen [{productId, openedDate}]
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
     dismissed: {                // weggetippte Hinweise, je Woche
       week: null,
@@ -193,6 +195,15 @@ function removeReceipt(receiptId) {
     // Käufe desselben Tages und Markts entfernen — die Einzelkäufe
     // tragen keine Bon-Kennung, Tag und Markt genügen in der Praxis.
     s.purchases = s.purchases.filter((p) => !(p.date === r.date && p.store === r.store));
+  });
+}
+
+/** Packung als angebrochen markieren oder die Markierung entfernen. */
+function toggleOpened(productId) {
+  update((s) => {
+    const i = s.opened.findIndex((o) => o.productId === productId);
+    if (i >= 0) s.opened.splice(i, 1);
+    else s.opened.push({ productId, openedDate: today() });
   });
 }
 
@@ -401,7 +412,11 @@ function compute() {
     });
   }
 
-  const inventory = estimateInventory(history, rhythms, ref);
+  // Angebrochenes hält kürzer als die Packung — die Korrektur muss vor
+  // Reichweite und Rezepten greifen, sonst rechnen beide mit der Frist
+  // der ungeöffneten Ware.
+  const inventory = applyOpened(estimateInventory(history, rhythms, ref), s.opened, ref);
+  const opened = openedItems(s.opened, ref);
 
   /* --- Vorschlagsliste: gelernte Rhythmen, sonst Kategorie-Annahmen --- */
   let base = [];
@@ -553,6 +568,10 @@ function compute() {
 
   const safety = safetyAlert(items.filter((i) => i.on));
 
+  const pattern = shoppingPattern(s.receipts, ref);
+  const season = offSeason(items.filter((i) => i.on), ref);
+  const seasonNow = inSeasonNow(ref);
+
   // Gangreihenfolge des zuletzt benutzten Markts
   const store = s.lastStore || (s.receipts.length ? s.receipts[s.receipts.length - 1].store : "");
   const aisleList = orderFor(store, s.aisleOrders);
@@ -568,6 +587,7 @@ function compute() {
     deposit, depositEntries, openDepositEntries: openEntries, archive,
     inflation,
     range, prices, forgotten, freeze, safety,
+    opened, pattern, season, seasonNow,
     store, aisleList,
     ethylene: checkEthyleneConflicts(items.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
@@ -648,7 +668,7 @@ function searchProducts(query, limit = 12) {
 const Data = {
   STORE_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
-  addReceipt, removeReceipt, learnAlias,
+  addReceipt, removeReceipt, learnAlias, toggleOpened,
   loadDemo, buildDemoHistory, buildFirstReceipt,
   exportJson, importJson,
   compute, parseReceiptText, searchProducts,

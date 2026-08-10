@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 267 Tests: Module, Grenzfälle, neue Funktionen, Oberfläche
+npm test        # 328 Tests: Module, Grenzfälle, Funktionen, Oberfläche
 ```
 
 ---
@@ -40,7 +40,7 @@ bündelt die Node-Module für den Browser und bricht ab, wenn zwei Module
 denselben Namen auf oberster Ebene vergeben. Es gibt eine Quelle, keine
 Handkopie.
 
-### Sechs neue Module
+### Zehn neue Module
 
 Alle rechnen aus Daten, die schon da waren — kein neues Feld in der
 Datenbank, keine fremde Datenquelle. Fachlogik gehört nach `src/algo`,
@@ -54,12 +54,27 @@ also steht sie dort und nicht in der Oberfläche.
 | `forgottenDetector.js` | „Zahnpasta zuletzt vor 9 Wochen — sonst alle 5." Fängt die Zwischenkäufe ab. Ab dem 1,6-fachen Rhythmus, über dem 6-fachen nicht mehr: das ist abgesetzt, nicht vergessen. |
 | `safetyAlert.js` | Beim Verlassen des Ladens: „Hähnchenbrust direkt kühlen." Nur Verbrauchsdatum-Produkte — eine Warnung bei jedem Einkauf würde weggetippt. |
 | `aisleOrder.js` | Gangreihenfolge je Markt, im Ladenmodus angewandt. Unbekannte Gänge fallen ans Ende, nie raus. |
+| `seasonCalendar.js` | „Erdbeeren sind jetzt Importware — Saison ist Mai bis Juli." Die Tabelle ist bewusst unvollständig: ohne Eintrag kein Hinweis. Bei Bananen „nicht in Saison" wäre Unsinn. |
+| `openedTracker.js` | Angebrochene Packungen. Eine geöffnete Dose hält 3 Tage, nicht 730 — ohne diesen Zustand rechnet die Bestandsschätzung mit der falschen Zahl. Ein Tippen genügt. |
+| `shoppingDay.js` | „Du kaufst meist samstags." Der Haushalt hat einen eigenen Rhythmus, nicht nur die Produkte. Daraus folgt eine Empfehlung für die Vorausschau. |
+| `listExport.js` | Liste als reiner Text, nach Gängen. Damit sie das Gerät verlassen kann: Web Share, sonst Zwischenablage, sonst zum Markieren. |
 
-Dazu in der Oberfläche: helles und dunkles Erscheinungsbild (System,
-Hell, Dunkel), und Hinweise lassen sich für eine Woche wegtippen statt
+Dazu in der Oberfläche: helles und dunkles Erscheinungsbild, drei
+Schriftgrößen, und Hinweise lassen sich für eine Woche wegtippen statt
 dauerhaft zu verschwinden.
 
-### Gestaltung
+### Gestaltung: die Fläche zeigt Zahlen, nicht Erklärungen
+
+Jede Erklärung sitzt hinter einem (i) neben der Gruppenüberschrift oder
+im Detail-Blatt einer Zeile. Auf der Liste steht der Produktname, ein
+Preis und höchstens zwei Marken — kein Rechenweg, keine Fußnote, kein
+Absatz. Wer wissen will, warum eine Position vorgeschlagen wird, tippt
+sie an: Rhythmus, Vertrauen, Haltbarkeit, Lagerort, Preisspanne,
+Bestand, Reichweite, Verlust und Datenqualität stehen dort als Tabelle.
+
+Ehrlichkeit kostet das nichts. Quellen, Schätzcharakter und der
+ungeschönte Datenqualitätsbericht sind vollständig da — eine Tippgeste
+entfernt statt dauerhaft im Weg.
 
 Orientierung ist iOS: großer Titel, der beim Scrollen in die Leiste
 zusammenfällt; gruppierte Listen mit Einzug statt Karten mit Schatten;
@@ -83,7 +98,7 @@ Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 ## Aufbau
 
 ```
-src/algo/        26 Node-Module — 20 unverändert aus der Vorlage, 6 neue
+src/algo/        30 Node-Module — 20 unverändert aus der Vorlage, 10 neue
 src/ui/
   index.html     Gerüst
   app.css        eine Gestaltung für Telefon und Rechner
@@ -109,11 +124,11 @@ gehört `npm run build` in denselben Commit.
 
 | Bereich | Was drin steckt |
 |---|---|
-| **Liste** | Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Rechenweg je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Budgetdeckel, Haushaltsgröße, Vorausschau, Urlaubsmodus, Lagerhinweis |
-| **Bestand** | geschätzter Vorrat mit Sicherheitsangabe, Rezepte nach gerettetem Betrag, Einräumhilfe nach Kühlzonen, Aufbrauchplan vor der Reise |
+| **Liste** | Vorrats-Reichweite als Ring, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
+| **Bestand** | geschätzter Vorrat, angebrochene Packungen, Rezepte nach gerettetem Betrag, Einräumhilfe nach Kühlzonen, Aufbrauchplan vor der Reise |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
-| **Zahlen** | Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
-| **Mehr** | Erscheinungsbild, Gangreihenfolge je Markt, Pfand, Bon-Archiv mit Gewährleistungsfristen, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
+| **Zahlen** | eigener Einkaufsrhythmus, Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
+| **Mehr** | Erscheinungsbild, Schriftgröße, Ladenweg je Markt, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
 
 Dazu der **Ladenmodus** als Vollbild: nach Gängen sortiert, große
 Ziele, am Ende ein Knopf, der den Einkauf in die Historie schreibt.
@@ -140,9 +155,9 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 267
-npm run test:algo # 57 Regressions- + 85 Stress- + 54 Funktionstests
-npm run test:ui   # 71 Oberflächentests in jsdom
+npm test          # alle 328
+npm run test:algo # 57 Regressions- + 85 Stress- + 93 Funktionstests
+npm run test:ui   # 93 Oberflächentests in jsdom
 ```
 
 Der Oberflächentest fährt die **gebaute** App in einem simulierten
