@@ -539,22 +539,18 @@ function viewListe(ctx, app) {
 function rangeHero(ctx, app) {
   const r = ctx.range;
   const days = Math.max(0, Math.round(r.days));
-  const SPAN = 14;                       // die Skala reicht zwei Wochen
-  const shown = Math.min(days, SPAN);
+  const SPAN = 14;                       // zwei Wochen sind der Maßstab
+  const frac = Math.min(1, days / SPAN);
   const color = days <= 1 ? "var(--red)" : days <= 3 ? "var(--amber)" : "var(--accent)";
 
-  // Die Striche stehen fest im Koordinatensystem; `vector-effect`
-  // hält sie dünn, auch wenn die Fläche in die Breite gezogen wird.
-  const W = 300, y0 = 4, y1 = 20;
-  let ticks = "";
-  for (let d = 0; d <= SPAN; d++) {
-    const x = (d / SPAN) * W;
-    const woche = d % 7 === 0;
-    ticks += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${woche ? 0 : y0}" y2="${y1}" ` +
-      `stroke="var(--rule-strong)" stroke-width="1" opacity="${woche ? 1 : .5}" vector-effect="non-scaling-stroke"/>`;
-  }
-  const fill = `<rect x="0" y="${y1}" width="${((shown / SPAN) * W).toFixed(1)}" height="4" fill="${color}"/>` +
-    `<rect x="0" y="${y1}" width="${W}" height="1" fill="var(--rule-strong)"/>`;
+  // Balken mit runden Enden. Gezeichnet als Linie mit runder Kappe und
+  // `vector-effect`, damit die Rundung rund bleibt, wenn die Fläche in
+  // die Breite gezogen wird — ein Rechteck mit `rx` würde zur Ellipse.
+  const W = 300, PAD = 6;
+  const x1 = PAD + frac * (W - PAD * 2);
+  const bar = (to, stroke) =>
+    `<line x1="${PAD}" y1="6" x2="${to.toFixed(1)}" y2="6" stroke="${stroke}" stroke-width="12" ` +
+    `stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
 
   const h = el("button", "hero");
   const txt = el("div", "txt");
@@ -563,7 +559,8 @@ function rangeHero(ctx, app) {
   h.append(txt);
   h.append(el("div", "heroRing",
     `<div class="val"><div class="n">${days}</div><div class="u">${days === 1 ? "Tag" : "Tage"}</div></div>` +
-    `<svg viewBox="0 0 ${W} 26" preserveAspectRatio="none" aria-hidden="true">${ticks}${fill}</svg>`));
+    `<svg viewBox="0 0 ${W} 12" preserveAspectRatio="none" aria-hidden="true">` +
+    bar(W - PAD, "var(--fill-2)") + (days > 0 ? bar(x1, color) : "") + `</svg>`));
   h.append(el("div", "chev"));
 
   h.addEventListener("click", () => {
@@ -676,7 +673,7 @@ function badgeScroller(ctx, app) {
   // abgeschnittenen Ecken.
   const s = el("div", "badgeRow");
   ctx.badges.rows.forEach((row) => {
-    const b = el("button", "badge" + (row.current ? " on" : ""));
+    const b = el("button", `badge m-${row.id}${row.current ? " on" : ""}`);
     b.append(el("div", "bIcon", markSvg(row.icon)));
     b.append(el("div", "bLbl", esc(row.label)));
     b.append(el("div", "bVal", esc(row.euros ? eur(row.value) : String(row.value))));
@@ -1421,14 +1418,14 @@ function chartCard(ctx) {
   let grid = "", bars = "";
   [0, max / 2, max].forEach((tv) => {
     grid += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(tv).toFixed(1)}" y2="${y(tv).toFixed(1)}" stroke="currentColor" opacity=".12"/>` +
-      `<text x="${pad.l - 8}" y="${(y(tv) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="currentColor" opacity=".45" font-family="ui-monospace,monospace">${tv.toFixed(0)}</text>`;
+      `<text x="${pad.l - 8}" y="${(y(tv) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="currentColor" opacity=".45">${tv.toFixed(0)}</text>`;
   });
   months.forEach((m, i) => {
     const x = pad.l + i * bw + bw * 0.26, w = bw * 0.48;
     const top = y(m[1]), base = y(0);
-    bars += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(base - top).toFixed(1)}" fill="var(--accent)"/>` +
-      `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(2, (base - top) * wasteShare).toFixed(1)}" fill="var(--red)"/>` +
-      `<text x="${(x + w / 2).toFixed(1)}" y="${H - pad.b + 17}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".45" font-family="ui-monospace,monospace">${m[0].slice(5)}</text>`;
+    bars += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(base - top).toFixed(1)}" fill="var(--accent)" rx="6"/>` +
+      `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(3, (base - top) * wasteShare).toFixed(1)}" fill="var(--red)" rx="6"/>` +
+      `<text x="${(x + w / 2).toFixed(1)}" y="${H - pad.b + 17}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".45">${m[0].slice(5)}</text>`;
   });
 
   const box = el("div", "chartBox");

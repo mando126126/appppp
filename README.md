@@ -342,48 +342,49 @@ Ehrlichkeit kostet das nichts. Quellen, Schätzcharakter und der
 ungeschönte Datenqualitätsbericht sind vollständig da — eine Tippgeste
 entfernt statt dauerhaft im Weg.
 
-### Papier und Tinte
+### Hell, farbig, rund
 
-Die erste Fassung der Gestaltung war eine iOS-Vorlage mit Grün darin:
-runde Karten in runden Karten, ein Akzentgrün von der Stange, Ringe und
-Fortschrittsbalken als Zierrat, Unicode-Glyphen (`✽ ◆ ↻`) statt
-gezeichneter Symbole. Sie hätte genauso eine Fitness-App sein können —
-und genau das ist das Problem: **nichts daran war aus dem Gegenstand
-hergeleitet.**
+Zwei Anläufe waren daneben, und beide auf lehrreiche Weise.
 
-Diese App verwaltet Kassenbons und Haushaltsbuchhaltung. Dafür gibt es
-eine visuelle Tradition, die älter ist als jedes Betriebssystem: der
-Beleg. Papier, Haarlinien, Positionen untereinander, Beträge
-rechtsbündig in gleich breiten Ziffern, eine Doppellinie über der
-Summe. Zwei Druckfarben, mehr hatte keine Registrierkasse.
+Der erste war eine iOS-Vorlage mit Grün darin: Karten in Karten, ein
+Akzent von der Stange, Ringe und Fortschrittsbalken als Zierrat,
+Unicode-Glyphen (`✽ ◆ ↻`) statt gezeichneter Symbole. Beliebig — es
+hätte genauso eine Fitness-App sein können.
 
-Daraus folgt alles andere:
+Der zweite war eine Kassenbon-Ästhetik: Sepia, Versalien, Monospace,
+Haarlinien, keine Rundungen. Konsequent aus dem Gegenstand hergeleitet
+— und kalt wie ein Formular von 1974. **Strenge ist keine Gestaltung,
+sie ist nur die andere Art, sich zu drücken.**
+
+Was jetzt gilt: hell, farbig, rund, freundlich. Und trotzdem nicht
+beliebig — der Unterschied liegt in vier Dingen, die Mühe machen:
 
 | | |
 |---|---|
-| **Flächen** | Es gibt keine Karten mehr. Zeilen stehen direkt auf dem Papier, getrennt durch Haarlinien. Karte-in-Karte-in-Karte war das eigentliche Problem: jede Zeile bekam einen Kasten, weil kein Kasten etwas über Wichtigkeit aussagte. |
-| **Ziffern** | Alle Zahlen in Monospace, Tabellenbreite, rechtsbündig. Beträge untereinander sollen sich vergleichen lassen, ohne dass man sie liest. |
-| **Farbe** | Tinte und ein Stempelrot als einziges Warnsignal. Grün nur dort, wo etwas abgehakt ist — die zweite Farbe im Druck. |
-| **Kanten** | Rechtwinklig. Radien nur an Bedienelementen, wo der Finger sie braucht. |
-| **Schrift** | Überschriften klein, versal, weit gesperrt — wie der Kopf eines Belegs. |
+| **Eine Palette, nicht ein Akzent** | Sechs Farben mit Aufgabe: Grün für Erledigtes, Korall für Dringendes, Bernstein für Schätzungen, Blau für Hinweise, Violett für Erreichtes, Pink nur für Abzeichen. Keine davon ist Dekoration — dass Korall ausschließlich „dringend" heißt, war der Grund für die sechste Farbe. |
+| **Gezeichnete Marken** | Fünf Strichzeichnungen in getönten Kacheln, jede in ihrer Farbe: Keimling, Preisschild, Kreispfeil, Beleg, Strichliste. Keine Emoji, keine Glyphen aus dem Zeichensatz. |
+| **Echte Hierarchie** | Große, freundliche Zahlen gegen ruhige Beschriftungen. Nicht alles gleich groß, nichts versal gesperrt. |
+| **Eine Tiefenstufe** | Genau ein Schatten, überall derselbe. Karten liegen auf dem Grund — nicht Karten auf Karten auf Karten. |
 
-Konkrete Ersetzungen: der Fortschrittsring der Vorrats-Reichweite ist
-eine **Tagesskala** mit Wochenmarken; die Meilenstein-Kacheln sind
-**Positionen mit einer Skala aus Strichen**; die fünf Glyphen sind
-**gezeichnete Marken** (Keimling, Preisschild, Kreispfeil, Beleg mit
-abgerissener Kante, Strichliste); der Streak ist eine **Strichliste**;
-Summenzeilen tragen die **Doppellinie**; und das Aktionsblatt hat eine
-**Perforation** an der Oberkante — es ist ein herausgetrennter
-Abschnitt, und das eine Bild sagt es.
+Dazu Bewegung mit ein wenig Nachschwingen (`cubic-bezier(.34,1.56,.64,1)`):
+Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
+Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
+davon, ohne dass Inhalt verloren geht.
 
-Der dunkle Modus ist kein umgedrehtes Papier, sondern ein Durchschlag:
-warmes Schwarz, gebrochenes Weiß, dieselben zwei Farben.
+Ziffern stehen in Tabellenbreite, damit Beträge untereinander
+vergleichbar sind, ohne dass man sie liest — aber in der
+Systemschrift, nicht in Schreibmaschine. Der Vorrat wird als große Zahl
+mit weichem Balken gezeigt statt als Fortschrittsring (der steckt in
+jeder zweiten App) und statt als Messskala (die war das Formular). Der
+Wochenrückblick ist die einzige farbige Karte der App — er ist
+höchstens drei Tage in der Woche da, also darf er auffallen.
 
 **Nebenbei repariert:** die Einstellung „Schriftgröße" hatte fast keine
 Wirkung. Alle Größen standen in Pixeln, der Faktor wirkte nur auf den
 Fließtext. Jetzt sitzt er auf der Wurzel und alle Schriftgrößen stehen
 in `rem` — Abstände und Rahmen bleiben in Pixeln, denn der Text soll
-wachsen, nicht das Gerüst.
+wachsen, nicht das Gerüst. Die Beschriftung der Tableiste ist
+gedeckelt, sonst steht dort bei 130 Prozent „MEH".
 
 Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 

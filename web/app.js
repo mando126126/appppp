@@ -152,7 +152,7 @@ const App = {
     if (meta) {
       const dark = theme === "dunkel" ||
         (theme === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
-      meta.setAttribute("content", dark ? "#000000" : "#F2F2F7");
+      meta.setAttribute("content", dark ? "#0E1013" : "#F4F5F7");
     }
   },
 
@@ -213,7 +213,7 @@ const App = {
 
   celebrate(badge, more = 0) {
     const body = el("div", "celebrate");
-    body.append(el("div", "cIcon", markSvg(badge.icon)));
+    body.append(el("div", `cIcon m-${badge.id}`, markSvg(badge.icon)));
     body.append(el("div", "cTitle", esc(badge.title)));
     body.append(el("div", "cLevel", `Stufe ${badge.level} von ${badge.maxLevel}`));
     body.append(el("p", "cNote", esc(badge.note)));
