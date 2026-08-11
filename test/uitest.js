@@ -927,6 +927,53 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
   })());
 }
 
+console.log("\n--- Kreis ohne Haken, Strich mit Bewegung ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  App.openStore();
+  const items = $("storeBody").querySelectorAll(".sItem");
+  ok("Der Ladenmodus listet Positionen", items.length > 0, items.length);
+  ok("Der Name steckt in einem eigenen Element für den Strich",
+    !!items[0].querySelector(".sn .strike"));
+  ok("Anfangs ist nichts durchgestrichen", !items[0].classList.contains("done"));
+
+  const ersteNode = items[0];
+  click(ersteNode);
+  ok("Ein Tippen streicht die Zeile durch", ersteNode.classList.contains("done"));
+  ok("Und meldet das der Vorlesehilfe", ersteNode.getAttribute("aria-pressed") === "true");
+
+  // Der springende Punkt: die Zeile wird NICHT neu gebaut, sonst
+  // liefe die Animation nie — sie wäre von Anfang an im Endzustand.
+  const nachher = $("storeBody").querySelectorAll(".sItem")[0];
+  ok("Die Zeile bleibt dieselbe, damit der Strich laufen kann", nachher === ersteNode);
+  ok("Der Zustand steht auch im Speicher", D.get().storeChecked.length === 1, D.get().storeChecked.length);
+
+  click(ersteNode);
+  ok("Nochmal tippen nimmt den Strich zurück", !ersteNode.classList.contains("done"));
+  ok("Und räumt den Speicher auf", D.get().storeChecked.length === 0);
+  App.closeStore();
+}
+{
+  // Der Kreis auf der Startseite trägt keinen Haken mehr — das prüft
+  // sich am Stylesheet, weil ein ::after im DOM nicht auftaucht.
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+  ok("Kein Haken mehr im Kreis der Liste", !/\.box:checked::after/.test(css));
+  ok("Kein Haken mehr im Kreis des Ladenmodus", !/\.sItem\.done \.tick::after/.test(css));
+  ok("Der Kreis wird gefüllt", /\.box:checked\{[^}]*background:var\(--accent\)/.test(css));
+  ok("Der Strich wird über die Breite gezogen",
+    /\.sItem\.done \.sn \.strike\{background-size:100%/.test(css.replace(/\s+/g, " ").replace(/ \{/g, "{")));
+}
+{
+  // Abwesenheit: die App erkennt sie und der Streak überlebt sie.
+  D.reset();
+  D.loadDemo("full");
+  const ctxA = App.ctx;
+  ok("Abwesenheiten werden mitgeliefert", Array.isArray(ctxA.absences));
+  ok("Eine dichte Demo-Historie hat keine", ctxA.absences.length === 0, ctxA.absences.length);
+}
+
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");
 ok("Konsole blieb fehlerfrei", errors.length === 0, errors.slice(0, 3).join(" | "));
 

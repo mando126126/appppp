@@ -1,4 +1,4 @@
-/* Gebündelt aus 44 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 45 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
 
 /* ===== foodDatabase.js ===== */
@@ -549,6 +549,13 @@ function mad(values) {
  * Berechnet den Rhythmus für ein Produkt.
  *
  * @param {Array<{date:string, quantity?:number}>} purchases
+ * @param {{absenceDays?:function}} [opts]
+ *   `absenceDays(from, to)` liefert die Tage, an denen der Haushalt in
+ *   diesem Zeitraum nicht da war. Sie werden vom Abstand abgezogen,
+ *   denn verbraucht wird nur, wenn jemand da ist. Als Funktion statt
+ *   als Liste übergeben, damit dieses Modul nichts über Abwesenheiten
+ *   wissen muss — die Erkennung steht in absenceDetector.js, und eine
+ *   Abhängigkeit dorthin wäre ein Ring.
  * @returns {{
  *   rhythmDays:number|null, confidence:number, sampleSize:number,
  *   lastPurchaseDate:string|null, lastQuantity:number,
@@ -556,7 +563,7 @@ function mad(values) {
  *   perUnitDays:number|null
  * }}
  */
-function computeRhythm(purchases) {
+function computeRhythm(purchases, opts = {}) {
   const empty = {
     rhythmDays: null, confidence: 0, sampleSize: 0, lastPurchaseDate: null,
     lastQuantity: 1, pauses: [], trend: "unbekannt", perUnitDays: null, invalidEntries: 0
@@ -587,13 +594,28 @@ function computeRhythm(purchases) {
   // Rohintervalle, jeweils normiert auf die gekaufte Menge:
   // 2 Liter Milch in 12 Tagen = 6 Tage pro Einheit.
   const rawIntervals = [];
+  const absenceOf = typeof opts.absenceDays === "function" ? opts.absenceDays : null;
+  let absenceCorrected = 0;
   for (let i = 1; i < sorted.length; i++) {
     const gap = daysBetween(sorted[i - 1].date, sorted[i].date);
+
+    // Abwesenheitstage abziehen: ein Abstand von 24 Tagen mit zwei
+    // Wochen Urlaub darin ist ein Abstand von zehn Verbrauchstagen.
+    // Mindestens ein Tag bleibt stehen — ein Abstand von null Tagen
+    // wäre kein Rhythmus, sondern eine Division durch null.
+    let away = 0;
+    if (absenceOf) {
+      const raw = Number(absenceOf(sorted[i - 1].date, sorted[i].date)) || 0;
+      away = Math.max(0, Math.min(gap - 1, raw));
+      if (away > 0) absenceCorrected++;
+    }
+    const effectiveGap = gap - away;
+
     const qty = sorted[i - 1].quantity || 1;
-    const perUnit = gap / qty;
+    const perUnit = effectiveGap / qty;
     // Sicherheitsnetz: nur endliche, nicht-negative Werte verwenden
     if (!Number.isFinite(perUnit) || perUnit < 0) continue;
-    rawIntervals.push({ gap, perUnit, from: sorted[i - 1].date, to: sorted[i].date });
+    rawIntervals.push({ gap: effectiveGap, calendarGap: gap, away, perUnit, from: sorted[i - 1].date, to: sorted[i].date });
   }
   if (rawIntervals.length === 0) {
     return { ...empty, lastPurchaseDate: last.date, lastQuantity: last.quantity || 1, invalidEntries: invalid.length };
@@ -645,12 +667,13 @@ function computeRhythm(purchases) {
     rhythmDays, confidence, sampleSize: working.length,
     lastPurchaseDate: last.date, lastQuantity,
     pauses, trend, perUnitDays: perUnitDays !== null ? Math.round(perUnitDays * 10) / 10 : null,
+    absenceCorrected,
     invalidEntries: invalid.length
   };
 }
 
 /** Rhythmen für alle Produkte eines Haushalts. */
-function computeAllRhythms(history) {
+function computeAllRhythms(history, opts = {}) {
   const byProduct = new Map();
   for (const entry of history) {
     if (!byProduct.has(entry.productId)) byProduct.set(entry.productId, []);
@@ -658,9 +681,173 @@ function computeAllRhythms(history) {
   }
   const out = new Map();
   for (const [productId, purchases] of byProduct.entries()) {
-    out.set(productId, computeRhythm(purchases));
+    out.set(productId, computeRhythm(purchases, opts));
   }
   return out;
+}
+
+/* ===== absenceDetector.js ===== */
+/**
+ * absenceDetector.js — Abwesenheit aus den Bons erkennen
+ * ================================================================
+ * Der Rhythmus misst Kalendertage zwischen zwei Käufen. Ein Haushalt
+ * verbraucht aber keine Kalendertage, sondern Anwesenheitstage. Wer
+ * zwei Wochen weg ist, hat danach einen Kaufabstand von 24 statt 10
+ * Tagen — und die App lernt daraus, dass zehn Tage falsch waren.
+ *
+ * `rhythmEngine2` hat dagegen eine Pausenerkennung: Abstände über dem
+ * Dreifachen des Medians fliegen raus. Die greift bei kurzen Rhythmen
+ * (14 Tage Urlaub sind das Fünffache eines Drei-Tage-Rhythmus) und
+ * greift NICHT bei mittleren (dieselben 14 Tage sind das Doppelte
+ * eines Zehn-Tage-Rhythmus). Genau dort entsteht der Schaden.
+ *
+ * Was in der Drei-Jahres-Simulation dabei herauskam: nach jedem
+ * Urlaub verlängerten sich die mittleren Rhythmen, die App schlug
+ * wochenlang zu spät vor, und die Trefferquote fiel von 80 % auf
+ * 44 %. Der Haushalt stand mit leerem Kühlschrank da — ausgerechnet
+ * in den Wochen nach der Rückkehr, in denen ohnehin nichts da ist.
+ *
+ * DER BESSERE UMGANG: Abstände NICHT wegwerfen, sondern korrigieren.
+ * Ein Kaufabstand von 24 Tagen mit 14 Tagen Abwesenheit ist ein
+ * Abstand von 10 Verbrauchstagen. Das erhält den Datenpunkt, statt
+ * ihn zu verlieren.
+ *
+ * WORAN MAN EINE ABWESENHEIT ERKENNT: nicht daran, dass ein einzelnes
+ * Produkt lange nicht gekauft wurde — das kann auch heißen, dass es
+ * nicht mehr gebraucht wird. Sondern daran, dass GAR NICHT eingekauft
+ * wurde. Eine Lücke in den Bons betrifft den ganzen Haushalt und ist
+ * damit die belastbarere Aussage.
+ * ================================================================
+ */
+
+
+
+const MIN_ABSENCE_DAYS = 6;      // ein langes Wochenende ist keine Abwesenheit
+const GAP_FACTOR = 3;            // Vielfaches des üblichen Einkaufsabstands
+const MIN_SHOPPING_DAYS = 8;     // darunter gibt es keinen üblichen Abstand
+const MAX_ABSENCE_DAYS = 90;     // darüber ist es keine Reise, sondern ein Umzug
+// Eine noch laufende Lücke — der letzte Einkauf ist lange her und es
+// kam noch keiner danach. Sie zählt kürzer als eine abgeschlossene,
+// weil sie zweideutig ist: „gerade aus dem Urlaub zurück" und „die
+// App seit Wochen nicht mehr benutzt" sehen von hier aus gleich aus.
+// Drei Wochen decken jede Reise ab und nicht das Aufgeben.
+const MAX_OPEN_ABSENCE_DAYS = 21;
+
+const shift = (dateStr, n) =>
+  new Date(new Date(dateStr + "T12:00:00Z").getTime() + n * 86400000).toISOString().slice(0, 10);
+
+function medianGap(values) {
+  if (!values.length) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Abwesenheiten aus den Einkaufstagen ableiten.
+ *
+ * @param {Array} receipts [{date}]
+ * @param {string} today
+ * @returns {Array} [{from, to, days, reason}] — der INNERE Zeitraum,
+ *   also ohne die beiden Einkaufstage, die ihn begrenzen.
+ */
+function detectAbsences(receipts, today) {
+  const days = [...new Set((receipts || [])
+    .filter((r) => r && r.date && r.date <= today)
+    .map((r) => r.date))].sort();
+
+  if (days.length < MIN_SHOPPING_DAYS) return [];
+
+  const gaps = [];
+  for (let i = 1; i < days.length; i++) gaps.push(daysBetween(days[i - 1], days[i]));
+
+  const usual = medianGap(gaps);
+  if (!usual || usual <= 0) return [];
+
+  const threshold = Math.max(MIN_ABSENCE_DAYS, usual * GAP_FACTOR);
+
+  const out = [];
+  for (let i = 1; i < days.length; i++) {
+    const gap = gaps[i - 1];
+    if (gap < threshold || gap > MAX_ABSENCE_DAYS) continue;
+    // Die Einkaufstage selbst gehören nicht zur Abwesenheit — an
+    // ihnen war jemand da. Gezählt wird, was dazwischen liegt, und
+    // davon nur der Teil, der über den üblichen Abstand hinausgeht.
+    const extra = Math.round(gap - usual);
+    if (extra < MIN_ABSENCE_DAYS) continue;
+    out.push({
+      from: shift(days[i - 1], 1),
+      to: shift(days[i], -1),
+      days: extra,
+      gap,
+      usual: Math.round(usual * 10) / 10,
+      reason: "keine_einkaeufe"
+    });
+  }
+
+  // Die noch offene Lücke am Ende: seit dem letzten Einkauf ist zu
+  // viel Zeit vergangen. Ohne sie meldet die App jemandem, der gerade
+  // aus dem Urlaub kommt und noch nicht einkaufen war, dass sein
+  // Zähler bei null steht — im unpassendsten Moment.
+  const lastDay = days[days.length - 1];
+  const open = daysBetween(lastDay, today);
+  if (open >= threshold) {
+    const extra = Math.min(MAX_OPEN_ABSENCE_DAYS, Math.round(open - usual));
+    if (extra >= MIN_ABSENCE_DAYS) {
+      out.push({
+        from: shift(lastDay, 1),
+        to: shift(lastDay, 1 + extra),
+        days: extra,
+        gap: open,
+        usual: Math.round(usual * 10) / 10,
+        reason: "noch_offen"
+      });
+    }
+  }
+
+  return out;
+}
+
+/** Eine bekannte Abwesenheit (Urlaubsmodus) in dieselbe Form bringen. */
+function knownAbsence(vacation, today) {
+  if (!vacation || !vacation.from || !vacation.to) return [];
+  const from = vacation.from;
+  const to = vacation.to < today ? vacation.to : today;
+  if (from >= to) return [];
+  const days = daysBetween(from, to);
+  if (days < MIN_ABSENCE_DAYS) return [];
+  return [{ from, to, days, gap: days, usual: null, reason: "urlaubsmodus" }];
+}
+
+/**
+ * Abwesenheitstage, die in einen Zeitraum fallen.
+ * Überlappungen werden nicht doppelt gezählt.
+ */
+function absenceDaysBetween(absences, fromDate, toDate) {
+  if (!absences || !absences.length || !fromDate || !toDate) return 0;
+
+  const spans = absences
+    .map((a) => ({
+      from: a.from > fromDate ? a.from : fromDate,
+      to: a.to < toDate ? a.to : toDate
+    }))
+    .filter((a) => a.from < a.to)
+    .sort((a, b) => a.from.localeCompare(b.from));
+
+  let total = 0;
+  let cursor = null;
+  for (const s of spans) {
+    const start = cursor && cursor > s.from ? cursor : s.from;
+    if (start >= s.to) continue;
+    total += daysBetween(start, s.to);
+    cursor = s.to;
+  }
+  return total;
+}
+
+/** Alle Abwesenheiten: erkannte und ausdrücklich eingetragene. */
+function allAbsences(receipts, vacation, today) {
+  return [...detectAbsences(receipts, today), ...knownAbsence(vacation, today)];
 }
 
 /* ===== productMatcher2.js ===== */
@@ -4177,6 +4364,37 @@ function suggestedLookahead(pattern) {
   return Math.max(1, Math.round(7 / Math.max(0.5, pattern.perWeek)));
 }
 
+// Anteil des Zyklus, den die Vorausschau höchstens vorwegnehmen darf.
+const MAX_LOOKAHEAD_SHARE = 0.35;
+
+/**
+ * Vorausschau, auf den Zyklus des Produkts bezogen.
+ *
+ * Die eingestellte Vorausschau ist eine feste Zahl in Tagen — für ein
+ * Produkt mit dreißigtägigem Rhythmus sind drei Tage ein Zehntel des
+ * Zyklus und damit ein vernünftiger Vorlauf. Für ein Produkt mit
+ * viertägigem Rhythmus sind dieselben drei Tage drei Viertel des
+ * Zyklus: es steht dann ab dem Tag nach dem Kauf wieder auf der Liste.
+ *
+ * Das ist kein theoretisches Problem. In der Drei-Jahres-Simulation
+ * war es der Auslöser einer Rückkopplung: Milch wurde bei jedem
+ * Einkauf vorgeschlagen, also bei jedem Einkauf gekauft, also lag der
+ * beobachtete Abstand bei der Einkaufsfrequenz, also wurde der
+ * Rhythmus noch kürzer. Die App lernte am Ende ihren eigenen
+ * Vorschlag statt den Bedarf des Haushalts, und der Haushalt kaufte
+ * 239 von 281 Packungen Milch zu früh. Der gemessene Verderb lag
+ * damit über dem eines Haushalts ganz ohne App — eine App, die
+ * schadet, statt zu nützen.
+ *
+ * Deshalb: der Vorlauf ist ein ANTEIL des Zyklus, gedeckelt durch die
+ * Einstellung. Nie mehr als ein gutes Drittel.
+ */
+function effectiveLookahead(rhythmDays, lookaheadDays) {
+  const wish = Math.max(0, Number(lookaheadDays) || 0);
+  if (!rhythmDays || !Number.isFinite(rhythmDays)) return wish;
+  return Math.min(wish, Math.floor(rhythmDays * MAX_LOOKAHEAD_SHARE));
+}
+
 /* ===== listExport.js ===== */
 /**
  * listExport.js — Liste als Text
@@ -5517,7 +5735,38 @@ function signalFor(entry, rhythmDays) {
  * @param {string} today
  * @returns {{factor, adjustedDays, signals, considered, neutral, disagreement, applied, reason, message}}
  */
-function feedbackAdjustment(log, rhythmDays, today) {
+/**
+ * Ist diese Rückmeldung schon im Rhythmus enthalten?
+ *
+ * DER PUNKT, AN DEM DIESES MODUL ZWEIMAL DASSELBE ZÄHLTE:
+ *
+ * „Hab noch da" heißt, dass NICHT gekauft wurde. Sobald danach ein
+ * Kauf stattfindet, ist der dadurch verlängerte Abstand in den Daten
+ * — und der Median hat ihn gesehen. Die Korrektur trotzdem weiter
+ * anzuwenden, verschiebt einen Rhythmus, der sich bereits verschoben
+ * hat. Zweimal derselbe Schluss aus derselben Tatsache.
+ *
+ * In der Drei-Jahres-Simulation kostete das die Hälfte der
+ * Trefferquote: nach dem Auszug einer Person häuften sich die
+ * „Hab noch"-Antworten, die Rhythmen wurden verlängert — einmal durch
+ * die längeren Kaufabstände und ein zweites Mal durch die Korrektur.
+ * Die App schlug danach so spät vor, dass sie nur noch 36 % dessen
+ * auf die Liste brachte, was der Haushalt brauchte.
+ *
+ * „War schon alle" verhält sich anders und wird deshalb NICHT
+ * verfallen gelassen: dass etwas vor dem Kauf bereits leer war, steht
+ * in keinem Kaufabstand. Zwei Käufe im Abstand von zehn Tagen sehen
+ * gleich aus, ob dazwischen drei Tage nichts da war oder nicht. Diese
+ * Aussage kann nur der Nutzer liefern, und sie bleibt gültig, bis sie
+ * veraltet.
+ */
+function isAbsorbed(entry, lastPurchaseDate) {
+  if (!lastPurchaseDate) return false;
+  if (entry.reason !== REASON.HAVE) return false;
+  return entry.date <= lastPurchaseDate;
+}
+
+function feedbackAdjustment(log, rhythmDays, today, opts = {}) {
   const base = {
     factor: 1,
     adjustedDays: rhythmDays,
@@ -5525,6 +5774,7 @@ function feedbackAdjustment(log, rhythmDays, today) {
     considered: 0,
     neutral: 0,
     disagreement: 0,
+    absorbed: 0,
     applied: false,
     reason: "kein_feedback",
     message: null
@@ -5541,11 +5791,17 @@ function feedbackAdjustment(log, rhythmDays, today) {
 
   // Nur Rückmeldungen aus dem Beobachtungszeitraum. Was jemand vor
   // einem Jahr angetippt hat, beschreibt einen anderen Haushalt.
+  const lastPurchaseDate = opts.lastPurchaseDate || null;
+  let absorbed = 0;
   const fresh = log.filter((e) => {
     if (!e || !e.date || e.date > today) return false;
-    return daysBetween(e.date, today) <= MAX_AGE_DAYS;
+    if (daysBetween(e.date, today) > MAX_AGE_DAYS) return false;
+    if (isAbsorbed(e, lastPurchaseDate)) { absorbed++; return false; }
+    return true;
   });
-  if (!fresh.length) return { ...base, reason: "nur_altes_feedback" };
+  if (!fresh.length) {
+    return { ...base, absorbed, reason: absorbed ? "im_rhythmus_enthalten" : "nur_altes_feedback" };
+  }
 
   // Gewichtung über Mehrfachnennung: das ist ein gewichteter Median,
   // ohne dafür eine eigene Implementierung zu brauchen.
@@ -5571,6 +5827,7 @@ function feedbackAdjustment(log, rhythmDays, today) {
       considered: fresh.length,
       signals: signalCount,
       neutral,
+      absorbed,
       reason: "zu_wenig_signale",
       message: signalCount
         ? `${signalCount} von ${MIN_SIGNALS} Rückmeldungen — noch keine Anpassung.`
@@ -5617,6 +5874,7 @@ function feedbackAdjustment(log, rhythmDays, today) {
     explicitSignals: explicitCount,
     considered: fresh.length,
     neutral,
+    absorbed,
     disagreement: Math.round(disagreement * 100) / 100,
     applied: adjustedDays !== rhythmDays,
     reason: "angewandt",
@@ -5652,7 +5910,15 @@ function feedbackAdjustment(log, rhythmDays, today) {
 function applyFeedback(rhythm, log, today, opts = {}) {
   if (!rhythm) return rhythm;
 
-  const adj = feedbackAdjustment(log || [], rhythm.rhythmDays, today);
+  // Der letzte Kauf entscheidet, welche „Hab noch"-Antworten schon in
+  // den Kaufabständen stecken. `opts.purchases` hat Vorrang, weil dort
+  // nach einem Strukturbruch nur die noch gültigen Käufe stehen.
+  const rows = Array.isArray(opts.purchases) ? opts.purchases : null;
+  const lastPurchaseDate = rows && rows.length
+    ? rows.map((p) => p.date).sort().pop()
+    : rhythm.lastPurchaseDate || null;
+
+  const adj = feedbackAdjustment(log || [], rhythm.rhythmDays, today, { lastPurchaseDate });
 
   // Widersprüchliche Rückmeldungen senken das Vertrauen, statt den
   // Rhythmus mit falscher Sicherheit zu verschieben.
@@ -6171,20 +6437,37 @@ const weekShift = (dateStr, weeks) =>
   new Date(new Date(dateStr + "T12:00:00Z").getTime() + weeks * 7 * 86400000).toISOString().slice(0, 10);
 
 /**
- * Wochen, die ganz oder teilweise in einen Urlaub fallen.
+ * Wochen, die ganz oder teilweise in eine Abwesenheit fallen.
+ *
+ * Zwei Quellen, gleichwertig behandelt: der eingeschaltete
+ * Urlaubsmodus und die aus den Bons ERKANNTE Abwesenheit. Die zweite
+ * ist die wichtigere, denn die meisten Haushalte schalten den
+ * Urlaubsmodus nicht ein — sie fahren einfach weg.
+ *
+ * Ohne sie zerfiel der Streak bei jedem Urlaub. In der
+ * Drei-Jahres-Simulation stand er nach jeder Reise wieder bei eins:
+ * zwei Wochen ohne Einkauf sind zwei Lückenwochen, und die eine
+ * Kulanzwoche deckt nur eine davon. Ein Zähler, der zweimal im Jahr
+ * abstürzt, weil jemand im Urlaub war, motiviert niemanden — er
+ * bestraft das Wegfahren.
+ *
+ * @param {{from,to}|Array} spans Urlaubsmodus und/oder erkannte Zeiträume
  * @returns {Set<string>} Wochenschlüssel
  */
-function vacationWeeks(vacation, today) {
+function vacationWeeks(spans, today) {
   const out = new Set();
-  if (!vacation || !vacation.from || !vacation.to) return out;
-  const from = vacation.from;
-  const to = vacation.to < today ? vacation.to : today;
-  if (from > to) return out;
-  let cursor = mondayOf(from);
-  // Obergrenze gegen eine fehlerhaft weit gesetzte Rückkehr.
-  for (let i = 0; i <= MAX_WEEKS_BACK && cursor <= to; i++) {
-    out.add(isoWeekKey(cursor));
-    cursor = weekShift(cursor, 1);
+  const list = (Array.isArray(spans) ? spans : [spans]).filter((v) => v && v.from && v.to);
+
+  for (const span of list) {
+    const from = span.from;
+    const to = span.to < today ? span.to : today;
+    if (from > to) continue;
+    let cursor = mondayOf(from);
+    // Obergrenze gegen einen fehlerhaft weit gesetzten Zeitraum.
+    for (let i = 0; i <= MAX_WEEKS_BACK && cursor <= to; i++) {
+      out.add(isoWeekKey(cursor));
+      cursor = weekShift(cursor, 1);
+    }
   }
   return out;
 }
@@ -6201,7 +6484,8 @@ function weeklyStreak(actions, today, opts = {}) {
   const held = new Set();
   normalizeActions(actions).forEach((a) => held.add(isoWeekKey(a.date)));
 
-  const vac = vacationWeeks(opts.vacation, today);
+  // Urlaubsmodus und erkannte Abwesenheiten zählen gleich.
+  const vac = vacationWeeks([opts.vacation, ...(opts.absences || [])], today);
   const isHeld = (wk) => held.has(wk) || vac.has(wk);
 
   const thisWeek = isoWeekKey(today);
@@ -6268,7 +6552,7 @@ function weeklyStreak(actions, today, opts = {}) {
 function streakDots(actions, today, n = 8, opts = {}) {
   const held = new Set();
   normalizeActions(actions).forEach((a) => held.add(isoWeekKey(a.date)));
-  const vac = vacationWeeks(opts.vacation, today);
+  const vac = vacationWeeks([opts.vacation, ...(opts.absences || [])], today);
   const out = [];
   for (let i = n - 1; i >= 0; i--) {
     const wk = isoWeekKey(weekShift(today, -i));

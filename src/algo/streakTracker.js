@@ -60,20 +60,37 @@ const weekShift = (dateStr, weeks) =>
   new Date(new Date(dateStr + "T12:00:00Z").getTime() + weeks * 7 * 86400000).toISOString().slice(0, 10);
 
 /**
- * Wochen, die ganz oder teilweise in einen Urlaub fallen.
+ * Wochen, die ganz oder teilweise in eine Abwesenheit fallen.
+ *
+ * Zwei Quellen, gleichwertig behandelt: der eingeschaltete
+ * Urlaubsmodus und die aus den Bons ERKANNTE Abwesenheit. Die zweite
+ * ist die wichtigere, denn die meisten Haushalte schalten den
+ * Urlaubsmodus nicht ein — sie fahren einfach weg.
+ *
+ * Ohne sie zerfiel der Streak bei jedem Urlaub. In der
+ * Drei-Jahres-Simulation stand er nach jeder Reise wieder bei eins:
+ * zwei Wochen ohne Einkauf sind zwei Lückenwochen, und die eine
+ * Kulanzwoche deckt nur eine davon. Ein Zähler, der zweimal im Jahr
+ * abstürzt, weil jemand im Urlaub war, motiviert niemanden — er
+ * bestraft das Wegfahren.
+ *
+ * @param {{from,to}|Array} spans Urlaubsmodus und/oder erkannte Zeiträume
  * @returns {Set<string>} Wochenschlüssel
  */
-function vacationWeeks(vacation, today) {
+function vacationWeeks(spans, today) {
   const out = new Set();
-  if (!vacation || !vacation.from || !vacation.to) return out;
-  const from = vacation.from;
-  const to = vacation.to < today ? vacation.to : today;
-  if (from > to) return out;
-  let cursor = mondayOf(from);
-  // Obergrenze gegen eine fehlerhaft weit gesetzte Rückkehr.
-  for (let i = 0; i <= MAX_WEEKS_BACK && cursor <= to; i++) {
-    out.add(isoWeekKey(cursor));
-    cursor = weekShift(cursor, 1);
+  const list = (Array.isArray(spans) ? spans : [spans]).filter((v) => v && v.from && v.to);
+
+  for (const span of list) {
+    const from = span.from;
+    const to = span.to < today ? span.to : today;
+    if (from > to) continue;
+    let cursor = mondayOf(from);
+    // Obergrenze gegen einen fehlerhaft weit gesetzten Zeitraum.
+    for (let i = 0; i <= MAX_WEEKS_BACK && cursor <= to; i++) {
+      out.add(isoWeekKey(cursor));
+      cursor = weekShift(cursor, 1);
+    }
   }
   return out;
 }
@@ -90,7 +107,8 @@ function weeklyStreak(actions, today, opts = {}) {
   const held = new Set();
   normalizeActions(actions).forEach((a) => held.add(isoWeekKey(a.date)));
 
-  const vac = vacationWeeks(opts.vacation, today);
+  // Urlaubsmodus und erkannte Abwesenheiten zählen gleich.
+  const vac = vacationWeeks([opts.vacation, ...(opts.absences || [])], today);
   const isHeld = (wk) => held.has(wk) || vac.has(wk);
 
   const thisWeek = isoWeekKey(today);
@@ -157,7 +175,7 @@ function weeklyStreak(actions, today, opts = {}) {
 function streakDots(actions, today, n = 8, opts = {}) {
   const held = new Set();
   normalizeActions(actions).forEach((a) => held.add(isoWeekKey(a.date)));
-  const vac = vacationWeeks(opts.vacation, today);
+  const vac = vacationWeeks([opts.vacation, ...(opts.absences || [])], today);
   const out = [];
   for (let i = n - 1; i >= 0; i--) {
     const wk = isoWeekKey(weekShift(today, -i));

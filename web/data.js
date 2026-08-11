@@ -648,6 +648,13 @@ function compute() {
     byProduct.get(h.productId).push(h);
   });
 
+  // Abwesenheiten zuerst: sie wirken auf JEDEN Kaufabstand. Erkannt
+  // werden sie an Lücken in den Bons, nicht an Lücken bei einem
+  // einzelnen Produkt — dass zwei Wochen gar nicht eingekauft wurde,
+  // betrifft den ganzen Haushalt und ist die belastbarere Aussage.
+  const absences = allAbsences(s.receipts, s.settings.vacation, ref);
+  const absenceDays = (from, to) => absenceDaysBetween(absences, from, to);
+
   const changes = new Map();
   const rhythms = new Map();
   for (const [pid, rows] of byProduct) {
@@ -657,7 +664,7 @@ function compute() {
     // Nach einem Bruch zählt nur das neue Verhalten. Vorher mittelte
     // der Median monatelang über zwei verschiedene Haushalte.
     const relevant = purchasesSinceChange(rows, change);
-    let r = computeRhythm(relevant);
+    let r = computeRhythm(relevant, { absenceDays });
 
     r = applySeason(r, rows, ref);
     r = applyFeedback(r, s.feedbackLog.filter((f) => f.productId === pid), ref, { purchases: relevant });
@@ -775,7 +782,10 @@ function compute() {
       if (!r.rhythmDays || !r.lastPurchaseDate || r.confidence < 0.4) continue;
       const since = daysBetween(r.lastPurchaseDate, ref);
       const dueIn = r.rhythmDays - since;   // negativ = überfällig
-      if (dueIn > lookahead) continue;
+      // Vorlauf als Anteil des Zyklus, nicht als feste Tageszahl —
+      // sonst steht ein Produkt mit kurzem Rhythmus ab dem Tag nach
+      // dem Kauf wieder auf der Liste. Begründung in shoppingDay.js.
+      if (dueIn > effectiveLookahead(r.rhythmDays, lookahead)) continue;
       const p = byId(pid);
       if (!p) continue;
       const st = wasteStats.get(pid) || {};
@@ -954,8 +964,11 @@ function compute() {
    * Alle drei lesen dasselbe Ereignis-Protokoll. Keine der Zahlen
    * wird hier gerechnet — sonst stünde die Fachlogik wieder in der
    * Oberfläche.                                                    */
-  const streak = weeklyStreak(s.actions, ref, { vacation: activeVacation(s) });
-  const streakWeeks = streakDots(s.actions, ref, 8, { vacation: activeVacation(s) });
+  // Abwesenheit hält den Streak — egal ob eingetragen oder erkannt.
+  // Wer im Urlaub war, hat nichts versäumt.
+  const streakOpts = { vacation: activeVacation(s), absences };
+  const streak = weeklyStreak(s.actions, ref, streakOpts);
+  const streakWeeks = streakDots(s.actions, ref, 8, streakOpts);
 
   const dueRange = reviewDue(ref, new Date().getHours());
   const reviewRange = dueRange || weekRangeFor(ref, 0);
@@ -974,7 +987,7 @@ function compute() {
     range, prices, forgotten, freeze, safety,
     opened, pattern, season, seasonNow,
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
-    changes, feedbackLog: s.feedbackLog,
+    changes, feedbackLog: s.feedbackLog, absences,
     actions: s.actions, review, streak, streakWeeks, badges, freshBadges,
     store, aisleList,
     ethylene: checkEthyleneConflicts(items.filter((i) => i.on)),

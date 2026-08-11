@@ -81,4 +81,38 @@ function suggestedLookahead(pattern) {
   return Math.max(1, Math.round(7 / Math.max(0.5, pattern.perWeek)));
 }
 
-module.exports = { shoppingPattern, suggestedLookahead, WEEKDAYS, MIN_RECEIPTS };
+// Anteil des Zyklus, den die Vorausschau höchstens vorwegnehmen darf.
+const MAX_LOOKAHEAD_SHARE = 0.35;
+
+/**
+ * Vorausschau, auf den Zyklus des Produkts bezogen.
+ *
+ * Die eingestellte Vorausschau ist eine feste Zahl in Tagen — für ein
+ * Produkt mit dreißigtägigem Rhythmus sind drei Tage ein Zehntel des
+ * Zyklus und damit ein vernünftiger Vorlauf. Für ein Produkt mit
+ * viertägigem Rhythmus sind dieselben drei Tage drei Viertel des
+ * Zyklus: es steht dann ab dem Tag nach dem Kauf wieder auf der Liste.
+ *
+ * Das ist kein theoretisches Problem. In der Drei-Jahres-Simulation
+ * war es der Auslöser einer Rückkopplung: Milch wurde bei jedem
+ * Einkauf vorgeschlagen, also bei jedem Einkauf gekauft, also lag der
+ * beobachtete Abstand bei der Einkaufsfrequenz, also wurde der
+ * Rhythmus noch kürzer. Die App lernte am Ende ihren eigenen
+ * Vorschlag statt den Bedarf des Haushalts, und der Haushalt kaufte
+ * 239 von 281 Packungen Milch zu früh. Der gemessene Verderb lag
+ * damit über dem eines Haushalts ganz ohne App — eine App, die
+ * schadet, statt zu nützen.
+ *
+ * Deshalb: der Vorlauf ist ein ANTEIL des Zyklus, gedeckelt durch die
+ * Einstellung. Nie mehr als ein gutes Drittel.
+ */
+function effectiveLookahead(rhythmDays, lookaheadDays) {
+  const wish = Math.max(0, Number(lookaheadDays) || 0);
+  if (!rhythmDays || !Number.isFinite(rhythmDays)) return wish;
+  return Math.min(wish, Math.floor(rhythmDays * MAX_LOOKAHEAD_SHARE));
+}
+
+module.exports = {
+  shoppingPattern, suggestedLookahead, effectiveLookahead,
+  WEEKDAYS, MIN_RECEIPTS, MAX_LOOKAHEAD_SHARE
+};

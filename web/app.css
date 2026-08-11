@@ -349,11 +349,10 @@ button.row:active{background:var(--fill)}
   border:1.8px solid var(--ink-3);border-radius:99px;background:transparent;
   position:relative;cursor:pointer;transition:background .16s var(--ease),border-color .16s var(--ease);
 }
+/* Gefüllter Kreis, kein Haken darin. Der Haken sagte dasselbe zweimal:
+   die Füllung allein trägt die Aussage „steht auf der Liste“, und ohne
+   ihn wirkt die Reihe ruhiger. Dieselbe Marke steht im Ladenmodus. */
 .box:checked{background:var(--accent);border-color:var(--accent)}
-.box:checked::after{
-  content:"";position:absolute;left:8px;top:4px;width:6px;height:11px;
-  border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(43deg);
-}
 .item .main{flex:1;min-width:0}
 .item .nm{font-size:17px;font-weight:500;display:flex;flex-wrap:wrap;align-items:center;gap:6px;letter-spacing:-.018em}
 .item .price{font-size:17px;font-variant-numeric:tabular-nums;text-align:right;flex:0 0 auto}
@@ -486,9 +485,25 @@ tbody tr:last-child td{border-bottom:none}
 }
 .sItem.done{opacity:.42}
 .sItem.done .tick{background:var(--accent);border-color:var(--accent)}
-.sItem.done .tick::after{content:"";position:absolute;left:8px;top:4px;width:7px;height:12px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(43deg)}
-.sItem.done .sn{text-decoration:line-through;text-decoration-color:var(--ink-3)}
 .sItem .sn{flex:1;font-size:17px;font-weight:500;letter-spacing:-.018em}
+
+/* Der Strich wird GEZOGEN, nicht gesetzt.
+   `text-decoration:line-through` lässt sich nicht animieren — es ist
+   im selben Bild da oder nicht. Deshalb ein Farbverlauf als
+   Hintergrundbild, dessen Breite von 0 auf 100 % läuft: das
+   funktioniert auch über einen Zeilenumbruch hinweg, was ein
+   absolut gesetztes Pseudo-Element nicht täte.
+   Bei „Bewegung reduzieren“ entfällt der Übergang (Regel weiter oben)
+   und der Strich steht sofort — die Aussage bleibt, nur die Bewegung
+   geht weg. */
+.sItem .sn .strike{
+  background-image:linear-gradient(currentColor,currentColor);
+  background-repeat:no-repeat;
+  background-position:0 58%;
+  background-size:0 1.5px;
+  transition:background-size .34s var(--ease);
+}
+.sItem.done .sn .strike{background-size:100% 1.5px}
 .sItem .sn small{display:block;font-size:12.5px;font-weight:400;color:var(--ink-2);margin-top:1px}
 .sItem .sp{font-size:16px;font-variant-numeric:tabular-nums;color:var(--ink-2)}
 .storeFoot{

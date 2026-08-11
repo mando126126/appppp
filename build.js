@@ -35,6 +35,7 @@ const OUT = path.join(ROOT, "web");
 const MODULES = [
   "foodDatabase.js",
   "rhythmEngine2.js",
+  "absenceDetector.js",
   "productMatcher2.js",
   "wasteInference2.js",
   "storageAdvisor.js",

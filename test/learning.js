@@ -27,6 +27,8 @@ const {
   detectChange, purchasesSinceChange, MIN_RELATIVE_CHANGE, MIN_AGE_DAYS
 } = require("../src/algo/changeDetector");
 const { computeRhythm } = require("../src/algo/rhythmEngine2");
+const { effectiveLookahead } = require("../src/algo/shoppingDay");
+const { detectAbsences, knownAbsence, absenceDaysBetween } = require("../src/algo/absenceDetector");
 
 let pass = 0, fail = 0;
 function ok(name, cond, detail) {
@@ -146,7 +148,7 @@ section("Feedback: Robustheit gegen Fehltipps");
     Math.abs(r.adjustedDays - 14) <= 14 * MAX_ADJUST, `${r.adjustedDays} statt 14`);
 }
 {
-  const rhythm = { rhythmDays: 14, confidence: 0.9, lastPurchaseDate: day(-5) };
+  const rhythm = { rhythmDays: 14, confidence: 0.9, lastPurchaseDate: day(-45) };
   const conflicting = [
     ...feedback(REASON.HAVE, 5, { dueIn: -12 }),
     ...Array.from({ length: 5 }, (_, i) =>
@@ -200,7 +202,7 @@ section("Feedback: die Gegenrichtung");
 
 section("Feedback: applyFeedback verändert keine Rohdaten");
 {
-  const rhythm = Object.freeze({ rhythmDays: 7, confidence: 0.8, lastPurchaseDate: day(-3), sampleSize: 9 });
+  const rhythm = Object.freeze({ rhythmDays: 7, confidence: 0.8, lastPurchaseDate: day(-45), sampleSize: 9 });
   const log = feedback(REASON.HAVE, 5);
   const logCopy = JSON.parse(JSON.stringify(log));
   const out = applyFeedback(rhythm, log, T0, { usePurchases: false });
@@ -385,12 +387,14 @@ section("Feedback: Verlauf über Monate");
 }
 {
   // Zusammenspiel mit dem echten Rhythmusmodell
+  // Die Reihe endet vor 20 Tagen: die Rückmeldungen danach stecken
+  // noch in keinem Kaufabstand und dürfen deshalb wirken.
   const purchases = Array.from({ length: 10 }, (_, i) =>
-    ({ productId: "milch", date: day(-(63 - i * 7)), quantity: 1, unitPrice: 1.29 }));
+    ({ productId: "milch", date: day(-(83 - i * 7)), quantity: 1, unitPrice: 1.29 }));
   const rhythm = computeRhythm(purchases);
   ok("Das Rhythmusmodell liefert einen Wert", rhythm.rhythmDays > 0, rhythm.rhythmDays);
 
-  const corrected = applyFeedback(rhythm, feedback(REASON.HAVE, 6), T0, { usePurchases: false });
+  const corrected = applyFeedback(rhythm, feedback(REASON.HAVE, 6, { spacing: 3 }), T0, { usePurchases: false });
   ok("Die Korrektur greift auf einem echten Rhythmus", corrected.rhythmDays > rhythm.rhythmDays,
     `${rhythm.rhythmDays} -> ${corrected.rhythmDays}`);
   ok("Alle Felder des Rhythmus überleben",
@@ -585,6 +589,146 @@ section("Zusammenspiel");
   ok("Ohne Saisonmuster ändert die Saisonstufe nichts",
     onlyFeedback.rhythmDays === bothWays.rhythmDays,
     `${onlyFeedback.rhythmDays} vs ${bothWays.rhythmDays}`);
+}
+
+
+/* ================================================================
+   Rückmeldungen, die schon im Rhythmus stecken
+   ================================================================
+   Der zweite Fall derselben Sorte wie das entfernte implizite Signal:
+   dieselbe Tatsache zweimal verrechnen. „Hab noch da“ heißt, dass
+   nicht gekauft wurde — sobald danach ein Kauf kommt, ist der dadurch
+   längere Abstand in den Daten und der Median hat ihn gesehen.
+   ================================================================ */
+section("Feedback: nicht zweimal dasselbe zählen");
+{
+  const log = feedback(REASON.HAVE, 6, { spacing: 4, start: 4 });   // Tag -4 bis -24
+  const offen = feedbackAdjustment(log, 10, T0, { lastPurchaseDate: day(-40) });
+  const gekauft = feedbackAdjustment(log, 10, T0, { lastPurchaseDate: day(-2) });
+
+  ok("Ohne Kauf danach wirkt die Rückmeldung", offen.adjustedDays > 10, offen.adjustedDays);
+  ok("Nach einem Kauf steckt sie im Abstand", gekauft.adjustedDays === 10, gekauft.adjustedDays);
+  ok("Und wird als solche ausgewiesen", gekauft.absorbed === 6, gekauft.absorbed);
+  ok("Der Grund wird benannt", gekauft.reason === "im_rhythmus_enthalten", gekauft.reason);
+}
+{
+  // Teilweise: was nach dem letzten Kauf kam, zählt weiter.
+  const log = feedback(REASON.HAVE, 8, { spacing: 5 });             // Tag 0 bis -35
+  const r = feedbackAdjustment(log, 12, T0, { lastPurchaseDate: day(-18) });
+  ok("Nur die jüngeren Rückmeldungen zählen", r.signals === 4, `${r.signals} von 8`);
+  ok("Die älteren sind verrechnet", r.absorbed === 4, r.absorbed);
+  ok("Und die Korrektur greift trotzdem", r.adjustedDays > 12, r.adjustedDays);
+}
+{
+  // „War schon alle“ verhält sich anders: dass etwas VOR dem Kauf leer
+  // war, steht in keinem Kaufabstand. Diese Aussage bleibt gültig.
+  const log = feedback(REASON.EMPTY, 5, { spacing: 6, start: 6, dueIn: 5 });
+  const r = feedbackAdjustment(log, 12, T0, { lastPurchaseDate: day(-1) });
+  ok("„War schon alle“ überlebt den nächsten Kauf", r.adjustedDays < 12, r.adjustedDays);
+  ok("Es wird nicht als verrechnet gezählt", r.absorbed === 0, r.absorbed);
+}
+{
+  // Ohne bekannten letzten Kauf ändert sich nichts am alten Verhalten.
+  const log = feedback(REASON.HAVE, 5);
+  const a = feedbackAdjustment(log, 9, T0);
+  const b = feedbackAdjustment(log, 9, T0, { lastPurchaseDate: null });
+  ok("Ohne Kaufdatum bleibt alles beim Alten", a.adjustedDays === b.adjustedDays && a.adjustedDays > 9);
+}
+{
+  // Der Regelkreis, um den es geht: Nutzer sagt „hab noch“, kauft
+  // später, der Abstand wächst — die Korrektur darf dann NICHT
+  // obendrauf kommen.
+  const rhythmus = { rhythmDays: 10, confidence: 0.8, lastPurchaseDate: day(-2) };
+  const spaeterGekauft = applyFeedback(rhythmus, feedback(REASON.HAVE, 5, { start: 5, spacing: 4 }), T0,
+    { purchases: [{ date: day(-30) }, { date: day(-2) }] });
+  ok("Nach dem Kauf wird nicht nachkorrigiert", spaeterGekauft.rhythmDays === 10, spaeterGekauft.rhythmDays);
+  ok("Die Begründung steht am Ergebnis",
+    spaeterGekauft.feedback.absorbed === 5, spaeterGekauft.feedback.absorbed);
+}
+
+/* ================================================================
+   Vorlauf als Anteil des Zyklus
+   ================================================================ */
+section("Vorausschau");
+{
+  ok("Bei langem Rhythmus bleibt die Einstellung stehen",
+    effectiveLookahead(30, 3) === 3, effectiveLookahead(30, 3));
+  ok("Bei kurzem Rhythmus wird sie beschnitten",
+    effectiveLookahead(4, 3) === 1, effectiveLookahead(4, 3));
+  ok("Ein Zwei-Tage-Rhythmus bekommt gar keinen Vorlauf",
+    effectiveLookahead(2, 3) === 0, effectiveLookahead(2, 3));
+  ok("Nie mehr als die Einstellung",
+    effectiveLookahead(100, 2) === 2, effectiveLookahead(100, 2));
+  ok("Ohne Rhythmus gilt die Einstellung",
+    effectiveLookahead(null, 3) === 3);
+  ok("Der Anteil bleibt unter der Hälfte des Zyklus",
+    [3, 5, 7, 10, 14, 21, 30, 60].every((r) => effectiveLookahead(r, 99) < r / 2));
+  ok("Nie negativ", [1, 2, 3].every((r) => effectiveLookahead(r, 5) >= 0));
+}
+
+/* ================================================================
+   Abwesenheit
+   ================================================================ */
+section("Abwesenheit");
+{
+  // Zweimal die Woche einkaufen, dann zwei Wochen weg.
+  const bons = [];
+  for (let d = 90; d >= 40; d -= 4) bons.push({ date: day(-d) });
+  for (let d = 12; d >= 0; d -= 4) bons.push({ date: day(-d) });
+
+  const abw = detectAbsences(bons, T0);
+  ok("Die Lücke wird erkannt", abw.length === 1, abw.length);
+  // Die Lücke liegt zwischen dem letzten Bon der ersten Reihe und dem
+  // ersten der zweiten — die Bontage selbst gehören nicht dazu.
+  ok("Sie liegt zwischen den beiden Reihen", abw[0].from > day(-43) && abw[0].to < day(-11),
+    `${abw[0] && abw[0].from}–${abw[0] && abw[0].to}`);
+  ok("Gezählt wird nur, was über den üblichen Abstand hinausgeht",
+    abw[0].days < abw[0].gap, `${abw[0].days} von ${abw[0].gap}`);
+
+  ok("Ohne genug Bons keine Behauptung", detectAbsences(bons.slice(0, 4), T0).length === 0);
+  ok("Regelmäßige Einkäufe ergeben keine Abwesenheit",
+    detectAbsences(bons.slice(0, 13), day(-40)).length === 0);
+}
+{
+  const abw = [{ from: day(-20), to: day(-10) }];
+  ok("Überschneidung wird gezählt", absenceDaysBetween(abw, day(-30), T0) === 10);
+  ok("Teilüberschneidung anteilig", absenceDaysBetween(abw, day(-15), T0) === 5);
+  ok("Keine Überschneidung, keine Tage", absenceDaysBetween(abw, day(-5), T0) === 0);
+  ok("Ohne Abwesenheit null", absenceDaysBetween([], day(-30), T0) === 0);
+
+  // Überlappende Zeiträume dürfen nicht doppelt zählen — sonst könnte
+  // ein Abstand rechnerisch negativ werden.
+  const doppelt = [{ from: day(-20), to: day(-10) }, { from: day(-15), to: day(-5) }];
+  ok("Überlappungen zählen einfach", absenceDaysBetween(doppelt, day(-30), T0) === 15,
+    absenceDaysBetween(doppelt, day(-30), T0));
+}
+{
+  // Der Kern: ein Abstand mit Urlaub darin ist kürzer, als er aussieht.
+  const kaeufe = [
+    { date: day(-60), quantity: 1 }, { date: day(-50), quantity: 1 },
+    { date: day(-40), quantity: 1 }, { date: day(-16), quantity: 1 },
+    { date: day(-6), quantity: 1 }
+  ];
+  const ohne = computeRhythm(kaeufe);
+  const mit = computeRhythm(kaeufe, {
+    absenceDays: (from, to) => absenceDaysBetween([{ from: day(-36), to: day(-22) }], from, to)
+  });
+  ok("Ohne Korrektur zieht der Urlaub den Rhythmus hoch",
+    ohne.rhythmDays >= 10, ohne.rhythmDays);
+  ok("Mit Korrektur bleibt er beim wahren Takt",
+    mit.rhythmDays === 10, mit.rhythmDays);
+  ok("Die Korrektur wird gezählt", mit.absenceCorrected === 1, mit.absenceCorrected);
+  ok("Ein Abstand bleibt immer mindestens ein Tag",
+    computeRhythm(kaeufe, { absenceDays: () => 9999 }).rhythmDays >= 1);
+}
+{
+  const bekannt = knownAbsence({ from: day(-20), to: day(-8) }, T0);
+  ok("Der Urlaubsmodus liefert einen Zeitraum", bekannt.length === 1);
+  ok("Ein Wochenende ist keine Abwesenheit",
+    knownAbsence({ from: day(-10), to: day(-8) }, T0).length === 0);
+  ok("Ohne Daten kein Zeitraum", knownAbsence({}, T0).length === 0 && knownAbsence(null, T0).length === 0);
+  ok("Ein Urlaub in der Zukunft wird bis heute beschnitten",
+    knownAbsence({ from: day(-20), to: day(30) }, T0)[0].to === T0);
 }
 
 console.log("\n" + "=".repeat(60));

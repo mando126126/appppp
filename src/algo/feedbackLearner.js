@@ -113,7 +113,38 @@ function signalFor(entry, rhythmDays) {
  * @param {string} today
  * @returns {{factor, adjustedDays, signals, considered, neutral, disagreement, applied, reason, message}}
  */
-function feedbackAdjustment(log, rhythmDays, today) {
+/**
+ * Ist diese Rückmeldung schon im Rhythmus enthalten?
+ *
+ * DER PUNKT, AN DEM DIESES MODUL ZWEIMAL DASSELBE ZÄHLTE:
+ *
+ * „Hab noch da" heißt, dass NICHT gekauft wurde. Sobald danach ein
+ * Kauf stattfindet, ist der dadurch verlängerte Abstand in den Daten
+ * — und der Median hat ihn gesehen. Die Korrektur trotzdem weiter
+ * anzuwenden, verschiebt einen Rhythmus, der sich bereits verschoben
+ * hat. Zweimal derselbe Schluss aus derselben Tatsache.
+ *
+ * In der Drei-Jahres-Simulation kostete das die Hälfte der
+ * Trefferquote: nach dem Auszug einer Person häuften sich die
+ * „Hab noch"-Antworten, die Rhythmen wurden verlängert — einmal durch
+ * die längeren Kaufabstände und ein zweites Mal durch die Korrektur.
+ * Die App schlug danach so spät vor, dass sie nur noch 36 % dessen
+ * auf die Liste brachte, was der Haushalt brauchte.
+ *
+ * „War schon alle" verhält sich anders und wird deshalb NICHT
+ * verfallen gelassen: dass etwas vor dem Kauf bereits leer war, steht
+ * in keinem Kaufabstand. Zwei Käufe im Abstand von zehn Tagen sehen
+ * gleich aus, ob dazwischen drei Tage nichts da war oder nicht. Diese
+ * Aussage kann nur der Nutzer liefern, und sie bleibt gültig, bis sie
+ * veraltet.
+ */
+function isAbsorbed(entry, lastPurchaseDate) {
+  if (!lastPurchaseDate) return false;
+  if (entry.reason !== REASON.HAVE) return false;
+  return entry.date <= lastPurchaseDate;
+}
+
+function feedbackAdjustment(log, rhythmDays, today, opts = {}) {
   const base = {
     factor: 1,
     adjustedDays: rhythmDays,
@@ -121,6 +152,7 @@ function feedbackAdjustment(log, rhythmDays, today) {
     considered: 0,
     neutral: 0,
     disagreement: 0,
+    absorbed: 0,
     applied: false,
     reason: "kein_feedback",
     message: null
@@ -137,11 +169,17 @@ function feedbackAdjustment(log, rhythmDays, today) {
 
   // Nur Rückmeldungen aus dem Beobachtungszeitraum. Was jemand vor
   // einem Jahr angetippt hat, beschreibt einen anderen Haushalt.
+  const lastPurchaseDate = opts.lastPurchaseDate || null;
+  let absorbed = 0;
   const fresh = log.filter((e) => {
     if (!e || !e.date || e.date > today) return false;
-    return daysBetween(e.date, today) <= MAX_AGE_DAYS;
+    if (daysBetween(e.date, today) > MAX_AGE_DAYS) return false;
+    if (isAbsorbed(e, lastPurchaseDate)) { absorbed++; return false; }
+    return true;
   });
-  if (!fresh.length) return { ...base, reason: "nur_altes_feedback" };
+  if (!fresh.length) {
+    return { ...base, absorbed, reason: absorbed ? "im_rhythmus_enthalten" : "nur_altes_feedback" };
+  }
 
   // Gewichtung über Mehrfachnennung: das ist ein gewichteter Median,
   // ohne dafür eine eigene Implementierung zu brauchen.
@@ -167,6 +205,7 @@ function feedbackAdjustment(log, rhythmDays, today) {
       considered: fresh.length,
       signals: signalCount,
       neutral,
+      absorbed,
       reason: "zu_wenig_signale",
       message: signalCount
         ? `${signalCount} von ${MIN_SIGNALS} Rückmeldungen — noch keine Anpassung.`
@@ -213,6 +252,7 @@ function feedbackAdjustment(log, rhythmDays, today) {
     explicitSignals: explicitCount,
     considered: fresh.length,
     neutral,
+    absorbed,
     disagreement: Math.round(disagreement * 100) / 100,
     applied: adjustedDays !== rhythmDays,
     reason: "angewandt",
@@ -248,7 +288,15 @@ function feedbackAdjustment(log, rhythmDays, today) {
 function applyFeedback(rhythm, log, today, opts = {}) {
   if (!rhythm) return rhythm;
 
-  const adj = feedbackAdjustment(log || [], rhythm.rhythmDays, today);
+  // Der letzte Kauf entscheidet, welche „Hab noch"-Antworten schon in
+  // den Kaufabständen stecken. `opts.purchases` hat Vorrang, weil dort
+  // nach einem Strukturbruch nur die noch gültigen Käufe stehen.
+  const rows = Array.isArray(opts.purchases) ? opts.purchases : null;
+  const lastPurchaseDate = rows && rows.length
+    ? rows.map((p) => p.date).sort().pop()
+    : rhythm.lastPurchaseDate || null;
+
+  const adj = feedbackAdjustment(log || [], rhythm.rhythmDays, today, { lastPurchaseDate });
 
   // Widersprüchliche Rückmeldungen senken das Vertrauen, statt den
   // Rhythmus mit falscher Sicherheit zu verschieben.

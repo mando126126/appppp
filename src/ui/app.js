@@ -305,50 +305,86 @@ const App = {
   /* ---------- Ladenmodus ---------- */
   openStore() {
     App.storeOpen = true;
+    App._storeSig = null;          // beim Öffnen frisch aufbauen
     document.getElementById("store").hidden = false;
     document.body.style.overflow = "hidden";
     App.renderStore();
   },
   closeStore() {
     App.storeOpen = false;
+    App._storeSig = null;
     document.getElementById("store").hidden = true;
     document.body.style.overflow = "";
     App.render();
   },
 
+  /**
+   * Der Ladenmodus baut sich NICHT bei jedem Abhaken neu auf.
+   *
+   * Er hing bisher am allgemeinen Neuzeichnen: ein Tippen änderte den
+   * Zustand, das Neuzeichnen warf die Liste weg und setzte sie neu —
+   * die neue Zeile war von Anfang an durchgestrichen, und ein Übergang
+   * von „nicht durchgestrichen“ nach „durchgestrichen“ fand nie statt.
+   * Genau der soll aber zu sehen sein.
+   *
+   * Deshalb: solange dieselben Positionen in derselben Reihenfolge
+   * anstehen, bleiben die Knöpfe stehen und es wechselt nur ihre
+   * Klasse. Nebenbei ist das auch schneller — im Laden wird jede
+   * Position einmal angetippt.
+   */
   renderStore() {
     const ctx = App.ctx;
     const S = Data.get();
     const active = ctx.items.filter((i) => i.on);
     const body = document.getElementById("storeBody");
-    body.innerHTML = "";
+    const groups = groupByAisle(active, ctx.aisleList);
 
-    // Gangreihenfolge kommt aus dem Modul, nicht aus einer Liste hier.
-    groupByAisle(active, ctx.aisleList).forEach(({ aisle, items }) => {
-      body.append(el("div", "aisle", esc(aisle)));
-      const box = el("div", "aisleGroup");
-      items.forEach((i) => {
-        const done = S.storeChecked.includes(i.productId);
-        const dup = ctx.duplicates.find((d) => d.productId === i.productId);
-        const b = el("button", "sItem" + (done ? " done" : ""));
-        b.setAttribute("aria-pressed", done ? "true" : "false");
-        b.innerHTML =
-          `<span class="tick"></span>` +
-          `<span class="sn">${esc(i.name)}${dup ? `<small>${esc(dup.message)}</small>` : ""}</span>` +
-          `<span class="sp">${eur(i.halved ? i.price / 2 : i.price)}</span>`;
-        b.addEventListener("click", () => {
-          Data.update((s) => {
-            s.storeChecked = s.storeChecked.includes(i.productId)
-              ? s.storeChecked.filter((x) => x !== i.productId)
-              : [...s.storeChecked, i.productId];
+    const signature = groups.map((g) => g.aisle + ":" + g.items.map((i) => i.productId).join(",")).join("|");
+    if (App._storeSig !== signature) {
+      App._storeSig = signature;
+      App._storeNodes = new Map();
+      body.innerHTML = "";
+
+      // Gangreihenfolge kommt aus dem Modul, nicht aus einer Liste hier.
+      groups.forEach(({ aisle, items }) => {
+        body.append(el("div", "aisle", esc(aisle)));
+        const box = el("div", "aisleGroup");
+        items.forEach((i) => {
+          const dup = ctx.duplicates.find((d) => d.productId === i.productId);
+          const b = el("button", "sItem");
+          b.innerHTML =
+            `<span class="tick"></span>` +
+            `<span class="sn"><span class="strike">${esc(i.name)}</span>` +
+            `${dup ? `<small>${esc(dup.message)}</small>` : ""}</span>` +
+            `<span class="sp">${eur(i.halved ? i.price / 2 : i.price)}</span>`;
+          b.addEventListener("click", () => {
+            // Erst sichtbar, dann gespeichert: der Strich läuft los,
+            // bevor irgendetwas gerechnet wird.
+            b.classList.toggle("done");
+            b.setAttribute("aria-pressed", b.classList.contains("done") ? "true" : "false");
+            Data.update((s) => {
+              s.storeChecked = s.storeChecked.includes(i.productId)
+                ? s.storeChecked.filter((x) => x !== i.productId)
+                : [...s.storeChecked, i.productId];
+            });
           });
+          App._storeNodes.set(i.productId, b);
+          box.append(b);
         });
-        box.append(b);
+        body.append(box);
       });
-      body.append(box);
-    });
 
-    if (!active.length) body.append(el("p", "empty", "Nichts auf der Liste."));
+      if (!active.length) body.append(el("p", "empty", "Nichts auf der Liste."));
+    }
+
+    // Zustand auffrischen. Beim Neuaufbau geschieht das noch vor dem
+    // ersten Bild, also ohne Animation — beim Öffnen soll nichts
+    // durchgestrichen werden, was schon durchgestrichen war.
+    App._storeNodes.forEach((node, pid) => {
+      const done = S.storeChecked.includes(pid);
+      node.classList.toggle("done", done);
+      node.setAttribute("aria-pressed", done ? "true" : "false");
+    });
 
     const inCart = active.filter((i) => S.storeChecked.includes(i.productId));
     const sum = inCart.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);

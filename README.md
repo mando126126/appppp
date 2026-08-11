@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 754 Tests + Zwei-Jahres-Simulation
+npm test        # 842 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -172,6 +172,99 @@ Push-Nachricht: ohne Server kann niemand die App von außen wecken, und
 einen Server hat diese App bewusst nicht. Sie erscheint beim nächsten
 Öffnen — genau so steht es auch in der Einstellung.
 
+### Drei Jahre am Stück: bringt das überhaupt etwas?
+
+Alle anderen Tests beantworten „rechnet es richtig?". `test/longterm.js`
+beantwortet die andere Frage — die, an der Apps scheitern. Ein
+simulierter Haushalt lebt 1095 Tage: er verbraucht Tag für Tag, kauft
+zweimal die Woche, fährt zweimal im Jahr zwei Wochen weg, und nach
+anderthalb Jahren zieht eine Person aus. Dieselbe Welt läuft **dreimal**
+mit demselben Startwert, mit drei Strategien — die dritte ist die
+gebaute App im simulierten Browser, mit echtem Speicher, echtem
+`compute()` und einer stellbaren Uhr.
+
+| Strategie | vergessen | unnötig | verdorben | Leertage | Ausgaben |
+|---|---|---|---|---|---|
+| Gedächtnis | 28,9 % | 0 % | 1625 € | 3219 | 5103 € |
+| Feste Liste | 26,7 % | 59,2 % | 3213 € | 1710 | 7132 € |
+| **Einkaufs-Anker** | **7,0 %** | 14,6 % | 2181 € | 1696 | 6188 € |
+
+Der ehrliche Vergleich ist der mit der **festen Liste**, nicht der mit
+dem Gedächtnis: Letzteres wirft am wenigsten weg, weil dieser Haushalt
+chronisch unterversorgt ist — an 3219 statt 1696 Tagen fehlte etwas.
+Wer weniger kauft, verdirbt weniger. Vergleichbar ist nur, was gleich
+gut versorgt ist, und da steht es 1696 zu 1710 Leertage bei **944 €
+weniger Ausgaben und 1032 € weniger Verderb** über drei Jahre. Rund
+315 € im Jahr, ohne dass jemand auf etwas verzichtet.
+
+Die Trefferquote — wie viel von dem, was gebraucht wurde, überhaupt auf
+der Liste stand — steigt von 53 % im ersten Quartal auf 88 % und hält
+sich dort, auch über den Haushaltsbruch hinweg. Nach drei Jahren:
+321 KB Speicher, `compute()` unter einer Viertelsekunde, Rhythmen im
+Median auf 30 % am wahren Takt.
+
+**Der Test ist kein Nutzertest.** Die Vergesslichkeitsrate von 30 % und
+die Nachschau-Rate von 70 % sind Annahmen, keine Messungen. Belastbar
+ist nur der Vergleich: drei Strategien, eine Welt, dieselben
+Zufallszahlen.
+
+#### Drei Fehler, die erst dieser Lauf gezeigt hat
+
+**1. Die App war eine Überkauf-Maschine.** Der erste Durchlauf war
+vernichtend: 49,8 % unnötige Käufe und **mehr** Verderb als ganz ohne
+App. Ursache war die feste Vorausschau von drei Tagen. Bei einem
+Rhythmus von dreißig Tagen ist das ein Zehntel des Zyklus, bei vier
+Tagen sind es drei Viertel — Milch stand ab dem Tag nach dem Kauf
+wieder auf der Liste. Daraus wurde eine Rückkopplung: vorgeschlagen →
+gekauft → beobachteter Abstand gleich der Einkaufsfrequenz → Rhythmus
+noch kürzer. Die App lernte am Ende ihren eigenen Vorschlag. 239 von
+281 Packungen Milch wurden zu früh gekauft. Der Vorlauf ist jetzt ein
+**Anteil** des Zyklus (`effectiveLookahead`), gedeckelt durch die
+Einstellung.
+
+**2. Rückmeldungen wurden zweimal verrechnet.** Derselbe Fehlertyp wie
+das oben verworfene implizite Signal: „Hab noch da" heißt, dass nicht
+gekauft wurde — sobald danach ein Kauf kommt, steckt der dadurch
+längere Abstand bereits in den Daten und der Median hat ihn gesehen.
+Die Korrektur trotzdem obendrauf zu legen, verschiebt einen Rhythmus,
+der sich schon verschoben hat. Nach dem Auszug einer Person kostete das
+die halbe Trefferquote: die App schlug so spät vor, dass nur noch 36 %
+des Bedarfs auf der Liste stand. „Hab noch" verfällt jetzt mit dem
+nächsten Kauf. **„War schon alle" nicht** — dass etwas vor dem Kauf
+bereits leer war, steht in keinem Kaufabstand.
+
+**3. Jeder Urlaub kostete zwei Wochen Blindflug.** Der Rhythmus misst
+Kalendertage, ein Haushalt verbraucht aber Anwesenheitstage. Die
+Pausenerkennung greift bei kurzen Rhythmen (14 Urlaubstage sind das
+Fünffache von drei) und nicht bei mittleren (dasselbe ist nur das
+Doppelte von zehn) — und genau dort entstand der Schaden: nach jeder
+Rückkehr verstummte die Liste wochenlang. `absenceDetector.js` erkennt
+Abwesenheit an einer Lücke in den **Bons** — das betrifft den ganzen
+Haushalt und ist belastbarer als eine Lücke bei einem Produkt — und
+zieht die Tage vom Abstand ab, statt den Datenpunkt wegzuwerfen.
+Derselbe Befund traf den Streak: der stand nach jeder Reise wieder bei
+eins, weil zwei Wochen Urlaub zwei Lückenwochen sind und die Kulanz nur
+eine deckt. Erkannte Abwesenheit hält ihn jetzt.
+
+### Abhaken, das sich wie Abhaken anfühlt
+
+Im Ladenmodus wird eine Position nicht mehr nur markiert, sondern
+**durchgestrichen** — und der Strich wird gezogen, nicht gesetzt.
+`text-decoration: line-through` lässt sich nicht animieren, deshalb ein
+Farbverlauf als Hintergrundbild, dessen Breite von null auf hundert
+Prozent läuft; das trägt auch über einen Zeilenumbruch.
+
+Dafür musste der Ladenmodus aufhören, sich bei jedem Tippen neu
+aufzubauen. Er hing am allgemeinen Neuzeichnen: die neue Zeile war von
+Anfang an im Endzustand, ein Übergang fand nie statt. Solange dieselben
+Positionen in derselben Reihenfolge anstehen, bleiben die Knöpfe jetzt
+stehen und es wechselt nur ihre Klasse — nebenbei auch schneller, denn
+im Laden wird jede Position einmal angetippt.
+
+Der Kreis trägt an beiden Stellen keinen Haken mehr, nur noch die
+Füllung. Der Haken sagte dasselbe zweimal, und ohne ihn wirkt die Liste
+ruhiger.
+
 ### Haushaltsprodukte rechnen anders
 
 Non-Food ist nicht dieselbe Aufgabe mit anderen Produkten, sondern ein
@@ -271,7 +364,7 @@ Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 ## Aufbau
 
 ```
-src/algo/        44 Node-Module — 20 unverändert aus der Vorlage, 24 neue
+src/algo/        45 Node-Module — 20 unverändert aus der Vorlage, 25 neue
 src/ui/
   index.html     Gerüst
   app.css        eine Gestaltung für Telefon und Rechner
@@ -329,10 +422,16 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 754
-npm run test:algo # 57 Regressions- + 85 Stress- + 94 Funktions- + 126 Haushalts- + 85 Lern- + 113 Rückblicktests
-npm run test:ui   # 194 Oberflächentests in jsdom
+npm test          # alle 842
+npm run test:algo # 597 Modultests (Regression, Stress, Funktionen, Haushalt, Lernen, Rückblick)
+npm run test:ui   # 209 Oberflächentests in jsdom
+npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
+
+`test/longterm.js` ist der aufwendigste: drei Jahre Haushalt durch die
+**gebaute** App, mit gestellter Uhr und im Vergleich gegen zwei
+Alternativstrategien. Er hat drei Fehler gefunden, die kein Einzeltest
+je erreicht hätte — sie stehen oben ausführlich.
 
 `test/simulation.js` lässt einen simulierten Haushalt zwei Jahre lang
 Tag für Tag einkaufen und antworten. Einzeltests prüfen einen Zustand;

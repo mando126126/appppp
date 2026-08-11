@@ -74,6 +74,13 @@ function mad(values) {
  * Berechnet den Rhythmus für ein Produkt.
  *
  * @param {Array<{date:string, quantity?:number}>} purchases
+ * @param {{absenceDays?:function}} [opts]
+ *   `absenceDays(from, to)` liefert die Tage, an denen der Haushalt in
+ *   diesem Zeitraum nicht da war. Sie werden vom Abstand abgezogen,
+ *   denn verbraucht wird nur, wenn jemand da ist. Als Funktion statt
+ *   als Liste übergeben, damit dieses Modul nichts über Abwesenheiten
+ *   wissen muss — die Erkennung steht in absenceDetector.js, und eine
+ *   Abhängigkeit dorthin wäre ein Ring.
  * @returns {{
  *   rhythmDays:number|null, confidence:number, sampleSize:number,
  *   lastPurchaseDate:string|null, lastQuantity:number,
@@ -81,7 +88,7 @@ function mad(values) {
  *   perUnitDays:number|null
  * }}
  */
-function computeRhythm(purchases) {
+function computeRhythm(purchases, opts = {}) {
   const empty = {
     rhythmDays: null, confidence: 0, sampleSize: 0, lastPurchaseDate: null,
     lastQuantity: 1, pauses: [], trend: "unbekannt", perUnitDays: null, invalidEntries: 0
@@ -112,13 +119,28 @@ function computeRhythm(purchases) {
   // Rohintervalle, jeweils normiert auf die gekaufte Menge:
   // 2 Liter Milch in 12 Tagen = 6 Tage pro Einheit.
   const rawIntervals = [];
+  const absenceOf = typeof opts.absenceDays === "function" ? opts.absenceDays : null;
+  let absenceCorrected = 0;
   for (let i = 1; i < sorted.length; i++) {
     const gap = daysBetween(sorted[i - 1].date, sorted[i].date);
+
+    // Abwesenheitstage abziehen: ein Abstand von 24 Tagen mit zwei
+    // Wochen Urlaub darin ist ein Abstand von zehn Verbrauchstagen.
+    // Mindestens ein Tag bleibt stehen — ein Abstand von null Tagen
+    // wäre kein Rhythmus, sondern eine Division durch null.
+    let away = 0;
+    if (absenceOf) {
+      const raw = Number(absenceOf(sorted[i - 1].date, sorted[i].date)) || 0;
+      away = Math.max(0, Math.min(gap - 1, raw));
+      if (away > 0) absenceCorrected++;
+    }
+    const effectiveGap = gap - away;
+
     const qty = sorted[i - 1].quantity || 1;
-    const perUnit = gap / qty;
+    const perUnit = effectiveGap / qty;
     // Sicherheitsnetz: nur endliche, nicht-negative Werte verwenden
     if (!Number.isFinite(perUnit) || perUnit < 0) continue;
-    rawIntervals.push({ gap, perUnit, from: sorted[i - 1].date, to: sorted[i].date });
+    rawIntervals.push({ gap: effectiveGap, calendarGap: gap, away, perUnit, from: sorted[i - 1].date, to: sorted[i].date });
   }
   if (rawIntervals.length === 0) {
     return { ...empty, lastPurchaseDate: last.date, lastQuantity: last.quantity || 1, invalidEntries: invalid.length };
@@ -170,12 +192,13 @@ function computeRhythm(purchases) {
     rhythmDays, confidence, sampleSize: working.length,
     lastPurchaseDate: last.date, lastQuantity,
     pauses, trend, perUnitDays: perUnitDays !== null ? Math.round(perUnitDays * 10) / 10 : null,
+    absenceCorrected,
     invalidEntries: invalid.length
   };
 }
 
 /** Rhythmen für alle Produkte eines Haushalts. */
-function computeAllRhythms(history) {
+function computeAllRhythms(history, opts = {}) {
   const byProduct = new Map();
   for (const entry of history) {
     if (!byProduct.has(entry.productId)) byProduct.set(entry.productId, []);
@@ -183,7 +206,7 @@ function computeAllRhythms(history) {
   }
   const out = new Map();
   for (const [productId, purchases] of byProduct.entries()) {
-    out.set(productId, computeRhythm(purchases));
+    out.set(productId, computeRhythm(purchases, opts));
   }
   return out;
 }
