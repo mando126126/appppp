@@ -1,501 +1,644 @@
 /* ================================================================
-   app.css — eine Gestaltung für Telefon und Rechner.
+   app.css — Papier und Tinte
 
-   Orientierung ist iOS: große Titel, die beim Scrollen zur Leiste
-   zusammenfallen; gruppierte Listen mit Einzug statt Karten mit
-   Schatten; Materials (Unschärfe) für alles, was über Inhalt liegt;
-   ruhige Flächen und eine einzige Akzentfarbe. Systemschriften, keine
-   Webfonts — auf dem iPhone ist das SF Pro, sonst der jeweilige
-   Systemschnitt.
+   Die vorige Fassung war eine iOS-Vorlage mit Grün darin: runde
+   Karten in runden Karten, ein Akzentgrün von der Stange, Ringe und
+   Fortschrittsbalken als Zierrat, Systemschrift ohne Anspruch. Nichts
+   daran war aus dem Gegenstand hergeleitet — es hätte genauso eine
+   Fitness-App sein können.
 
-   Farben stehen ausschließlich als Variablen und existieren doppelt:
-   hell und dunkel. Kein Wert steht fest im Regelwerk, sonst bricht
-   einer der beiden Modi.
+   Diese App verwaltet Kassenbons und Haushaltsbuchhaltung. Dafür gibt
+   es eine visuelle Tradition, die älter ist als jedes Betriebssystem:
+   der Beleg. Papier, Haarlinien, Positionen untereinander, Beträge
+   rechtsbündig in gleich breiten Ziffern, eine Doppellinie über der
+   Summe. Zwei Druckfarben, mehr hatte keine Registrierkasse.
+
+   DARAUS FOLGT ALLES ANDERE:
+
+     Flächen    Es gibt keine Karten. Die Zeilen stehen direkt auf dem
+                Papier, getrennt durch Haarlinien. Eine Karte auf einer
+                Karte auf einer Karte war das eigentliche Problem —
+                jede Zeile bekam einen Kasten, weil kein Kasten etwas
+                über Wichtigkeit aussagte.
+     Ziffern    Alle Zahlen in Tabellenbreite, rechtsbündig. Beträge
+                untereinander müssen sich vergleichen lassen, ohne dass
+                man sie liest.
+     Farbe      Tinte und ein Stempelrot. Grün nur dort, wo etwas
+                abgehakt ist — die zweite Farbe im Druck.
+     Kanten     Rechtwinklig. Radien nur an Bedienelementen, wo der
+                Finger sie braucht.
+     Schrift    Namen in der Systemschrift, Zahlen in der dicksten
+                Monospace, die das Gerät hat. Überschriften klein,
+                versal, weit gesperrt — wie der Kopf eines Belegs.
+
+   Der dunkle Modus ist kein umgedrehtes Papier, sondern ein
+   Durchschlag: warmes Schwarz, gebrochenes Weiß, dieselben zwei
+   Farben.
    ================================================================ */
 
 :root{
   color-scheme: light dark;
 
-  /* Flächen — von hinten nach vorne */
-  --bg:#F2F2F7;              /* Systemhintergrund gruppiert */
-  --surface:#FFFFFF;         /* Zeilen und Karten */
-  --surface-2:#F2F2F7;       /* eingelassene Felder */
-  --material:rgba(249,249,251,.82);   /* Leisten mit Unschärfe */
-  --separator:rgba(60,60,67,.14);
-  --separator-strong:rgba(60,60,67,.29);
+  /* Papier und Tinte */
+  --paper:#F6F3ED;              /* der Bogen, auf dem alles steht */
+  --paper-2:#FCFAF6;            /* Beleg: Blätter, Ladenmodus */
+  --sunken:#EAE5DA;             /* eingelassene Felder */
+  --material:rgba(246,243,237,.88);
+  --ink:#1B1917;
+  --ink-2:rgba(27,25,23,.58);
+  --ink-3:rgba(27,25,23,.33);
+  --on-accent:#FCFAF6;
 
-  /* Text */
-  --ink:#000000;
-  --ink-2:rgba(60,60,67,.62);   /* sekundär */
-  --ink-3:rgba(60,60,67,.32);   /* tertiär */
-  --on-accent:#FFFFFF;
+  /* Haarlinien — das tragende Gestaltungsmittel */
+  --rule:rgba(27,25,23,.15);
+  --rule-strong:rgba(27,25,23,.38);
 
-  /* Akzent und Signale */
-  --accent:#0B7A5B;
-  --accent-soft:rgba(11,122,91,.12);
-  --green:#12855F;
-  --red:#D9401F;
-  --red-soft:rgba(217,64,31,.12);
-  --amber:#9A6B06;
-  --amber-soft:rgba(154,107,6,.14);
-  --blue:#0A69D4;
-  --blue-soft:rgba(10,105,212,.12);
-  --fill:rgba(118,118,128,.12);      /* Systemfüllung, z. B. Stepper */
-  --fill-2:rgba(118,118,128,.20);
+  /* Zwei Druckfarben */
+  --accent:#1D5C43;             /* Stempelgrün: abgehakt, bestätigt */
+  --accent-soft:rgba(29,92,67,.10);
+  --green:#1D5C43;
+  --red:#B3341C;                /* Stempelrot: das einzige Warnsignal */
+  --red-soft:rgba(179,52,28,.10);
+  --amber:#8A5A12;              /* Ocker: Vorbehalt, Schätzung */
+  --amber-soft:rgba(138,90,18,.12);
+  --blue:#2C4A73;               /* Tinte blau: Hinweis ohne Dringlichkeit */
+  --blue-soft:rgba(44,74,115,.10);
+  --fill:rgba(27,25,23,.06);
+  --fill-2:rgba(27,25,23,.13);
 
-  --r-lg:18px;   /* gruppierte Listen */
-  --r-md:12px;   /* Felder, Knöpfe */
-  --r-sm:9px;
+  /* Rechtwinklig. Die Namen bleiben, damit alte Regeln greifen. */
+  --r-lg:0px;
+  --r-md:2px;
+  --r-sm:2px;
 
   --safe-top:env(safe-area-inset-top,0px);
   --safe-bottom:env(safe-area-inset-bottom,0px);
-  --nav-h:52px;
+  --nav-h:54px;
   --text-scale:1;
-  --ease:cubic-bezier(.32,.72,0,1);   /* iOS-artig: schnell an, weich aus */
-}
+  --pad:18px;                   /* Papierrand */
+  --ease:cubic-bezier(.32,.72,0,1);
 
-:root[data-theme="dunkel"],
-:root:not([data-theme="hell"]) {
-  /* nichts — der dunkle Satz steht unten in der Medienabfrage bzw.
-     im ausdrücklichen Attribut. Diese Regel hält nur die Reihenfolge. */
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Roboto Mono",Menlo,Consolas,monospace;
 }
 
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="hell"]){
-    --bg:#000000;
-    --surface:#1C1C1E;
-    --surface-2:#2C2C2E;
-    --material:rgba(30,30,32,.78);
-    --separator:rgba(84,84,88,.40);
-    --separator-strong:rgba(84,84,88,.65);
-    --ink:#FFFFFF;
-    --ink-2:rgba(235,235,245,.60);
-    --ink-3:rgba(235,235,245,.30);
-    --accent:#3DD9A4;
-    --accent-soft:rgba(61,217,164,.16);
-    --green:#3DD9A4;
-    --red:#FF6B4A;
-    --red-soft:rgba(255,107,74,.16);
-    --amber:#F0B429;
-    --amber-soft:rgba(240,180,41,.16);
-    --blue:#5AA9FF;
-    --blue-soft:rgba(90,169,255,.16);
-    --on-accent:#00140D;
-    --fill:rgba(118,118,128,.24);
-    --fill-2:rgba(118,118,128,.36);
+    --paper:#12110F;
+    --paper-2:#1A1815;
+    --sunken:#221F1B;
+    --material:rgba(18,17,15,.90);
+    --ink:#F2EDE3;
+    --ink-2:rgba(242,237,227,.58);
+    --ink-3:rgba(242,237,227,.32);
+    --on-accent:#0B1710;
+    --rule:rgba(242,237,227,.16);
+    --rule-strong:rgba(242,237,227,.40);
+    --accent:#5FBF92;
+    --accent-soft:rgba(95,191,146,.14);
+    --green:#5FBF92;
+    --red:#E8674A;
+    --red-soft:rgba(232,103,74,.14);
+    --amber:#D6A040;
+    --amber-soft:rgba(214,160,64,.14);
+    --blue:#7FA6DB;
+    --blue-soft:rgba(127,166,219,.14);
+    --fill:rgba(242,237,227,.07);
+    --fill-2:rgba(242,237,227,.15);
   }
 }
 
 :root[data-theme="dunkel"]{
-  --bg:#000000;
-  --surface:#1C1C1E;
-  --surface-2:#2C2C2E;
-  --material:rgba(30,30,32,.78);
-  --separator:rgba(84,84,88,.40);
-  --separator-strong:rgba(84,84,88,.65);
-  --ink:#FFFFFF;
-  --ink-2:rgba(235,235,245,.60);
-  --ink-3:rgba(235,235,245,.30);
-  --accent:#3DD9A4;
-  --accent-soft:rgba(61,217,164,.16);
-  --green:#3DD9A4;
-  --red:#FF6B4A;
-  --red-soft:rgba(255,107,74,.16);
-  --amber:#F0B429;
-  --amber-soft:rgba(240,180,41,.16);
-  --blue:#5AA9FF;
-  --blue-soft:rgba(90,169,255,.16);
-  --on-accent:#00140D;
-  --fill:rgba(118,118,128,.24);
-  --fill-2:rgba(118,118,128,.36);
+  --paper:#12110F;
+  --paper-2:#1A1815;
+  --sunken:#221F1B;
+  --material:rgba(18,17,15,.90);
+  --ink:#F2EDE3;
+  --ink-2:rgba(242,237,227,.58);
+  --ink-3:rgba(242,237,227,.32);
+  --on-accent:#0B1710;
+  --rule:rgba(242,237,227,.16);
+  --rule-strong:rgba(242,237,227,.40);
+  --accent:#5FBF92;
+  --accent-soft:rgba(95,191,146,.14);
+  --green:#5FBF92;
+  --red:#E8674A;
+  --red-soft:rgba(232,103,74,.14);
+  --amber:#D6A040;
+  --amber-soft:rgba(214,160,64,.14);
+  --blue:#7FA6DB;
+  --blue-soft:rgba(127,166,219,.14);
+  --fill:rgba(242,237,227,.07);
+  --fill-2:rgba(242,237,227,.15);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;min-height:100%}
+/* Der Faktor sitzt auf der Wurzel, alle Schriftgrößen stehen in rem.
+   Vorher standen sie in Pixeln — die Einstellung „Schriftgröße" hatte
+   damit fast keine Wirkung, obwohl sie im Menü stand. Das ist der
+   Unterschied zwischen einer Barrierefreiheit, die es gibt, und einer,
+   die wirkt. Abstände und Rahmen bleiben in Pixeln: der Text soll
+   wachsen, nicht das Gerüst. */
+html{font-size:calc(16.5px * var(--text-scale))}
 body{
-  background:var(--bg);color:var(--ink);
+  background:var(--paper);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
-  font-size:calc(17px * var(--text-scale));line-height:1.41;letter-spacing:-.01em;
+  font-size:1rem;line-height:1.4;letter-spacing:-.005em;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   overscroll-behavior-y:none;
 }
-h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.022em}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 p{margin:0}
 button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit;letter-spacing:inherit}
-input,select,textarea{font-family:inherit;font-size:17px;color:inherit}
-:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:4px}
-.num,.mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:0}
 .hide{display:none !important}
+
+/* Alle Zahlen gleich breit. Das ist keine Zierde: Beträge
+   untereinander sollen sich vergleichen lassen, ohne dass man sie
+   liest — dafür müssen die Ziffern in einer Spalte stehen. */
+.num,.mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+/* Der Kopf eines Belegs: klein, versal, weit gesperrt. */
+.groupTitle,.aisle,.sectionRow,.tile .l,.totals .l,.strip .l,.rvTag,.bLbl,.cLevel,.field .lbl,
+.storeFoot .stat{
+  font-size:0.636rem;font-weight:600;text-transform:uppercase;letter-spacing:.13em;
+  color:var(--ink-2);
+}
 
 /* ---------------- Gerüst ---------------- */
 .shell{min-height:100vh;display:flex;flex-direction:column}
 
-/* Leiste oben: Material mit Unschärfe, Titel erscheint erst beim Scrollen */
 .appbar{
   position:sticky;top:0;z-index:40;
-  padding:calc(var(--safe-top) + 6px) 16px 8px;
+  padding:calc(var(--safe-top) + 8px) var(--pad) 8px;
   background:var(--material);
-  -webkit-backdrop-filter:saturate(180%) blur(20px);
-  backdrop-filter:saturate(180%) blur(20px);
-  border-bottom:.5px solid transparent;
-  transition:border-color .2s linear;
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border-bottom:1px solid transparent;
+  transition:border-color .15s linear;
 }
-.appbar.scrolled{border-bottom-color:var(--separator)}
-.barRow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px}
+.appbar.scrolled{border-bottom-color:var(--rule-strong)}
+.barRow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px}
 .barTitle{
-  font-size:17px;font-weight:600;opacity:0;transform:translateY(6px);
-  transition:opacity .18s var(--ease),transform .18s var(--ease);
+  font-size:0.667rem;font-weight:700;text-transform:uppercase;letter-spacing:.15em;
+  opacity:0;transform:translateY(4px);
+  transition:opacity .16s var(--ease),transform .16s var(--ease);
 }
 .appbar.scrolled .barTitle{opacity:1;transform:none}
-.barActions{display:flex;gap:8px;margin-left:auto}
+.barActions{display:flex;gap:14px;margin-left:auto}
 .barBtn{
-  color:var(--accent);font-size:16px;font-weight:500;
-  padding:6px 2px;min-height:36px;white-space:nowrap;
+  color:var(--ink);font-size:0.667rem;font-weight:700;text-transform:uppercase;letter-spacing:.11em;
+  padding:8px 0;min-height:34px;white-space:nowrap;
+  border-bottom:1.5px solid var(--ink);
 }
-.barBtn:active{opacity:.4}
+.barBtn:active{opacity:.45}
 .barBtn.filled{
-  background:var(--accent);color:var(--on-accent);
-  border-radius:99px;padding:7px 15px;font-weight:600;font-size:15px;
+  background:var(--ink);color:var(--paper);
+  border:none;padding:8px 13px;
 }
-.barBtn.filled:active{opacity:.8}
+.barBtn.filled:active{opacity:.75}
 
-/* Großer Titel im Inhalt, wie in iOS */
-.largeTitle{padding:4px 16px 2px}
-.largeTitle h1{font-size:34px;line-height:1.12;letter-spacing:-.028em}
+/* Belegkopf statt großem iOS-Titel */
+.largeTitle{padding:10px var(--pad) 0}
+.largeTitle h1{
+  font-size:0.909rem;font-weight:700;text-transform:uppercase;letter-spacing:.18em;
+  line-height:1.2;
+}
 .largeTitle .sub{
-  font-size:15px;color:var(--ink-2);margin-top:3px;
-  display:flex;align-items:center;gap:7px;flex-wrap:wrap;letter-spacing:-.01em;
+  font-family:var(--mono);font-size:0.697rem;color:var(--ink-2);
+  margin-top:6px;padding-bottom:9px;letter-spacing:0;
+  display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  border-bottom:1px solid var(--rule-strong);
 }
 
-main{flex:1;padding:6px 16px calc(var(--nav-h) + var(--safe-bottom) + 28px);width:100%}
+main{flex:1;padding:0 var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 32px);width:100%}
 
 /* ---------------- Tableiste unten ---------------- */
 .nav{
   position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;
   background:var(--material);
-  -webkit-backdrop-filter:saturate(180%) blur(20px);
-  backdrop-filter:saturate(180%) blur(20px);
-  border-top:.5px solid var(--separator);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  border-top:1px solid var(--rule-strong);
   padding-bottom:var(--safe-bottom);
 }
 .nav button{
-  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  height:var(--nav-h);font-size:10px;font-weight:500;color:var(--ink-2);letter-spacing:0;
-  transition:color .15s linear;
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  height:var(--nav-h);
+  /* Die Leiste ist fest hoch: ihre Beschriftung darf mitwachsen, aber
+     nicht über die Zellenbreite hinaus. Sonst steht dort „MEH". */
+  font-size:min(0.545rem,11px);font-weight:600;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--ink-3);transition:color .12s linear;position:relative;
 }
-.nav button svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.nav button[aria-current="page"]{color:var(--accent)}
-.nav button[aria-current="page"] svg{stroke-width:2.1}
+.nav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.nav button[aria-current="page"]{color:var(--ink)}
+.nav button[aria-current="page"] svg{stroke-width:1.9}
+.nav button[aria-current="page"]::after{
+  content:"";position:absolute;top:0;left:22%;right:22%;height:2px;background:var(--ink);
+}
 .nav button:active{opacity:.5}
 
-/* ---------------- Gruppierte Liste (das Grundelement) ---------------- */
-.group{margin:22px 0 0}
-.group:first-child{margin-top:10px}
+/* ---------------- Der Block: Überschrift, Zeilen, Abschluss ------
+   Kein Kasten. Eine Überschrift, eine Linie darunter, Positionen,
+   eine Linie darunter. Genau der Aufbau eines Belegabschnitts.     */
+.group{margin:26px 0 0}
+.group:first-child{margin-top:18px}
 .groupTitle{
-  font-size:13px;font-weight:400;color:var(--ink-2);
-  text-transform:uppercase;letter-spacing:.045em;
-  padding:0 16px 7px;
+  display:flex;align-items:center;gap:8px;
+  padding:0 0 6px;border-bottom:1px solid var(--rule-strong);
 }
 .groupBody{
-  background:var(--surface);border-radius:var(--r-lg);overflow:hidden;
+  background:transparent;border-radius:0;overflow:visible;
+  border-bottom:1px solid var(--rule-strong);
 }
-.groupNote{font-size:13px;color:var(--ink-2);padding:7px 16px 0;line-height:1.38}
+.groupNote{font-size:0.727rem;color:var(--ink-2);padding:8px 0 0;line-height:1.4}
 
-/* Zeile in einer gruppierten Liste */
 .row{
   display:flex;align-items:center;gap:12px;
-  padding:11px 16px;min-height:44px;position:relative;
-  background:var(--surface);width:100%;text-align:left;
+  padding:11px 0;min-height:44px;position:relative;
+  background:transparent;width:100%;text-align:left;
 }
 .row + .row::before{
-  content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--separator);
+  content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--rule);
 }
-button.row:active{background:var(--fill)}
+button.row:active,label.row:active{background:var(--fill)}
 .row .rowMain{flex:1;min-width:0}
-.row .rowTitle{font-size:17px;letter-spacing:-.016em}
-.row .rowSub{font-size:13px;color:var(--ink-2);margin-top:1px;line-height:1.35}
-.row .rowValue{font-size:17px;color:var(--ink-2);font-variant-numeric:tabular-nums;flex:0 0 auto}
-.row .rowValue small{display:block;font-size:12px;color:var(--ink-3);text-align:right}
-.row .chev{width:9px;height:9px;flex:0 0 auto;border-right:2px solid var(--ink-3);border-top:2px solid var(--ink-3);transform:rotate(45deg)}
-/* Breite Steuerelemente (Segmented Control) brauchen eine eigene Zeile —
-   nebeneinander überdecken sie sonst das Label. */
-.row.stacked{flex-direction:column;align-items:stretch;gap:10px;padding-top:12px;padding-bottom:12px}
-.row.stacked .segmented{width:100%}
+.row .rowTitle{font-size:0.97rem;letter-spacing:-.008em}
+.row .rowSub{font-size:0.758rem;color:var(--ink-2);margin-top:2px;line-height:1.35}
+.row .rowValue{
+  font-family:var(--mono);font-size:0.879rem;color:var(--ink);
+  font-variant-numeric:tabular-nums;flex:0 0 auto;text-align:right;letter-spacing:-.02em;
+}
+.row .rowValue small{display:block;font-size:0.636rem;color:var(--ink-3);text-align:right}
+/* Winkel statt Pfeil — dünner, weniger Betrieb */
+.row .chev{
+  width:6px;height:6px;flex:0 0 auto;
+  border-right:1.2px solid var(--ink-3);border-top:1.2px solid var(--ink-3);transform:rotate(45deg);
+}
+.row.stacked{flex-direction:column;align-items:stretch;gap:10px;padding:13px 0}
 
-/* Karte für alles, was keine Zeilenliste ist */
-.card{background:var(--surface);border-radius:var(--r-lg);padding:16px}
-.card + .card{margin-top:12px}
-.card h2{font-size:20px}
-.card h3{font-size:16px;margin-bottom:7px}
-.sub{font-size:14px;color:var(--ink-2);margin:4px 0 14px;line-height:1.42}
-.headrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
-.stat{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
-.srcnote{font-size:12px;color:var(--ink-3);margin-top:13px;line-height:1.42}
-.empty{font-size:15px;color:var(--ink-2);padding:22px 0;text-align:center}
+.card{background:transparent;border-radius:0;padding:0}
+.card + .card{margin-top:22px}
+.card h2{font-size:1.03rem}
+.card h3{font-size:0.848rem;margin-bottom:6px}
+.sub{font-size:0.788rem;color:var(--ink-2);margin:4px 0 12px;line-height:1.4}
+.headrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.stat{font-family:var(--mono);font-size:0.697rem;color:var(--ink-2)}
+.srcnote{font-size:0.697rem;color:var(--ink-3);margin-top:14px;line-height:1.45}
+.empty{font-size:0.788rem;color:var(--ink-2);padding:26px 0;text-align:center}
+
+/* Der Info-Knopf: ein gesetztes „i", keine Sprechblase */
+.infoBtn{
+  width:15px;height:15px;flex:0 0 auto;border-radius:99px;
+  border:1px solid var(--ink-3);color:var(--ink-2);
+  font-size:0.576rem;font-weight:700;font-style:normal;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;
+  text-transform:none;letter-spacing:0;
+}
+.infoBtn:active{background:var(--fill-2)}
 
 /* ---------------- Hinweise ---------------- */
+/* Kein farbiger Kasten, sondern ein Randstrich — wie eine
+   Anmerkung neben der Spalte. */
 .note{
-  font-size:14px;line-height:1.44;padding:12px 14px;border-radius:var(--r-md);
-  background:var(--accent-soft);color:var(--ink);margin:10px 0;
+  font-size:0.788rem;line-height:1.45;padding:10px 0 10px 13px;
+  border-left:2px solid var(--ink-3);color:var(--ink);margin:12px 0;
 }
 .note b{font-weight:600}
-.note.gold{background:var(--amber-soft)}
-.note.blue{background:var(--blue-soft)}
-.note.red{background:var(--red-soft)}
-.note.green{background:var(--accent-soft)}
+.note.gold{border-left-color:var(--amber)}
+.note.blue{border-left-color:var(--blue)}
+.note.red{border-left-color:var(--red)}
+.note.green{border-left-color:var(--accent)}
 
-/* Hervorgehobene Kachel, z. B. Vorrats-Reichweite */
+/* ---------------- Reichweite: eine Skala, kein Ring -------------
+   Der Ring war ein Standardbauteil. Eine Skala mit Tagesstrichen
+   sagt dasselbe und ist am Gegenstand: sie zeigt, wie viele Tage
+   noch abgetragen werden können.                                  */
 .hero{
-  background:var(--surface);border-radius:var(--r-lg);padding:20px 18px;
-  display:flex;align-items:center;gap:18px;
+  display:block;width:100%;text-align:left;cursor:pointer;
+  background:transparent;border-radius:0;padding:16px 0 14px;
+  border-bottom:1px solid var(--rule-strong);
+  position:relative;
 }
-.heroRing{flex:0 0 auto;position:relative;width:74px;height:74px}
-.heroRing svg{width:74px;height:74px;transform:rotate(-90deg)}
+.hero:active{opacity:.6}
+.heroRing{display:block;width:100%;margin-top:10px;position:relative}
+.heroRing svg{width:100%;height:26px;display:block}
 .heroRing .val{
-  position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;line-height:1;
+  position:absolute;right:0;top:-40px;display:flex;align-items:baseline;gap:5px;
 }
-.heroRing .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
-.heroRing .u{font-size:10px;color:var(--ink-2);margin-top:2px}
-.hero .txt{flex:1;min-width:0}
-.hero .txt b{display:block;font-size:17px;font-weight:600;letter-spacing:-.02em}
-.hero .txt small{display:block;font-size:13.5px;color:var(--ink-2);margin-top:3px;line-height:1.4}
+.heroRing .n{font-family:var(--mono);font-size:2.061rem;font-weight:600;letter-spacing:-.04em;line-height:1}
+.heroRing .u{font-size:0.636rem;font-weight:600;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-2)}
+.hero .txt{min-width:0}
+.hero .txt b{
+  display:block;font-size:0.636rem;font-weight:700;text-transform:uppercase;letter-spacing:.13em;
+  color:var(--ink-2);
+}
+.hero .txt small{display:block;font-size:0.758rem;color:var(--ink-2);margin-top:8px;line-height:1.4}
+.hero .chev{position:absolute;right:0;top:20px}
 
-/* Kennzahlen als waagerechte Streifen */
-.scroller{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin:0 -16px;padding-left:16px;padding-right:16px}
-.scroller::-webkit-scrollbar{display:none}
-.tile{
-  flex:0 0 auto;min-width:142px;background:var(--surface);
-  border-radius:var(--r-lg);padding:14px 15px;
+/* ---------------- Kennzahlen als Spalten, nicht als Kacheln ----- */
+.scroller{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));
+  gap:0;margin:18px 0 0;
+  border-top:1px solid var(--rule-strong);border-bottom:1px solid var(--rule-strong);
 }
-.tile .l{font-size:12.5px;color:var(--ink-2);letter-spacing:-.005em}
-.tile .v{font-size:25px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1.05}
-.tile .v.good{color:var(--green)}
+.tile{
+  padding:12px 12px 12px 0;min-width:0;border-left:1px solid var(--rule);
+}
+.tile:first-child{border-left:none}
+.tile:not(:first-child){padding-left:12px}
+.tile .l{display:block;line-height:1.3}
+.tile .v{
+  font-family:var(--mono);font-size:1.273rem;font-weight:600;margin-top:6px;
+  font-variant-numeric:tabular-nums;letter-spacing:-.04em;line-height:1;
+}
+.tile .v.good{color:var(--accent)}
 .tile .v.warn{color:var(--red)}
-.tile .t{font-size:11.5px;color:var(--ink-3);margin-top:3px}
+.tile .t{font-size:0.636rem;color:var(--ink-3);margin-top:4px;font-family:var(--mono)}
 
 /* ---------------- Steuerelemente ---------------- */
-.stepper{display:flex;align-items:center;background:var(--fill);border-radius:var(--r-sm);flex:0 0 auto;overflow:hidden}
-.stepper button{width:44px;height:34px;font-size:19px;font-weight:400;color:var(--ink);position:relative}
+.stepper{display:flex;align-items:center;border:1px solid var(--rule-strong);flex:0 0 auto}
+.stepper button{width:38px;height:32px;font-size:0.97rem;color:var(--ink);position:relative}
 .stepper button:active{background:var(--fill-2)}
-.stepper button:disabled{opacity:.3;cursor:default}
-.stepper button:first-child::after{content:"";position:absolute;right:0;top:7px;bottom:7px;width:.5px;background:var(--separator-strong)}
-.stepper button:last-child::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:.5px;background:var(--separator-strong)}
-.stepVal{min-width:78px;text-align:right;font-size:17px;font-variant-numeric:tabular-nums;color:var(--ink-2);flex:0 0 auto}
+.stepper button:disabled{opacity:.25;cursor:default}
+.stepper button:first-child{border-right:1px solid var(--rule-strong)}
+.stepVal{
+  font-family:var(--mono);min-width:74px;text-align:right;font-size:0.879rem;
+  font-variant-numeric:tabular-nums;color:var(--ink);flex:0 0 auto;
+}
+.stepWrap{display:flex;align-items:center;gap:12px;flex:0 0 auto}
 
-.switch{position:relative;width:51px;height:31px;flex:0 0 auto}
+/* Schalter: ein Kästchen, das umspringt — kein iOS-Regler */
+.switch{position:relative;width:46px;height:26px;flex:0 0 auto}
 .switch input{position:absolute;inset:0;opacity:0;margin:0;width:100%;height:100%;cursor:pointer}
-.switch .track{position:absolute;inset:0;border-radius:99px;background:var(--fill-2);transition:background .22s var(--ease)}
+.switch .track{
+  position:absolute;inset:0;border:1px solid var(--rule-strong);background:transparent;
+  transition:background .18s var(--ease),border-color .18s var(--ease);
+}
 .switch .track::after{
-  content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:99px;
-  background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);
-  transition:transform .22s var(--ease);
+  content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;
+  background:var(--ink-3);transition:transform .18s var(--ease),background .18s var(--ease);
 }
-.switch input:checked + .track{background:var(--accent)}
-.switch input:checked + .track::after{transform:translateX(20px)}
-.switch input:focus-visible + .track{outline:3px solid var(--blue);outline-offset:2px}
+.switch input:checked + .track{border-color:var(--accent)}
+.switch input:checked + .track::after{transform:translateX(20px);background:var(--accent)}
+.switch input:focus-visible + .track{outline:2px solid var(--ink);outline-offset:2px}
 
-/* Segmentierte Auswahl */
-.segmented{display:flex;background:var(--fill);border-radius:var(--r-sm);padding:2px;gap:2px}
+.segmented{display:flex;border:1px solid var(--rule-strong)}
 .segmented button{
-  flex:1;padding:6px 10px;border-radius:7px;font-size:13.5px;font-weight:500;
-  color:var(--ink);transition:background .18s var(--ease);white-space:nowrap;
+  flex:1;padding:8px 8px;font-size:0.667rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--ink-2);border-left:1px solid var(--rule);transition:background .14s linear,color .14s linear;
+  white-space:nowrap;
 }
-.segmented button[aria-selected="true"]{background:var(--surface);box-shadow:0 3px 8px rgba(0,0,0,.10),0 1px 1px rgba(0,0,0,.04);font-weight:600}
+.segmented button:first-child{border-left:none}
+.segmented button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.row.stacked .segmented{width:100%}
 
 .field{display:block;margin:14px 0}
-.field .lbl{display:block;font-size:13px;font-weight:500;color:var(--ink-2);margin-bottom:6px;letter-spacing:-.005em}
+.field .lbl{display:block;margin-bottom:6px}
 .field input,.field select,.field textarea{
-  width:100%;padding:12px 14px;border:none;border-radius:var(--r-md);
-  background:var(--surface-2);min-height:46px;
+  width:100%;padding:11px 12px;border:1px solid var(--rule-strong);border-radius:0;
+  background:transparent;min-height:44px;
 }
 .field textarea{
-  min-height:200px;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;
+  min-height:190px;font-family:var(--mono);font-size:0.727rem;
   line-height:1.55;white-space:pre;overflow-wrap:normal;overflow-x:auto;resize:vertical;
 }
-.row2{display:flex;gap:10px}
+.row2{display:flex;gap:12px}
 .row2 > *{flex:1}
+.dateRow{display:flex;gap:12px;padding:12px 0}
+.dateRow .field{margin:0;flex:1}
 
 /* ---------------- Knöpfe ---------------- */
 .cta{
-  display:block;width:100%;margin-top:14px;padding:14px;border-radius:var(--r-md);
-  background:var(--accent);color:var(--on-accent);font-weight:600;font-size:17px;min-height:50px;
-  transition:opacity .15s linear,transform .1s var(--ease);letter-spacing:-.015em;
+  display:block;width:100%;margin-top:16px;padding:14px;border-radius:0;
+  background:var(--ink);color:var(--paper);
+  font-size:0.697rem;font-weight:700;text-transform:uppercase;letter-spacing:.14em;
+  min-height:48px;transition:opacity .14s linear;
 }
-.cta:active{opacity:.85;transform:scale(.985)}
-.cta:disabled{opacity:.35;cursor:default;transform:none}
-.cta.light{background:var(--fill);color:var(--accent)}
-.cta.danger{background:var(--fill);color:var(--red)}
+.cta:active{opacity:.75}
+.cta:disabled{opacity:.25;cursor:default}
+.cta.light{background:transparent;color:var(--ink);border:1px solid var(--rule-strong)}
+.cta.danger{background:transparent;color:var(--red);border:1px solid var(--red)}
+/* „Fertig" schließt nur. Es als gleichwertigen Knopf zu setzen ließe
+   zwei Handlungen gleich wichtig aussehen, wo eine bloß zumacht. */
+#sheetCancel{background:transparent;border:none;color:var(--ink-2);margin-top:8px}
+#sheetCancel:active{opacity:.5}
+
+.ctaRow{display:flex;gap:12px;margin-top:16px}
+.ctaRow .cta{margin-top:0;flex:1}
+.ctaRow .cta.light{flex:0 0 34%}
+
 .pillBtn{
-  padding:7px 14px;border-radius:99px;background:var(--fill);
-  font-size:14px;font-weight:500;color:var(--ink);min-height:34px;
+  padding:7px 12px;border-radius:0;border:1px solid var(--rule-strong);background:transparent;
+  font-size:0.636rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--ink);min-height:32px;white-space:nowrap;
 }
-.pillBtn.on{background:var(--accent);color:var(--on-accent);font-weight:600}
-.pillBtn:active{opacity:.7}
-.linkBtn{color:var(--accent);font-size:15px;font-weight:500;padding:6px 0}
+.pillBtn.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.pillBtn:active{opacity:.6}
+.pillBtn:disabled{opacity:.25;cursor:default}
+.rowActions{display:flex;gap:8px;flex:0 0 auto}
+.linkBtn{
+  color:var(--ink);font-size:0.667rem;font-weight:700;text-transform:uppercase;letter-spacing:.11em;
+  padding:6px 0;border-bottom:1.5px solid var(--ink);
+}
 .linkBtn:active{opacity:.5}
 
-/* ---------------- Listenpositionen ---------------- */
+/* ---------------- Positionen ---------------- */
 .items{list-style:none;margin:0;padding:0}
-.item{padding:12px 16px;position:relative;background:var(--surface)}
-.item + .item::before{content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--separator)}
-.item.off{opacity:.45}
-.item .top{display:flex;align-items:flex-start;gap:13px}
+.item{padding:11px 0;position:relative;background:transparent}
+.item + .item::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--rule)}
+.item.off{opacity:.4}
+.item .top{display:flex;align-items:flex-start;gap:12px}
 
-/* Kreis statt Kästchen — iOS-Erinnerungen-Anmutung */
+/* Der abgehakte Kreis: die zweite Druckfarbe, ohne Haken darin. */
 .box{
   appearance:none;-webkit-appearance:none;
-  width:25px;height:25px;flex:0 0 auto;margin:1px 0 0;
-  border:1.8px solid var(--ink-3);border-radius:99px;background:transparent;
-  position:relative;cursor:pointer;transition:background .16s var(--ease),border-color .16s var(--ease);
+  width:20px;height:20px;flex:0 0 auto;margin:2px 0 0;
+  border:1.4px solid var(--ink-3);border-radius:99px;background:transparent;
+  position:relative;cursor:pointer;transition:background .15s var(--ease),border-color .15s var(--ease);
 }
-/* Gefüllter Kreis, kein Haken darin. Der Haken sagte dasselbe zweimal:
-   die Füllung allein trägt die Aussage „steht auf der Liste“, und ohne
-   ihn wirkt die Reihe ruhiger. Dieselbe Marke steht im Ladenmodus. */
 .box:checked{background:var(--accent);border-color:var(--accent)}
-.item .main{flex:1;min-width:0}
-.item .nm{font-size:17px;font-weight:500;display:flex;flex-wrap:wrap;align-items:center;gap:6px;letter-spacing:-.018em}
-.item .price{font-size:17px;font-variant-numeric:tabular-nums;text-align:right;flex:0 0 auto}
-.item .price small{display:block;font-size:11.5px;color:var(--ink-3);font-weight:400}
-.item .calc{font-size:13px;color:var(--ink-2);margin-top:4px;padding-left:38px;line-height:1.4}
-.item .why{padding-left:38px}
-
-.pill{
-  font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;
-  background:var(--fill);color:var(--ink-2);white-space:nowrap;letter-spacing:0;
+.item .main{flex:1;min-width:0;text-align:left;padding:0;background:none;display:block}
+.item .main:active{opacity:.5}
+.item .nm{font-size:0.97rem;display:flex;flex-wrap:wrap;align-items:center;gap:7px;letter-spacing:-.008em}
+.item .price{
+  font-family:var(--mono);font-size:0.879rem;font-variant-numeric:tabular-nums;
+  text-align:right;flex:0 0 auto;letter-spacing:-.02em;
 }
-.pill.rh{background:var(--accent-soft);color:var(--accent)}
-.pill.risk{background:var(--red-soft);color:var(--red)}
-.pill.dup{background:var(--blue-soft);color:var(--blue)}
-.pill.warn{background:var(--amber-soft);color:var(--amber)}
-.pill.state{background:var(--fill-2);color:var(--ink)}
-.pill.safety{background:var(--red);color:#fff}
-.pill.cheap{background:var(--accent-soft);color:var(--green)}
+.item .price small{display:block;font-size:0.636rem;color:var(--ink-3)}
+.item .calc{font-size:0.727rem;color:var(--ink-2);margin-top:4px;padding-left:32px;line-height:1.4}
+.item .why{padding-left:32px}
+.inlineActions{padding:8px 0 2px 32px}
+.item .opts{padding:8px 0 4px 32px}
 
-.reasons{margin-top:11px;padding-left:38px}
-.reasons .q{font-size:13px;color:var(--ink-2);margin-bottom:8px}
+/* Marken neben dem Namen: gesetzt wie ein Stempel, nicht wie ein Chip */
+.pill{
+  font-size:0.576rem;font-weight:700;padding:2px 5px;border-radius:0;letter-spacing:.07em;
+  text-transform:uppercase;background:transparent;color:var(--ink-2);
+  border:1px solid var(--ink-3);white-space:nowrap;
+}
+.pill.rh{color:var(--accent);border-color:var(--accent)}
+.pill.risk{color:var(--red);border-color:var(--red)}
+.pill.dup{color:var(--blue);border-color:var(--blue)}
+.pill.warn{color:var(--amber);border-color:var(--amber)}
+.pill.state{color:var(--ink-2);border-color:var(--rule-strong)}
+.pill.safety{background:var(--red);color:var(--paper);border-color:var(--red)}
+.pill.cheap{color:var(--accent);border-color:var(--accent)}
+
+.reasons{margin-top:11px;padding-left:32px}
+.reasons .q{font-size:0.727rem;color:var(--ink-2);margin-bottom:8px}
 .opts{display:flex;gap:8px;flex-wrap:wrap}
 .opt{
-  flex:1 1 30%;min-width:106px;text-align:left;padding:10px 12px;border-radius:var(--r-md);
-  background:var(--surface-2);border:1.5px solid transparent;transition:border-color .15s linear;
+  flex:1 1 30%;min-width:100px;text-align:left;padding:8px 10px;border-radius:0;
+  background:transparent;border:1px solid var(--rule);
+  font-size:0.667rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);
+  transition:border-color .14s linear,color .14s linear;
 }
-.opt[aria-pressed="true"]{border-color:var(--accent)}
-.opt span{display:block;font-size:14.5px;font-weight:500}
-.opt small{display:block;font-size:11.5px;color:var(--ink-2);margin-top:1px;line-height:1.3}
-.out{margin-top:10px;font-size:13.5px;padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2)}
-.out.watch{background:var(--amber-soft)}
+.opt[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+.opt span{display:block}
+.out{margin-top:10px;font-size:0.758rem;padding:10px 0 0;border-top:1px solid var(--rule)}
+.out.watch{color:var(--amber)}
 
+/* Die Summenzeile: Doppellinie darüber, wie auf jedem Beleg. */
 .totals{
   display:flex;justify-content:space-between;align-items:flex-end;
-  padding:14px 16px;background:var(--surface);
-  position:relative;
+  padding:13px 0 2px;background:transparent;position:relative;
+  border-top:3px double var(--rule-strong);margin-top:-1px;
 }
-.totals::before{content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--separator)}
-.totals .big{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.03em}
-.totals .l{font-size:13px;color:var(--ink-2);margin-bottom:4px}
-.totals .saved{font-size:13.5px;color:var(--green);font-weight:500;text-align:right}
+.totals::before{display:none}
+.totals .big{
+  font-family:var(--mono);font-size:1.455rem;font-weight:600;
+  font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.04em;
+}
+.totals .l{display:block;margin-bottom:6px}
+.totals .saved{font-family:var(--mono);font-size:0.758rem;color:var(--accent);text-align:right}
+.totals.bare{border-top:3px double var(--rule-strong);padding-top:13px;margin-top:14px}
 
-/* ---------------- Tabellen ---------------- */
+/* Sektionsüberschrift innerhalb einer Positionsliste */
+.sectionRow{
+  padding:14px 0 5px;background:transparent;position:relative;
+  border-bottom:1px solid var(--rule);
+}
+
+/* ---------------- Tabellen und Listen ---------------- */
 .tableWrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-table{width:100%;border-collapse:collapse;font-size:15px}
-th,td{text-align:left;padding:10px 6px;border-bottom:.5px solid var(--separator);vertical-align:top}
-th{font-size:12px;font-weight:500;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:0.848rem}
+th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:0.606rem;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.11em;white-space:nowrap}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 tbody tr:last-child td{border-bottom:none}
 
 .plain{list-style:none;margin:0;padding:0}
-.plain li{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:.5px solid var(--separator);font-size:15px;line-height:1.42}
+.plain li{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--rule);font-size:0.848rem;line-height:1.4}
 .plain li:first-child{border-top:none}
+
+/* Kennzeichen rechts: ein Wert mit Rahmen, keine Blase */
 .flag{
-  flex:0 0 auto;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;
-  font-variant-numeric:tabular-nums;white-space:nowrap;min-width:54px;text-align:center;
+  flex:0 0 auto;font-family:var(--mono);font-size:0.667rem;font-weight:600;
+  padding:2px 6px;border-radius:0;border:1px solid var(--rule-strong);
+  font-variant-numeric:tabular-nums;white-space:nowrap;min-width:48px;text-align:center;
+  color:var(--ink-2);background:transparent;
 }
-.f-ok{background:var(--accent-soft);color:var(--green)}
-.f-gold{background:var(--amber-soft);color:var(--amber)}
-.f-miss{background:var(--red-soft);color:var(--red)}
-.f-new{background:var(--blue-soft);color:var(--blue)}
+.f-ok{color:var(--accent);border-color:var(--accent)}
+.f-gold{color:var(--amber);border-color:var(--amber)}
+.f-miss{color:var(--red);border-color:var(--red)}
+.f-new{color:var(--blue);border-color:var(--blue)}
 
+.chartBox{padding:14px 0 4px}
 .chart{width:100%;height:auto;display:block}
-.legend{display:flex;gap:18px;font-size:12.5px;color:var(--ink-2);margin-top:10px;flex-wrap:wrap}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.legend{
+  display:flex;gap:18px;font-size:0.606rem;color:var(--ink-2);margin-top:12px;flex-wrap:wrap;
+  text-transform:uppercase;letter-spacing:.09em;font-weight:600;
+}
+.legend i{display:inline-block;width:9px;height:9px;margin-right:6px;vertical-align:-1px}
 
-.save{display:flex;align-items:center;gap:13px;padding:13px 16px;position:relative;background:var(--surface)}
-.save + .save::before{content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--separator)}
-.save .amt{font-size:17px;font-weight:700;color:var(--green);font-variant-numeric:tabular-nums;flex:0 0 68px;letter-spacing:-.02em}
+.save{display:flex;align-items:center;gap:14px;padding:12px 0;position:relative;background:transparent}
+.save + .save::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--rule)}
+.save .amt{
+  font-family:var(--mono);font-size:0.909rem;font-weight:600;color:var(--accent);
+  font-variant-numeric:tabular-nums;flex:0 0 62px;letter-spacing:-.03em;
+}
 .save .txt{flex:1;min-width:0}
-.save .txt b{display:block;font-size:15.5px;font-weight:500}
-.save .txt small{display:block;font-size:12.5px;color:var(--ink-2);line-height:1.4;margin-top:2px}
-.strip{display:flex;justify-content:space-between;padding:14px 16px;position:relative;background:var(--surface)}
-.strip::before{content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--separator)}
-.strip .big{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
-.strip .l{font-size:12.5px;color:var(--ink-2)}
+.save .txt b{display:block;font-size:0.879rem;font-weight:500}
+.save .txt small{display:block;font-size:0.727rem;color:var(--ink-2);line-height:1.4;margin-top:2px}
+.strip{
+  display:flex;justify-content:space-between;padding:13px 0 2px;position:relative;background:transparent;
+  border-top:3px double var(--rule-strong);margin-top:-1px;
+}
+.strip::before{display:none}
+.strip .big{font-family:var(--mono);font-size:1.212rem;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.strip .l{display:block;margin-top:4px}
 
 /* ---------------- Erfassen ---------------- */
-.matchRow{display:flex;gap:12px;align-items:flex-start;padding:12px 16px;position:relative;background:var(--surface)}
-.matchRow + .matchRow::before{content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--separator)}
+.matchRow{display:flex;gap:14px;align-items:flex-start;padding:11px 0;position:relative;background:transparent}
+.matchRow + .matchRow::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--rule)}
 .matchRow .raw{flex:1;min-width:0}
-.matchRow .raw .r{font-size:12.5px;color:var(--ink-2);font-family:ui-monospace,"SF Mono",Menlo,monospace;word-break:break-word}
-.matchRow .raw .n{font-size:16px;font-weight:500;margin-top:2px}
-.matchRow .amt{flex:0 0 auto;text-align:right;font-size:15px;font-variant-numeric:tabular-nums}
-.matchRow .amt small{display:block;font-size:11.5px;color:var(--ink-3)}
-.matchRow select{width:100%;margin-top:7px;padding:9px 11px;border:none;border-radius:var(--r-sm);background:var(--surface-2);min-height:42px;font-size:15px}
+.matchRow .raw .r{font-size:0.697rem;color:var(--ink-3);font-family:var(--mono);word-break:break-word}
+.matchRow .raw .n{font-size:0.909rem;margin-top:3px}
+.matchRow .amt{flex:0 0 auto;text-align:right;font-family:var(--mono);font-size:0.848rem;font-variant-numeric:tabular-nums}
+.matchRow .amt small{display:block;font-size:0.636rem;color:var(--ink-3)}
+.matchRow select{width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--rule-strong);border-radius:0;background:transparent;min-height:40px;font-size:0.848rem}
 
-.results{list-style:none;margin:10px 0 0;padding:0;max-height:290px;overflow-y:auto;background:var(--surface-2);border-radius:var(--r-md)}
+.results{list-style:none;margin:10px 0 0;padding:0;max-height:280px;overflow-y:auto;border:1px solid var(--rule-strong)}
 .results li{position:relative}
-.results li + li::before{content:"";position:absolute;left:14px;right:0;top:0;height:.5px;background:var(--separator)}
-.results button{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;text-align:left;min-height:48px}
+.results li + li::before{content:"";position:absolute;left:12px;right:0;top:0;height:1px;background:var(--rule)}
+.results button{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px;text-align:left;min-height:44px}
 .results button:active{background:var(--fill)}
-.results .rn{font-size:16px}
-.results .rc{font-size:12.5px;color:var(--ink-2)}
+.results .rn{font-size:0.909rem}
+.results .rc{font-family:var(--mono);font-size:0.727rem;color:var(--ink-2)}
+.noHit{padding:13px 12px;font-size:0.848rem;color:var(--ink-2)}
 
 .basket{list-style:none;margin:0;padding:0}
-.basket li{display:flex;align-items:center;gap:11px;padding:11px 16px;position:relative;background:var(--surface)}
-.basket li + li::before{content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--separator)}
-.basket .bn{flex:1;font-size:16px;min-width:0}
-.del{color:var(--red);font-size:22px;line-height:1;padding:6px 8px;flex:0 0 auto}
+.basket li{display:flex;align-items:center;gap:12px;padding:10px 0;position:relative;background:transparent}
+.basket li + li::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--rule)}
+.basket .bn{flex:1;font-size:0.909rem;min-width:0}
+.priceIn{
+  font-family:var(--mono);width:80px;padding:8px;border:1px solid var(--rule-strong);border-radius:0;
+  background:transparent;text-align:right;
+}
+.del{color:var(--red);font-size:1.091rem;line-height:1;padding:6px 4px;flex:0 0 auto;font-family:var(--mono)}
 .del:active{opacity:.5}
 
-/* ---------------- Ladenmodus ---------------- */
-.store{position:fixed;inset:0;z-index:90;background:var(--bg);display:flex;flex-direction:column}
+.row.action .rowTitle{font-weight:600}
+.row.action.danger .rowTitle{color:var(--red)}
+button.row.action,label.row.action{cursor:pointer}
+
+/* ---------------- Ladenmodus: hier ist die App wirklich ein Beleg */
+.store{position:fixed;inset:0;z-index:90;background:var(--paper-2);display:flex;flex-direction:column}
 .store[hidden]{display:none}
 .storeTop{
-  display:flex;align-items:center;gap:12px;padding:calc(var(--safe-top) + 12px) 16px 12px;
-  background:var(--material);
-  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
-  border-bottom:.5px solid var(--separator);
+  display:flex;align-items:center;gap:14px;padding:calc(var(--safe-top) + 14px) var(--pad) 12px;
+  background:var(--paper-2);border-bottom:1px solid var(--rule-strong);
 }
-.storeTop h2{font-size:18px;flex:0 0 auto}
-.storeTop .prog{flex:1;font-size:14px;color:var(--ink-2);font-variant-numeric:tabular-nums}
-.storeTop .close{color:var(--accent);font-size:17px;font-weight:600;padding:6px 2px;min-height:38px}
-.storeBody{flex:1;overflow-y:auto;padding:8px 16px 18px;-webkit-overflow-scrolling:touch}
-.aisle{
-  font-size:13px;font-weight:400;text-transform:uppercase;letter-spacing:.05em;
-  color:var(--ink-2);margin:20px 4px 7px;
+.storeTop h2{font-size:0.727rem;font-weight:700;text-transform:uppercase;letter-spacing:.16em;flex:0 0 auto}
+.storeTop .prog{flex:1;font-family:var(--mono);font-size:0.727rem;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.storeTop .close{
+  font-size:0.667rem;font-weight:700;text-transform:uppercase;letter-spacing:.11em;
+  padding:8px 0;min-height:36px;border-bottom:1.5px solid var(--ink);
 }
-.aisleGroup{background:var(--surface);border-radius:var(--r-lg);overflow:hidden}
+.storeBody{flex:1;overflow-y:auto;padding:0 var(--pad) 20px;-webkit-overflow-scrolling:touch}
+.aisle{margin:22px 0 5px;padding-bottom:5px;border-bottom:1px solid var(--rule-strong)}
+.aisleGroup{background:transparent;border-radius:0;overflow:visible}
 .sItem{
-  display:flex;align-items:center;gap:14px;width:100%;background:var(--surface);
-  padding:15px 16px;text-align:left;min-height:60px;position:relative;
-  transition:background .15s linear;
+  display:flex;align-items:center;gap:14px;width:100%;background:transparent;
+  padding:14px 0;text-align:left;min-height:54px;position:relative;
 }
-.sItem + .sItem::before{content:"";position:absolute;left:16px;right:0;top:0;height:.5px;background:var(--separator)}
+.sItem + .sItem::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--rule)}
 .sItem .tick{
-  width:26px;height:26px;flex:0 0 auto;border:1.8px solid var(--ink-3);border-radius:99px;position:relative;
-  transition:background .16s var(--ease),border-color .16s var(--ease);
+  width:20px;height:20px;flex:0 0 auto;border:1.4px solid var(--ink-3);border-radius:99px;position:relative;
+  transition:background .15s var(--ease),border-color .15s var(--ease);
 }
 .sItem.done{opacity:.42}
 .sItem.done .tick{background:var(--accent);border-color:var(--accent)}
-.sItem .sn{flex:1;font-size:17px;font-weight:500;letter-spacing:-.018em}
+.sItem .sn{flex:1;font-size:0.97rem;letter-spacing:-.008em}
+.sItem .sn small{display:block;font-size:0.727rem;color:var(--ink-2);margin-top:2px}
+.sItem .sp{font-family:var(--mono);font-size:0.879rem;font-variant-numeric:tabular-nums;color:var(--ink)}
 
-/* Der Strich wird GEZOGEN, nicht gesetzt.
-   `text-decoration:line-through` lässt sich nicht animieren — es ist
-   im selben Bild da oder nicht. Deshalb ein Farbverlauf als
-   Hintergrundbild, dessen Breite von 0 auf 100 % läuft: das
-   funktioniert auch über einen Zeilenumbruch hinweg, was ein
-   absolut gesetztes Pseudo-Element nicht täte.
-   Bei „Bewegung reduzieren“ entfällt der Übergang (Regel weiter oben)
-   und der Strich steht sofort — die Aussage bleibt, nur die Bewegung
-   geht weg. */
+/* Der Strich wird GEZOGEN, nicht gesetzt. `text-decoration` lässt
+   sich nicht animieren — es ist im selben Bild da oder nicht.
+   Deshalb ein Farbverlauf als Hintergrundbild mit wachsender Breite:
+   das trägt auch über einen Zeilenumbruch, was ein absolut gesetztes
+   Pseudo-Element nicht täte. Bei „Bewegung reduzieren" entfällt der
+   Übergang und der Strich steht sofort. */
 .sItem .sn .strike{
   background-image:linear-gradient(currentColor,currentColor);
   background-repeat:no-repeat;
@@ -504,329 +647,254 @@ tbody tr:last-child td{border-bottom:none}
   transition:background-size .34s var(--ease);
 }
 .sItem.done .sn .strike{background-size:100% 1.5px}
-.sItem .sn small{display:block;font-size:12.5px;font-weight:400;color:var(--ink-2);margin-top:1px}
-.sItem .sp{font-size:16px;font-variant-numeric:tabular-nums;color:var(--ink-2)}
-.storeFoot{
-  display:flex;justify-content:space-between;align-items:center;gap:14px;
-  background:var(--material);
-  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
-  border-top:.5px solid var(--separator);
-  padding:12px 16px calc(var(--safe-bottom) + 12px);
-}
-.storeFoot .sum{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
-.storeFoot .cta{margin:0;width:auto;padding:13px 22px;flex:0 0 auto}
 
-/* ---------------- Aktionsblatt ---------------- */
+.storeFoot{
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+  background:var(--paper-2);border-top:3px double var(--rule-strong);
+  padding:14px var(--pad) calc(var(--safe-bottom) + 14px);
+}
+.storeFoot .stat{display:block;margin-bottom:4px}
+.storeFoot .sum{font-family:var(--mono);font-size:1.273rem;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.storeFoot .cta{margin:0;width:auto;padding:13px 20px;flex:0 0 auto}
+
+/* ---------------- Blatt: ein abgerissener Beleg -----------------
+   Die Perforation oben ist keine Spielerei, sondern das eine Bild,
+   das sagt, was dieses Blatt ist: ein herausgetrennter Abschnitt.  */
 .sheet{
   position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center;
-  background:rgba(0,0,0,.42);
-  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
-  animation:fade .22s var(--ease);
+  background:rgba(20,18,16,.44);
+  animation:fade .18s var(--ease);
 }
 .sheet[hidden]{display:none}
 .sheetBody{
-  width:100%;max-width:540px;background:var(--surface);
-  border-radius:20px 20px 0 0;padding:8px 18px calc(var(--safe-bottom) + 18px);
-  max-height:88vh;overflow-y:auto;animation:rise .32s var(--ease);
+  width:100%;max-width:520px;background:var(--paper-2);
+  border-radius:0;padding:20px var(--pad) calc(var(--safe-bottom) + 20px);
+  max-height:88vh;overflow-y:auto;animation:rise .26s var(--ease);position:relative;
+}
+/* Abrisskante: die Perforation muss durch das Papier hindurch
+   stanzen, nicht darauf liegen. Deshalb eine Maske aus zwei Lagen —
+   oben die Halbkreise, darunter volle Deckung. */
+.sheetBody{
+  --scallop:radial-gradient(circle at 7px -1px, transparent 0 5px, #000 5.5px);
+  -webkit-mask-image:var(--scallop),linear-gradient(#000,#000);
+  -webkit-mask-size:14px 10px,100% calc(100% - 9px);
+  -webkit-mask-position:0 0,0 9px;
+  -webkit-mask-repeat:repeat-x,no-repeat;
+  mask-image:var(--scallop),linear-gradient(#000,#000);
+  mask-size:14px 10px,100% calc(100% - 9px);
+  mask-position:0 0,0 9px;
+  mask-repeat:repeat-x,no-repeat;
 }
 @keyframes fade{from{opacity:0}to{opacity:1}}
-@keyframes rise{from{transform:translateY(100%)}to{transform:none}}
-.grabber{width:36px;height:5px;border-radius:99px;background:var(--fill-2);margin:0 auto 16px}
-.sheetTitle{font-size:20px;font-weight:600;letter-spacing:-.022em}
-.sheetSub{font-size:15px;color:var(--ink-2);margin:6px 0 16px;line-height:1.42}
+@keyframes rise{from{transform:translateY(12%)}to{transform:none}}
+.grabber{display:none}
+.sheetTitle{font-size:0.727rem;font-weight:700;text-transform:uppercase;letter-spacing:.16em;padding-top:4px}
+.sheetSub{font-family:var(--mono);font-size:0.727rem;color:var(--ink-2);margin:8px 0 16px;line-height:1.45}
+.sheetPara{font-size:0.848rem;line-height:1.5;color:var(--ink);margin:0 0 12px}
+.sheetPara:last-child{margin-bottom:0}
+.shareText{
+  font-family:var(--mono);font-size:0.727rem;line-height:1.55;
+  background:transparent;border:1px solid var(--rule);border-radius:0;padding:13px;
+  white-space:pre-wrap;word-break:break-word;margin:0 0 12px;
+}
 
-/* Waagerecht mittig über `left:0;right:0` mit automatischem Rand statt
-   über `left:50%` und Verschiebung: bei letzterem steht dem Kasten nur
-   die halbe Bildschirmbreite zur Verfügung, und jede Meldung mit zwei
-   Wörtern bricht um, obwohl Platz da wäre. */
+/* Wertepaare im Blatt: Beleg-Positionen */
+.facts{margin:0 0 16px;display:grid;grid-template-columns:auto 1fr;gap:0}
+.facts dt{
+  font-size:0.636rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);
+  padding:9px 14px 9px 0;border-top:1px solid var(--rule);white-space:nowrap;
+}
+.facts dd{
+  margin:0;font-size:0.848rem;padding:9px 0;text-align:right;
+  border-top:1px solid var(--rule);
+}
+.facts dt:first-of-type,.facts dd:first-of-type{border-top:none}
+
+/* ---------------- Bestätigung ---------------- */
 .toast{
   position:fixed;left:0;right:0;margin-inline:auto;width:fit-content;
-  bottom:calc(var(--nav-h) + var(--safe-bottom) + 18px);z-index:120;
-  background:rgba(28,28,30,.94);color:#fff;padding:13px 20px;border-radius:99px;
-  font-size:15px;font-weight:500;box-shadow:0 10px 34px rgba(0,0,0,.32);
-  max-width:92vw;text-align:center;
-  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
-  animation:pop .28s var(--ease);
+  bottom:calc(var(--nav-h) + var(--safe-bottom) + 20px);z-index:120;
+  background:var(--ink);color:var(--paper);padding:12px 18px;border-radius:0;
+  font-size:0.848rem;max-width:92vw;text-align:left;
+  display:flex;align-items:center;gap:12px;
+  animation:pop .22s var(--ease);
 }
 .toast[hidden]{display:none}
-@keyframes pop{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.toast .tIcon{
+  flex:0 0 auto;width:20px;height:20px;border-radius:99px;
+  background:var(--accent);color:var(--on-accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.667rem;font-weight:700;line-height:1;
+}
+.toast.in .tIcon{animation:tick .4s var(--ease) .03s both}
+.toast .tTxt{min-width:0}
+.toast .tTxt b{display:block;font-weight:500}
+.toast .tTxt small{display:block;font-family:var(--mono);font-size:0.697rem;opacity:.66;margin-top:2px}
+@keyframes tick{
+  0%{transform:scale(.2);opacity:0}
+  60%{transform:scale(1.2);opacity:1}
+  100%{transform:scale(1)}
+}
+.sItem.done .tick{animation:tick .34s var(--ease)}
+.box:checked{animation:tick .3s var(--ease)}
 
 /* ================================================================
-   Ab 900 px: Seitenleiste statt Leiste unten.
+   Rückblick, Streak, Meilensteine
+   ================================================================ */
+
+/* Der Rückblick ist ein eigener Abschnitt mit doppelter Oberlinie —
+   höchstens drei Tage in der Woche da, deshalb darf er sich abheben. */
+.reviewCard{
+  background:transparent;border:none;border-radius:0;
+  border-bottom:3px double var(--rule-strong);
+  margin:0;padding:0;
+}
+.rvHead{display:flex;align-items:center;justify-content:space-between;padding:10px 0 0}
+.rvTag{color:var(--ink)}
+.rvClose{font-family:var(--mono);font-size:0.97rem;line-height:1;color:var(--ink-3);padding:2px 0 2px 8px}
+.rvClose:active{opacity:.5}
+.rvBody{display:block;width:100%;text-align:left;padding:6px 0 14px}
+.rvBody:active{opacity:.6}
+.rvHead2{font-size:1.03rem;font-weight:600;letter-spacing:-.015em;line-height:1.3}
+.rvStrip{display:flex;gap:0;margin-top:14px;border-top:1px solid var(--rule)}
+.rvItem{flex:1 1 0;min-width:0;padding:10px 10px 0 0;border-left:1px solid var(--rule)}
+.rvItem:first-child{border-left:none}
+.rvItem:not(:first-child){padding-left:10px}
+.rvItem .v{
+  font-family:var(--mono);font-size:0.97rem;font-weight:600;font-variant-numeric:tabular-nums;
+  letter-spacing:-.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.rvItem .l{font-size:0.606rem;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-2);margin-top:4px}
+.rvStreak{font-family:var(--mono);font-size:0.697rem;color:var(--ink-2);margin-top:12px}
+
+/* Streak als Strichliste — die älteste Art, Wochen zu zählen. */
+.streak{display:flex;align-items:center;gap:14px;padding:12px 0;background:transparent;flex-wrap:wrap}
+.sDots{display:flex;gap:5px;flex:0 0 auto}
+.sDot{
+  width:4px;height:16px;border-radius:0;display:block;
+  background:var(--ink-3);opacity:.35;
+}
+.sDot.on{background:var(--accent);opacity:1}
+.sDot.vac{background:var(--ink-3);opacity:.55}
+.sDot.now{box-shadow:0 3px 0 0 var(--ink)}
+.streak .sTxt{font-size:0.758rem;color:var(--ink-2);flex:1;min-width:0}
+
+/* Meilensteine: Positionen mit Skala, keine Kachelreihe. */
+.badgeRow{display:block;background:transparent;padding:0}
+.badgeRow + .row::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--rule)}
+.badge{
+  display:grid;grid-template-columns:22px 1fr auto;grid-template-rows:auto auto;
+  column-gap:12px;row-gap:5px;align-items:center;
+  width:100%;text-align:left;background:transparent;border-radius:0;
+  padding:12px 0;position:relative;
+}
+.badge + .badge::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--rule)}
+.badge:active{opacity:.6}
+.badge .bIcon{
+  grid-row:1 / span 2;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+  color:var(--ink-3);
+}
+.badge .bIcon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.badge.on .bIcon{color:var(--accent)}
+.badge .bLbl{grid-column:2;grid-row:1;color:var(--ink)}
+.badge .bVal{
+  grid-column:3;grid-row:1;text-align:right;
+  font-family:var(--mono);font-size:0.909rem;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.03em;
+}
+/* Die Skala: ein Raster aus Strichen, gefüllt bis zum Stand. */
+.badge .bBar{
+  grid-column:2;grid-row:2;height:6px;position:relative;overflow:hidden;
+  background-image:repeating-linear-gradient(90deg,var(--rule-strong) 0 1px,transparent 1px 5px);
+}
+.badge .bBar i{display:block;height:100%;background:var(--accent);opacity:.85}
+.badge .bNext{
+  grid-column:3;grid-row:2;text-align:right;
+  font-family:var(--mono);font-size:0.636rem;color:var(--ink-3);white-space:nowrap;
+}
+
+/* Glückwunsch: ein Stempel auf dem Beleg */
+.sheet.celebration .sheetTitle{text-align:center}
+.celebrate{text-align:center;padding:18px 0 4px}
+.celebrate .cIcon{
+  width:66px;height:66px;margin:0 auto 18px;border-radius:99px;
+  border:1.5px solid var(--accent);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  animation:stamp .45s var(--ease);
+}
+.celebrate .cIcon svg{width:32px;height:32px;stroke:currentColor;fill:none;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.celebrate .cTitle{font-size:1.152rem;font-weight:600;letter-spacing:-.02em;line-height:1.3}
+.celebrate .cLevel{margin-top:8px;color:var(--accent)}
+.celebrate .cNote{font-size:0.788rem;color:var(--ink-2);line-height:1.5;margin:14px 0 0}
+@keyframes stamp{
+  0%{transform:scale(1.5) rotate(-7deg);opacity:0}
+  55%{transform:scale(.94) rotate(2deg);opacity:1}
+  100%{transform:scale(1) rotate(0)}
+}
+
+/* Konfidenzmarken: gefüllt heißt gelernt, hohl heißt geschätzt. */
+.supplyVal{display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.dot{width:7px;height:7px;flex:0 0 auto;border-radius:99px;border:1.2px solid var(--ink-3);background:transparent}
+.dot.full{background:var(--ink);border-color:var(--ink)}
+.dot.half{background:linear-gradient(90deg,var(--ink) 50%,transparent 50%);border-color:var(--ink)}
+.dot.none{border-style:dashed;opacity:.5}
+
+.plainBtn{text-align:left;padding:0;background:none;display:block}
+.plainBtn:active{opacity:.5}
+.card:empty{display:none}
+
+/* ================================================================
+   Ab 900 px: Seitenleiste. Der Beleg bleibt schmal — eine Spalte
+   über 1200 px wäre unlesbar, und ein Kassenbon ist nun einmal
+   schmal.
    ================================================================ */
 @media (min-width:900px){
-  :root{--nav-h:0px}
+  :root{--nav-h:0px;--pad:0px}
   .shell{flex-direction:row;min-height:100vh}
   .nav{
     position:sticky;top:0;left:auto;right:auto;bottom:auto;height:100vh;
-    flex-direction:column;justify-content:flex-start;gap:2px;
-    width:250px;flex:0 0 250px;padding:calc(var(--safe-top) + 20px) 12px 16px;
-    border-top:none;border-right:.5px solid var(--separator);
-    background:var(--material);
+    flex-direction:column;justify-content:flex-start;gap:0;
+    width:224px;flex:0 0 224px;padding:34px 22px 20px;
+    border-top:none;border-right:1px solid var(--rule-strong);
+    background:transparent;
+    -webkit-backdrop-filter:none;backdrop-filter:none;
   }
   .nav::before{
-    content:"Einkaufs-Anker";display:block;font-size:17px;font-weight:700;
-    letter-spacing:-.022em;padding:6px 12px 20px;color:var(--ink);
+    content:"Einkaufs-Anker";display:block;
+    font-size:0.667rem;font-weight:700;text-transform:uppercase;letter-spacing:.18em;
+    padding:0 0 24px;color:var(--ink);
   }
   .nav button{
     flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:12px;
-    height:42px;padding:0 12px;border-radius:9px;font-size:15px;font-weight:500;
+    height:38px;padding:0;font-size:0.667rem;letter-spacing:.11em;
   }
-  .nav button svg{width:22px;height:22px}
-  .nav button[aria-current="page"]{background:var(--accent-soft)}
+  .nav button svg{width:18px;height:18px}
+  .nav button[aria-current="page"]::after{display:none}
+  .nav button[aria-current="page"]{color:var(--ink)}
   .col{flex:1;min-width:0;display:flex;flex-direction:column}
-  .appbar{padding:calc(var(--safe-top) + 14px) 32px 10px}
-  .largeTitle{padding:6px 32px 4px}
-  .largeTitle h1{font-size:38px}
-  main{padding:8px 32px 56px;max-width:1120px}
-  .scroller{margin:0;padding-left:0;padding-right:0;flex-wrap:wrap}
-  .tile{flex:1 1 168px}
-  .cards2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+  /* Die Leiste endet, wo der Beleg endet — sonst steht der Knopf am
+     rechten Bildschirmrand und die Spalte weit links davon. */
+  .appbar{padding:28px 40px 10px;max-width:760px;background:transparent;
+    -webkit-backdrop-filter:none;backdrop-filter:none;}
+  .largeTitle{padding:12px 40px 0;max-width:760px}
+  main{padding:0 40px 60px;max-width:760px}
+  .cards2{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
   .cards2 .card + .card{margin-top:0}
   .sheet{align-items:center}
-  .sheetBody{border-radius:18px;max-width:560px;padding-bottom:20px;animation:zoom .26s var(--ease)}
-  @keyframes zoom{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
-  .toast{bottom:28px}
-  .storeTop{padding:16px 28px}
-  .storeBody{padding:12px 28px 20px;max-width:880px;width:100%;margin:0 auto}
-  .storeFoot{padding:14px 28px}
+  .sheetBody{max-width:520px;padding-bottom:22px;animation:zoom .2s var(--ease)}
+  @keyframes zoom{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+  .toast{bottom:30px}
+  .storeTop{padding:20px 40px 12px}
+  .storeBody{padding:0 40px 20px;max-width:760px;width:100%;margin:0 auto}
+  .storeFoot{padding:16px 40px}
+}
+
+@media (max-width:360px){
+  :root{--pad:14px}
+  .nav button{font-size:0.485rem}
+  .nav button svg{width:19px;height:19px}
 }
 
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important;animation:none !important}
 }
-
-
-/* ================================================================
-   Ergänzungen: Info-Knopf, Detail-Blatt, Teilen, kleine Layouts
-   ================================================================ */
-
-/* (i) neben der Gruppenüberschrift — trägt die Erklärung, die sonst
-   als Fließtext auf der Fläche stünde. */
-.groupTitle{display:flex;align-items:center;gap:7px}
-.infoBtn{
-  width:17px;height:17px;flex:0 0 auto;border-radius:99px;
-  border:1.2px solid var(--ink-3);color:var(--ink-2);
-  font-size:11px;font-weight:600;font-style:italic;line-height:1;
-  display:inline-flex;align-items:center;justify-content:center;
-  text-transform:none;letter-spacing:0;
-}
-.infoBtn:active{background:var(--fill-2)}
-
-/* Zeile mit zwei Knöpfen rechts */
-.rowActions{display:flex;gap:7px;flex:0 0 auto}
-.stepWrap{display:flex;align-items:center;gap:10px;flex:0 0 auto}
-
-/* Der Hauptbereich einer Listenposition ist antippbar */
-.item .main{
-  flex:1;min-width:0;text-align:left;padding:0;background:none;
-  display:block;
-}
-.item .main:active{opacity:.55}
-.inlineActions{padding:0 16px 10px 54px}
-.item .opts{padding:2px 16px 12px 54px}
-
-/* Antippbare Reihe im Ladenweg / in Aktionen */
-.row.action .rowTitle{color:var(--accent)}
-.row.action.danger .rowTitle{color:var(--red)}
-button.row.action{cursor:pointer}
-label.row.action{cursor:pointer}
-
-/* Hero ist ein Knopf */
-button.hero{width:100%;text-align:left;cursor:pointer}
-button.hero:active{opacity:.7}
-.hero .chev{margin-left:auto}
-
-/* Detail-Blatt: Wertepaare */
-.facts{margin:0 0 14px;display:grid;grid-template-columns:auto 1fr;gap:0}
-.facts dt{
-  font-size:13px;color:var(--ink-2);padding:9px 14px 9px 0;
-  border-top:.5px solid var(--separator);white-space:nowrap;
-}
-.facts dd{
-  margin:0;font-size:15px;padding:9px 0;text-align:right;
-  border-top:.5px solid var(--separator);
-}
-.facts dt:first-of-type,.facts dd:first-of-type{border-top:none}
-.sheetPara{font-size:15px;line-height:1.45;color:var(--ink);margin:0 0 12px}
-.sheetPara:last-child{margin-bottom:0}
-.shareText{
-  font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:13px;line-height:1.5;
-  background:var(--surface-2);border-radius:var(--r-md);padding:14px;
-  white-space:pre-wrap;word-break:break-word;margin:0 0 12px;
-}
-
-/* Zwei Knöpfe nebeneinander */
-.ctaRow{display:flex;gap:10px;margin-top:14px}
-.ctaRow .cta{margin-top:0;flex:1}
-.ctaRow .cta.light{flex:0 0 34%}
-
-/* Datumsfelder in einer Zeile der gruppierten Liste */
-.dateRow{display:flex;gap:10px;padding:12px 16px;background:var(--surface)}
-.dateRow .field{margin:0;flex:1}
-.row2{display:flex;gap:10px}
-.row2 > *{flex:1}
-.noHit{padding:13px 14px;font-size:15px;color:var(--ink-2)}
-.priceIn{width:88px;padding:9px;border:none;border-radius:var(--r-sm);background:var(--surface-2);text-align:right}
-.totals.bare{background:none;padding:14px 0 0}
-.chartBox{padding:14px 16px 16px}
-
-/* Karten ohne Titel brauchen oben keinen Extraabstand */
-.card:empty{display:none}
-
-
-/* ================================================================
-   Haushaltsprodukte: Konfidenzmarken, Sektionen, sechs Tabs
-   ================================================================ */
-
-/* Nie eine Zahl ohne Konfidenzmarke — gefüllt heißt gelernt. */
-.supplyVal{display:flex;align-items:center;gap:8px;flex:0 0 auto}
-.dot{
-  width:9px;height:9px;flex:0 0 auto;border-radius:99px;
-  border:1.5px solid var(--ink-3);background:transparent;
-}
-.dot.full{background:var(--accent);border-color:var(--accent)}
-.dot.half{background:linear-gradient(90deg,var(--accent) 50%,transparent 50%);border-color:var(--accent)}
-.dot.none{border-style:dashed;opacity:.5}
-
-/* Sektionsüberschrift innerhalb einer Positionsliste */
-.sectionRow{
-  padding:9px 16px 7px;font-size:12.5px;font-weight:600;
-  color:var(--ink-2);text-transform:uppercase;letter-spacing:.05em;
-  background:var(--surface-2);position:relative;
-}
-
-/* Sechs Tabs statt fünf: „Fällig" braucht einen eigenen Platz. */
-.nav button{font-size:9.5px}
-.nav button svg{width:24px;height:24px}
-@media (max-width:360px){
-  .nav button{font-size:9px}
-  .nav button svg{width:22px;height:22px}
-}
-@media (min-width:900px){
-  .nav button{font-size:15px}
-  .nav button svg{width:22px;height:22px}
-}
-
-/* Zeilentext als Knopf, ohne wie einer auszusehen */
-.plainBtn{text-align:left;padding:0;background:none;display:block}
-.plainBtn:active{opacity:.55}
-
-
-/* ================================================================
-   Rückblick, Streak, Meilensteine, Sofort-Rückmeldung
-   ================================================================ */
-
-/* --- Wochenrückblick: die einzige Karte mit Akzentfläche. Sie ist
-   höchstens drei Tage in der Woche da, deshalb darf sie auffallen. */
-.reviewCard{
-  background:var(--surface);border-radius:var(--r-lg);overflow:hidden;
-  margin:10px 0 0;border:1px solid var(--accent-soft);
-}
-.rvHead{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:11px 14px 0;
-}
-.rvTag{
-  font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--accent);
-}
-.rvClose{
-  font-size:21px;line-height:1;color:var(--ink-3);padding:2px 6px;margin:-4px -6px 0 0;
-}
-.rvClose:active{opacity:.5}
-.rvBody{display:block;width:100%;text-align:left;padding:6px 14px 14px}
-.rvBody:active{opacity:.7}
-.rvHead2{font-size:19px;font-weight:600;letter-spacing:-.022em;line-height:1.28}
-.rvStrip{display:flex;gap:10px;margin-top:13px;flex-wrap:wrap}
-.rvItem{
-  flex:1 1 92px;background:var(--surface-2);border-radius:var(--r-md);padding:9px 11px;min-width:92px;
-}
-.rvItem .v{
-  font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.025em;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.rvItem .l{font-size:11.5px;color:var(--ink-2);margin-top:2px;line-height:1.3}
-.rvStreak{font-size:13px;color:var(--ink-2);margin-top:11px}
-
-/* --- Streak: acht Punkte, keine Rangliste, kein Vergleich --- */
-.streak{display:flex;align-items:center;gap:12px;padding:13px 16px;background:var(--surface);flex-wrap:wrap}
-.sDots{display:flex;gap:6px;flex:0 0 auto}
-.sDot{
-  width:11px;height:11px;border-radius:99px;
-  border:1.5px solid var(--ink-3);background:transparent;display:block;
-}
-.sDot.on{background:var(--accent);border-color:var(--accent)}
-.sDot.vac{background:var(--fill-2);border-color:var(--fill-2)}
-.sDot.now{box-shadow:0 0 0 3px var(--accent-soft)}
-.streak .sTxt{font-size:13.5px;color:var(--ink-2);flex:1;min-width:0}
-
-/* --- Meilensteine --- */
-.badgeRow{
-  display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;
-  padding:14px 16px;background:var(--surface);
-}
-.badgeRow::-webkit-scrollbar{display:none}
-.badge{
-  flex:0 0 auto;width:132px;text-align:left;
-  background:var(--surface-2);border-radius:var(--r-md);padding:12px 13px;
-}
-.badge:active{opacity:.7}
-.badge .bIcon{
-  font-size:15px;line-height:1;color:var(--ink-3);
-  width:26px;height:26px;border-radius:99px;background:var(--fill);
-  display:flex;align-items:center;justify-content:center;
-}
-.badge.on .bIcon{background:var(--accent);color:var(--on-accent)}
-.badge .bVal{font-size:21px;font-weight:700;margin-top:9px;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1.05}
-.badge .bLbl{font-size:12px;color:var(--ink-2);margin-top:1px}
-.badge .bBar{height:4px;border-radius:99px;background:var(--fill);margin-top:9px;overflow:hidden}
-.badge .bBar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .5s var(--ease)}
-.badge .bNext{font-size:11px;color:var(--ink-3);margin-top:6px;line-height:1.3}
-
-/* Glückwunsch-Blatt */
-.sheet.celebration .sheetTitle{
-  text-align:center;font-size:13px;font-weight:600;color:var(--accent);
-  text-transform:uppercase;letter-spacing:.06em;
-}
-.celebrate{text-align:center;padding:14px 0 2px}
-.celebrate .cIcon{
-  width:64px;height:64px;margin:0 auto 14px;border-radius:99px;
-  background:var(--accent);color:var(--on-accent);
-  font-size:28px;display:flex;align-items:center;justify-content:center;
-  animation:badgePop .5s var(--ease);
-}
-.celebrate .cTitle{font-size:21px;font-weight:700;letter-spacing:-.024em;line-height:1.25}
-.celebrate .cLevel{font-size:13px;color:var(--accent);font-weight:600;margin-top:5px}
-.celebrate .cNote{font-size:14px;color:var(--ink-2);line-height:1.45;margin:12px 0 0}
-@keyframes badgePop{
-  0%{transform:scale(.4);opacity:0}
-  55%{transform:scale(1.12)}
-  100%{transform:scale(1);opacity:1}
-}
-
-/* --- Sofort-Rückmeldung: der Toast trägt jetzt ein Zeichen ---
-   Eine Bestätigung, die man sieht, bevor man sie liest. Das Häkchen
-   springt kurz auf — dieselbe Bewegung, die iOS für „erledigt“
-   benutzt. Bei „Bewegung reduzieren“ bleibt der Inhalt, nur die
-   Bewegung entfällt (Regel weiter oben). */
-.toast{display:flex;align-items:center;gap:11px;text-align:left}
-.toast .tIcon{
-  flex:0 0 auto;width:24px;height:24px;border-radius:99px;
-  background:var(--accent);color:var(--on-accent);
-  display:flex;align-items:center;justify-content:center;
-  font-size:14px;font-weight:700;line-height:1;
-}
-.toast.in .tIcon{animation:tick .42s var(--ease) .04s both}
-.toast .tTxt{min-width:0}
-.toast .tTxt b{display:block;font-weight:500}
-.toast .tTxt small{display:block;font-size:12.5px;opacity:.72;margin-top:1px}
-@keyframes tick{
-  0%{transform:scale(.2);opacity:0}
-  60%{transform:scale(1.22);opacity:1}
-  100%{transform:scale(1)}
-}
-
-/* Abgehakte Zeile im Ladenmodus quittiert den Druck sichtbar */
-.sItem.done .tick{animation:tick .38s var(--ease)}
-.box:checked{animation:tick .34s var(--ease)}

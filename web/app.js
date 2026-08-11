@@ -213,7 +213,7 @@ const App = {
 
   celebrate(badge, more = 0) {
     const body = el("div", "celebrate");
-    body.append(el("div", "cIcon", esc(badge.icon)));
+    body.append(el("div", "cIcon", markSvg(badge.icon)));
     body.append(el("div", "cTitle", esc(badge.title)));
     body.append(el("div", "cLevel", `Stufe ${badge.level} von ${badge.maxLevel}`));
     body.append(el("p", "cNote", esc(badge.note)));

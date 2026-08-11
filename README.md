@@ -342,12 +342,48 @@ Ehrlichkeit kostet das nichts. Quellen, Schätzcharakter und der
 ungeschönte Datenqualitätsbericht sind vollständig da — eine Tippgeste
 entfernt statt dauerhaft im Weg.
 
-Orientierung ist iOS: großer Titel, der beim Scrollen in die Leiste
-zusammenfällt; gruppierte Listen mit Einzug statt Karten mit Schatten;
-Materials mit Unschärfe für Leisten und Blätter; Systemschriften statt
-Webfonts. Farben stehen ausschließlich als Variablen und existieren
-doppelt — wer eine Farbe fest ins Regelwerk schreibt, bricht einen der
-beiden Modi.
+### Papier und Tinte
+
+Die erste Fassung der Gestaltung war eine iOS-Vorlage mit Grün darin:
+runde Karten in runden Karten, ein Akzentgrün von der Stange, Ringe und
+Fortschrittsbalken als Zierrat, Unicode-Glyphen (`✽ ◆ ↻`) statt
+gezeichneter Symbole. Sie hätte genauso eine Fitness-App sein können —
+und genau das ist das Problem: **nichts daran war aus dem Gegenstand
+hergeleitet.**
+
+Diese App verwaltet Kassenbons und Haushaltsbuchhaltung. Dafür gibt es
+eine visuelle Tradition, die älter ist als jedes Betriebssystem: der
+Beleg. Papier, Haarlinien, Positionen untereinander, Beträge
+rechtsbündig in gleich breiten Ziffern, eine Doppellinie über der
+Summe. Zwei Druckfarben, mehr hatte keine Registrierkasse.
+
+Daraus folgt alles andere:
+
+| | |
+|---|---|
+| **Flächen** | Es gibt keine Karten mehr. Zeilen stehen direkt auf dem Papier, getrennt durch Haarlinien. Karte-in-Karte-in-Karte war das eigentliche Problem: jede Zeile bekam einen Kasten, weil kein Kasten etwas über Wichtigkeit aussagte. |
+| **Ziffern** | Alle Zahlen in Monospace, Tabellenbreite, rechtsbündig. Beträge untereinander sollen sich vergleichen lassen, ohne dass man sie liest. |
+| **Farbe** | Tinte und ein Stempelrot als einziges Warnsignal. Grün nur dort, wo etwas abgehakt ist — die zweite Farbe im Druck. |
+| **Kanten** | Rechtwinklig. Radien nur an Bedienelementen, wo der Finger sie braucht. |
+| **Schrift** | Überschriften klein, versal, weit gesperrt — wie der Kopf eines Belegs. |
+
+Konkrete Ersetzungen: der Fortschrittsring der Vorrats-Reichweite ist
+eine **Tagesskala** mit Wochenmarken; die Meilenstein-Kacheln sind
+**Positionen mit einer Skala aus Strichen**; die fünf Glyphen sind
+**gezeichnete Marken** (Keimling, Preisschild, Kreispfeil, Beleg mit
+abgerissener Kante, Strichliste); der Streak ist eine **Strichliste**;
+Summenzeilen tragen die **Doppellinie**; und das Aktionsblatt hat eine
+**Perforation** an der Oberkante — es ist ein herausgetrennter
+Abschnitt, und das eine Bild sagt es.
+
+Der dunkle Modus ist kein umgedrehtes Papier, sondern ein Durchschlag:
+warmes Schwarz, gebrochenes Weiß, dieselben zwei Farben.
+
+**Nebenbei repariert:** die Einstellung „Schriftgröße" hatte fast keine
+Wirkung. Alle Größen standen in Pixeln, der Faktor wirkte nur auf den
+Fließtext. Jetzt sitzt er auf der Wurzel und alle Schriftgrößen stehen
+in `rem` — Abstände und Rahmen bleiben in Pixeln, denn der Text soll
+wachsen, nicht das Gerüst.
 
 Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 

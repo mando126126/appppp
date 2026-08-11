@@ -48,7 +48,27 @@ const REASONS = [
   { key: "skip", label: "Diese Woche nicht" }
 ];
 
-/* ---------- Bausteine im iOS-Stil ---------- */
+/* ---------- Gezeichnete Marken ----------
+   Fünf Strichzeichnungen für die Meilensteine. Vorher standen dort
+   Unicode-Glyphen — bequem, aber sie sehen auf jedem Gerät anders aus,
+   passen zu nichts und verraten sofort, dass niemand hingesehen hat.
+   Jede Marke bezieht sich auf ihre Sache: ein Keimling für Gerettetes,
+   ein Preisschild, ein Kreispfeil, ein Beleg mit abgerissener Kante,
+   eine Strichliste. */
+const MARKS = {
+  sprout: '<path d="M12 21v-9"/><path d="M12 14c0-4.4 3.1-7.5 7.5-7.5C19.5 10.9 16.4 14 12 14z"/>' +
+          '<path d="M12 17c0-3.3-2.5-5.8-5.8-5.8C6.2 14.5 8.7 17 12 17z"/>',
+  tag: '<path d="M12.8 3.2H20v7.2l-9.2 9.2L3.6 12.4l9.2-9.2z"/><circle cx="16.6" cy="7.4" r="1.3"/>',
+  cycle: '<path d="M4.2 11.2A8 8 0 0117.6 6"/><path d="M19.8 12.8A8 8 0 016.4 18"/>' +
+         '<path d="M17.6 2.6V6h-3.4"/><path d="M6.4 21.4V18h3.4"/>',
+  receipt: '<path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>',
+  tally: '<path d="M5 6.5v11M9 6.5v11M13 6.5v11M17 6.5v11"/><path d="M3.4 17.6L18.6 6.4"/>'
+};
+
+const markSvg = (key) =>
+  `<svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[key] || MARKS.receipt}</svg>`;
+
+/* ---------- Bausteine ---------- */
 
 /**
  * Gruppierte Liste. `info` landet hinter einem (i) statt als Fließtext
@@ -507,27 +527,43 @@ function viewListe(ctx, app) {
   return c;
 }
 
-/** Ring mit der Vorrats-Reichweite. Antippen öffnet die Herleitung. */
+/**
+ * Vorrats-Reichweite als Tagesskala.
+ *
+ * Vorher war das ein Fortschrittsring — ein Standardbauteil, das in
+ * jeder zweiten App steckt und über den Gegenstand nichts aussagt.
+ * Eine Skala mit Tagesstrichen sagt dasselbe und ist am Gegenstand:
+ * man sieht, wie viele Tage noch abgetragen werden können und wo die
+ * Woche endet.
+ */
 function rangeHero(ctx, app) {
   const r = ctx.range;
   const days = Math.max(0, Math.round(r.days));
-  const frac = Math.min(1, days / 7);
-  const C = 2 * Math.PI * 31;
+  const SPAN = 14;                       // die Skala reicht zwei Wochen
+  const shown = Math.min(days, SPAN);
   const color = days <= 1 ? "var(--red)" : days <= 3 ? "var(--amber)" : "var(--accent)";
 
-  const h = el("button", "hero");
-  h.append(el("div", "heroRing",
-    `<svg viewBox="0 0 74 74" aria-hidden="true">
-       <circle cx="37" cy="37" r="31" fill="none" stroke="var(--fill)" stroke-width="7"/>
-       <circle cx="37" cy="37" r="31" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round"
-               stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}"/>
-     </svg>
-     <div class="val"><div class="n">${days}</div><div class="u">${days === 1 ? "Tag" : "Tage"}</div></div>`));
+  // Die Striche stehen fest im Koordinatensystem; `vector-effect`
+  // hält sie dünn, auch wenn die Fläche in die Breite gezogen wird.
+  const W = 300, y0 = 4, y1 = 20;
+  let ticks = "";
+  for (let d = 0; d <= SPAN; d++) {
+    const x = (d / SPAN) * W;
+    const woche = d % 7 === 0;
+    ticks += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${woche ? 0 : y0}" y2="${y1}" ` +
+      `stroke="var(--rule-strong)" stroke-width="1" opacity="${woche ? 1 : .5}" vector-effect="non-scaling-stroke"/>`;
+  }
+  const fill = `<rect x="0" y="${y1}" width="${((shown / SPAN) * W).toFixed(1)}" height="4" fill="${color}"/>` +
+    `<rect x="0" y="${y1}" width="${W}" height="1" fill="var(--rule-strong)"/>`;
 
+  const h = el("button", "hero");
   const txt = el("div", "txt");
   txt.append(el("b", null, "Vorrat reicht"));
   txt.append(el("small", null, esc(r.limiting.slice(0, 2).map((x) => x.name).join(", "))));
   h.append(txt);
+  h.append(el("div", "heroRing",
+    `<div class="val"><div class="n">${days}</div><div class="u">${days === 1 ? "Tag" : "Tage"}</div></div>` +
+    `<svg viewBox="0 0 ${W} 26" preserveAspectRatio="none" aria-hidden="true">${ticks}${fill}</svg>`));
   h.append(el("div", "chev"));
 
   h.addEventListener("click", () => {
@@ -641,9 +677,9 @@ function badgeScroller(ctx, app) {
   const s = el("div", "badgeRow");
   ctx.badges.rows.forEach((row) => {
     const b = el("button", "badge" + (row.current ? " on" : ""));
-    b.append(el("div", "bIcon", esc(row.icon)));
-    b.append(el("div", "bVal", esc(row.euros ? eur(row.value) : String(row.value))));
+    b.append(el("div", "bIcon", markSvg(row.icon)));
     b.append(el("div", "bLbl", esc(row.label)));
+    b.append(el("div", "bVal", esc(row.euros ? eur(row.value) : String(row.value))));
     const bar = el("div", "bBar");
     const fill = el("i");
     fill.style.width = Math.round(row.progress * 100) + "%";
@@ -1385,14 +1421,14 @@ function chartCard(ctx) {
   let grid = "", bars = "";
   [0, max / 2, max].forEach((tv) => {
     grid += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(tv).toFixed(1)}" y2="${y(tv).toFixed(1)}" stroke="currentColor" opacity=".12"/>` +
-      `<text x="${pad.l - 8}" y="${(y(tv) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="currentColor" opacity=".5">${tv.toFixed(0)}</text>`;
+      `<text x="${pad.l - 8}" y="${(y(tv) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="currentColor" opacity=".45" font-family="ui-monospace,monospace">${tv.toFixed(0)}</text>`;
   });
   months.forEach((m, i) => {
     const x = pad.l + i * bw + bw * 0.26, w = bw * 0.48;
     const top = y(m[1]), base = y(0);
-    bars += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(base - top).toFixed(1)}" fill="var(--accent)" rx="5"/>` +
-      `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(2, (base - top) * wasteShare).toFixed(1)}" fill="var(--red)" rx="5"/>` +
-      `<text x="${(x + w / 2).toFixed(1)}" y="${H - pad.b + 17}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".5">${m[0].slice(5)}</text>`;
+    bars += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(base - top).toFixed(1)}" fill="var(--accent)"/>` +
+      `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(2, (base - top) * wasteShare).toFixed(1)}" fill="var(--red)"/>` +
+      `<text x="${(x + w / 2).toFixed(1)}" y="${H - pad.b + 17}" text-anchor="middle" font-size="10" fill="currentColor" opacity=".45" font-family="ui-monospace,monospace">${m[0].slice(5)}</text>`;
   });
 
   const box = el("div", "chartBox");

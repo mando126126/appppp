@@ -6834,13 +6834,18 @@ const sumEurosOf = (list) => Math.round(list.reduce((a, x) => a + (x.euros || 0)
  * ================================================================
  */
 
+/* `icon` ist ein SCHLÜSSEL, kein Zeichen. Vorher standen hier
+   Unicode-Glyphen (✽ ◆ ↻ ▤ ▪) — der deutlichste Verräter einer
+   Gestaltung von der Stange: echte Symbole werden gezeichnet, nicht
+   aus dem Zeichensatz gegriffen. Die Zeichnung steht in views.js, wo
+   sie hingehört; dieses Modul benennt nur, was gemeint ist. */
 const MILESTONES = [
   {
     id: "gerettet",
     label: "Gerettet",
     unit: "Produkte",
     steps: [3, 10, 25, 50, 100, 250],
-    icon: "✽",
+    icon: "sprout",
     title: (n) => `${n} Produkte vor dem Verderb bewahrt`,
     note: "Zählt Handlungen, die du bestätigt hast: halbe Menge, eingefroren, aufgebraucht, gekocht."
   },
@@ -6850,7 +6855,7 @@ const MILESTONES = [
     unit: "€",
     euros: true,
     steps: [10, 25, 50, 100, 250, 500],
-    icon: "◆",
+    icon: "tag",
     title: (n) => `${n} € unter deinem üblichen Preis`,
     note: "Realisierte Ersparnis: gezahlter Preis gegen deinen eigenen Medianpreis. Nachrechenbar, nicht geschätzt."
   },
@@ -6859,7 +6864,7 @@ const MILESTONES = [
     label: "Getauscht",
     unit: "×",
     steps: [3, 10, 25, 50],
-    icon: "↻",
+    icon: "cycle",
     title: (n) => `${n}× rechtzeitig getauscht`,
     note: "Zahnbürste, Schwamm, Filter — Austausch nach Zeit, nicht nach Verbrauch."
   },
@@ -6868,7 +6873,7 @@ const MILESTONES = [
     label: "Erfasst",
     unit: "Bons",
     steps: [1, 10, 50, 100, 250],
-    icon: "▤",
+    icon: "receipt",
     title: (n) => (n === 1 ? "Erster Bon erfasst" : `${n} Bons erfasst`),
     note: "Jeder Bon schärft die Rhythmen. Ohne Historie rät die App nur."
   },
@@ -6877,7 +6882,7 @@ const MILESTONES = [
     label: "Am Stück",
     unit: "Wochen",
     steps: [2, 4, 12, 26, 52],
-    icon: "▪",
+    icon: "tally",
     title: (n) => `${n} Wochen am Stück`,
     note: "Wochen mit mindestens einer Handlung. Urlaubswochen zählen mit."
   }
