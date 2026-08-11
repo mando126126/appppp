@@ -1,4 +1,4 @@
-/* Gebündelt aus 40 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 44 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
 
 /* ===== foodDatabase.js ===== */
@@ -5959,4 +5959,733 @@ function purchasesSinceChange(purchases, change) {
   const idx = rows.findIndex((p) => p.date >= change.date);
   if (idx <= 0) return rows;
   return rows.slice(Math.max(0, idx - 1));
+}
+
+/* ===== activityLog.js ===== */
+/**
+ * activityLog.js — das Ereignis-Protokoll
+ * ================================================================
+ * Wochenrückblick, Meilensteine und Streak brauchen alle dieselbe
+ * Grundlage: eine Liste dessen, was tatsächlich passiert ist, mit
+ * Datum. Drei Module, die sich jeweils ihre eigene Zählung aus den
+ * Käufen zusammenrechnen, wären drei Wahrheiten — und spätestens
+ * beim ersten Widerspruch („der Rückblick sagt 3, das Abzeichen
+ * sagt 4“) ist das Vertrauen weg.
+ *
+ * Deshalb ein Protokoll, in das jede zählbare Handlung genau einmal
+ * geschrieben wird, und drei Module, die nur noch lesen.
+ *
+ * WAS HIER HINEINGEHÖRT: bestätigte Handlungen mit Datum. Ein Kauf,
+ * ein Austausch, ein gerettetes Produkt. Keine Schätzungen über
+ * Dinge, die vielleicht passiert sind.
+ *
+ * ZWEI GELDBETRÄGE, DIE NICHT ZUSAMMENGEHÖREN:
+ *
+ *   `gerettet`  ist kontrafaktisch — der Wert, der ohne die
+ *               Handlung wahrscheinlich verdorben wäre. Eine
+ *               Schätzung, und als solche gekennzeichnet.
+ *   `guenstig`  ist realisiert — die Differenz zwischen gezahltem
+ *               und dem eigenen üblichen Preis. Nachrechenbar.
+ *
+ * Die beiden werden NIE addiert. Das ist derselbe Grundsatz, mit
+ * dem in der Ansicht „Zahlen“ schon die Haushalts-Ersparnis getrennt
+ * von der Lebensmittel-Ersparnis steht: eine Summe aus gemessen und
+ * geschätzt ist eine Zahl, die nichts mehr bedeutet.
+ * ================================================================
+ */
+
+
+
+const ACTION = {
+  GERETTET: "gerettet",         // Verderb abgewendet, vom Nutzer bestätigt
+  GUENSTIG: "guenstig",         // unter dem eigenen üblichen Preis gekauft
+  GETAUSCHT: "getauscht",       // Austauschprodukt gewechselt
+  ERFASST: "erfasst",           // Bon gebucht
+  RUECKMELDUNG: "rueckmeldung"  // Antwort auf einen Vorschlag
+};
+
+const ACTION_LABEL = {
+  gerettet: "gerettet",
+  guenstig: "günstig gekauft",
+  getauscht: "getauscht",
+  erfasst: "erfasst",
+  rueckmeldung: "Rückmeldung"
+};
+
+const KINDS = Object.values(ACTION);
+
+// Ein Jahr plus Puffer: so weit zurück schaut der längste Streak
+// (52 Wochen). Älteres wertet kein Modul mehr aus, und ein Protokoll,
+// das unbegrenzt wächst, sprengt irgendwann den Browserspeicher.
+const MAX_LEDGER_DAYS = 400;
+const MAX_LEDGER_ENTRIES = 1500;
+
+// Unter zehn Cent ist eine „Ersparnis“ Rundungsrauschen.
+const MIN_SAVING_EUROS = 0.1;
+
+const isDate = (d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+/**
+ * Fremde oder alte Einträge auf eine verlässliche Form bringen.
+ * Ein einziger kaputter Eintrag aus einer alten Sicherung darf nicht
+ * die gesamte Auswertung mitreißen.
+ */
+function normalizeActions(list) {
+  return (Array.isArray(list) ? list : [])
+    .filter((a) => a && isDate(a.date) && KINDS.includes(a.kind))
+    .map((a) => ({
+      date: a.date,
+      kind: a.kind,
+      productId: a.productId || null,
+      euros: Number.isFinite(a.euros) ? Math.max(0, a.euros) : 0
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Einträge im Zeitraum, Grenzen eingeschlossen. */
+function actionsInRange(list, from, to) {
+  return normalizeActions(list).filter((a) => a.date >= from && a.date <= to);
+}
+
+/** Anzahl je Art. Fehlende Arten stehen als 0 drin, nicht als undefined. */
+function countByKind(list) {
+  const out = {};
+  KINDS.forEach((k) => { out[k] = 0; });
+  normalizeActions(list).forEach((a) => { out[a.kind]++; });
+  return out;
+}
+
+/** Summe der Beträge einer Art. */
+function sumEuros(list, kind) {
+  const sum = normalizeActions(list)
+    .filter((a) => !kind || a.kind === kind)
+    .reduce((a, x) => a + x.euros, 0);
+  return Math.round(sum * 100) / 100;
+}
+
+/** Protokoll kürzen: erst nach Alter, dann notfalls nach Anzahl. */
+function pruneActions(list, today, maxDays = MAX_LEDGER_DAYS) {
+  const cutoff = shiftDate(today, -maxDays);
+  const kept = normalizeActions(list).filter((a) => a.date >= cutoff);
+  return kept.length > MAX_LEDGER_ENTRIES ? kept.slice(kept.length - MAX_LEDGER_ENTRIES) : kept;
+}
+
+const shiftDate = (dateStr, days) =>
+  new Date(new Date(dateStr + "T12:00:00Z").getTime() + days * 86400000).toISOString().slice(0, 10);
+
+/**
+ * Realisierte Ersparnis eines Einkaufs: was unter dem eigenen
+ * üblichen Preis gezahlt wurde.
+ *
+ * Verglichen wird gegen die Historie VOR diesem Einkauf. Nähme man
+ * die Historie einschließlich der neuen Zeile, verschöbe der günstige
+ * Kauf den Bezugswert selbst nach unten und die Ersparnis fiele zu
+ * klein aus — bei drei Datenpunkten spürbar.
+ *
+ * @param {Array} rows [{productId, quantity, unitPrice}]
+ * @param {Array} priorHistory Käufe vor diesem Bon
+ * @returns {Array} [{productId, euros, usual, paid}]
+ */
+function receiptSavings(rows, priorHistory) {
+  const out = [];
+  for (const r of (rows || [])) {
+    if (!r || !r.productId) continue;
+    const paid = Number(r.unitPrice);
+    const qty = Math.max(1, Number(r.quantity) || 1);
+    if (!Number.isFinite(paid) || paid <= 0) continue;
+
+    const mem = priceMemory(r.productId, priorHistory || []);
+    if (!mem || !mem.usual) continue;
+
+    // Dieselbe Schwelle wie im Preis-Gedächtnis: darunter ist ein
+    // Unterschied kein Angebot, sondern Streuung.
+    if (paid > mem.usual * (1 - NOTABLE_CHANGE)) continue;
+
+    const euros = Math.round((mem.usual - paid) * qty * 100) / 100;
+    if (euros < MIN_SAVING_EUROS) continue;
+    out.push({ productId: r.productId, euros, usual: mem.usual, paid: Math.round(paid * 100) / 100 });
+  }
+  return out;
+}
+
+/* ===== streakTracker.js ===== */
+/**
+ * streakTracker.js — Wochen am Stück, ohne Rangliste
+ * ================================================================
+ * Ein Streak ist der billigste wirksame Wiederkehrgrund, den es
+ * gibt. Er ist aber auch der schnellste Weg, jemanden zu verlieren:
+ * Wer nach elf Wochen einmal im Urlaub war und bei null steht,
+ * kommt nicht wieder.
+ *
+ * Deshalb drei Entscheidungen, die von der reinen Snapchat-Logik
+ * abweichen:
+ *
+ *   1. KEINE RANGLISTE. Bei Lebensmittelverschwendung ist ein
+ *      öffentlicher Vergleich beschämend, nicht motivierend — wer
+ *      hinten steht, deinstalliert. Der Streak gehört dem Haushalt,
+ *      nicht einem Wettbewerb.
+ *   2. DIE LAUFENDE WOCHE BRICHT NIE. Bis Sonntagabend ist die Woche
+ *      offen. Eine App, die dienstags meldet „Streak verloren“, ist
+ *      schlicht falsch.
+ *   3. EINE KULANZWOCHE. Wer den Streak eine Weile gehalten hat,
+ *      verliert ihn nicht an eine einzelne Lücke. Höchstens eine
+ *      Kulanz je acht Wochen, sonst wäre die Zahl bedeutungslos.
+ *
+ * Urlaubswochen zählen als gehalten. Das ist keine Schummelei: die
+ * App weiß aus dem Urlaubsmodus, dass in dieser Woche bewusst nicht
+ * eingekauft wurde. Sie so zu werten wie eine vergessene Woche wäre
+ * eine Fehlmessung.
+ * ================================================================
+ */
+
+
+
+const MAX_WEEKS_BACK = 60;      // etwas mehr als ein Jahr
+const GRACE_AFTER_WEEKS = 4;    // erst ab vier Wochen gibt es Kulanz
+const GRACE_SPACING = 8;        // höchstens eine Kulanz je acht Wochen
+
+/**
+ * ISO-Kalenderwoche als sortierbarer Schlüssel („2026-W32“).
+ * Die eine Implementierung im Projekt — data.js reicht sie durch.
+ */
+function isoWeekKey(dateStr) {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const day = (d.getUTCDay() + 6) % 7;              // Montag = 0
+  d.setUTCDate(d.getUTCDate() - day + 3);           // Donnerstag derselben Woche
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const fd = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - fd + 3);
+  const week = 1 + Math.round((d - firstThursday) / (7 * 86400000));
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/** Montag der Woche, in der `dateStr` liegt. */
+function mondayOf(dateStr) {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+
+const weekShift = (dateStr, weeks) =>
+  new Date(new Date(dateStr + "T12:00:00Z").getTime() + weeks * 7 * 86400000).toISOString().slice(0, 10);
+
+/**
+ * Wochen, die ganz oder teilweise in einen Urlaub fallen.
+ * @returns {Set<string>} Wochenschlüssel
+ */
+function vacationWeeks(vacation, today) {
+  const out = new Set();
+  if (!vacation || !vacation.from || !vacation.to) return out;
+  const from = vacation.from;
+  const to = vacation.to < today ? vacation.to : today;
+  if (from > to) return out;
+  let cursor = mondayOf(from);
+  // Obergrenze gegen eine fehlerhaft weit gesetzte Rückkehr.
+  for (let i = 0; i <= MAX_WEEKS_BACK && cursor <= to; i++) {
+    out.add(isoWeekKey(cursor));
+    cursor = weekShift(cursor, 1);
+  }
+  return out;
+}
+
+/**
+ * Streak aus dem Ereignis-Protokoll.
+ *
+ * @param {Array} actions Ereignisse aus activityLog
+ * @param {string} today
+ * @param {{vacation}} opts
+ * @returns {{weeks, thisWeekActive, longest, graceUsed, weekKeys, message, holdBy}}
+ */
+function weeklyStreak(actions, today, opts = {}) {
+  const held = new Set();
+  normalizeActions(actions).forEach((a) => held.add(isoWeekKey(a.date)));
+
+  const vac = vacationWeeks(opts.vacation, today);
+  const isHeld = (wk) => held.has(wk) || vac.has(wk);
+
+  const thisWeek = isoWeekKey(today);
+  const thisWeekActive = isHeld(thisWeek);
+
+  let weeks = 0;
+  let graceUsed = 0;
+  let lastGraceAt = null;
+  // Eine Kulanzwoche zählt erst, wenn danach wieder eine gehaltene
+  // Woche kommt. Sonst meldete ein lückenlos gehaltener Streak eine
+  // verbrauchte Kulanz, nur weil davor irgendwann nichts war.
+  let pendingGrace = 0;
+  const weekKeys = [];
+
+  for (let i = 0; i < MAX_WEEKS_BACK; i++) {
+    const wk = isoWeekKey(weekShift(today, -i));
+    if (isHeld(wk)) {
+      weeks++;
+      weekKeys.push(wk);
+      graceUsed += pendingGrace;
+      pendingGrace = 0;
+      continue;
+    }
+
+    // Die laufende Woche ist bis Sonntag offen — sie kann den Streak
+    // nicht beenden, sie hat nur noch nicht begonnen.
+    if (i === 0) continue;
+
+    const spacingOk = lastGraceAt === null || i - lastGraceAt >= GRACE_SPACING;
+    if (weeks >= GRACE_AFTER_WEEKS && spacingOk) {
+      pendingGrace++;
+      lastGraceAt = i;
+      continue;
+    }
+    break;
+  }
+
+  // Längster Streak: dieselbe Regel rückwärts über den gesamten
+  // Zeitraum, damit ein Rekord auch nach einer Pause erhalten bleibt.
+  let longest = 0, run = 0;
+  for (let i = MAX_WEEKS_BACK - 1; i >= 0; i--) {
+    if (isHeld(isoWeekKey(weekShift(today, -i)))) { run++; longest = Math.max(longest, run); }
+    else run = 0;
+  }
+
+  return {
+    weeks,
+    thisWeekActive,
+    longest: Math.max(longest, weeks),
+    graceUsed,
+    weekKeys,
+    holdBy: vac.has(thisWeek) && !held.has(thisWeek) ? "urlaub" : null,
+    // Nie eine Verlustmeldung. Wer bei null steht, fängt an — er hat
+    // nichts verloren.
+    message: weeks === 0
+      ? "Diese Woche fängt der Zähler an."
+      : thisWeekActive
+        ? `${weeks} ${weeks === 1 ? "Woche" : "Wochen"} am Stück.`
+        : `${weeks} ${weeks === 1 ? "Woche" : "Wochen"} am Stück — diese Woche ist noch offen.`
+  };
+}
+
+/** Die letzten `n` Wochen als Punktereihe für die Anzeige. */
+function streakDots(actions, today, n = 8, opts = {}) {
+  const held = new Set();
+  normalizeActions(actions).forEach((a) => held.add(isoWeekKey(a.date)));
+  const vac = vacationWeeks(opts.vacation, today);
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const wk = isoWeekKey(weekShift(today, -i));
+    out.push({
+      week: wk,
+      current: i === 0,
+      held: held.has(wk),
+      vacation: vac.has(wk) && !held.has(wk)
+    });
+  }
+  return out;
+}
+
+/* ===== weeklyReview.js ===== */
+/**
+ * weeklyReview.js — der Wochenrückblick
+ * ================================================================
+ * „Diese Woche: 3 Produkte gerettet, 4,20 € günstiger als üblich,
+ *  Zahnbürste getauscht.“
+ *
+ * Das Modul rechnet nichts Neues aus. Es liest das Ereignis-
+ * Protokoll und die Bons und fasst zusammen, was ohnehin schon da
+ * ist. Genau deshalb kostet es fast nichts und ist trotzdem der
+ * Grund, die App am Sonntagabend zu öffnen.
+ *
+ * DREI REGELN, DAMIT DER RÜCKBLICK NICHT ZUR WERBUNG WIRD:
+ *
+ *   1. Nur Zeilen mit Inhalt. Eine Woche ohne Austausch zeigt keine
+ *      Austausch-Zeile mit einer Null. Ein Rückblick, der immer
+ *      gleich lang ist, wird nicht gelesen.
+ *   2. Geschätzt und gemessen bleiben getrennt. „Gerettet“ ist eine
+ *      Schätzung des abgewendeten Verlusts, „günstiger als üblich“
+ *      ist nachrechenbar. Eine Summe aus beidem wäre eine Zahl ohne
+ *      Bedeutung.
+ *   3. Eine ruhige Woche ist keine schlechte Woche. Wer nichts
+ *      erfasst hat, bekommt keine Ermahnung, sondern einen Satz,
+ *      der das feststellt und gut ist.
+ *
+ * Der Rückblick ist ab Sonntagabend fällig und bleibt bis Dienstag
+ * abrufbar — sonst verpasst ihn jeder, der sonntags nicht ans Handy
+ * geht. Ab Montag bezieht er sich auf die abgeschlossene Vorwoche.
+ * ================================================================
+ */
+
+
+
+
+
+
+const REVIEW_WEEKDAY = 0;      // Sonntag (getUTCDay)
+const REVIEW_HOUR = 17;        // ab 17 Uhr — der Abend ist gemeint
+const REVIEW_GRACE_DAYS = 2;   // Montag und Dienstag noch nachholbar
+const COMPARE_WEEKS = 12;      // Vergleichszeitraum für den Schnitt
+const MIN_WEEKS_FOR_COMPARE = 3;
+
+const money = (n) => (Number(n) || 0).toFixed(2).replace(".", ",") + " €";
+const weekdayOfDate = (d) => new Date(d + "T12:00:00Z").getUTCDay();
+
+/**
+ * Welcher Zeitraum ist gerade gemeint?
+ *
+ * @returns {{weekKey, from, to, complete, label}}
+ */
+function weekRangeFor(dateStr, offset = 0) {
+  const monday = weekShift(mondayOf(dateStr), offset);
+  const sunday = weekShift(monday, 1);
+  const to = offset < 0 ? new Date(new Date(sunday + "T12:00:00Z").getTime() - 86400000).toISOString().slice(0, 10) : dateStr;
+  return {
+    weekKey: isoWeekKey(monday),
+    from: monday,
+    to,
+    complete: offset < 0 || weekdayOfDate(dateStr) === REVIEW_WEEKDAY,
+    label: offset < 0 ? "Vorige Woche" : "Diese Woche"
+  };
+}
+
+/**
+ * Ist der Rückblick jetzt fällig — und für welche Woche?
+ *
+ * @param {string} today
+ * @param {number} hour Stunde im Ortszeitsystem des Geräts
+ * @returns {null|{weekKey, from, to, complete, label}}
+ */
+function reviewDue(today, hour = 20) {
+  const wd = weekdayOfDate(today);
+  if (wd === REVIEW_WEEKDAY) {
+    return hour >= REVIEW_HOUR ? weekRangeFor(today, 0) : null;
+  }
+  // Montag = 1, Dienstag = 2 — die Vorwoche ist da abgeschlossen.
+  if (wd >= 1 && wd <= REVIEW_GRACE_DAYS) return weekRangeFor(today, -1);
+  return null;
+}
+
+/** Wochensummen der Bons, jüngste zuerst. */
+function weeklySpends(receipts, today, weeks = COMPARE_WEEKS) {
+  const byWeek = new Map();
+  (receipts || []).forEach((r) => {
+    if (!r || !r.date || r.date > today) return;
+    if (daysBetween(r.date, today) > weeks * 7) return;
+    const wk = isoWeekKey(r.date);
+    byWeek.set(wk, (byWeek.get(wk) || 0) + (Number(r.total) || 0));
+  });
+  return byWeek;
+}
+
+function medianOfNumbers(values) {
+  if (!values.length) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Der Rückblick für einen Zeitraum.
+ *
+ * @param {{actions, receipts}} data
+ * @param {{weekKey, from, to, complete, label}} range aus weekRangeFor
+ * @returns {object}
+ */
+function weeklyReview(data, range) {
+  const actions = actionsInRange(data.actions || [], range.from, range.to);
+  const receipts = (data.receipts || []).filter((r) => r && r.date >= range.from && r.date <= range.to);
+
+  const rescued = actions.filter((a) => a.kind === ACTION.GERETTET);
+  const cheaper = actions.filter((a) => a.kind === ACTION.GUENSTIG);
+  const swaps = actions.filter((a) => a.kind === ACTION.GETAUSCHT);
+  const feedback = actions.filter((a) => a.kind === ACTION.RUECKMELDUNG);
+
+  const spend = Math.round(receipts.reduce((a, r) => a + (Number(r.total) || 0), 0) * 100) / 100;
+
+  // Vergleich mit den eigenen Wochen — nicht mit einem Durchschnitts-
+  // haushalt. Fremde Vergleichszahlen wären hier erfunden.
+  const spends = weeklySpends(data.receipts, range.to);
+  spends.delete(range.weekKey);
+  const others = [...spends.values()].filter((v) => v > 0);
+  let comparison = null;
+  if (others.length >= MIN_WEEKS_FOR_COMPARE && spend > 0) {
+    const med = medianOfNumbers(others);
+    const delta = spend - med;
+    comparison = {
+      median: Math.round(med * 100) / 100,
+      delta: Math.round(delta * 100) / 100,
+      weeks: others.length,
+      text: Math.abs(delta) < 1
+        ? "wie in deinen üblichen Wochen"
+        : delta < 0
+          ? `${money(-delta)} unter deinem Schnitt`
+          : `${money(delta)} über deinem Schnitt`
+    };
+  }
+
+  const nameOf = (pid) => { const p = byId(pid); return p ? p.name : null; };
+  const swapNames = [...new Set(swaps.map((s) => nameOf(s.productId)).filter(Boolean))];
+  const rescuedNames = [...new Set(rescued.map((r) => nameOf(r.productId)).filter(Boolean))];
+
+  /* Jede Zeile trägt zwei Fassungen: `label`/`value` für das Blatt,
+     `tile` für die drei Kacheln auf der Karte. Ohne die zweite stünde
+     dort „1 Produkt gerettet“ neben „ca. 1,25 €“ — dieselbe Aussage
+     zweimal, und auf einem schmalen Telefon in zwei Zeilen gebrochen. */
+  const lines = [];
+  if (rescued.length) {
+    lines.push({
+      key: "gerettet",
+      label: rescued.length === 1 ? "1 Produkt gerettet" : `${rescued.length} Produkte gerettet`,
+      value: sumEuros(rescued) > 0 ? "ca. " + money(sumEuros(rescued)) : "",
+      note: rescuedNames.slice(0, 3).join(", "),
+      tile: { v: String(rescued.length), l: "gerettet" },
+      estimated: true
+    });
+  }
+  if (cheaper.length) {
+    lines.push({
+      key: "guenstig",
+      label: "Günstiger als üblich",
+      value: money(sumEuros(cheaper)),
+      note: `${cheaper.length} ${cheaper.length === 1 ? "Position" : "Positionen"}`,
+      tile: { v: money(sumEuros(cheaper)), l: "gespart" },
+      estimated: false
+    });
+  }
+  if (swaps.length) {
+    lines.push({
+      key: "getauscht",
+      label: swaps.length === 1 ? "1× getauscht" : `${swaps.length}× getauscht`,
+      value: "",
+      note: swapNames.slice(0, 3).join(", "),
+      tile: { v: swaps.length + "×", l: "getauscht" },
+      estimated: false
+    });
+  }
+  if (receipts.length) {
+    lines.push({
+      key: "einkauf",
+      label: receipts.length === 1 ? "1 Einkauf" : `${receipts.length} Einkäufe`,
+      value: money(spend),
+      note: comparison ? comparison.text : "",
+      tile: { v: money(spend), l: receipts.length === 1 ? "1 Einkauf" : `${receipts.length} Einkäufe` },
+      estimated: false
+    });
+  }
+  if (feedback.length) {
+    lines.push({
+      key: "rueckmeldung",
+      label: feedback.length === 1 ? "1 Rückmeldung" : `${feedback.length} Rückmeldungen`,
+      value: "",
+      note: "fließen in die Rhythmen ein",
+      tile: { v: String(feedback.length), l: feedback.length === 1 ? "Rückmeldung" : "Rückmeldungen" },
+      estimated: false
+    });
+  }
+
+  const quiet = lines.length === 0;
+
+  return {
+    ...range,
+    lines,
+    quiet,
+    spend,
+    comparison,
+    receipts: receipts.length,
+    rescued: { count: rescued.length, euros: sumEuros(rescued), names: rescuedNames },
+    cheaper: { count: cheaper.length, euros: sumEuros(cheaper) },
+    swaps: { count: swaps.length, names: swapNames },
+    feedback: feedback.length,
+    headline: buildHeadline({ quiet, rescued, cheaper, swaps, receipts, spend, comparison }),
+    // Für die Benachrichtigung: eine Zeile, kein Absatz.
+    short: quiet
+      ? "Ruhige Woche."
+      : lines.slice(0, 3).map((l) => (l.value ? `${l.label} (${l.value})` : l.label)).join(", ")
+  };
+}
+
+/** Die eine Zeile obenauf: das Stärkste, was diese Woche hergibt. */
+function buildHeadline(x) {
+  if (x.quiet) return "Ruhige Woche — nichts erfasst.";
+  if (x.rescued.length >= 2) {
+    return `${x.rescued.length} Produkte gerettet` +
+      (x.rescued.length && sumEurosOf(x.rescued) > 0 ? ` — geschätzt ${money(sumEurosOf(x.rescued))} nicht in der Tonne.` : ".");
+  }
+  if (x.cheaper.length && sumEurosOf(x.cheaper) >= 1) {
+    return `${money(sumEurosOf(x.cheaper))} günstiger eingekauft als üblich.`;
+  }
+  if (x.rescued.length === 1) return "Ein Produkt gerettet.";
+  if (x.swaps.length) return `${x.swaps.length}× rechtzeitig getauscht.`;
+  if (x.receipts.length) {
+    return x.comparison && x.comparison.delta < -1
+      ? `${x.receipts.length} ${x.receipts.length === 1 ? "Einkauf" : "Einkäufe"}, ${x.comparison.text}.`
+      : `${x.receipts.length} ${x.receipts.length === 1 ? "Einkauf" : "Einkäufe"} für ${money(x.spend)}.`;
+  }
+  return "Eine Woche mit Rückmeldungen — die Rhythmen sitzen jetzt genauer.";
+}
+
+const sumEurosOf = (list) => Math.round(list.reduce((a, x) => a + (x.euros || 0), 0) * 100) / 100;
+
+/* ===== milestones.js ===== */
+/**
+ * milestones.js — Meilensteine mit echter Bezugsgröße
+ * ================================================================
+ * Abstrakte Punkte („420 XP“) bedeuten nichts. Diese App hat etwas
+ * Besseres: eine bezifferbare Wirkung. „50 Produkte vor dem Verderb
+ * bewahrt“ ist keine Spielwährung, sondern eine Zusammenfassung
+ * dessen, was der Haushalt getan hat.
+ *
+ * VIER REGELN:
+ *
+ *   1. Jede Stufe zählt bestätigte Handlungen aus dem Ereignis-
+ *      Protokoll. Keine Stufe misst bloße App-Nutzung — „zehnmal
+ *      geöffnet“ ist eine Auszeichnung für die App, nicht für den
+ *      Nutzer.
+ *   2. Geld und Stückzahl bleiben getrennte Reihen, und die
+ *      Geldreihe zählt ausschließlich REALISIERTE Ersparnis. Ein
+ *      Abzeichen für geschätzte Beträge wäre eine Auszeichnung für
+ *      eine Vermutung.
+ *   3. Keine Stufe kann verfallen. Was einmal erreicht ist, bleibt.
+ *      Ein rückläufiger Zähler wäre eine Bestrafung für eine
+ *      ruhige Phase.
+ *   4. Nicht erreichte Stufen werden neutral gezeigt: der Abstand,
+ *      nicht das Versäumnis.
+ * ================================================================
+ */
+
+const MILESTONES = [
+  {
+    id: "gerettet",
+    label: "Gerettet",
+    unit: "Produkte",
+    steps: [3, 10, 25, 50, 100, 250],
+    icon: "✽",
+    title: (n) => `${n} Produkte vor dem Verderb bewahrt`,
+    note: "Zählt Handlungen, die du bestätigt hast: halbe Menge, eingefroren, aufgebraucht, gekocht."
+  },
+  {
+    id: "guenstig",
+    label: "Günstig gekauft",
+    unit: "€",
+    euros: true,
+    steps: [10, 25, 50, 100, 250, 500],
+    icon: "◆",
+    title: (n) => `${n} € unter deinem üblichen Preis`,
+    note: "Realisierte Ersparnis: gezahlter Preis gegen deinen eigenen Medianpreis. Nachrechenbar, nicht geschätzt."
+  },
+  {
+    id: "getauscht",
+    label: "Getauscht",
+    unit: "×",
+    steps: [3, 10, 25, 50],
+    icon: "↻",
+    title: (n) => `${n}× rechtzeitig getauscht`,
+    note: "Zahnbürste, Schwamm, Filter — Austausch nach Zeit, nicht nach Verbrauch."
+  },
+  {
+    id: "erfasst",
+    label: "Erfasst",
+    unit: "Bons",
+    steps: [1, 10, 50, 100, 250],
+    icon: "▤",
+    title: (n) => (n === 1 ? "Erster Bon erfasst" : `${n} Bons erfasst`),
+    note: "Jeder Bon schärft die Rhythmen. Ohne Historie rät die App nur."
+  },
+  {
+    id: "wochen",
+    label: "Am Stück",
+    unit: "Wochen",
+    steps: [2, 4, 12, 26, 52],
+    icon: "▪",
+    title: (n) => `${n} Wochen am Stück`,
+    note: "Wochen mit mindestens einer Handlung. Urlaubswochen zählen mit."
+  }
+];
+
+const badgeKey = (id, threshold) => `${id}:${threshold}`;
+
+/**
+ * Stand aller Reihen.
+ *
+ * @param {{gerettet, guenstig, getauscht, erfasst, wochen}} totals
+ * @returns {{rows, reached, reachedKeys, count, nextUp}}
+ */
+function milestoneState(totals) {
+  const rows = MILESTONES.map((m) => {
+    const raw = Number(totals && totals[m.id]) || 0;
+    const value = Math.max(0, m.euros ? Math.round(raw * 100) / 100 : Math.floor(raw));
+
+    const reached = m.steps.filter((s) => value >= s);
+    const current = reached.length ? reached[reached.length - 1] : null;
+    const next = m.steps.find((s) => value < s) || null;
+
+    // Fortschritt immer zwischen der zuletzt erreichten Stufe und der
+    // nächsten — sonst sähe der Sprung von 100 auf 250 aus wie
+    // Stillstand, obwohl es der schwerste Abschnitt ist.
+    const floor = current || 0;
+    const progress = next ? Math.min(1, Math.max(0, (value - floor) / (next - floor))) : 1;
+
+    return {
+      id: m.id,
+      label: m.label,
+      unit: m.unit,
+      icon: m.icon,
+      euros: !!m.euros,
+      note: m.note,
+      value,
+      steps: m.steps,
+      reached,
+      reachedKeys: reached.map((s) => badgeKey(m.id, s)),
+      level: reached.length,
+      maxLevel: m.steps.length,
+      current,
+      currentTitle: current ? m.title(current) : null,
+      next,
+      nextTitle: next ? m.title(next) : null,
+      remaining: next ? Math.round((next - value) * 100) / 100 : 0,
+      progress: Math.round(progress * 100) / 100,
+      complete: !next
+    };
+  });
+
+  const reachedKeys = rows.flatMap((r) => r.reachedKeys);
+
+  // Was am nächsten dran ist — die eine Zeile, die sich zu zeigen lohnt.
+  const open = rows.filter((r) => r.next !== null);
+  const nextUp = open.length
+    ? open.slice().sort((a, b) => b.progress - a.progress)[0]
+    : null;
+
+  return {
+    rows,
+    reachedKeys,
+    reached: rows.filter((r) => r.current !== null),
+    count: reachedKeys.length,
+    total: MILESTONES.reduce((a, m) => a + m.steps.length, 0),
+    nextUp
+  };
+}
+
+/**
+ * Stufen, die seit dem letzten Blick dazugekommen sind.
+ * `seen` ist die Liste bereits gefeierter Schlüssel.
+ */
+function newMilestones(state, seen) {
+  const known = new Set(Array.isArray(seen) ? seen : []);
+  const out = [];
+  state.rows.forEach((row) => {
+    const def = MILESTONES.find((m) => m.id === row.id);
+    row.reached.forEach((step) => {
+      const key = badgeKey(row.id, step);
+      if (known.has(key)) return;
+      out.push({
+        key, id: row.id, threshold: step,
+        label: row.label, icon: row.icon, unit: row.unit,
+        title: def.title(step),
+        note: def.note,
+        level: row.reached.indexOf(step) + 1,
+        maxLevel: row.maxLevel
+      });
+    });
+  });
+  // Die höchste Stufe zuerst — wer zwei auf einmal erreicht, soll die
+  // größere sehen.
+  return out.sort((a, b) => b.threshold - a.threshold);
 }

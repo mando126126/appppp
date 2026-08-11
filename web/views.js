@@ -339,6 +339,10 @@ function viewListe(ctx, app) {
     return c;
   }
 
+  // Der Rückblick steht obenan, aber nur wenn er fällig ist. Eine
+  // Karte, die jeden Tag da ist, ist kein Anlass mehr.
+  if (ctx.review.due) c.append(reviewCard(ctx, app));
+
   if (ctx.range.days !== null) c.append(rangeHero(ctx, app));
 
   /* --- Sicherheit: eine Zeile --- */
@@ -433,8 +437,11 @@ function viewListe(ctx, app) {
       r.append(el("div", "rowMain",
         `<div class="rowTitle">${esc(f.name)}: ${f.share === 0.5 ? "die Hälfte" : "ein Teil"}</div>` +
         `<div class="rowSub">rettet ${eur(f.valueAtRisk)}</div>`));
-      const done = el("button", "pillBtn", "Erledigt");
-      done.addEventListener("click", () => app.dismiss("freeze", f.productId));
+      const done = el("button", "pillBtn", "Eingefroren");
+      done.addEventListener("click", () => {
+        app.dismiss("freeze", f.productId);
+        app.rescue(f.productId, `${f.name} eingefroren`, f.valueAtRisk);
+      });
       r.append(done);
       g.body.append(r);
     });
@@ -537,6 +544,137 @@ function rangeHero(ctx, app) {
   return h;
 }
 
+/* ================================================================
+   Wochenrückblick, Streak, Meilensteine
+   ================================================================
+   Drei Anzeigen aus einer Quelle: dem Ereignis-Protokoll. Sie
+   rechnen hier nichts — jede Zahl kommt fertig aus compute().
+   ================================================================ */
+
+/** Die Karte, die sonntags oben auf der Liste steht. */
+function reviewCard(ctx, app) {
+  const r = ctx.review;
+  const box = el("div", "reviewCard");
+
+  const head = el("div", "rvHead");
+  head.append(el("span", "rvTag", esc(r.label)));
+  const close = el("button", "rvClose", "×");
+  close.setAttribute("aria-label", "Rückblick schließen");
+  close.addEventListener("click", (e) => { e.stopPropagation(); Data.markReviewSeen(r.weekKey); });
+  head.append(close);
+  box.append(head);
+
+  const open = el("button", "rvBody");
+  open.append(el("div", "rvHead2", esc(r.headline)));
+
+  const strip = el("div", "rvStrip");
+  r.lines.slice(0, 3).forEach((l) => {
+    strip.append(el("div", "rvItem",
+      `<div class="v">${esc(l.tile.v)}</div><div class="l">${esc(l.tile.l)}</div>`));
+  });
+  if (r.lines.length) open.append(strip);
+
+  if (ctx.streak.weeks > 0) open.append(el("div", "rvStreak", esc(ctx.streak.message)));
+  open.addEventListener("click", () => reviewSheet(ctx, app, { markSeen: true }));
+  box.append(open);
+  return box;
+}
+
+/**
+ * Der ganze Rückblick, mit Herkunft jeder Zahl.
+ *
+ * Aus der Karte geöffnet gilt er als gelesen — dafür braucht es
+ * keinen zweiten Knopf neben „Fertig“. Aus „Zahlen“ oder „Mehr“
+ * geöffnet nicht: dort blättert man auch durch ältere Wochen, und
+ * ein Blick zurück darf den fälligen Rückblick nicht wegräumen.
+ */
+function reviewSheet(ctx, app, opts = {}) {
+  const r = ctx.review;
+  const body = el("div");
+
+  body.append(el("div", "note green", esc(r.headline)));
+
+  if (r.quiet) {
+    body.append(el("p", "sheetPara",
+      "Nichts erfasst in diesem Zeitraum. Das ist keine schlechte Woche — die App zählt nur, was sie sieht."));
+  } else {
+    const facts = el("dl", "facts");
+    r.lines.forEach((l) => {
+      facts.append(el("dt", null, esc(l.label)));
+      facts.append(el("dd", null,
+        esc([l.value, l.note].filter(Boolean).join(" · ")) + (l.estimated ? ' <span class="pill warn">geschätzt</span>' : "")));
+    });
+    body.append(facts);
+  }
+
+  body.append(streakStrip(ctx));
+
+  body.append(el("p", "srcnote",
+    "„Gerettet“ ist eine Schätzung des abgewendeten Verlusts, „günstiger als üblich“ ist die nachrechenbare " +
+    "Differenz zu deinem eigenen Medianpreis. Die beiden werden nicht addiert — eine Summe aus geschätzt und " +
+    "gemessen wäre eine Zahl ohne Bedeutung."));
+
+  app.sheet("Wochenrückblick", `${deDate(r.from)} – ${deDate(r.to)}`, body);
+  if (opts.markSeen) Data.markReviewSeen(r.weekKey);
+}
+
+/** Acht Wochen als Punktereihe. Kein Ranking, kein Vergleich. */
+function streakStrip(ctx) {
+  const wrap = el("div", "streak");
+  const dots = el("div", "sDots");
+  ctx.streakWeeks.forEach((w) => {
+    const d = el("span", "sDot" +
+      (w.held ? " on" : w.vacation ? " vac" : "") + (w.current ? " now" : ""));
+    d.setAttribute("title", w.week + (w.vacation ? " · Urlaub" : w.held ? "" : " · ohne Eintrag"));
+    dots.append(d);
+  });
+  wrap.append(dots);
+  wrap.append(el("div", "sTxt", esc(ctx.streak.message)));
+  return wrap;
+}
+
+/** Meilensteine als waagerechte Reihe. */
+function badgeScroller(ctx, app) {
+  // Eigene Klasse statt `.scroller`: der steht mit negativen Rändern
+  // am Seitenrand, hier sitzt er in einer gruppierten Liste mit
+  // abgeschnittenen Ecken.
+  const s = el("div", "badgeRow");
+  ctx.badges.rows.forEach((row) => {
+    const b = el("button", "badge" + (row.current ? " on" : ""));
+    b.append(el("div", "bIcon", esc(row.icon)));
+    b.append(el("div", "bVal", esc(row.euros ? eur(row.value) : String(row.value))));
+    b.append(el("div", "bLbl", esc(row.label)));
+    const bar = el("div", "bBar");
+    const fill = el("i");
+    fill.style.width = Math.round(row.progress * 100) + "%";
+    bar.append(fill);
+    b.append(bar);
+    // Nur der Abstand, nicht auch noch das Ziel: auf 132 Pixeln bricht
+    // „noch 8,00 € bis 10 €“ in drei Zeilen. Das Ziel steht im Blatt.
+    b.append(el("div", "bNext", esc(row.next
+      ? `noch ${row.euros ? eur(row.remaining) : row.remaining}`
+      : "alle Stufen erreicht")));
+    b.addEventListener("click", () => badgeSheet(row, app));
+    s.append(b);
+  });
+  return s;
+}
+
+function badgeSheet(row, app) {
+  const body = el("div");
+  const list = el("ul", "plain");
+  row.steps.forEach((step) => {
+    const done = row.value >= step;
+    list.append(el("li", null,
+      `<span class="flag ${done ? "f-ok" : ""}">${done ? "✓" : "–"}</span>` +
+      `<span>${esc(row.euros ? step + " €" : `${step} ${row.unit}`)}` +
+      `<br><small>${done ? "erreicht" : `noch ${esc(row.euros ? eur(step - row.value) : String(step - row.value))}`}</small></span>`));
+  });
+  body.append(list);
+  body.append(el("p", "srcnote", esc(row.note)));
+  app.sheet(row.label, row.currentTitle || `Stand: ${row.euros ? eur(row.value) : row.value} ${row.euros ? "" : row.unit}`, body);
+}
+
 /** Eine Position der Vorschlagsliste. Knapp — Details im Blatt. */
 function listItem(it, ctx, app) {
   const p = byId(it.productId) || {};
@@ -573,7 +711,14 @@ function listItem(it, ctx, app) {
     const acts = el("div", "inlineActions");
     const h = el("button", "pillBtn" + (it.halved ? " on" : ""), it.halved ? "✓ halbe Menge" : "Halbe Menge");
     h.setAttribute("aria-pressed", it.halved ? "true" : "false");
-    h.addEventListener("click", () => app.choose(it.productId, { halved: !it.halved }));
+    h.addEventListener("click", () => {
+      const now = !it.halved;
+      app.choose(it.productId, { halved: now });
+      // Nur beim Setzen. Gegen mehrfaches Zählen sperrt zusätzlich
+      // Data.recordRescue — ein Produkt kann höchstens einmal am Tag
+      // gerettet werden.
+      if (now) app.rescue(it.productId, `${it.name}: halbe Menge`, it.price / 2);
+    });
     acts.append(h);
     li.append(acts);
   }
@@ -719,9 +864,18 @@ function viewBestand(ctx, app) {
         `<div class="rowTitle">${esc(o.name)}</div><div class="rowSub">seit ${o.openedDays} ${o.openedDays === 1 ? "Tag" : "Tagen"}</div>`));
       r.append(el("span", "flag " + (o.expired ? "f-miss" : o.urgent ? "f-gold" : "f-ok"),
         o.expired ? "über Frist" : `${o.daysLeft} T`));
-      const undo = el("button", "pillBtn", "Weg");
-      undo.setAttribute("aria-label", `${o.name} nicht mehr als angebrochen führen`);
-      undo.addEventListener("click", () => { Data.toggleOpened(o.productId); app.toast("Entfernt"); });
+      // Aufgebraucht statt nur „weg“: eine angebrochene Packung, die
+      // vor ihrer Frist leer wird, ist genau der Fall, den die App
+      // verhindern helfen soll. Nach Fristablauf zählt sie nicht mehr
+      // — dann war es keine Rettung.
+      const inv = ctx.inventory.find((i) => i.productId === o.productId);
+      const undo = el("button", "pillBtn", "Aufgebraucht");
+      undo.setAttribute("aria-label", `${o.name} aufgebraucht`);
+      undo.addEventListener("click", () => {
+        Data.toggleOpened(o.productId);
+        if (o.expired) app.toast("Notiert", { icon: "·" });
+        else app.rescue(o.productId, `${o.name} aufgebraucht`, inv ? inv.value : 0);
+      });
       r.append(undo);
       g.body.append(r);
     });
@@ -773,13 +927,33 @@ function viewBestand(ctx, app) {
   const g = uiGroup("Kochen", "Sortiert nach gerettetem Betrag, nicht nach Geschmack. Bewusst ohne Nährwerte.");
   (rec.unsafeIngredients || []).forEach((u) => g.body.append(uiRow(u.message, null, el("span", "flag f-miss", "!"))));
   if (!rec.length) g.body.append(el("p", "empty", "Kein passendes Rezept."));
-  rec.forEach((x) => g.body.append(uiRow(x.name,
-    `${x.minutes} Min${x.complete ? "" : " · fehlt: " + x.missing.join(", ")}`, null, {
-      value: x.rescuedValue > 0 ? eur(x.rescuedValue) : "",
-      onClick: () => app.notice(x.name,
-        `${x.minutes} Minuten.\n\nNutzt aus deinem Bestand: ${x.usesFromStock.join(", ") || "—"}` +
-        (x.complete ? "" : `\n\nFehlt: ${x.missing.join(", ")}`))
-    })));
+  rec.forEach((x) => {
+    const r = el("div", "row");
+    const main = el("button", "rowMain plainBtn");
+    main.innerHTML =
+      `<div class="rowTitle">${esc(x.name)}</div>` +
+      `<div class="rowSub">${esc(`${x.minutes} Min${x.complete ? "" : " · fehlt: " + x.missing.join(", ")}`)}</div>`;
+    main.addEventListener("click", () => app.notice(x.name,
+      `${x.minutes} Minuten.\n\nNutzt aus deinem Bestand: ${x.usesFromStock.join(", ") || "—"}` +
+      (x.complete ? "" : `\n\nFehlt: ${x.missing.join(", ")}`)));
+    r.append(main);
+    if (x.rescuedValue > 0) r.append(el("div", "rowValue", eur(x.rescuedValue)));
+    // Ein Rezept anzuzeigen rettet nichts. Erst das Kochen tut es —
+    // deshalb der Knopf, und deshalb zählt nur er.
+    if (x.complete && x.usesFromStock.length) {
+      const cooked = el("button", "pillBtn", "Gekocht");
+      cooked.setAttribute("aria-label", `${x.name} gekocht`);
+      cooked.addEventListener("click", () => {
+        // `usesFromStock` trägt Namen, das Protokoll braucht eine
+        // Produktkennung — sonst stünde im Rückblick der Rezeptname
+        // an der Stelle, an der ein Produkt erwartet wird.
+        const used = ctx.inventory.filter((i) => x.usesFromStock.includes(i.name));
+        app.rescue(used.length ? used[0].productId : null, `${x.name} gekocht`, x.rescuedValue);
+      });
+      r.append(cooked);
+    }
+    g.body.append(r);
+  });
   c.append(g);
 
   /* --- Einräumen --- */
@@ -929,9 +1103,9 @@ function renderScan(box, cap, app) {
   save.disabled = !p.rows.some((r) => r.productId);
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
-    const n = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
+    const res = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
     cap.parsed = null; cap.text = "";
-    app.toast(`${n} gebucht`);
+    app.toast(`${res.count} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
   });
   box.append(save);
@@ -1012,9 +1186,9 @@ function renderManual(box, cap, app) {
 
   const save = el("button", "cta", "Buchen");
   save.addEventListener("click", () => {
-    const n = Data.addReceipt({ date: di.value, store: si.value.trim() || "Unbekannt", items: cap.basket });
+    const res = Data.addReceipt({ date: di.value, store: si.value.trim() || "Unbekannt", items: cap.basket });
     cap.basket = [];
-    app.toast(`${n} gebucht`);
+    app.toast(`${res.count} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
   });
   box.append(save);
@@ -1034,12 +1208,48 @@ function viewZahlen(ctx, app) {
 
   const savingsTotal = ctx.savings.reduce((a, x) => a + x.estimatedWeeklySaving, 0);
   const s = el("div", "scroller");
+  s.append(tile("Am Stück", `${ctx.streak.weeks}`,
+    ctx.streak.weeks === 1 ? "Woche" : "Wochen", ctx.streak.weeks > 0 ? "good" : null));
   s.append(tile("Ø pro Woche", eur(t.spendPerWeek), `${t.receipts} Bons`));
   s.append(tile("zu holen", eur(savingsTotal), "ohne Verzicht", "good"));
   s.append(tile("Verlust", eur(t.wastedPerWeek), `${de(ctx.impact.kg)} kg gesamt`, "warn"));
   s.append(tile("Rhythmen", String([...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length),
     `von ${ctx.rhythms.size}`));
   c.append(s);
+
+  /* --- Wochenrückblick: immer abrufbar, nicht nur sonntags --- */
+  const rv = uiGroup("Rückblick",
+    "Fasst zusammen, was im Zeitraum tatsächlich passiert ist — aus dem Ereignis-Protokoll, nicht aus einer " +
+    "Hochrechnung. Der Rückblick meldet sich von selbst ab Sonntagabend.");
+  rv.body.append(uiRow(ctx.review.label, ctx.review.quiet ? "nichts erfasst" : ctx.review.short, null, {
+    onClick: () => reviewSheet(ctx, app)
+  }));
+  const prev = ctx.review.label === "Vorige Woche" ? null : "Vorige Woche";
+  if (prev) {
+    rv.body.append(uiRow(prev, null, null, {
+      onClick: () => {
+        const range = weekRangeFor(ctx.ref, -1);
+        const past = weeklyReview({ actions: ctx.actions, receipts: Data.get().receipts }, range);
+        past.due = false;
+        reviewSheet({ ...ctx, review: past }, app);
+      }
+    }));
+  }
+  rv.body.append(streakStrip(ctx));
+  c.append(rv);
+
+  /* --- Meilensteine --- */
+  const ms = uiGroup(`Erreicht · ${ctx.badges.count} von ${ctx.badges.total}`,
+    "Stufen zählen bestätigte Handlungen, keine App-Nutzung. Geld und Stückzahl bleiben getrennte Reihen: " +
+    "die Geldreihe zählt ausschließlich realisierte Preisersparnis, nie geschätzte Beträge.\n\n" +
+    "Erreichtes verfällt nicht. Eine ruhige Phase kostet keine Stufe.");
+  ms.body.append(badgeScroller(ctx, app));
+  if (ctx.badges.nextUp) {
+    ms.body.append(uiRow("Als Nächstes", ctx.badges.nextUp.nextTitle, null, {
+      value: `${Math.round(ctx.badges.nextUp.progress * 100)} %`
+    }));
+  }
+  c.append(ms);
 
   /* --- Einkaufsmuster --- */
   if (ctx.pattern) {
@@ -1209,6 +1419,17 @@ function viewMehr(ctx, app) {
     segmented([[1, "Normal"], [1.15, "Groß"], [1.3, "Sehr groß"]], S.settings.textScale,
       (v) => app.set((s) => { s.settings.textScale = v; }), "Schriftgröße"), { stacked: true }));
   c.append(look);
+
+  /* --- Rückblick --- */
+  const rv = uiGroup("Wochenrückblick",
+    "Der Rückblick erscheint ab Sonntagabend oben auf der Liste und bleibt bis Dienstag abrufbar.\n\n" +
+    "Die Erinnerung ist ausdrücklich KEINE echte Push-Nachricht: ohne Server kann niemand die App von " +
+    "außen wecken, und einen Server hat diese App bewusst nicht. Die Meldung erscheint deshalb beim " +
+    "nächsten Öffnen, wenn der Rückblick fällig ist.");
+  rv.body.append(uiRow("Erinnern", "beim nächsten Öffnen",
+    toggle(!!S.review.notify, (on) => app.askNotify(on), "Erinnerung an den Wochenrückblick")));
+  rv.body.append(uiRow("Diese Woche ansehen", null, null, { onClick: () => reviewSheet(ctx, app) }));
+  c.append(rv);
 
   /* --- Haushalt: bestimmt Verbrauchsraten und filtert Produkte --- */
   const hh = uiGroup("Haushalt",

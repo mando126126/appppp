@@ -33,6 +33,16 @@ const NAV = [
   }
 ];
 
+/**
+ * Zusatzzeile für die Buchungsbestätigung: was diesmal unter dem
+ * eigenen üblichen Preis lag. Nur wenn es etwas zu sagen gibt —
+ * „0,00 € gespart“ ist keine Rückmeldung, sondern Rauschen.
+ */
+function bookedDetail(res) {
+  const saved = (res.savings || []).reduce((a, s) => a + s.euros, 0);
+  return saved > 0 ? `${eur(saved)} unter deinem üblichen Preis` : null;
+}
+
 const App = {
   tab: "liste",
   ctx: null,
@@ -79,7 +89,24 @@ const App = {
   /** Austausch eintragen — setzt den Zähler zurück, ohne Kauf. */
   swap(productId, name) {
     Data.recordSwapFor(productId);
-    App.toast(`${name} getauscht`);
+    App.toast(`${name} getauscht`, { icon: "↻" });
+  },
+
+  /**
+   * Eine bestätigte Rettung festhalten.
+   *
+   * Bewusst nur an Stellen aufgerufen, an denen der Nutzer eine
+   * Handlung ausdrücklich bestätigt — halbe Menge, eingefroren,
+   * aufgebraucht, gekocht. Aus einer bloßen Anzeige eine Rettung zu
+   * zählen wäre eine Auszeichnung dafür, dass die App etwas
+   * angezeigt hat.
+   */
+  rescue(productId, text, euros) {
+    const counted = Data.recordRescue(productId, euros);
+    App.toast(text, {
+      icon: "✓",
+      detail: counted && euros > 0 ? "ca. " + eur(euros) + " gerettet" : null
+    });
   },
 
   /** Hinweis für diese Woche wegtippen. */
@@ -130,12 +157,73 @@ const App = {
   },
 
   /* ---------- Rückmeldungen ---------- */
-  toast(text, ms = 2200) {
+  /**
+   * Kurze Bestätigung. Sie ist der einzige Ort, an dem die App auf
+   * eine Handlung sofort antwortet — ohne sie fühlt sich jedes
+   * Abhaken an, als wäre nichts passiert.
+   *
+   * Zweites Argument war früher die Dauer in Millisekunden. Beide
+   * Formen bleiben gültig, damit ältere Aufrufe weiterlaufen.
+   */
+  toast(text, opts = {}) {
+    const o = typeof opts === "number" ? { ms: opts } : opts;
+    const ms = o.ms || (o.detail ? 2800 : 2200);
     const t = document.getElementById("toast");
-    t.textContent = text;
+
+    t.innerHTML = "";
+    if (o.icon !== null) t.append(el("span", "tIcon", esc(o.icon || "✓")));
+    const txt = el("span", "tTxt");
+    txt.append(el("b", null, esc(text)));
+    if (o.detail) txt.append(el("small", null, esc(o.detail)));
+    t.append(txt);
+
     t.hidden = false;
+    // Neustart der Animation: ohne das bleibt der zweite Toast in
+    // Folge stumm stehen, weil die Animation schon gelaufen ist.
+    t.classList.remove("in");
+    void t.offsetWidth;
+    t.classList.add("in");
+
+    // Ein kurzer Impuls, wo das Gerät ihn kann. Bewusst sehr kurz —
+    // spürbar, nicht störend.
+    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) { /* egal */ } }
+
     clearTimeout(App._toastTimer);
     App._toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+  },
+
+  /* ---------- Meilensteine ---------- */
+  /**
+   * Neue Stufen feiern — aber nur die, die in dieser Sitzung erreicht
+   * wurden. Beim ersten Durchlauf wird der Stand still übernommen:
+   * wer die App mit 100 erfassten Bons öffnet, hat diese Bons nicht
+   * gerade eben erfasst, und ein Schwall Glückwünsche entwertet die
+   * Auszeichnung, bevor sie zum ersten Mal zählt.
+   */
+  checkBadges(firstRun) {
+    const fresh = (App.ctx.freshBadges || []);
+    if (!fresh.length || App._badgeBusy) return;
+
+    App._badgeBusy = true;
+    Data.markBadgesSeen(fresh.map((b) => b.key));
+    App._badgeBusy = false;
+
+    if (!firstRun) App.celebrate(fresh[0], fresh.length - 1);
+  },
+
+  celebrate(badge, more = 0) {
+    const body = el("div", "celebrate");
+    body.append(el("div", "cIcon", esc(badge.icon)));
+    body.append(el("div", "cTitle", esc(badge.title)));
+    body.append(el("div", "cLevel", `Stufe ${badge.level} von ${badge.maxLevel}`));
+    body.append(el("p", "cNote", esc(badge.note)));
+    if (more > 0) {
+      body.append(el("p", "cNote", `Dazu ${more} weitere${more === 1 ? "r" : ""} Meilenstein${more === 1 ? "" : "e"} — alle unter „Zahlen“.`));
+    }
+    App.sheet("Geschafft", null, body);
+    // Die Überschrift mittig, wie der Rest des Blatts. Der Titel
+    // bleibt ein echtes Element — er beschriftet den Dialog.
+    document.getElementById("sheet").classList.add("celebration");
   },
 
   /**
@@ -154,6 +242,7 @@ const App = {
     if (content) opts.append(content);
     // Ein Blatt, das nur informiert, wird nicht "abgebrochen".
     document.getElementById("sheetCancel").textContent = "Fertig";
+    sheet.classList.remove("celebration");
     sheet.hidden = false;
     document.getElementById("sheetCancel").focus();
   },
@@ -276,7 +365,7 @@ const App = {
       `${inCart.length} Positionen für ${eur(sum)} kommen in die Historie. Daraus lernt die App die Rhythmen.`,
       () => {
         const alert = safetyAlert(inCart);
-        const n = Data.addReceipt({
+        const res = Data.addReceipt({
           date: Data.today(),
           store: App.ctx.store || "Einkauf",
           items: inCart.map((i) => ({
@@ -289,7 +378,7 @@ const App = {
         // Sicherheitshinweis im richtigen Moment: beim Verlassen des
         // Ladens, nicht drei Tage später in einer Liste.
         if (alert) App.notice("Kühlkette", alert.message);
-        else App.toast(`${n} Positionen gebucht`);
+        else App.toast(`${res.count} Positionen gebucht`, { detail: bookedDetail(res) });
       },
       "Buchen"
     );
@@ -372,6 +461,50 @@ const App = {
 
     App.onScroll();
     if (App.storeOpen) App.renderStore();
+
+    const first = !App._seeded;
+    App._seeded = true;
+    App.checkBadges(first);
+  },
+
+  /* ---------- Wochenrückblick ---------- */
+  /**
+   * Erinnerung am Sonntagabend.
+   *
+   * EHRLICH BLEIBEN: Das ist keine echte Push-Nachricht. Ohne Server
+   * kann niemand die App von außen wecken — und einen Server hat
+   * diese App bewusst nicht. Die Meldung erscheint deshalb beim
+   * nächsten Öffnen, wenn der Rückblick fällig ist. Genau so steht
+   * es auch in der Einstellung.
+   */
+  maybeNotifyReview() {
+    const S = Data.get();
+    const r = App.ctx.review;
+    if (!S.review.notify || !r.due) return;
+    if (S.review.lastNotifiedWeek === r.weekKey) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      new Notification("Wochenrückblick", { body: r.headline, icon: "icons/icon-192.png", tag: "rueckblick" });
+      Data.markReviewNotified(r.weekKey);
+    } catch (e) {
+      console.warn("Erinnerung nicht möglich:", e);
+    }
+  },
+
+  /** Erlaubnis für die Erinnerung einholen. */
+  askNotify(on) {
+    if (!on) { Data.update((s) => { s.review.notify = false; }); return; }
+    if (typeof Notification === "undefined") {
+      App.toast("Dieser Browser kann das nicht", { icon: "!" });
+      return;
+    }
+    const apply = (perm) => {
+      Data.update((s) => { s.review.notify = perm === "granted"; });
+      if (perm !== "granted") App.toast("Ohne Erlaubnis geht es nicht", { icon: "!" });
+    };
+    if (Notification.permission === "granted") return apply("granted");
+    const res = Notification.requestPermission(apply);
+    if (res && typeof res.then === "function") res.then(apply).catch(() => apply("denied"));
   }
 };
 
@@ -410,6 +543,7 @@ function boot() {
 
   Data.subscribe(() => App.render());
   App.render();
+  App.maybeNotifyReview();
 
   // Service Worker: macht die App offline nutzbar. Fehlschlag ist
   // kein Grund zum Abbruch — die App läuft auch ohne.

@@ -89,7 +89,8 @@ if (sources.length < 2) { console.error("index.html bindet kaum Skripte ein."); 
 try {
   window.eval(
     sources.join("\n;\n") +
-    "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet };"
+    "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
+    " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -764,6 +765,166 @@ App.goto("liste");
     [...ctx2.rhythms.values()].every((r) => !r.rhythmDays || (r.rhythmDays >= 1 && Number.isFinite(r.rhythmDays))));
   ok("Alle Vertrauenswerte bleiben im Bereich",
     [...ctx2.rhythms.values()].every((r) => r.confidence >= 0 && r.confidence <= 1));
+}
+
+console.log("\n--- Rückblick, Streak, Meilensteine ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  const c = App.ctx;
+
+  ok("Beispieldaten bringen ein Ereignis-Protokoll mit", c.actions.length > 30, c.actions.length);
+  ok("Der Streak läuft", c.streak.weeks >= 4, c.streak.weeks);
+  ok("Acht Wochen werden angezeigt", c.streakWeeks.length === 8);
+  ok("Meilensteine sind erreicht", c.badges.count > 0, c.badges.count);
+  ok("Aber keiner wird gefeiert — sie wurden nicht jetzt erreicht",
+    c.freshBadges.length === 0, c.freshBadges.length);
+  ok("Der Rückblick hat Inhalt", c.review.lines.length > 0, c.review.lines.map((l) => l.key).join(","));
+  ok("Und eine Überschrift ohne Platzhalter",
+    !/undefined|NaN/.test(c.review.headline), c.review.headline);
+
+  // Die Karte hängt am Wochentag — deshalb wird sie unabhängig davon
+  // geprüft, sonst liefe der Test nur dienstags durch.
+  const cardNode = T.reviewCard(c, App);
+  ok("Die Rückblick-Karte rendert", cardNode.querySelectorAll(".rvItem").length > 0);
+  ok("Sie trägt eine Überschrift", cardNode.querySelector(".rvHead2").textContent.length > 0);
+  ok("Und lässt sich schließen", !!cardNode.querySelector(".rvClose"));
+
+  T.reviewSheet(c, App);
+  ok("Das Rückblick-Blatt öffnet", !$("sheet").hidden);
+  ok("Es nennt die Herkunft der Zahlen",
+    /geschätzt|nachrechenbar|Medianpreis/.test($("sheetOpts").textContent));
+  ok("Es zeigt die Wochenpunkte", $("sheetOpts").querySelectorAll(".sDot").length === 8);
+  click($("sheetCancel"));
+
+  const dots = T.streakStrip(c);
+  ok("Die laufende Woche ist markiert", !!dots.querySelector(".sDot.now"));
+
+  const badges = T.badgeScroller(c, App);
+  ok("Alle Meilenstein-Reihen werden gezeigt", badges.querySelectorAll(".badge").length === 5,
+    badges.querySelectorAll(".badge").length);
+  ok("Jede Reihe hat einen Fortschrittsbalken", badges.querySelectorAll(".bBar i").length === 5);
+}
+{
+  // Rettung: einmal zählen, nicht zweimal.
+  D.reset();
+  D.loadDemo("full");
+  const before = D.get().lifetime.gerettet;
+  const pid = App.ctx.items.length ? App.ctx.items[0].productId : "salat_kopf";
+
+  ok("Eine Rettung wird gezählt", D.recordRescue(pid, 1.5) === true);
+  ok("Der Lebenszähler steigt", D.get().lifetime.gerettet === before + 1);
+  ok("Dasselbe Produkt am selben Tag zählt nicht doppelt", D.recordRescue(pid, 1.5) === false);
+  ok("Der Zähler bleibt stehen", D.get().lifetime.gerettet === before + 1, D.get().lifetime.gerettet);
+  ok("Ein anderes Produkt zählt sehr wohl", D.recordRescue("nudeln", 1) === true);
+  ok("Geschätzte Beträge landen in ihrem eigenen Topf",
+    D.get().lifetime.geretteteEuros >= 2.5 && D.get().lifetime.guenstig !== D.get().lifetime.geretteteEuros);
+}
+{
+  // Buchen: Bon im Protokoll, Preisvorteil getrennt ausgewiesen.
+  D.reset();
+  D.loadDemo("full");
+  const before = D.get().lifetime.erfasst;
+  const usual = App.ctx.prices.get("butter");
+  const res = D.addReceipt({
+    date: D.today(), store: "Testmarkt",
+    items: [{ productId: "butter", quantity: 2, unitPrice: usual ? usual.usual * 0.5 : 1 }]
+  });
+  ok("Buchen liefert Anzahl und Ersparnis", res.count === 1 && Array.isArray(res.savings));
+  ok("Der Bon steht im Protokoll", D.get().lifetime.erfasst === before + 1);
+  ok("Der Preisvorteil wird erkannt", res.savings.length === 1, JSON.stringify(res.savings));
+  ok("Und ist realisiert, nicht geschätzt", D.get().lifetime.guenstig > 0, D.get().lifetime.guenstig);
+  ok("Das Ereignis trägt ein Datum",
+    D.get().actions.every((a) => /^\d{4}-\d{2}-\d{2}$/.test(a.date)));
+}
+{
+  // Ein neuer Meilenstein wird gefeiert — aber erst, wenn er in
+  // dieser Sitzung erreicht wurde.
+  D.reset();
+  D.loadDemo("full");
+  App.render();
+  const need = App.ctx.badges.rows.find((r) => r.id === "getauscht");
+  let guard = 0;
+  while (App.ctx.badges.rows.find((r) => r.id === "getauscht").next !== null && guard++ < 3) {
+    const row = App.ctx.badges.rows.find((r) => r.id === "getauscht");
+    for (let i = 0; i < row.remaining; i++) D.recordSwapFor("zahnbuerste");
+    break;
+  }
+  ok("Ein erreichter Meilenstein öffnet das Glückwunsch-Blatt",
+    !$("sheet").hidden && /Geschafft/.test($("sheetTitle").textContent), $("sheetTitle").textContent);
+  ok("Es nennt die Stufe", /Stufe \d+ von \d+/.test($("sheetOpts").textContent));
+  click($("sheetCancel"));
+  ok("Danach ist er als gesehen vermerkt",
+    App.ctx.freshBadges.length === 0, App.ctx.freshBadges.map((b) => b.key).join(","));
+  ok("Und wird nicht erneut gefeiert", $("sheet").hidden);
+  ok("Der Meilenstein bleibt erreicht", need && App.ctx.badges.count > 0);
+}
+{
+  // Sofort-Rückmeldung: sichtbar, mit Zeichen, mit Zusatzzeile.
+  App.toast("Getauscht", { icon: "↻", detail: "ca. 1,50 € gerettet" });
+  const t = $("toast");
+  ok("Der Toast ist sichtbar", !t.hidden);
+  ok("Er trägt ein Zeichen", t.querySelector(".tIcon").textContent === "↻");
+  ok("Und eine Zusatzzeile", /gerettet/.test(t.querySelector(".tTxt small").textContent));
+  ok("Die Animation wird neu gestartet", t.classList.contains("in"));
+  App.toast("Nur Text");
+  ok("Ohne Zusatz bleibt die zweite Zeile weg", !t.querySelector(".tTxt small"));
+  ok("Die alte Aufrufform mit Millisekunden geht weiter",
+    (App.toast("Kurz", 500), !t.hidden));
+}
+{
+  // Der Rückblick lässt sich wegtippen und kommt in derselben Woche
+  // nicht wieder.
+  D.reset();
+  D.loadDemo("full");
+  const wk = App.ctx.review.weekKey;
+  D.markReviewSeen(wk);
+  ok("Weggetippt bleibt weggetippt", D.get().review.lastSeenWeek === wk);
+  ok("Und die Karte ist nicht mehr fällig", App.ctx.review.due === false);
+
+  // Ohne Benachrichtigungs-API darf nichts abstürzen.
+  App.askNotify(true);
+  ok("Ohne Benachrichtigungen bleibt die Einstellung aus", D.get().review.notify === false);
+  App.maybeNotifyReview();
+  ok("Und das Melden bricht nicht ab", true);
+}
+{
+  // Eine Sicherung aus einer Fassung ohne diese Felder muss laufen.
+  D.reset();
+  D.loadDemo("full");
+  const backup = JSON.parse(D.exportJson());
+  delete backup.actions;
+  delete backup.lifetime;
+  delete backup.review;
+  delete backup.badgesSeen;
+  D.importJson(JSON.stringify(backup));
+  ok("Alte Sicherung bekommt ein leeres Protokoll", Array.isArray(D.get().actions) && D.get().actions.length === 0);
+  ok("Und Zähler auf null", D.get().lifetime.erfasst === 0);
+  App.goto("zahlen");
+  ok("Die Ansicht Zahlen rendert trotzdem", $("main").children.length > 0);
+  ok("Der Streak steht bei null", App.ctx.streak.weeks === 0, App.ctx.streak.weeks);
+  ok("Ohne Ereignisse wird nichts gefeiert", App.ctx.freshBadges.length === 0);
+}
+{
+  D.reset();
+  D.loadDemo("full");
+  App.goto("zahlen");
+  const txt = $("main").textContent;
+  ok("Zahlen zeigt den Rückblick", /Rückblick/.test(txt));
+  ok("Zahlen zeigt die Meilensteine", /Erreicht/.test(txt));
+  ok("Zahlen zeigt den Streak", /Am Stück/.test(txt));
+  App.goto("mehr");
+  ok("Mehr bietet die Erinnerung an", /Wochenrückblick/.test($("main").textContent));
+  ok("Und sagt ehrlich, dass es kein echtes Push ist", (() => {
+    const info = [...$("main").querySelectorAll(".infoBtn")]
+      .find((b) => (b.getAttribute("aria-label") || "").includes("Wochenrückblick"));
+    if (!info) return false;
+    click(info);
+    const t = $("sheetOpts").textContent;
+    click($("sheetCancel"));
+    return /keine echte Push|KEINE echte Push/i.test(t);
+  })());
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

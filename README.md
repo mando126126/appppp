@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 589 Tests + Zwei-Jahres-Simulation
+npm test        # 754 Tests + Zwei-Jahres-Simulation
 ```
 
 ---
@@ -116,6 +116,62 @@ Dieselben Daten ein zweites Mal auszuwerten liefert keine neue
 Information — nur einen zusätzlichen Fehler. Die Gegenrichtung kommt
 jetzt aus einer Aussage des Nutzers.
 
+### Wiederkehren, ohne zu beschämen
+
+Vier Funktionen, die alle aus **einer** Quelle lesen: einem dauerhaften
+Ereignis-Protokoll (`activityLog.js`). Drei Module, die sich ihre
+Zählung jeweils selbst aus den Käufen zusammenrechnen, wären drei
+Wahrheiten — und spätestens beim ersten Widerspruch („der Rückblick
+sagt 3, das Abzeichen sagt 4") ist das Vertrauen weg. Ins Protokoll
+kommt nur, was der Nutzer bestätigt hat, mit Datum.
+
+**Wochenrückblick** (`weeklyReview.js`). Ab Sonntagabend steht er oben
+auf der Liste, nachholbar bis Dienstag. Er rechnet nichts Neues, er
+fasst zusammen. Drei Regeln halten ihn ehrlich: nur Zeilen mit Inhalt
+(ein Rückblick, der immer gleich lang ist, wird nicht gelesen);
+geschätzt und gemessen bleiben getrennt; und eine ruhige Woche wird
+festgestellt, nicht getadelt.
+
+**Meilensteine** (`milestones.js`). „50 Produkte vor dem Verderb
+bewahrt" statt „420 XP" — diese App hat eine bezifferbare Wirkung, das
+ist stärker als eine Spielwährung. Keine Stufe misst App-Nutzung, keine
+kann verfallen, und die Geldreihe zählt ausschließlich **realisierte**
+Preisersparnis. Ein Abzeichen für einen geschätzten Betrag wäre eine
+Auszeichnung für eine Vermutung.
+
+**Streak** (`streakTracker.js`) — Wochen am Stück, für den Haushalt,
+**ohne Rangliste**. Bei Lebensmittelverschwendung ist ein öffentlicher
+Vergleich beschämend statt motivierend; wer hinten steht,
+deinstalliert. Drei Abweichungen von der reinen Snapchat-Logik: die
+laufende Woche bricht nie (bis Sonntag ist sie offen — eine App, die
+dienstags „Streak verloren" meldet, ist schlicht falsch), eine
+Kulanzwoche je acht Wochen, und Urlaubswochen zählen als gehalten. Der
+Urlaubsmodus weiß ja, dass bewusst nicht eingekauft wurde. Keine
+Meldung des Moduls enthält das Wort „verloren".
+
+**Sofort-Rückmeldung.** Jede bestätigte Handlung quittiert die App mit
+einem Zeichen, einer Zeile und dem Betrag — „Vollkornbrot eingefroren ·
+ca. 1,25 € gerettet". Trivial gebaut, überproportional wirksam.
+
+Zwei Geldbeträge, die **nie** addiert werden: `gerettet` ist
+kontrafaktisch (der Wert, der ohne die Handlung wahrscheinlich
+verdorben wäre), `guenstig` ist nachrechenbar (gezahlter Preis gegen
+den eigenen Medianpreis). Derselbe Grundsatz wie bei der getrennt
+ausgewiesenen Haushalts-Ersparnis: eine Summe aus gemessen und
+geschätzt ist eine Zahl, die nichts mehr bedeutet.
+
+Als „gerettet" zählt nur eine Handlung, die der Nutzer ausdrücklich
+bestätigt: halbe Menge, eingefroren, aufgebraucht, gekocht. Höchstens
+einmal je Produkt und Tag — sonst erzeugte ein Knopf, den man an- und
+wieder abschaltet, beliebig viele Einträge. Aus einer bloßen Anzeige
+eine Rettung zu zählen wäre eine Auszeichnung dafür, dass die App etwas
+angezeigt hat.
+
+Die Sonntagabend-Erinnerung ist ausdrücklich **keine** echte
+Push-Nachricht: ohne Server kann niemand die App von außen wecken, und
+einen Server hat diese App bewusst nicht. Sie erscheint beim nächsten
+Öffnen — genau so steht es auch in der Einstellung.
+
 ### Haushaltsprodukte rechnen anders
 
 Non-Food ist nicht dieselbe Aufgabe mit anderen Produkten, sondern ein
@@ -215,16 +271,16 @@ Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 ## Aufbau
 
 ```
-src/algo/        40 Node-Module — 20 unverändert aus der Vorlage, 20 neue
+src/algo/        44 Node-Module — 20 unverändert aus der Vorlage, 24 neue
 src/ui/
   index.html     Gerüst
   app.css        eine Gestaltung für Telefon und Rechner
   data.js        Speicher, Demo-Historie, compute() — ruft nur die Module
-  views.js       die fünf Ansichten
+  views.js       die sechs Ansichten
   app.js         Rahmen: Navigation, Kopfbereich, Ladenmodus, Blätter
 build.js         bündelt src/ nach web/
 tools/serve.js   Entwicklungsserver ohne Abhängigkeiten
-test/            Modultests, Stresstests, Oberflächentest
+test/            Modultests, Stresstests, Simulation, Oberflächentest
 web/             Bauergebnis — das, was auf den Server kommt
 ```
 
@@ -241,12 +297,12 @@ gehört `npm run build` in denselben Commit.
 
 | Bereich | Was drin steckt |
 |---|---|
-| **Liste** | Vorrats-Reichweite als Ring, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
+| **Liste** | Wochenrückblick (ab Sonntagabend), Vorrats-Reichweite als Ring, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
 | **Fällig** | Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
 | **Bestand** | geschätzter Vorrat, Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
-| **Zahlen** | eigener Einkaufsrhythmus, Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
-| **Mehr** | Erscheinungsbild, Schriftgröße, Haushaltsprofil (Wasserhärte, Geräte), Ladenweg je Markt, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
+| **Zahlen** | Streak und Rückblick, Meilensteine, eigener Einkaufsrhythmus, Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
+| **Mehr** | Erscheinungsbild, Schriftgröße, Rückblick-Erinnerung, Haushaltsprofil (Wasserhärte, Geräte), Ladenweg je Markt, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
 
 Dazu der **Ladenmodus** als Vollbild: nach Gängen sortiert, große
 Ziele, am Ende ein Knopf, der den Einkauf in die Historie schreibt.
@@ -273,9 +329,9 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 589
-npm run test:algo # 57 Regressions- + 85 Stress- + 94 Funktions- + 126 Haushalts- + 85 Lerntests
-npm run test:ui   # 142 Oberflächentests in jsdom
+npm test          # alle 754
+npm run test:algo # 57 Regressions- + 85 Stress- + 94 Funktions- + 126 Haushalts- + 85 Lern- + 113 Rückblicktests
+npm run test:ui   # 194 Oberflächentests in jsdom
 ```
 
 `test/simulation.js` lässt einen simulierten Haushalt zwei Jahre lang

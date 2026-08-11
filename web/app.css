@@ -520,8 +520,12 @@ tbody tr:last-child td{border-bottom:none}
 .sheetTitle{font-size:20px;font-weight:600;letter-spacing:-.022em}
 .sheetSub{font-size:15px;color:var(--ink-2);margin:6px 0 16px;line-height:1.42}
 
+/* Waagerecht mittig über `left:0;right:0` mit automatischem Rand statt
+   über `left:50%` und Verschiebung: bei letzterem steht dem Kasten nur
+   die halbe Bildschirmbreite zur Verfügung, und jede Meldung mit zwei
+   Wörtern bricht um, obwohl Platz da wäre. */
 .toast{
-  position:fixed;left:50%;transform:translateX(-50%);
+  position:fixed;left:0;right:0;margin-inline:auto;width:fit-content;
   bottom:calc(var(--nav-h) + var(--safe-bottom) + 18px);z-index:120;
   background:rgba(28,28,30,.94);color:#fff;padding:13px 20px;border-radius:99px;
   font-size:15px;font-weight:500;box-shadow:0 10px 34px rgba(0,0,0,.32);
@@ -530,7 +534,7 @@ tbody tr:last-child td{border-bottom:none}
   animation:pop .28s var(--ease);
 }
 .toast[hidden]{display:none}
-@keyframes pop{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes pop{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 
 /* ================================================================
    Ab 900 px: Seitenleiste statt Leiste unten.
@@ -692,3 +696,122 @@ button.hero:active{opacity:.7}
 /* Zeilentext als Knopf, ohne wie einer auszusehen */
 .plainBtn{text-align:left;padding:0;background:none;display:block}
 .plainBtn:active{opacity:.55}
+
+
+/* ================================================================
+   Rückblick, Streak, Meilensteine, Sofort-Rückmeldung
+   ================================================================ */
+
+/* --- Wochenrückblick: die einzige Karte mit Akzentfläche. Sie ist
+   höchstens drei Tage in der Woche da, deshalb darf sie auffallen. */
+.reviewCard{
+  background:var(--surface);border-radius:var(--r-lg);overflow:hidden;
+  margin:10px 0 0;border:1px solid var(--accent-soft);
+}
+.rvHead{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 14px 0;
+}
+.rvTag{
+  font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--accent);
+}
+.rvClose{
+  font-size:21px;line-height:1;color:var(--ink-3);padding:2px 6px;margin:-4px -6px 0 0;
+}
+.rvClose:active{opacity:.5}
+.rvBody{display:block;width:100%;text-align:left;padding:6px 14px 14px}
+.rvBody:active{opacity:.7}
+.rvHead2{font-size:19px;font-weight:600;letter-spacing:-.022em;line-height:1.28}
+.rvStrip{display:flex;gap:10px;margin-top:13px;flex-wrap:wrap}
+.rvItem{
+  flex:1 1 92px;background:var(--surface-2);border-radius:var(--r-md);padding:9px 11px;min-width:92px;
+}
+.rvItem .v{
+  font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.025em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.rvItem .l{font-size:11.5px;color:var(--ink-2);margin-top:2px;line-height:1.3}
+.rvStreak{font-size:13px;color:var(--ink-2);margin-top:11px}
+
+/* --- Streak: acht Punkte, keine Rangliste, kein Vergleich --- */
+.streak{display:flex;align-items:center;gap:12px;padding:13px 16px;background:var(--surface);flex-wrap:wrap}
+.sDots{display:flex;gap:6px;flex:0 0 auto}
+.sDot{
+  width:11px;height:11px;border-radius:99px;
+  border:1.5px solid var(--ink-3);background:transparent;display:block;
+}
+.sDot.on{background:var(--accent);border-color:var(--accent)}
+.sDot.vac{background:var(--fill-2);border-color:var(--fill-2)}
+.sDot.now{box-shadow:0 0 0 3px var(--accent-soft)}
+.streak .sTxt{font-size:13.5px;color:var(--ink-2);flex:1;min-width:0}
+
+/* --- Meilensteine --- */
+.badgeRow{
+  display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;
+  padding:14px 16px;background:var(--surface);
+}
+.badgeRow::-webkit-scrollbar{display:none}
+.badge{
+  flex:0 0 auto;width:132px;text-align:left;
+  background:var(--surface-2);border-radius:var(--r-md);padding:12px 13px;
+}
+.badge:active{opacity:.7}
+.badge .bIcon{
+  font-size:15px;line-height:1;color:var(--ink-3);
+  width:26px;height:26px;border-radius:99px;background:var(--fill);
+  display:flex;align-items:center;justify-content:center;
+}
+.badge.on .bIcon{background:var(--accent);color:var(--on-accent)}
+.badge .bVal{font-size:21px;font-weight:700;margin-top:9px;font-variant-numeric:tabular-nums;letter-spacing:-.03em;line-height:1.05}
+.badge .bLbl{font-size:12px;color:var(--ink-2);margin-top:1px}
+.badge .bBar{height:4px;border-radius:99px;background:var(--fill);margin-top:9px;overflow:hidden}
+.badge .bBar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .5s var(--ease)}
+.badge .bNext{font-size:11px;color:var(--ink-3);margin-top:6px;line-height:1.3}
+
+/* Glückwunsch-Blatt */
+.sheet.celebration .sheetTitle{
+  text-align:center;font-size:13px;font-weight:600;color:var(--accent);
+  text-transform:uppercase;letter-spacing:.06em;
+}
+.celebrate{text-align:center;padding:14px 0 2px}
+.celebrate .cIcon{
+  width:64px;height:64px;margin:0 auto 14px;border-radius:99px;
+  background:var(--accent);color:var(--on-accent);
+  font-size:28px;display:flex;align-items:center;justify-content:center;
+  animation:badgePop .5s var(--ease);
+}
+.celebrate .cTitle{font-size:21px;font-weight:700;letter-spacing:-.024em;line-height:1.25}
+.celebrate .cLevel{font-size:13px;color:var(--accent);font-weight:600;margin-top:5px}
+.celebrate .cNote{font-size:14px;color:var(--ink-2);line-height:1.45;margin:12px 0 0}
+@keyframes badgePop{
+  0%{transform:scale(.4);opacity:0}
+  55%{transform:scale(1.12)}
+  100%{transform:scale(1);opacity:1}
+}
+
+/* --- Sofort-Rückmeldung: der Toast trägt jetzt ein Zeichen ---
+   Eine Bestätigung, die man sieht, bevor man sie liest. Das Häkchen
+   springt kurz auf — dieselbe Bewegung, die iOS für „erledigt“
+   benutzt. Bei „Bewegung reduzieren“ bleibt der Inhalt, nur die
+   Bewegung entfällt (Regel weiter oben). */
+.toast{display:flex;align-items:center;gap:11px;text-align:left}
+.toast .tIcon{
+  flex:0 0 auto;width:24px;height:24px;border-radius:99px;
+  background:var(--accent);color:var(--on-accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;line-height:1;
+}
+.toast.in .tIcon{animation:tick .42s var(--ease) .04s both}
+.toast .tTxt{min-width:0}
+.toast .tTxt b{display:block;font-weight:500}
+.toast .tTxt small{display:block;font-size:12.5px;opacity:.72;margin-top:1px}
+@keyframes tick{
+  0%{transform:scale(.2);opacity:0}
+  60%{transform:scale(1.22);opacity:1}
+  100%{transform:scale(1)}
+}
+
+/* Abgehakte Zeile im Ladenmodus quittiert den Druck sichtbar */
+.sItem.done .tick{animation:tick .38s var(--ease)}
+.box:checked{animation:tick .34s var(--ease)}

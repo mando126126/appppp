@@ -31,17 +31,11 @@ const plusDays = (dateStr, n) => iso(new Date(dateStr + "T12:00:00Z").getTime() 
 const weekdayOf = (dateStr) => WEEKDAYS[new Date(dateStr + "T12:00:00Z").getUTCDay()];
 
 /** Kalenderwoche als Schlüssel, damit Abwahl-Entscheidungen genau
-    eine Woche gelten und danach von selbst verfallen. */
-function weekKey(dateStr) {
-  const d = new Date(dateStr + "T12:00:00Z");
-  const day = (d.getUTCDay() + 6) % 7;              // Montag = 0
-  d.setUTCDate(d.getUTCDate() - day + 3);           // Donnerstag derselben Woche
-  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const fd = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - fd + 3);
-  const week = 1 + Math.round((d - firstThursday) / (7 * 86400000));
-  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-}
+    eine Woche gelten und danach von selbst verfallen. Die Rechnung
+    steht in streakTracker.js — sie wird dort für den Streak ohnehin
+    gebraucht, und zwei Fassungen derselben Wochenzählung liefen
+    unweigerlich am Jahreswechsel auseinander. */
+const weekKey = (dateStr) => isoWeekKey(dateStr);
 
 /* ---------- Grundzustand ---------- */
 function emptyState() {
@@ -75,6 +69,18 @@ function emptyState() {
     // geleert und ist deshalb nur der Zustand der laufenden Woche —
     // zum Lernen braucht es ein Protokoll, das bleibt.
     feedbackLog: [],            // [{productId, date, reason, dueIn}]
+    // Ereignis-Protokoll: die eine Quelle für Wochenrückblick,
+    // Meilensteine und Streak. Nur bestätigte Handlungen mit Datum.
+    actions: [],                // [{date, kind, productId, euros}]
+    // Lebenszähler. Das Protokoll wird nach gut einem Jahr gekürzt —
+    // ein Meilenstein „100 Bons“ darf davon nicht zurückfallen.
+    lifetime: { gerettet: 0, geretteteEuros: 0, guenstig: 0, getauscht: 0, erfasst: 0, rueckmeldungen: 0 },
+    badgesSeen: [],             // schon gefeierte Meilensteine
+    review: {
+      lastSeenWeek: null,       // Rückblick dieser Woche weggetippt
+      lastNotifiedWeek: null,
+      notify: false             // Erinnerung am Sonntagabend
+    },
     aisleOrders: {},            // Markt -> Gangreihenfolge
     opened: [],                 // angebrochene Packungen [{productId, openedDate}]
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
@@ -109,7 +115,7 @@ const listeners = new Set();
 function merge(parsed) {
   const base = emptyState();
   const out = { ...base, ...parsed };
-  for (const key of ["settings", "dismissed", "household"]) {
+  for (const key of ["settings", "dismissed", "household", "lifetime", "review"]) {
     out[key] = { ...base[key], ...(parsed[key] || {}) };
   }
   out.settings.vacation = { ...base.settings.vacation, ...(parsed.settings || {}).vacation };
@@ -147,6 +153,10 @@ function save() {
 
 function get() { return state; }
 
+/** Urlaub nur, wenn er auch eingeschaltet ist — sonst zählen alte
+    Daten aus einem abgeschalteten Urlaubsmodus als Pause weiter. */
+const activeVacation = (s) => (s.settings.vacation && s.settings.vacation.active ? s.settings.vacation : null);
+
 /** Zustand ändern, sichern und die Oberfläche benachrichtigen. */
 function update(fn) {
   fn(state);
@@ -174,6 +184,12 @@ function addReceipt(receipt) {
   const date = receipt.date || today();
   const store = receipt.store || "Unbekannt";
   const rows = receipt.items.filter((i) => i.productId);
+
+  // Vor dem Einbuchen: gegen welchen üblichen Preis wurde gekauft?
+  // Danach wäre die Antwort verfälscht — der neue Kauf verschöbe den
+  // Bezugswert selbst.
+  const savings = receiptSavings(rows, state.purchases);
+
   update((s) => {
     rows.forEach((i) => {
       s.purchases.push({
@@ -198,7 +214,14 @@ function addReceipt(receipt) {
     s.listChoices = {};
     s.storeChecked = [];
   });
-  return rows.length;
+
+  logAction(ACTION.ERFASST, {
+    date,
+    euros: Math.round(rows.reduce((a, i) => a + i.unitPrice * i.quantity, 0) * 100) / 100
+  });
+  savings.forEach((sv) => logAction(ACTION.GUENSTIG, { date, productId: sv.productId, euros: sv.euros }));
+
+  return { count: rows.length, savings };
 }
 
 function removeReceipt(receiptId) {
@@ -221,6 +244,71 @@ function toggleOpened(productId) {
   });
 }
 
+/* ---------- Ereignis-Protokoll ---------- */
+/**
+ * Eine bestätigte Handlung festhalten. Einziger Schreibweg ins
+ * Protokoll — Wochenrückblick, Meilensteine und Streak lesen nur.
+ *
+ * Der Lebenszähler läuft mit, weil das Protokoll nach gut einem Jahr
+ * gekürzt wird. Ohne ihn fiele ein erreichter Meilenstein wieder
+ * zurück, und eine Auszeichnung, die verschwindet, ist schlimmer als
+ * gar keine.
+ */
+function logAction(kind, { date, productId = null, euros = 0 } = {}) {
+  update((s) => {
+    const d = date || today();
+    s.actions.push({ date: d, kind, productId, euros: Math.max(0, Number(euros) || 0) });
+    s.actions = pruneActions(s.actions, today());
+
+    const lt = s.lifetime;
+    if (kind === ACTION.GERETTET) {
+      lt.gerettet++;
+      lt.geretteteEuros = Math.round((lt.geretteteEuros + (Number(euros) || 0)) * 100) / 100;
+    } else if (kind === ACTION.GUENSTIG) {
+      lt.guenstig = Math.round((lt.guenstig + (Number(euros) || 0)) * 100) / 100;
+    } else if (kind === ACTION.GETAUSCHT) lt.getauscht++;
+    else if (kind === ACTION.ERFASST) lt.erfasst++;
+    else if (kind === ACTION.RUECKMELDUNG) lt.rueckmeldungen++;
+  });
+}
+
+/**
+ * Ein Produkt gerettet — der Nutzer hat eine Handlung bestätigt, die
+ * Verderb abwendet: halbe Menge, eingefroren, aufgebraucht, verkocht.
+ *
+ * `euros` ist ausdrücklich eine SCHÄTZUNG des abgewendeten Verlusts,
+ * kein realisierter Betrag. Die Trennung von der Preisersparnis zieht
+ * sich durch alle drei auswertenden Module.
+ */
+function recordRescue(productId, euros) {
+  // Höchstens eine Rettung je Produkt und Tag. Ohne diese Sperre
+  // erzeugte ein Knopf, den man an- und wieder abschaltet, beliebig
+  // viele Einträge — der schnellste Weg, eine Auszeichnung wertlos
+  // zu machen.
+  const t = today();
+  if (state.actions.some((a) => a.kind === ACTION.GERETTET && a.productId === productId && a.date === t)) return false;
+  logAction(ACTION.GERETTET, { productId, euros });
+  return true;
+}
+
+/** Meilensteine als gesehen markieren, ohne sie zu feiern. */
+function seedBadges(keys) {
+  update((s) => { s.badgesSeen = [...new Set(keys)]; });
+}
+
+function markBadgesSeen(keys) {
+  update((s) => { s.badgesSeen = [...new Set([...s.badgesSeen, ...keys])]; });
+}
+
+/** Wochenrückblick für diese Woche als gelesen ablegen. */
+function markReviewSeen(wk) {
+  update((s) => { s.review.lastSeenWeek = wk; });
+}
+
+function markReviewNotified(wk) {
+  update((s) => { s.review.lastNotifiedWeek = wk; });
+}
+
 /**
  * Eine Rückmeldung dauerhaft festhalten. `dueIn` sagt, wie weit die
  * Vorhersage danebenlag: 0 heißt „heute fällig", negativ „war schon
@@ -239,6 +327,7 @@ function recordFeedback(productId, reason, dueIn) {
     const cutoff = plusDays(today(), -365);
     s.feedbackLog = s.feedbackLog.filter((e) => e.date >= cutoff);
   });
+  logAction(ACTION.RUECKMELDUNG, { productId });
 }
 
 /**
@@ -252,6 +341,7 @@ function recordSwapFor(productId) {
     const t = today();
     s.swaps[productId] = { lastSwap: t, history: [...cur.history, t] };
   });
+  logAction(ACTION.GETAUSCHT, { productId });
 }
 
 function learnAlias(rawLine, productId) {
@@ -388,6 +478,73 @@ function buildFirstReceipt(ref = today()) {
     .map(([pid, qty]) => ({ productId: pid, date: ref, quantity: qty, unitPrice: byId(pid).typicalPrice, weightG: null }));
 }
 
+/**
+ * Ereignis-Protokoll zur Demo-Historie.
+ *
+ * Ohne das blieben Wochenrückblick, Meilensteine und Streak in den
+ * Beispieldaten leer — und wer die App zum ersten Mal öffnet, sähe
+ * drei tote Bereiche. Die Ereignisse werden aus derselben erzeugten
+ * Historie abgeleitet, sind also in sich stimmig: die Bons stehen im
+ * Protokoll, die Preisvorteile sind aus den Preisen gerechnet, die
+ * Austausche liegen auf echten Kaufdaten.
+ */
+function buildDemoActions(purchases, receipts, ref) {
+  const out = [];
+
+  // Bons und die dabei realisierten Preisvorteile, chronologisch —
+  // dieselbe Rechnung wie beim echten Erfassen.
+  const sorted = [...receipts].sort((a, b) => a.date.localeCompare(b.date));
+  sorted.forEach((rec) => {
+    out.push({ date: rec.date, kind: ACTION.ERFASST, productId: null, euros: rec.total });
+    const rows = purchases.filter((p) => p.date === rec.date && p.store === rec.store);
+    const before = purchases.filter((p) => p.date < rec.date);
+    receiptSavings(rows, before).forEach((sv) =>
+      out.push({ date: rec.date, kind: ACTION.GUENSTIG, productId: sv.productId, euros: sv.euros }));
+  });
+
+  // Austausch: die INTERVAL-Produkte, jeweils zum Kaufdatum.
+  purchases
+    .filter((p) => ["zahnbuerste", "kuechenschwamm", "wasserfilter"].includes(p.productId))
+    .forEach((p) => out.push({ date: p.date, kind: ACTION.GETAUSCHT, productId: p.productId, euros: 0 }));
+
+  // Gerettet: verderbliche Produkte, über das letzte Vierteljahr
+  // verteilt. Bewusst nicht bei jedem Kauf — eine App, in der jeder
+  // Einkauf eine Rettung ist, zählt keine Handlungen mehr.
+  const risky = ["salat_kopf", "haehnchen", "paprika", "tomaten", "brot_vollkorn"];
+  let n = 0;
+  for (let d = 88; d >= 1; d -= 6) {
+    const pid = risky[n % risky.length];
+    const p = byId(pid);
+    if (p) out.push({
+      date: plusDays(ref, -d), kind: ACTION.GERETTET, productId: pid,
+      euros: Math.round(p.typicalPrice * 50) / 100
+    });
+    n++;
+  }
+
+  // Rückmeldungen: gelegentlich, nicht wöchentlich.
+  for (let d = 75; d >= 3; d -= 17) {
+    out.push({ date: plusDays(ref, -d), kind: ACTION.RUECKMELDUNG, productId: "milch_vollmilch", euros: 0 });
+  }
+
+  return pruneActions(out, ref);
+}
+
+/** Lebenszähler aus einem Protokoll aufsummieren. */
+function lifetimeFrom(actions) {
+  const lt = { gerettet: 0, geretteteEuros: 0, guenstig: 0, getauscht: 0, erfasst: 0, rueckmeldungen: 0 };
+  actions.forEach((a) => {
+    if (a.kind === ACTION.GERETTET) { lt.gerettet++; lt.geretteteEuros += a.euros; }
+    else if (a.kind === ACTION.GUENSTIG) lt.guenstig += a.euros;
+    else if (a.kind === ACTION.GETAUSCHT) lt.getauscht++;
+    else if (a.kind === ACTION.ERFASST) lt.erfasst++;
+    else if (a.kind === ACTION.RUECKMELDUNG) lt.rueckmeldungen++;
+  });
+  lt.geretteteEuros = Math.round(lt.geretteteEuros * 100) / 100;
+  lt.guenstig = Math.round(lt.guenstig * 100) / 100;
+  return lt;
+}
+
 function loadDemo(kind = "full") {
   const ref = today();
   const rows = kind === "first" ? buildFirstReceipt(ref) : buildDemoHistory(ref);
@@ -420,6 +577,17 @@ function loadDemo(kind = "full") {
       .filter((p) => p.date < cutoff && depositTypeFor(p.productId).value > 0)
       .map((p) => `${p.date}|${p.productId}`);
 
+    s.actions = buildDemoActions(s.purchases, s.receipts, ref);
+    s.lifetime = lifetimeFrom(s.actions);
+    // Beispieldaten feiern keine Meilensteine: der Nutzer hat sie
+    // nicht erreicht, und ein Schwall Glückwünsche beim ersten Start
+    // entwertet die Auszeichnung, bevor sie zum ersten Mal zählt.
+    s.badgesSeen = milestoneState({
+      ...s.lifetime,
+      wochen: weeklyStreak(s.actions, ref, { vacation: activeVacation(s) }).weeks
+    }).reachedKeys;
+    s.review = { lastSeenWeek: null, lastNotifiedWeek: null, notify: s.review.notify };
+
     s.settings.demo = true;
     s.listWeek = null;
     s.listChoices = {};
@@ -438,6 +606,13 @@ function importJson(text) {
   if (parsed.schema !== SCHEMA) throw new Error(`Sicherung hat Fassung ${parsed.schema}, erwartet ${SCHEMA}.`);
   if (!Array.isArray(parsed.purchases)) throw new Error("Sicherung enthält keine Käufe.");
   state = merge(parsed);
+  // Eine eingelesene Sicherung bringt fertige Zähler mit. Was darin
+  // schon erreicht war, wurde nicht jetzt erreicht — also kein
+  // Glückwunsch-Schwall nach dem Einlesen.
+  state.badgesSeen = milestoneState({
+    ...state.lifetime,
+    wochen: weeklyStreak(state.actions, today(), { vacation: activeVacation(state) }).weeks
+  }).reachedKeys;
   save();
   listeners.forEach((l) => l());
   return state.purchases.length;
@@ -775,6 +950,21 @@ function compute() {
   const weeks = Math.max(1, Math.round(spanDays / 7) || 1);
   const wastedEuros = [...wasteStats.values()].reduce((a, x) => a + x.wastedEuros, 0);
 
+  /* --- Rückblick, Streak, Meilensteine ---------------------------
+   * Alle drei lesen dasselbe Ereignis-Protokoll. Keine der Zahlen
+   * wird hier gerechnet — sonst stünde die Fachlogik wieder in der
+   * Oberfläche.                                                    */
+  const streak = weeklyStreak(s.actions, ref, { vacation: activeVacation(s) });
+  const streakWeeks = streakDots(s.actions, ref, 8, { vacation: activeVacation(s) });
+
+  const dueRange = reviewDue(ref, new Date().getHours());
+  const reviewRange = dueRange || weekRangeFor(ref, 0);
+  const review = weeklyReview({ actions: s.actions, receipts: s.receipts }, reviewRange);
+  review.due = !!dueRange && s.review.lastSeenWeek !== reviewRange.weekKey;
+
+  const badges = milestoneState({ ...s.lifetime, wochen: streak.weeks });
+  const freshBadges = newMilestones(badges, s.badgesSeen);
+
   return {
     ref, weekKey: wk, weekday: weekdayOf(ref),
     history, rhythms, stage, chronic, anomalies, wasteStats, inventory,
@@ -785,6 +975,7 @@ function compute() {
     opened, pattern, season, seasonNow,
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog,
+    actions: s.actions, review, streak, streakWeeks, badges, freshBadges,
     store, aisleList,
     ethylene: checkEthyleneConflicts(items.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
@@ -866,6 +1057,7 @@ const Data = {
   STORE_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
   addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
+  logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,
   exportJson, importJson,
   compute, parseReceiptText, searchProducts,

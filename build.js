@@ -72,7 +72,11 @@ const MODULES = [
   "stockUpAdvisor.js",
   "feedbackLearner.js",
   "seasonalRhythm.js",
-  "changeDetector.js"
+  "changeDetector.js",
+  "activityLog.js",
+  "streakTracker.js",
+  "weeklyReview.js",
+  "milestones.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt
