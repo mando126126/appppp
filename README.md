@@ -363,6 +363,52 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### 850 Produkte und eine Suche, die deutsch kann
+
+Der freie Text war der Notausgang, und er wurde zu oft benutzt: wer
+„Bananen" tippte, bekam eine Zeile ohne Haltbarkeit, ohne Gang, ohne
+Gewicht — für Rhythmus, Verderb und Wirkungsmessung unsichtbar. Der
+Katalog ist deshalb von 273 auf **846 Produkte** gewachsen, und
+darüber liegt eine eigene Suche (`productSearch.js`).
+
+Eigen, weil es eine andere Frage ist als die des Bonabgleichs.
+`productMatcher2` bekommt eine vollständige, kryptisch abgekürzte
+Zeile und bucht daraus Historie — ein Fehltreffer ist teuer, also
+fragt es lieber nach. Die Tippsuche bekommt ein Fragment und stellt
+zwölf Vorschläge daneben; ein Fehlvorschlag kostet nichts, ein
+fehlender Vorschlag alles.
+
+Acht Stufen, und die Reihenfolge der ersten beiden ist der Kern:
+
+1. ein ganzes Wort ist es (`milch` → H-Milch)
+2. **ein Wort endet darauf** (`brot` → Vollkornbrot)
+3. der Name beginnt damit (`ban` → Bananen)
+4. ein Wort beginnt damit, 5. der Name enthält es, 6. ein Alias
+   passt, 7. vertippt, aber nah dran (`jogurt` → Joghurt), 8. der
+   Gang passt
+
+Stufe 2 vor Stufe 3 ist deutsche Morphologie: im Kompositum steht das
+Grundwort **hinten**. „Vollmilch" ist Milch, „Milchreis" ist Reis. Wer
+`milch` tippt, meint fast nie Milchreis — eine Suche, die nur auf
+Wortanfänge schaut, zeigt ihm aber genau den zuerst.
+
+Dazu drei Regeln, die jede für sich einen Fehler verhindern:
+
+- **Der Tippfehler-Ausgleich verlangt denselben Anfangsbuchstaben.**
+  Ohne ihn wird aus `spargel` ein Haargel — Levenshtein-Abstand 2.
+- **Unter vier Zeichen wird nicht geraten.** Kurz ist alles zu allem
+  ähnlich.
+- **Was der Haushalt schon kauft, steht bei gleichem Rang vorn** — aber
+  nur bei gleichem Rang. Die Gewohnheit ordnet, sie entscheidet nicht.
+
+Umlaute, ß und Akzente sind gefaltet: `kaese`, `Käse` und `KAESE`
+führen zum selben Ergebnis. Dieselbe Faltung fehlte im Bonabgleich für
+Akzente — „Crème fraîche" zerfiel zu `cr me fra che`, und wer `creme`
+tippte, bekam Handcreme und Schuhcreme, aber nicht das Produkt, das so
+heißt. `test/search.js` prüft das mit 56 Tests, darunter 30 Eingaben,
+die ein Mensch wirklich tippt, und der Nachweis, dass **jedes** der 846
+Produkte über seinen eigenen Namen auffindbar ist.
+
 Freie Zeilen bekommen **keine Produktkennung**. Sie fließen
 ausdrücklich nicht in die Rhythmen ein, tauchen in keiner Verderb-,
 Saison- oder Doppelkauf-Prüfung auf und zeigen statt eines erfundenen

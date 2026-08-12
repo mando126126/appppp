@@ -1124,20 +1124,16 @@ function parseReceiptText(text) {
   };
 }
 
-/** Produktsuche für die Nachfrage-Liste und das manuelle Erfassen. */
+/**
+ * Produktsuche für die Nachfrage-Liste und das manuelle Erfassen.
+ *
+ * Die Rangfolge steht in productSearch.js — hier wird nur ergänzt,
+ * was nur der Speicher weiß: was dieser Haushalt schon gekauft hat.
+ * Bei gleichem Rang steht das vorn. Wer einmal Haferdrink gekauft
+ * hat, meint bei „hafer" mit einiger Sicherheit wieder den.
+ */
 function searchProducts(query, limit = 12) {
-  const q = String(query).toLowerCase().trim();
-  if (!q) return [];
-  const hits = [];
-  for (const p of FOOD_DATABASE) {
-    const inName = p.name.toLowerCase().indexOf(q);
-    const inAlias = p.aliases.some((a) => a.toLowerCase().includes(q));
-    if (inName === 0) hits.push({ p, rank: 0 });
-    else if (inName > 0) hits.push({ p, rank: 1 });
-    else if (inAlias) hits.push({ p, rank: 2 });
-    if (hits.length > 200) break;
-  }
-  return hits.sort((a, b) => a.rank - b.rank || a.p.name.localeCompare(b.p.name)).slice(0, limit).map((h) => h.p);
+  return findProducts(query, limit, { boost: new Set(state.purchases.map((p) => p.productId)) });
 }
 
 const Data = {

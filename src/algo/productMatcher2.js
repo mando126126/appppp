@@ -65,11 +65,18 @@ const FILLER_WORDS = new Set([
  * Vereinheitlicht Umlaute. Deutsche Kassenbons schreiben denselben
  * Artikel mal "HÄHNCHEN", mal "HAEHNCHEN" -- ohne diese Normalisierung
  * gelten beide als verschiedene Produkte.
+ *
+ * Danach fallen die übrigen Akzente weg: "Crème fraîche" und
+ * "CREME FRAICHE" sind dasselbe, und eine Kasse schreibt zuverlässig
+ * die zweite Form. Die Reihenfolge ist wichtig -- erst ae/oe/ue, dann
+ * die Akzente. Umgekehrt würde aus "ä" ein "a", und "HAEHNCHEN" träfe
+ * "Hähnchen" nicht mehr.
  */
 function foldUmlauts(s) {
   return s
     .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue")
-    .replace(/ß/g, "ss");
+    .replace(/ß/g, "ss")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 /** Zerlegt "H-MILCH 3,5% 1L" in { core:"h milch 3,5%", quantity:1, unit:"l" } */
@@ -335,7 +342,27 @@ function matchProduct(rawName, catalog = FOOD_DATABASE) {
   let best = { productId: null, confidence: 0 };
 
   for (const entry of candidates) {
-    for (const variant of entry.variants) {
+    for (let vi = 0; vi < entry.variants.length; vi++) {
+      const variant = entry.variants[vi];
+
+      /* Der eigene NAME schlägt alles — auch die Kategorieprüfung.
+       *
+       * Die Prüfung ist eine Sicherung gegen Fehlzuordnung: „Fischstäbchen"
+       * soll nicht bei den Nudeln landen. Sie arbeitet über Wortstämme und
+       * schlägt deshalb auch bei „Fischsauce" (Trockenware) und
+       * „Fischfutter" (Tierbedarf) an — beide heißen wirklich so und sind
+       * kein Fisch. Steht die Eingabe exakt auf dem Produkt, ist das keine
+       * Vermutung mehr, die abgesichert werden müsste.
+       *
+       * `variants[0]` ist der Name, alles danach sind Aliase. Für Aliase
+       * bleibt die Prüfung scharf: dort IST es eine Vermutung. */
+      if (vi === 0 && variant.core === parsed.core) {
+        return {
+          productId: entry.product.id, confidence: 1, method: "exakt",
+          quantity: parsed.quantity, needsConfirmation: false
+        };
+      }
+
       // Exakter Treffer nach Normalisierung
       if (variant.core === parsed.core && !conflictsWithCategory(parsed.tokens, entry.product.category)) {
         return {
@@ -376,7 +403,7 @@ function matchReceipt(rawItems) {
 }
 
 module.exports = {
-  matchProduct, matchReceipt, parseProductName, combinedSimilarity,
+  matchProduct, matchReceipt, parseProductName, combinedSimilarity, levenshtein,
   conflictsWithCategory, looksLikeMeat, MEAT_TOKENS,
   CONFIRM_THRESHOLD, SAFE_THRESHOLD
 };

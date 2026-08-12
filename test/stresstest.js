@@ -478,14 +478,24 @@ t("Verbrauchsdatum-Produkt VOR Ablauf bleibt nutzbar", () => {
   return genutzt ? true : "frisches Hähnchen wird nicht mehr verwendet";
 });
 
-t("Produktabgleich: alle 732 Namen und Aliase treffen ihr eigenes Produkt", () => {
-  let fehl = 0;
+// Ohne Zahl im Titel: der Katalog wächst, und ein Titel, der bei
+// jeder Erweiterung nachgezogen werden muss, wird irgendwann falsch
+// und niemand merkt es.
+t("Produktabgleich: jeder Name und jeder Alias trifft sein eigenes Produkt", () => {
+  let fehl = 0, geprueft = 0;
+  const beispiele = [];
   for (const p of FOOD_DATABASE) {
     for (const n of [p.name, ...p.aliases]) {
-      if (matchProduct(n).productId !== p.id) fehl++;
+      geprueft++;
+      const treffer = matchProduct(n).productId;
+      if (treffer !== p.id) {
+        fehl++;
+        if (beispiele.length < 5) beispiele.push(`„${n}“ -> ${treffer || "nichts"} statt ${p.id}`);
+      }
     }
   }
-  return fehl === 0 ? true : `${fehl} Namen treffen das falsche Produkt`;
+  if (geprueft < 1000) return `nur ${geprueft} Bezeichnungen geprüft — Katalog geschrumpft?`;
+  return fehl === 0 ? true : `${fehl} von ${geprueft} treffen falsch: ${beispiele.join("; ")}`;
 });
 
 t("Kaputtes Datum vergiftet nicht die ganze Historie", () => {
