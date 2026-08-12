@@ -213,22 +213,175 @@ const App = {
     Data.markBadgesSeen(fresh.map((b) => b.key));
     App._badgeBusy = false;
 
-    if (!firstRun) App.celebrate(fresh[0], fresh.length - 1);
+    // Beim allerersten Aufbau (Beispieldaten geladen, Sicherung
+    // eingespielt) wird nicht gefeiert — sonst prasseln zwanzig
+    // Auftritte hintereinander herunter für etwas, das der Nutzer
+    // gerade nicht getan hat.
+    if (!firstRun) App.celebrateAll(fresh);
+  },
+
+  /* ================================================================
+     Der Auftritt
+     ================================================================
+     Ein Meilenstein ist der einzige Moment, in dem diese App etwas
+     feiert. Er hat deshalb einen eigenen Auftritt und nicht dasselbe
+     nüchterne Blatt wie eine Nachfrage: Vollbild, ein Aufblitzen in
+     der Farbe der Reihe, ein Regen bunter Schnipsel — und eine Zahl,
+     die wie eine Walze durchläuft und auf dem Wert stehen bleibt.
+
+     WAS DABEI NICHT PASSIERT, und darauf kommt es an: Es wird
+     nichts ausgespielt. Die Walze zeigt keinen Zufall, sie zählt zur
+     ECHTEN Zahl hoch und hält dort. Kein „fast gewonnen", keine
+     Kiste, die sich öffnet, kein zweiter Versuch. Der Reiz eines
+     Glücksspiels kommt aus der Ungewissheit; hier kommt er daher,
+     dass jemand etwas geschafft hat, und die Bewegung würdigt das
+     nur. Alles andere wäre in einer App gegen Verschwendung eine
+     merkwürdige Lehre.
+
+     Wer keine Bewegung will (`prefers-reduced-motion`), bekommt
+     dasselbe Fenster mit derselben Zahl, nur sofort und still.
+     ================================================================ */
+
+  /** Alle frisch erreichten nacheinander zeigen, größte zuerst. */
+  celebrateAll(list) {
+    App._party = (App._party || []).concat(list);
+    if (!App._partyOpen) App.nextParty();
+  },
+
+  nextParty() {
+    const queue = App._party || [];
+    const badge = queue.shift();
+    if (!badge) { App.closeParty(); return; }
+    App.celebrate(badge, queue.length);
   },
 
   celebrate(badge, more = 0) {
-    const body = el("div", "celebrate");
-    body.append(el("div", `cIcon m-${badge.id}`, markSvg(badge.icon)));
-    body.append(el("div", "cTitle", esc(badge.title)));
-    body.append(el("div", "cLevel", `Stufe ${badge.level} von ${badge.maxLevel}`));
-    body.append(el("p", "cNote", esc(badge.note)));
-    if (more > 0) {
-      body.append(el("p", "cNote", `Dazu ${more} weitere${more === 1 ? "r" : ""} Meilenstein${more === 1 ? "" : "e"} — alle unter „Zahlen“.`));
+    const still = App.reducedMotion();
+    const box = document.getElementById("party");
+    const card = document.getElementById("partyCard");
+    const glow = document.getElementById("partyGlow");
+
+    App._partyOpen = true;
+    box.hidden = false;
+    box.className = "party show m-" + badge.id + (still ? " still" : "");
+    glow.className = "partyGlow";
+
+    document.getElementById("partyKicker").textContent =
+      badge.level >= badge.maxLevel ? "Höchste Stufe" : "Geschafft";
+    document.getElementById("partyMark").innerHTML = markSvg(badge.icon);
+    document.getElementById("partyTitle").textContent = badge.title;
+    document.getElementById("partyLevel").textContent =
+      `Stufe ${badge.level} von ${badge.maxLevel}`;
+    document.getElementById("partyNote").textContent = badge.note;
+
+    // Stufen als Punkte: was erreicht ist, ist voll. Das zeigt in
+    // einem Blick, dass es weitergeht — ohne eine Zahl mehr.
+    const pips = document.getElementById("partyPips");
+    pips.innerHTML = "";
+    for (let i = 1; i <= badge.maxLevel; i++) {
+      pips.append(el("i", i <= badge.level ? "on" : null));
     }
-    App.sheet("Geschafft", null, body);
-    // Die Überschrift mittig, wie der Rest des Blatts. Der Titel
-    // bleibt ein echtes Element — er beschriftet den Dialog.
-    document.getElementById("sheet").classList.add("celebration");
+
+    const go = document.getElementById("partyGo");
+    go.textContent = more > 0 ? `Weiter (noch ${more})` : "Weiter";
+    go.onclick = () => (more > 0 ? App.nextParty() : App.closeParty());
+
+    App.rollNumber(badge, still);
+    if (!still) App.burst(badge);
+
+    // Der Knopf bekommt den Fokus, damit der Auftritt auch mit
+    // Tastatur und Vorleseprogramm einen Ausgang hat.
+    go.focus();
+  },
+
+  /**
+   * Die Zahl läuft hoch und bleibt stehen.
+   *
+   * Nicht linear: der Anfang ist schnell, das Ende zäh
+   * (Ease-Out-Quartik). Genau daran erkennt man eine Walze, die
+   * ausläuft — eine gleichmäßig laufende Zahl wirkt wie ein
+   * Ladebalken.
+   */
+  rollNumber(badge, still) {
+    const out = document.getElementById("partyNum");
+    const ziel = badge.threshold;
+    const einheit = badge.unit === "€" ? " €" : "";
+    const zeige = (n) => { out.textContent = de(Math.round(n)) + einheit; };
+
+    if (App._rollTimer) cancelAnimationFrame(App._rollTimer);
+
+    // Zuerst die richtige Zahl hinschreiben, dann erst hochlaufen
+    // lassen. Wenn die Bewegung ausfällt — kein requestAnimationFrame,
+    // Fenster im Hintergrund, Sparmodus —, steht trotzdem der echte
+    // Wert da und nicht eine leere Fläche oder eine Null.
+    zeige(ziel);
+    if (still) return;
+
+    const dauer = 1100;
+    const start = performance.now();
+    const schritt = (jetzt) => {
+      const t = Math.min(1, (jetzt - start) / dauer);
+      const eased = 1 - Math.pow(1 - t, 4);
+      zeige(ziel * eased);
+      if (t < 1) { App._rollTimer = requestAnimationFrame(schritt); return; }
+      App._rollTimer = null;
+      zeige(ziel);
+      // Der kleine Stoß am Ende ist der Punkt, an dem die Walze
+      // einrastet. Ohne ihn hört die Zahl einfach auf.
+      out.classList.remove("land");
+      void out.offsetWidth;
+      out.classList.add("land");
+    };
+    App._rollTimer = requestAnimationFrame(schritt);
+  },
+
+  /** Schnipselregen. Reine Elemente mit CSS-Bewegung, keine Bibliothek. */
+  burst(badge) {
+    const feld = document.getElementById("partyBurst");
+    feld.innerHTML = "";
+    const STUECK = 28;
+    for (let i = 0; i < STUECK; i++) {
+      const p = el("i");
+      // Auffächern statt Zufall über die ganze Breite: von der Mitte
+      // nach außen, damit es aus dem Abzeichen zu kommen scheint.
+      const winkel = (i / STUECK) * Math.PI * 2;
+      // Weit genug, um hinter der Karte hervorzukommen: die ist rund
+      // 340 Pixel breit, ein Wurf über 90 Pixel bliebe vollständig
+      // dahinter verborgen. Genau das war der erste Versuch — die
+      // Schnipsel flogen, sah nur niemand.
+      const weite = 200 + (i % 5) * 62;
+      p.style.setProperty("--x", `${Math.cos(winkel) * weite}px`);
+      p.style.setProperty("--y", `${Math.sin(winkel) * weite - 40}px`);
+      p.style.setProperty("--r", `${(i % 7) * 90}deg`);
+      p.style.setProperty("--d", `${(i % 6) * 45}ms`);
+      p.className = "p" + (i % 6);
+      feld.append(p);
+    }
+    // Nach der Bewegung wieder wegräumen: 28 Elemente, die im
+    // Hintergrund stehen bleiben, kosten bei jedem Neuzeichnen Zeit.
+    clearTimeout(App._burstTimer);
+    App._burstTimer = setTimeout(() => { feld.innerHTML = ""; }, 2400);
+  },
+
+  closeParty() {
+    const box = document.getElementById("party");
+    App._partyOpen = false;
+    App._party = [];
+    if (App._rollTimer) { cancelAnimationFrame(App._rollTimer); App._rollTimer = null; }
+    box.classList.remove("show");
+    document.getElementById("partyBurst").innerHTML = "";
+    // Erst nach dem Ausblenden verstecken, sonst springt es weg.
+    clearTimeout(App._partyTimer);
+    App._partyTimer = setTimeout(() => { box.hidden = true; }, App.reducedMotion() ? 0 : 220);
+  },
+
+  /** Systemeinstellung „weniger Bewegung" — sie gilt hier wirklich. */
+  reducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    } catch (e) {
+      return false;
+    }
   },
 
   /**
@@ -247,7 +400,6 @@ const App = {
     if (content) opts.append(content);
     // Ein Blatt, das nur informiert, wird nicht "abgebrochen".
     document.getElementById("sheetCancel").textContent = "Fertig";
-    sheet.classList.remove("celebration");
     sheet.hidden = false;
     document.getElementById("sheetCancel").focus();
   },

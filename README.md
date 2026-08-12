@@ -363,6 +363,49 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### Der Auftritt bei einem Meilenstein
+
+Ein erreichter Meilenstein bekam bisher dasselbe nüchterne Blatt wie
+eine Rückfrage. Jetzt hat er einen eigenen Auftritt: Vollbild, ein
+Aufblitzen in der Farbe der Reihe, ein Regen bunter Schnipsel — und
+eine Zahl, die wie eine Walze durchläuft und einrastet.
+
+**Was dabei ausdrücklich nicht passiert:** Es wird nichts ausgespielt.
+Die Walze zeigt keinen Zufall, sie zählt zur echten Zahl hoch und
+hält dort. Kein „fast gewonnen", keine Kiste, die sich öffnet, kein
+zweiter Versuch. Der Reiz eines Glücksspiels kommt aus der
+Ungewissheit; hier kommt er daher, dass jemand etwas geschafft hat,
+und die Bewegung würdigt das nur. Alles andere wäre in einer App
+gegen Verschwendung eine merkwürdige Lehre.
+
+Es gilt für **alle** Reihen. Die Farbe kommt aus derselben Palette
+wie die Abzeichen unter „Zahlen": grün für Gerettetes, gelb fürs
+Sparen, blau fürs Tauschen, violett fürs Erfassen, rosa für den
+Streak. Die Stufen stehen als Punkte darunter — in einem Blick
+sichtbar, dass es weitergeht, ohne eine Zahl mehr.
+
+Vier Details, die jedes einen Fehler verhindern:
+
+- **Die Schnipsel fliegen hinter der Karte hervor**, nicht davor. Im
+  ersten Versuch lagen sie über der Schrift, und der Auftritt
+  verdeckte seine eigene Aussage. Sie müssen weit genug fliegen (über
+  200 px), sonst bleiben sie vollständig hinter der 340 px breiten
+  Karte verborgen — sie flogen, sah nur niemand.
+- **Die echte Zahl steht zuerst da**, dann läuft die Walze los. Fällt
+  die Bewegung aus — kein `requestAnimationFrame`, Fenster im
+  Hintergrund, Sparmodus —, steht trotzdem der richtige Wert da und
+  keine leere Fläche.
+- **Tabellenziffern.** Proportionale Ziffern sind verschieden breit,
+  und eine Zahl, die beim Hochlaufen in jedem Bild ihre Breite
+  ändert, wirkt kaputt.
+- **Mehrere auf einmal kommen nacheinander**, mit „Weiter (noch 2)".
+  Beim ersten Aufbau — Beispieldaten geladen, Sicherung eingespielt —
+  wird gar nicht gefeiert: zwanzig Auftritte für etwas, das gerade
+  niemand getan hat, sind keine Freude, sondern eine Belästigung.
+
+`prefers-reduced-motion` bekommt dasselbe Fenster mit derselben Zahl,
+sofort und still. Weniger Bewegung heißt keine, nicht etwas weniger.
+
 ### Ein Bild statt Abtippen
 
 Bis hierher gab es genau einen Weg in die Historie: den Bontext

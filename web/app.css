@@ -800,23 +800,147 @@ button.row.action,label.row.action{cursor:pointer}
 .badge .bNext{grid-column:3;grid-row:2;text-align:right;font-size:0.7rem;color:var(--ink-3);white-space:nowrap}
 
 /* Glückwunsch */
-.sheet.celebration .sheetTitle{text-align:center;font-size:0.79rem;color:var(--accent);letter-spacing:.02em}
-.celebrate{text-align:center;padding:10px 0 4px}
-.celebrate .cIcon{
-  width:76px;height:76px;margin:0 auto 18px;border-radius:26px;
-  background:var(--accent-soft);color:var(--accent);
-  display:flex;align-items:center;justify-content:center;
-  animation:cheer .55s var(--spring);
+/* ================================================================
+   Der Auftritt bei einem Meilenstein
+   ================================================================
+   Der einzige Ort in dieser App, an dem etwas laut sein darf. Das
+   ist Absicht und zugleich die Grenze: laut ist die BEWEGUNG, nicht
+   die Aussage. Die Zahl in der Mitte ist die echte, sie läuft nur
+   hoch wie eine Walze und rastet ein.
+
+   Alles hier hat einen Aus-Schalter: unter `prefers-reduced-motion`
+   erscheint dasselbe Fenster mit derselben Zahl, sofort und still.
+   ================================================================ */
+.party{
+  position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:rgba(10,12,16,.62);backdrop-filter:blur(3px);
+  opacity:0;transition:opacity .22s ease;
 }
-.celebrate .cIcon svg{width:36px;height:36px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.celebrate .cTitle{font-size:1.33rem;font-weight:750;letter-spacing:-.03em;line-height:1.25}
-.celebrate .cLevel{font-size:0.85rem;color:var(--accent);font-weight:650;margin-top:7px}
-.celebrate .cNote{font-size:0.85rem;color:var(--ink-2);line-height:1.5;margin:14px 0 0}
-.cIcon.m-guenstig{background:var(--amber-soft);color:var(--amber)}
-.cIcon.m-getauscht{background:var(--blue-soft);color:var(--blue)}
-.cIcon.m-erfasst{background:var(--violet-soft);color:var(--violet)}
-.cIcon.m-wochen{background:var(--pink-soft);color:var(--pink)}
-.sheet.celebration .sheetTitle{color:inherit}
+.party.show{opacity:1}
+.party[hidden]{display:none}
+
+/* Der Schein hinter der Karte trägt die Farbe der Reihe. Er ist der
+   einzige Farbträger — die Karte selbst bleibt weiß, sonst wird aus
+   dem Moment eine Litfaßsäule. */
+.partyGlow{
+  position:absolute;width:min(520px,120vw);aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle,var(--party) 0%,transparent 62%);
+  opacity:.55;filter:blur(6px);
+}
+.party:not(.still) .partyGlow{animation:glowPulse 2.4s ease-out}
+@keyframes glowPulse{
+  0%{transform:scale(.2);opacity:0}
+  22%{transform:scale(1.06);opacity:.75}
+  100%{transform:scale(1);opacity:.45}
+}
+
+.partyCard{
+  position:relative;z-index:2;width:100%;max-width:340px;text-align:center;
+  background:var(--surface);border-radius:26px;padding:26px 22px 20px;box-shadow:var(--lift);
+}
+.party:not(.still) .partyCard{animation:cardIn .5s var(--spring) both}
+@keyframes cardIn{
+  from{transform:scale(.86) translateY(14px);opacity:0}
+  to{transform:scale(1) translateY(0);opacity:1}
+}
+
+.partyKicker{
+  font-size:0.7rem;font-weight:750;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--party-ink);
+}
+
+.partyMark{
+  width:74px;height:74px;margin:12px auto 4px;border-radius:24px;
+  display:grid;place-items:center;background:var(--party-soft);color:var(--party-ink);
+  position:relative;overflow:hidden;
+}
+.partyMark svg{width:38px;height:38px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.party:not(.still) .partyMark{animation:markIn .62s var(--spring) .08s both}
+@keyframes markIn{
+  from{transform:scale(.3) rotate(-14deg);opacity:0}
+  to{transform:scale(1) rotate(0);opacity:1}
+}
+/* Ein Lichtstreifen, der einmal über das Zeichen läuft. Genau
+   einmal — als Dauerschleife wäre es ein Werbebanner. */
+.party:not(.still) .partyMark::after{
+  content:"";position:absolute;inset:-40% -120%;
+  background:linear-gradient(76deg,transparent 42%,rgba(255,255,255,.85) 50%,transparent 58%);
+  animation:shine 1.1s ease-in-out .7s 1 both;
+}
+@keyframes shine{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* Die Walze. Tabellenziffern, damit die Zahl beim Hochlaufen nicht
+   zappelt — proportionale Ziffern sind verschieden breit, und eine
+   Zahl, die bei jedem Bild ihre Breite ändert, wirkt kaputt. */
+.partyNum{
+  font-size:2.9rem;font-weight:800;letter-spacing:-.04em;line-height:1.05;
+  font-variant-numeric:tabular-nums;color:var(--ink);margin-top:6px;
+}
+.partyNum.land{animation:landPunch .34s var(--spring)}
+@keyframes landPunch{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.16)}
+  100%{transform:scale(1)}
+}
+
+.partyTitle{font-size:1.02rem;font-weight:650;line-height:1.35;margin:8px 0 0;color:var(--ink)}
+.partyLevel{font-size:0.82rem;font-weight:650;color:var(--party-ink);margin-top:9px}
+
+.partyPips{display:flex;gap:6px;justify-content:center;margin-top:10px}
+.partyPips i{width:7px;height:7px;border-radius:50%;background:var(--fill-2)}
+.partyPips i.on{background:var(--party-ink)}
+
+.partyNote{font-size:0.83rem;color:var(--ink-2);line-height:1.5;margin:14px 0 0}
+
+/* Der Knopf bleibt im Grün der App und nimmt NICHT die Farbe der
+   Reihe an. Zwei Gründe: „Weiter" ist überall dieselbe Handlung, und
+   Grün ist in dieser App die Farbe des Handelns. Und praktisch: Weiß
+   auf dem Gelb der Sparreihe wäre kaum lesbar. Die Zugehörigkeit
+   tragen schon vier Elemente — Überzeile, Zeichen, Stufe, Punkte. */
+.partyCard .cta{margin-top:18px}
+
+/* Die Schnipsel. Sechs Farben aus der Palette, kein Regenbogen —
+   es sind dieselben Farben, die die App sonst auch benutzt. */
+/* HINTER der Karte, nicht davor. Davor legen sich die Schnipsel
+   über die Schrift und man liest nicht mehr, wofür man gerade
+   gefeiert wird — der Auftritt verdeckte seine eigene Aussage. So
+   fliegen sie unter der Karte hervor nach außen, was ohnehin mehr
+   nach Wurf aussieht. */
+.partyBurst{position:absolute;inset:0;z-index:1;pointer-events:none;
+  display:grid;place-items:center}
+.partyBurst i{
+  position:absolute;width:9px;height:14px;border-radius:2px;opacity:0;
+  animation:confetti 1.5s cubic-bezier(.2,.7,.35,1) var(--d) both;
+}
+.partyBurst .p0{background:var(--accent)}
+.partyBurst .p1{background:var(--amber)}
+.partyBurst .p2{background:var(--blue)}
+.partyBurst .p3{background:var(--violet)}
+.partyBurst .p4{background:var(--pink)}
+.partyBurst .p5{background:var(--red)}
+@keyframes confetti{
+  0%{transform:translate(0,0) rotate(0);opacity:0}
+  12%{opacity:1}
+  /* Der Bogen: erst nach außen und oben, dann fallen. Ein gerader
+     Strahl sieht aus wie ein Fehler, kein Wurf. */
+  55%{transform:translate(var(--x),var(--y)) rotate(var(--r));opacity:1}
+  100%{transform:translate(calc(var(--x) * 1.18),calc(var(--y) + 260px)) rotate(calc(var(--r) * 2));opacity:0}
+}
+
+/* Farbe je Reihe. Sie kommt aus derselben Palette wie die Abzeichen
+   in „Zahlen" — dieselbe Sache, dieselbe Farbe. */
+.party{--party:rgba(14,164,107,.42);--party-soft:var(--accent-soft);--party-ink:var(--accent)}
+.party.m-guenstig{--party:rgba(239,161,42,.42);--party-soft:var(--amber-soft);--party-ink:var(--amber)}
+.party.m-getauscht{--party:rgba(61,130,246,.42);--party-soft:var(--blue-soft);--party-ink:var(--blue)}
+.party.m-erfasst{--party:rgba(123,92,240,.42);--party-soft:var(--violet-soft);--party-ink:var(--violet)}
+.party.m-wochen{--party:rgba(228,73,154,.42);--party-soft:var(--pink-soft);--party-ink:var(--pink)}
+
+/* Weniger Bewegung heißt: keine. Nicht „etwas weniger". */
+@media (prefers-reduced-motion: reduce){
+  .party,.party *{animation:none !important;transition:none !important}
+  .partyBurst{display:none}
+}
 @keyframes cheer{
   0%{transform:scale(.3) rotate(-12deg);opacity:0}
   100%{transform:scale(1) rotate(0);opacity:1}

@@ -864,14 +864,72 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
     for (let i = 0; i < row.remaining; i++) D.recordSwapFor("zahnbuerste");
     break;
   }
-  ok("Ein erreichter Meilenstein öffnet das Glückwunsch-Blatt",
-    !$("sheet").hidden && /Geschafft/.test($("sheetTitle").textContent), $("sheetTitle").textContent);
-  ok("Es nennt die Stufe", /Stufe \d+ von \d+/.test($("sheetOpts").textContent));
-  click($("sheetCancel"));
+  ok("Ein erreichter Meilenstein bekommt seinen Auftritt",
+    !$("party").hidden && /Geschafft|Höchste Stufe/.test($("partyKicker").textContent),
+    $("partyKicker").textContent);
+  ok("Er nennt die Stufe", /Stufe \d+ von \d+/.test($("partyLevel").textContent));
+  ok("Und zeigt die erreichte Zahl", /\d/.test($("partyNum").textContent), $("partyNum").textContent);
+  ok("Die Zahl ist die echte Schwelle",
+    $("partyNum").textContent.replace(/[^\d]/g, "") !== "",
+    $("partyNum").textContent);
+  ok("Die Stufen stehen als Punkte da", $("partyPips").querySelectorAll("i").length > 0);
+  ok("Und die erreichten sind gefüllt", $("partyPips").querySelectorAll("i.on").length > 0);
+  ok("Die Farbe kommt aus der Reihe", /m-getauscht/.test($("party").className), $("party").className);
+  click($("partyGo"));
   ok("Danach ist er als gesehen vermerkt",
     App.ctx.freshBadges.length === 0, App.ctx.freshBadges.map((b) => b.key).join(","));
-  ok("Und wird nicht erneut gefeiert", $("sheet").hidden);
+  ok("Und wird nicht erneut gefeiert", !$("party").classList.contains("show"));
   ok("Der Meilenstein bleibt erreicht", need && App.ctx.badges.count > 0);
+
+  /* --- Mehrere auf einmal: nacheinander, nicht übereinander --- */
+  const zwei = [
+    { key: "a", id: "gerettet", icon: "sprout", unit: "Produkte", threshold: 10,
+      title: "10 Produkte vor dem Verderb bewahrt", note: "Test", level: 2, maxLevel: 6 },
+    { key: "b", id: "guenstig", icon: "tag", unit: "€", threshold: 25,
+      title: "25 € unter deinem üblichen Preis", note: "Test", level: 2, maxLevel: 6 }
+  ];
+  App.celebrateAll(zwei);
+  ok("Der erste Auftritt läuft", !$("party").hidden && /10/.test($("partyNum").textContent),
+    $("partyNum").textContent);
+  ok("Und kündigt den nächsten an", /noch 1/.test($("partyGo").textContent), $("partyGo").textContent);
+  click($("partyGo"));
+  ok("Der zweite folgt", /25/.test($("partyNum").textContent), $("partyNum").textContent);
+  ok("Mit seiner eigenen Farbe", /m-guenstig/.test($("party").className), $("party").className);
+  ok("Und mit Einheit, wo eine hingehört", /€/.test($("partyNum").textContent), $("partyNum").textContent);
+  ok("Zuletzt steht nur noch Weiter da", $("partyGo").textContent.trim() === "Weiter",
+    $("partyGo").textContent);
+  click($("partyGo"));
+  ok("Danach ist der Auftritt vorbei", !$("party").classList.contains("show"));
+  ok("Und die Warteschlange leer", !App._party || App._party.length === 0);
+
+  /* --- Höchste Stufe wird als solche benannt --- */
+  App.celebrateAll([{ key: "c", id: "wochen", icon: "tally", unit: "Wochen", threshold: 52,
+    title: "52 Wochen am Stück", note: "Test", level: 5, maxLevel: 5 }]);
+  ok("Die letzte Stufe heißt auch so", /Höchste Stufe/.test($("partyKicker").textContent),
+    $("partyKicker").textContent);
+  ok("Und alle Punkte sind gefüllt",
+    $("partyPips").querySelectorAll("i").length === $("partyPips").querySelectorAll("i.on").length);
+  click($("partyGo"));
+
+  /* --- Weniger Bewegung: dasselbe Fenster, keine Schnipsel --- */
+  const echtesMatchMedia = window.matchMedia;
+  window.matchMedia = (q) => ({ matches: /reduce/.test(q), media: q, addListener() {}, removeListener() {} });
+  App.celebrateAll([{ key: "d", id: "erfasst", icon: "receipt", unit: "Bons", threshold: 50,
+    title: "50 Bons erfasst", note: "Test", level: 3, maxLevel: 6 }]);
+  ok("Ohne Bewegung erscheint dasselbe Fenster", !$("party").hidden);
+  ok("Mit derselben Zahl", /50/.test($("partyNum").textContent), $("partyNum").textContent);
+  ok("Aber ohne Schnipsel", $("partyBurst").children.length === 0, $("partyBurst").children.length);
+  ok("Und als still gekennzeichnet", /still/.test($("party").className), $("party").className);
+  click($("partyGo"));
+  window.matchMedia = echtesMatchMedia;
+
+  /* --- Beim ersten Aufbau wird nicht gefeiert --- */
+  D.reset();
+  D.loadDemo("full");
+  App._seeded = false;
+  App.render();
+  ok("Beim Laden von Beispieldaten prasselt nichts herunter",
+    !$("party").classList.contains("show"));
 }
 {
   // Sofort-Rückmeldung: sichtbar, mit Zeichen, mit Zusatzzeile.
