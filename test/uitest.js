@@ -91,7 +91,7 @@ try {
     sources.join("\n;\n") +
     "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
-    " brandOf, brandSwapCandidates, brandSheet };"
+    " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -380,7 +380,13 @@ App.goto("liste");
   // Der Rechenweg steht nicht mehr unter jeder Zeile
   ok("Keine Rechenweg-Zeile mehr auf der Liste", !$("main").querySelector(".item .calc"));
   const main = $("main").querySelector(".item .main");
-  ok("Position lässt sich antippen", !!main && main.tagName === "BUTTON");
+  // Kein <button> mehr, sondern role="button": in der Zeile stecken
+  // die antippbaren Marken, und Schaltfläche in Schaltfläche ist
+  // ungültiges HTML.
+  ok("Position lässt sich antippen",
+    !!main && main.getAttribute("role") === "button" && main.getAttribute("tabindex") === "0");
+  ok("Und enthält keine verschachtelte Schaltfläche",
+    !!main && !main.querySelector("button"));
   const b4 = errors.length;
   click(main);
   ok("Detail-Blatt öffnet ohne Fehler", $("sheet").hidden === false && errors.length === b4, errors[b4]);
@@ -965,6 +971,64 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
     click($("sheetCancel"));
     return /keine echte Push|KEINE echte Push/i.test(t);
   })());
+}
+
+console.log("\n--- Marken erklären sich ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+
+  const marken = [...$("main").querySelectorAll(".item .pill")];
+  ok("Die Liste trägt Marken", marken.length > 0, marken.length);
+  ok("Jede Marke ist antippbar",
+    marken.every((m) => m.getAttribute("role") === "button" && m.getAttribute("tabindex") === "0"),
+    marken.filter((m) => m.getAttribute("role") !== "button").map((m) => m.textContent).join(", "));
+  ok("Jede Marke erklärt sich schon beim Verweilen",
+    marken.every((m) => (m.getAttribute("title") || "").length > 2));
+
+  // Antippen öffnet die Erklärung — und NICHT das Detail-Blatt der
+  // Zeile darunter. Genau dafür steht das stopPropagation im pill().
+  const m = marken[0];
+  click(m);
+  const blatt = $("sheet");
+  ok("Ein Tipp öffnet die Erklärung", blatt.hidden === false);
+  const titel = $("sheetTitle").textContent;
+  ok("Sie hat eine Überschrift", titel.length > 2, titel);
+  const text = $("sheetOpts").textContent;
+  ok("Und einen erklärenden Text", text.length > 60, text.slice(0, 40));
+  ok("Der Text ist generisch, nicht über dieses eine Produkt",
+    !text.includes($("main").querySelector(".item .nm").firstChild.textContent.trim()), text.slice(0, 60));
+  App.closeSheet();
+
+  // Der Schlüssel entscheidet über den Text, nicht die Farbe: dieselbe
+  // gelbe Marke steht mal für „überfällig", mal für „teurer als sonst".
+  ok("Überfällig und teuer erklären Verschiedenes",
+    T.PILL_INFO.ueberfaellig[1] !== T.PILL_INFO.teuer[1]);
+  ok("Jede Erklärung hat Überschrift und Text",
+    Object.values(T.PILL_INFO).every((v) => Array.isArray(v) && v[0] && v[1] && v[1].length > 60));
+
+  // Ein vertippter Schlüssel darf nicht still eine stumme Marke
+  // erzeugen — deshalb wird hier geprüft, dass alle benutzten
+  // Schlüssel existieren.
+  const benutzt = ["own", "ueberfaellig", "risiko", "vd", "teuer", "guenstig", "doppelt",
+    "zustand", "rest", "haltbar", "angebrochen", "marke", "eigenmarke"];
+  ok("Alle benutzten Schlüssel sind hinterlegt",
+    benutzt.every((k) => T.PILL_INFO[k]), benutzt.filter((k) => !T.PILL_INFO[k]).join(", "));
+
+  // Ein unbekannter Schlüssel bleibt sichtbar, aber stumm — eine
+  // Marke, die verschwindet, wäre der schlimmere Fehler.
+  const stumm = T.pill("gibtsnicht", "own", "test");
+  ok("Unbekannter Schlüssel bleibt eine sichtbare, stumme Marke",
+    stumm.textContent === "test" && !stumm.getAttribute("role"));
+
+  // Im Bestand dasselbe: „3 T" und „haltbar" sind ohne Erklärung
+  // nicht zu entschlüsseln.
+  App.goto("bestand");
+  const bm = [...$("main").querySelectorAll(".flag[role=button]")];
+  ok("Auch der Bestand erklärt seine Marken", bm.length > 0, bm.length);
+  ok("Und verschachtelt dabei keine Schaltflächen",
+    ![...$("main").querySelectorAll("button")].some((b) => b.querySelector("[role=button]")));
 }
 
 console.log("\n--- Kreis ohne Haken, Strich mit Bewegung ---");

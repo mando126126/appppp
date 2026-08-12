@@ -68,6 +68,131 @@ const MARKS = {
 const markSvg = (key) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[key] || MARKS.receipt}</svg>`;
 
+/* ================================================================
+   Was bedeutet dieses Zeichen?
+   ================================================================
+   Die Liste ist voller kleiner Marken: „von dir“, „+8 %“, „doppelt?“,
+   „VD“, „3 T“. Sie sind kurz, weil eine Zeile schmal ist — und genau
+   deshalb erklärt sich keine von selbst. Wer „+8 %“ liest, weiß
+   nicht, ob das Mehrwertsteuer, Rabatt oder Preisänderung ist, und
+   niemand tippt eine Zeile an, um das herauszufinden.
+
+   Also: jede Marke ist antippbar und erklärt sich. Auf dem Rechner
+   reicht das Verweilen mit dem Zeiger (`title`), auf dem Telefon —
+   wo es kein Verweilen gibt — öffnet ein Tippen dasselbe Blatt, das
+   auch hinter den (i) steckt.
+
+   Die Texte sind GENERISCH. Sie erklären die Art der Marke, nicht den
+   Einzelfall: „so entsteht diese Zahl“, nicht „deine Äpfel sind 8 %
+   teurer“. Der Einzelfall steht im Detail-Blatt, das eine Zeile
+   weiter aufgeht — hier geht es um die Frage „was ist das für ein
+   Zeichen?“, und die stellt man einmal, nicht bei jedem Produkt neu.
+   ================================================================ */
+const PILL_INFO = {
+  own: ["Von dir ergänzt",
+    "Diese Zeile hast du selbst auf die Liste gesetzt, die App hat sie nicht vorgeschlagen.\n\n" +
+    "Selbst ergänzte Zeilen verändern keinen Rhythmus: aus einem einmaligen Wunsch lernt die App " +
+    "keinen Kaufabstand. Sie gelten für eine Woche und verschwinden mit dem nächsten gebuchten Einkauf."],
+
+  ueberfaellig: ["Überfällig",
+    "Der aus deinen Käufen gelernte Abstand ist überschritten — so viele Tage länger als sonst ist es " +
+    "her.\n\nDas ist eine Schätzung aus deiner Historie, keine Ansage. Wenn du das Produkt noch hast, " +
+    "sag es der App: sie rechnet die Antwort in den Rhythmus ein."],
+
+  risiko: ["Verderb-Risiko",
+    "Von diesem Produkt landet bei dir überdurchschnittlich viel im Müll. Der Prozentsatz ist der " +
+    "geschätzte Anteil, der bisher verdorben ist.\n\nGeschätzt heißt: die App sieht, dass wieder " +
+    "gekauft wurde, bevor die Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank geschaut."],
+
+  vd: ["Verbrauchsdatum",
+    "Dieses Produkt trägt ein Verbrauchsdatum, kein Mindesthaltbarkeitsdatum. Das ist ein " +
+    "rechtlicher Unterschied, kein sprachlicher.\n\nNach Ablauf darf es nicht mehr verzehrt werden — " +
+    "hier verlängert die App niemals etwas und schlägt auch keine Resteverwertung vor."],
+
+  teuer: ["Über deinem üblichen Preis",
+    "Verglichen wird mit DEINEM üblichen Preis: dem Median dessen, was du für dieses Produkt bisher " +
+    "gezahlt hast.\n\nKein Vergleich zwischen Märkten — dafür hat die App keine Daten, und fremde " +
+    "Preise wären erfunden. Der Median statt des Durchschnitts, damit ein einzelnes Angebot den " +
+    "Bezugswert nicht verschiebt."],
+
+  guenstig: ["Unter deinem üblichen Preis",
+    "Günstiger als der Median deiner bisherigen Käufe dieses Produkts.\n\nNur diese Differenz zählt " +
+    "die App als tatsächlich gesparte Euros — sie ist nachrechenbar, im Gegensatz zu allem " +
+    "Geschätzten."],
+
+  doppelt: ["Vielleicht doppelt",
+    "Etwas sehr Ähnliches steht schon auf der Liste oder wurde gerade erst gekauft.\n\nDie App " +
+    "streicht deshalb nichts — sie fragt nur. Manchmal braucht man wirklich zwei."],
+
+  zustand: ["Deine Antwort",
+    "Deine Rückmeldung zu diesem Vorschlag, für diese Woche festgehalten.\n\nSie bleibt nicht ohne " +
+    "Folgen: „hab ich noch“ verlängert den gelernten Abstand, „war schon leer“ verkürzt ihn. Deshalb " +
+    "lohnt sich das Antippen mehr als das bloße Abwählen."],
+
+  rest: ["Resthaltbarkeit",
+    "Geschätzte Tage, die dieses Produkt bei richtiger Lagerung noch hat — gerechnet ab dem Kaufdatum " +
+    "mit dem Katalogwert.\n\nEine Schätzung, kein Datum von der Packung. Was du aufgedruckt hast, " +
+    "gilt immer mehr als diese Zahl."],
+
+  haltbar: ["Lange haltbar",
+    "Bei diesem Produkt ist die Haltbarkeit kein Thema — Reis, Nudeln, Konserven.\n\nDie App zeigt " +
+    "deshalb keine Tage: eine Zahl wie „400 T“ wäre richtig und trotzdem nutzlos."],
+
+  kuehlen: ["Kühlkette",
+    "Dieses Produkt sollte auf dem Heimweg gekühlt bleiben.\n\nDer Hinweis kommt beim Verlassen des " +
+    "Ladens und nur bei Produkten mit Verbrauchsdatum. Bei jedem Einkauf gezeigt, würde er " +
+    "weggetippt — und dann fehlte er, wenn er zählt."],
+
+  angebrochen: ["Angebrochen",
+    "Als geöffnet vermerkt. Eine offene Packung hält nicht mehr so lange wie eine geschlossene — die " +
+    "App rechnet ab dem Öffnen mit der kürzeren Frist.\n\nOhne diesen Zustand schätzt sie den " +
+    "Vorrat zu großzügig."],
+
+  marke: ["Herstellermarke",
+    "Auf der Bonzeile stand ein Markenname.\n\nDie Marke wird nur für den Preisvergleich " +
+    "festgehalten. Für die Produktzuordnung wird sie weggeworfen — sonst wären „Marken-Butter“ und " +
+    "„Butter“ für die App zwei verschiedene Dinge."],
+
+  eigenmarke: ["Eigenmarke",
+    "Die Handelsmarke des Händlers — ja!, Gut&Günstig, K-Classic, Milbona und so weiter.\n\n" +
+    "Die App empfiehlt nichts davon. Sie zeigt nur, was der Unterschied bei dir ausmachen würde."]
+};
+
+/**
+ * Eine antippbare Marke. `key` wählt die Erklärung, `cls` die Farbe —
+ * getrennt, weil dieselbe Farbe verschiedene Dinge bedeutet: die
+ * gelbe Marke steht mal für „überfällig“, mal für „teurer als
+ * üblich“. Aus der Farbe die Erklärung abzuleiten, hätte genau dort
+ * still den falschen Text gezeigt.
+ */
+function pill(key, cls, label) {
+  const info = PILL_INFO[key];
+  const e = el("span", "pill " + cls, esc(label));
+  if (!info) return e;                       // unbekannter Schlüssel: stumm, aber sichtbar
+  e.setAttribute("role", "button");
+  e.setAttribute("tabindex", "0");
+  e.setAttribute("title", info[0]);          // Zeiger auf dem Rechner
+  e.setAttribute("aria-label", `${label} — ${info[0]}, Erklärung anzeigen`);
+  const open = (ev) => {
+    // Sonst öffnet zusätzlich das Detail-Blatt der Zeile darunter.
+    ev.stopPropagation();
+    ev.preventDefault();
+    App.notice(info[0], info[1]);
+  };
+  e.addEventListener("click", open);
+  e.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") open(ev);
+  });
+  return e;
+}
+
+/** Dasselbe für die breiteren Marken rechts in Listenzeilen. */
+function flag(key, cls, label) {
+  const e = pill(key, cls, label);
+  e.className = "flag " + cls;
+  return e;
+}
+
 /* ---------- Bausteine ---------- */
 
 /**
@@ -761,14 +886,19 @@ function brandSheet(c, app) {
   const body = el("div");
   const einheit = c.basis === "100g" ? "je 100 g" : "je Packung";
 
+  // „M“ und „E“ sind genau die Art Kürzel, die man einmal erklärt
+  // haben will — beide Marken sind deshalb antippbar.
+  const zeile = (key, cls, kuerzel, titel, unten) => {
+    const li = el("li");
+    li.append(flag(key, cls, kuerzel));
+    li.append(el("span", null, `${esc(titel)}<br><small>${esc(unten)}</small>`));
+    return li;
+  };
   const list = el("ul", "plain");
-  list.append(el("li", null,
-    `<span class="flag">M</span><span>${esc(c.marke ? brandLabel(c.marke) : "Marke")}` +
-    `<br><small>${esc(eur(c.markenPreis) + " " + einheit + " · " + c.markenKaeufe + " Käufe")}</small></span>`));
-  list.append(el("li", null,
-    `<span class="flag f-ok">E</span><span>${esc(c.eigenmarke ? brandLabel(c.eigenmarke) : "Eigenmarke")}` +
-    `<br><small>${esc(eur(c.eigenPreis) + " " + einheit +
-      (c.belegt ? " · " + c.eigenKaeufe + " Käufe" : " · geschätzt"))}</small></span>`));
+  list.append(zeile("marke", "", "M", c.marke ? brandLabel(c.marke) : "Marke",
+    `${eur(c.markenPreis)} ${einheit} · ${c.markenKaeufe} Käufe`));
+  list.append(zeile("eigenmarke", "f-ok", "E", c.eigenmarke ? brandLabel(c.eigenmarke) : "Eigenmarke",
+    `${eur(c.eigenPreis)} ${einheit}${c.belegt ? " · " + c.eigenKaeufe + " Käufe" : " · geschätzt"}`));
   body.append(list);
 
   body.append(uiRow("Unterschied", einheit, null, { value: eur(c.differenz) }));
@@ -904,23 +1034,35 @@ function listItem(it, ctx, app) {
   cb.setAttribute("aria-label", it.name);
   cb.addEventListener("change", () => app.choose(it.choiceKey, { on: cb.checked, reason: cb.checked ? null : undefined }));
 
-  const main = el("button", "main");
+  // Kein <button>, sondern ein Element mit Schaltflächen-Rolle: die
+  // Marken darin sind selbst antippbar, und eine Schaltfläche in
+  // einer Schaltfläche ist ungültiges HTML — Browser hängen die
+  // innere dann aus dem Baum aus, und das Antippen ginge ins Leere.
+  const main = el("div", "main");
+  main.setAttribute("role", "button");
+  main.setAttribute("tabindex", "0");
   main.setAttribute("aria-label", `Details zu ${it.name}`);
   const nm = el("div", "nm", esc(it.name));
-  if (manuell) nm.append(el("span", "pill own", "von dir"));
-  if (!manuell && it.dueIn < 0) nm.append(el("span", "pill warn", `${-it.dueIn} T überfällig`));
-  if (it.riskFlag) nm.append(el("span", "pill risk", pct(it.wasteRate)));
-  if (p.safetyCritical) nm.append(el("span", "pill safety", "VD"));
+  if (manuell) nm.append(pill("own", "own", "von dir"));
+  if (!manuell && it.dueIn < 0) nm.append(pill("ueberfaellig", "warn", `${-it.dueIn} T überfällig`));
+  if (it.riskFlag) nm.append(pill("risiko", "risk", pct(it.wasteRate)));
+  if (p.safetyCritical) nm.append(pill("vd", "safety", "VD"));
   const pm = ctx.prices.get(it.productId);
   if (pm && pm.verdict !== "üblich") {
-    nm.append(el("span", "pill " + (pm.verdict === "günstig" ? "cheap" : "warn"), sign(pm.changePercent) + " %"));
+    const guenstig = pm.verdict === "günstig";
+    nm.append(pill(guenstig ? "guenstig" : "teuer", guenstig ? "cheap" : "warn",
+      sign(pm.changePercent) + " %"));
   }
-  if (ctx.duplicates.some((d) => d.productId === it.productId)) nm.append(el("span", "pill dup", "doppelt?"));
+  if (ctx.duplicates.some((d) => d.productId === it.productId)) nm.append(pill("doppelt", "dup", "doppelt?"));
   if (!it.on && it.reason) {
     const rr = REASONS.find((x) => x.key === it.reason);
-    if (rr) nm.append(el("span", "pill state", rr.label));
+    if (rr) nm.append(pill("zustand", "state", rr.label));
   }
   main.append(nm);
+  main.addEventListener("keydown", (ev) => {
+    if (ev.target !== main) return;          // eine Marke hat ihre eigene Taste
+    if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); main.click(); }
+  });
   main.addEventListener("click", () => {
     // Eine frei eingetragene Zeile hat kein Detail-Blatt — sie hat ja
     // keine Daten. Sie bekommt ihr eigenes, kleines.
@@ -1090,7 +1232,8 @@ function viewBestand(ctx, app) {
       const r = el("div", "row");
       r.append(el("div", "rowMain",
         `<div class="rowTitle">${esc(o.name)}</div><div class="rowSub">seit ${o.openedDays} ${o.openedDays === 1 ? "Tag" : "Tagen"}</div>`));
-      r.append(el("span", "flag " + (o.expired ? "f-miss" : o.urgent ? "f-gold" : "f-ok"),
+      r.append(flag(o.expired ? "angebrochen" : "rest",
+        o.expired ? "f-miss" : o.urgent ? "f-gold" : "f-ok",
         o.expired ? "über Frist" : `${o.daysLeft} T`));
       // Aufgebraucht statt nur „weg“: eine angebrochene Packung, die
       // vor ihrer Frist leer wird, ist genau der Fall, den die App
@@ -1117,11 +1260,20 @@ function viewBestand(ctx, app) {
     const p = byId(i.productId) || {};
     const longLived = !p.isFood || i.daysLeft > 120;
     const flagCls = i.daysLeft <= 2 ? "f-miss" : i.daysLeft <= 5 ? "f-gold" : "f-ok";
-    const r = el("button", "row");
+    // Wie in der Liste: die Marke rechts ist selbst antippbar, also
+    // darf die Zeile keine echte Schaltfläche sein.
+    const r = el("div", "row");
+    r.setAttribute("role", "button");
+    r.setAttribute("tabindex", "0");
     r.append(el("div", "rowMain",
       `<div class="rowTitle">${esc(i.name)}${i.opened ? ' <span class="pill">offen</span>' : ""}</div>` +
       `<div class="rowSub">${de(i.remainingUnits.toFixed(1))} · ${eur(i.value)}</div>`));
-    r.append(el("span", "flag " + (longLived ? "f-ok" : flagCls), longLived ? "haltbar" : `${i.daysLeft} T`));
+    r.append(flag(longLived ? "haltbar" : "rest", longLived ? "f-ok" : flagCls,
+      longLived ? "haltbar" : `${i.daysLeft} T`));
+    r.addEventListener("keydown", (ev) => {
+      if (ev.target !== r) return;
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); r.click(); }
+    });
     r.append(el("div", "chev"));
     r.addEventListener("click", () => productSheet(i.productId, ctx));
     inv.body.append(r);

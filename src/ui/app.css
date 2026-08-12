@@ -442,8 +442,11 @@ button.row:active,label.row:active{background:var(--fill)}
   transition:background .18s var(--ease),border-color .18s var(--ease),transform .3s var(--spring);
 }
 .box:checked{background:var(--accent);border-color:var(--accent)}
-.item .main{flex:1;min-width:0;text-align:left;padding:0;background:none;display:block}
+.item .main{flex:1;min-width:0;text-align:left;padding:0;background:none;display:block;cursor:pointer}
+/* Nur die Zeile selbst blasst beim Tippen ab, nicht ihre Marken —
+   die haben ihre eigene Rückmeldung und ihr eigenes Ziel. */
 .item .main:active{opacity:.55}
+.item .main .pill:active{opacity:1}
 .item .nm{font-size:1rem;font-weight:520;display:flex;flex-wrap:wrap;align-items:center;gap:6px;letter-spacing:-.018em}
 .item .price{font-size:1rem;text-align:right;flex:0 0 auto}
 .item .price small{display:block;font-size:0.7rem;color:var(--ink-3);font-weight:400}
@@ -490,6 +493,16 @@ button.row:active,label.row:active{background:var(--fill)}
 .pill.safety{background:var(--red);color:#fff}
 .pill.cheap{background:var(--accent-soft);color:var(--accent)}
 .pill.own{background:var(--violet-soft);color:var(--violet)}
+
+/* Antippbare Marken: erklären sich auf Tippen (Telefon) oder beim
+   Verweilen mit dem Zeiger (Rechner). Der Unterschied zur stummen
+   Marke muss sichtbar sein, ohne laut zu werden — deshalb nur der
+   Zeiger, ein kleiner Druckpunkt und ein Fokusring für die Tastatur. */
+.pill[role="button"],.flag[role="button"]{cursor:help;transition:transform .12s var(--spring)}
+.pill[role="button"]:active,.flag[role="button"]:active{transform:scale(.9)}
+.pill[role="button"]:focus-visible,.flag[role="button"]:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
 
 .reasons{margin-top:11px;padding-left:37px}
 .reasons .q{font-size:0.79rem;color:var(--ink-2);margin-bottom:8px}

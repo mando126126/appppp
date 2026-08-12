@@ -363,6 +363,40 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### Jede Marke erklärt sich
+
+Die Liste ist voller kurzer Zeichen: „von dir", „+8 %", „doppelt?",
+„VD", „3 T". Sie sind kurz, weil eine Zeile schmal ist — und genau
+deshalb erklärt sich keines von selbst. Wer „+8 %" liest, weiß nicht,
+ob das Mehrwertsteuer, Rabatt oder Preisänderung ist, und niemand
+tippt eine Zeile an, um es herauszufinden.
+
+Jede Marke ist jetzt antippbar. Auf dem Rechner genügt das Verweilen
+mit dem Zeiger (`title`), auf dem Telefon — wo es kein Verweilen gibt
+— öffnet ein Tippen dasselbe Blatt, das auch hinter den (i) steckt.
+
+Die Texte sind **generisch**: sie erklären die Art der Marke, nicht
+den Einzelfall. „So entsteht diese Zahl", nicht „deine Äpfel sind 8 %
+teurer" — der Einzelfall steht im Detail-Blatt, das eine Zeile weiter
+aufgeht. Die Frage „was ist das für ein Zeichen?" stellt man einmal,
+nicht bei jedem Produkt neu.
+
+Zwei Details, die nicht Kosmetik sind:
+
+- **Der Schlüssel entscheidet über den Text, nicht die Farbe.** Die
+  gelbe Marke steht mal für „überfällig", mal für „teurer als sonst".
+  Wer die Erklärung aus der CSS-Klasse ableitet, zeigt an einer von
+  beiden Stellen still den falschen Text.
+- **Marke in Zeile heißt: die Zeile ist keine `<button>` mehr.** Eine
+  Schaltfläche in einer Schaltfläche ist ungültiges HTML; Browser
+  hängen die innere aus dem Baum aus, und das Antippen ginge ins
+  Leere. Beide Zeilen tragen jetzt `role="button"` samt Tastaturweg,
+  und ein Test prüft, dass keine Verschachtelung zurückkehrt.
+
+Ein unbekannter Schlüssel lässt die Marke sichtbar, aber stumm. Eine
+Marke, die bei einem Tippfehler verschwindet, wäre der schlimmere
+Fehler.
+
 ### Marke oder Eigenmarke
 
 Ein Potenzial, kein Auftrag (`brandSwap.js`). Die App tauscht nichts,
