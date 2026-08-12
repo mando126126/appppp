@@ -79,9 +79,23 @@ function foldUmlauts(s) {
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+/**
+ * Längste sinnvolle Bonzeile. Der längste Katalogname liegt bei rund
+ * 40 Zeichen; alles jenseits von 120 ist keine Artikelbezeichnung
+ * mehr, sondern ein Einlesefehler oder eine zusammengelaufene Zeile.
+ *
+ * Die Grenze ist nicht Kosmetik: Levenshtein kostet Länge mal Länge,
+ * und seit der Katalog auf 846 Produkte gewachsen ist, wird jede
+ * Zeile gegen über tausend Namen und Aliase gehalten. Eine Zeile mit
+ * 5000 Zeichen brauchte damit fast eine halbe Sekunde — auf einem
+ * Telefon mit einem ganzen Bon voller solcher Zeilen wäre das eine
+ * hängende Oberfläche. Der Stresstest hat genau das gemeldet.
+ */
+const MAX_RAW_LENGTH = 120;
+
 /** Zerlegt "H-MILCH 3,5% 1L" in { core:"h milch 3,5%", quantity:1, unit:"l" } */
 function parseProductName(raw) {
-  let s = foldUmlauts(String(raw || "").toLowerCase());
+  let s = foldUmlauts(String(raw || "").slice(0, MAX_RAW_LENGTH).toLowerCase());
 
   // Mengenangabe herausziehen (1l, 500g, 10er, 2x)
   let quantity = 1;
@@ -403,6 +417,7 @@ function matchReceipt(rawItems) {
 }
 
 module.exports = {
+  MAX_RAW_LENGTH,
   matchProduct, matchReceipt, parseProductName, combinedSimilarity, levenshtein,
   conflictsWithCategory, looksLikeMeat, MEAT_TOKENS,
   CONFIRM_THRESHOLD, SAFE_THRESHOLD

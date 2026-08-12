@@ -734,6 +734,71 @@ function badgeSheet(row, app) {
 }
 
 /* ================================================================
+   Marke oder Eigenmarke
+   ================================================================
+   Ein Potenzial, kein Auftrag. Die App tauscht nichts, sie zeigt nur,
+   was ein Wechsel im Jahr bedeuten würde — und trennt dabei strikt,
+   was aus den eigenen Bons BELEGT ist von dem, was nur GESCHÄTZT ist.
+
+   Die Reihenfolge in der Ansicht ist Absicht: Belegtes zuerst, weil
+   es die einzige Zahl ist, für die der Haushalt selbst der Beleg ist.
+   Geschätztes steht darunter, mit eigenem Titel und eigener Summe.
+   Eine gemeinsame Zahl gibt es nicht — nicht, weil sie schwer zu
+   rechnen wäre, sondern weil sie nichts bedeutete.
+   ================================================================ */
+function brandRow(c, app) {
+  // Kurz halten: auf 390 Pixeln bricht jede dritte Angabe in eine
+  // zweite Zeile, und dann liest niemand mehr die erste. Der
+  // Prozentsatz und die Basis stehen im Blatt.
+  const sub = `${eur(c.markenPreis)} gegen ${eur(c.eigenPreis)} · ${de(c.proJahr)}×/Jahr`;
+  return uiRow(c.name, sub, null, {
+    value: eur(c.jahresPotenzial),
+    onClick: () => brandSheet(c, app)
+  });
+}
+
+function brandSheet(c, app) {
+  const body = el("div");
+  const einheit = c.basis === "100g" ? "je 100 g" : "je Packung";
+
+  const list = el("ul", "plain");
+  list.append(el("li", null,
+    `<span class="flag">M</span><span>${esc(c.marke ? brandLabel(c.marke) : "Marke")}` +
+    `<br><small>${esc(eur(c.markenPreis) + " " + einheit + " · " + c.markenKaeufe + " Käufe")}</small></span>`));
+  list.append(el("li", null,
+    `<span class="flag f-ok">E</span><span>${esc(c.eigenmarke ? brandLabel(c.eigenmarke) : "Eigenmarke")}` +
+    `<br><small>${esc(eur(c.eigenPreis) + " " + einheit +
+      (c.belegt ? " · " + c.eigenKaeufe + " Käufe" : " · geschätzt"))}</small></span>`));
+  body.append(list);
+
+  body.append(uiRow("Unterschied", einheit, null, { value: eur(c.differenz) }));
+  body.append(uiRow("Im Jahr", `bei ${de(c.proJahr)} Käufen`, null, { value: eur(c.jahresPotenzial) }));
+
+  body.append(el("p", "srcnote", esc(c.belegt
+    ? "Belegt: Du hast beides schon gekauft. Verglichen werden die Mediane deiner eigenen Preise — " +
+      "ein einzelnes Angebot verschiebt die Zahl nicht."
+    : "Geschätzt: Für dieses Produkt gibt es noch keinen eigenen Eigenmarken-Preis. Gerechnet wird mit " +
+      Math.round(ESTIMATED_SHARE * 100) + " % Abstand, dem unteren Ende der üblichen Spanne. " +
+      "Kauf die Eigenmarke einmal, und aus der Schätzung wird deine eigene Zahl.")));
+
+  body.append(el("p", "srcnote",
+    "Hochgerechnet wird nur auf den Anteil, den du wirklich als Marke kaufst. " +
+    "Was du längst als Eigenmarke holst, steht hier nicht noch einmal."));
+
+  // Der Blatt-Titel nennt das Produkt schon — „Nicht mehr für
+  // Kaffee, gemahlen" wäre nur länger und läse sich schlechter.
+  const off = el("button", "cta light", "Nicht mehr vorschlagen");
+  off.addEventListener("click", () => {
+    Data.toggleBrandOff(c.productId);
+    app.closeSheet();
+    app.toast(c.name + ": kein Vergleich mehr");
+  });
+  body.append(off);
+
+  app.sheet(c.name, c.belegt ? "aus deinen Bons belegt" : "geschätzt", body);
+}
+
+/* ================================================================
    Etwas hinzufügen
    ================================================================
    Bis hierher war die Liste ein Automat: sie füllte sich selbst und
@@ -1413,6 +1478,39 @@ function viewZahlen(ctx, app) {
     }));
   }
   c.append(ms);
+
+  /* --- Marke oder Eigenmarke --- */
+  if (ctx.brandHeadline) {
+    const h = ctx.brandHeadline;
+    const b = ctx.brands;
+    const g = uiGroup("Marke oder Eigenmarke",
+      "Zeigt, was ein Wechsel zur Eigenmarke im Jahr bedeuten würde. Mehr nicht: nichts davon landet auf " +
+      "der Liste, nichts wird als Ersparnis gebucht.\n\n" +
+      "Belegt heißt: du hast beides schon gekauft, verglichen werden deine eigenen Preise. Geschätzt heißt: " +
+      "es gibt nur Markenkäufe, gerechnet wird mit einem Erfahrungswert. Die beiden Summen werden nie addiert.\n\n" +
+      "Wer eine Eigenmarke probiert und wieder zur Marke zurückgeht, bekommt den Vorschlag nicht mehr. " +
+      "Das ist eine Antwort, keine Lücke.");
+    g.body.append(uiRow(h.text, h.hint, null, {}));
+    // Zwei Zwischenüberschriften mit je eigener Summe. Die Trennung
+    // steht damit nicht nur im Erklärtext, sondern im Aufbau der
+    // Ansicht — man KANN die beiden Zahlen gar nicht als eine lesen.
+    if (b.belegt.length) {
+      g.body.append(uiRow("Belegt", "aus deinen eigenen Bons", null, { value: eur(b.proJahrBelegt) }));
+      b.belegt.slice(0, 5).forEach((x) => g.body.append(brandRow(x, app)));
+    }
+    if (b.geschaetzt.length) {
+      g.body.append(uiRow("Geschätzt", `${b.geschaetzt.length} ohne eigenen Vergleich`, null, {
+        value: eur(b.proJahrGeschaetzt)
+      }));
+      b.geschaetzt.slice(0, 5).forEach((x) => g.body.append(brandRow(x, app)));
+    }
+    if (b.abgelehnt) {
+      g.body.append(el("p", "srcnote",
+        `${b.abgelehnt} ${b.abgelehnt === 1 ? "Produkt" : "Produkte"} ausgelassen: dort hast du die ` +
+        "Eigenmarke probiert und bist zur Marke zurück."));
+    }
+    c.append(g);
+  }
 
   /* --- Einkaufsmuster --- */
   if (ctx.pattern) {

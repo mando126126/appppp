@@ -363,6 +363,57 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### Marke oder Eigenmarke
+
+Ein Potenzial, kein Auftrag (`brandSwap.js`). Die App tauscht nichts,
+setzt keine Eigenmarke auf die Liste und bucht keinen Betrag als
+Ersparnis — sie zeigt, was ein Wechsel im Jahr bedeuten würde, und
+überlässt die Entscheidung dem Haushalt. Wer seinen Kaffee mag, mag
+ihn; eine App, die das jede Woche in Frage stellt, wird deinstalliert,
+und zwar zu Recht.
+
+**Zwei Arten von Zahl, die nie addiert werden.** *Belegt* heißt: der
+Haushalt hat dasselbe Produkt schon beides Mal gekauft, verglichen
+werden die Mediane der eigenen Preise — die Differenz ist keine
+Behauptung, sondern der eigene Bon. *Geschätzt* heißt: es gibt nur
+Markenkäufe, gerechnet wird mit 25 % Abstand, dem unteren Ende der
+üblichen Spanne. Das ist ein **Schätzwert ohne belastbare Quelle**,
+dieselbe Auflage wie bei den geschätzten Haltbarkeiten im Katalog. Die
+beiden Summen stehen unter eigenen Zwischenüberschriften; ein Feld,
+das sie zusammenfasst, gibt es nicht — und ein Test prüft, dass es
+auch keines gibt.
+
+**Warum hier nichts gebucht wird.** Wer wirklich wechselt, zahlt unter
+seinem eigenen Median, und `receiptSavings` bucht die Differenz
+ohnehin als realisiert. Denselben Euro hier ein zweites Mal zu zählen
+wäre exakt der Fehler, der in diesem Projekt schon zweimal der
+teuerste war.
+
+**Drei Zurückhaltungen**, jede gegen einen konkreten Fehlschluss:
+
+- **Probiert und wieder verlassen** — folgen nach dem letzten
+  Eigenmarkenkauf mindestens drei Markenkäufe, schweigt die App. Das
+  ist eine Antwort, keine Wissenslücke. Ein einzelner Markenkauf
+  reicht nicht: dann wechseln sich beide ab, und der Vergleich ist
+  gerade dadurch belegt.
+- **Nur der Markenanteil wird hochgerechnet.** Was der Haushalt längst
+  als Eigenmarke holt, steht nicht noch einmal im Potenzial.
+- **Je 100 g, wenn Gewichte da sind.** Der nackte Stückpreis verglich
+  sonst 500 g Markenbutter mit 250 g Eigenmarke und meldete eine
+  Ersparnis, die es nicht gibt.
+
+Erkannt wird die Marke aus der **Klartextzeile des Bons** und beim
+Buchen festgehalten. Der Produktabgleich wirft Markennamen bewusst weg
+— sie stören die Zuordnung —, aber davor steht dort „MILBONA JOGHURT"
+oder „EHRMANN ALMIGHURT". Positionen, die im Ladenmodus abgehakt
+wurden, haben keine Zeile und zählen nirgends mit, weder dafür noch
+dagegen. Die beiden Markerlisten sind Pflegearbeit wie die Markenliste
+im Matcher; unvollständig ist in Ordnung, weil eine unerkannte Marke
+nur ein Potenzial kostet.
+
+Und was einen nicht interessiert, lässt sich dauerhaft abstellen —
+kein „für diese Woche".
+
 ### 850 Produkte und eine Suche, die deutsch kann
 
 Der freie Text war der Notausgang, und er wurde zu oft benutzt: wer

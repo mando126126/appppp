@@ -90,7 +90,8 @@ try {
   window.eval(
     sources.join("\n;\n") +
     "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
-    " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState };"
+    " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
+    " brandOf, brandSwapCandidates, brandSheet };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -920,6 +921,39 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
   ok("Zahlen zeigt den Rückblick", /Rückblick/.test(txt));
   ok("Zahlen zeigt die Meilensteine", /Erreicht/.test(txt));
   ok("Zahlen zeigt den Streak", /Am Stück/.test(txt));
+
+  /* --- Marke gegen Eigenmarke --- */
+  ok("Zahlen zeigt den Eigenmarken-Vergleich", /Marke oder Eigenmarke/.test(txt));
+  const b = App.ctx.brands;
+  ok("Die Demo liefert einen belegten Fall", b.belegt.length > 0,
+    b.belegt.map((x) => x.name).join(", "));
+  ok("Und einen geschätzten", b.geschaetzt.length > 0,
+    b.geschaetzt.map((x) => x.name).join(", "));
+  ok("Belegtes und Geschätztes bleiben getrennte Summen",
+    b.proJahrBelegt > 0 && b.proJahrGeschaetzt > 0 && !("proJahr" in b));
+  ok("Wer zur Marke zurückging, wird ausgelassen", b.abgelehnt > 0, b.abgelehnt);
+  ok("Kein Vorschlag für das, was schon Eigenmarke ist",
+    ![...b.belegt, ...b.geschaetzt].some((x) => x.productId === "milch_vollmilch"));
+
+  // Der Vergleich ist ein Hinweis, keine Buchung: er darf weder auf
+  // der Liste landen noch in einer Ersparnis-Zahl auftauchen.
+  const vorherAktionen = D.get().actions.length;
+  const vorherManuell = D.get().manual.length;
+  T.brandSheet(b.belegt[0], App);
+  ok("Das Blatt öffnet sich", /Unterschied/.test($("sheetOpts").textContent));
+  ok("Es weist die Herkunft der Zahl aus", /[Bb]elegt|[Gg]eschätzt/.test($("sheetOpts").textContent));
+  const aus = [...$("sheetOpts").querySelectorAll("button")]
+    .find((x) => /nicht mehr vorschlagen/i.test(x.textContent));
+  ok("Es lässt sich dauerhaft abstellen", !!aus);
+  const abgestellt = b.belegt[0].productId;
+  click(aus);
+  App.goto("zahlen");
+  ok("Danach ist das Produkt verschwunden",
+    ![...App.ctx.brands.belegt, ...App.ctx.brands.geschaetzt].some((x) => x.productId === abgestellt));
+  ok("Der Vergleich bucht nichts ins Protokoll", D.get().actions.length === vorherAktionen);
+  ok("Und setzt nichts auf die Liste", D.get().manual.length === vorherManuell);
+  D.update((st) => { st.brandOff = []; });
+
   App.goto("mehr");
   ok("Mehr bietet die Erinnerung an", /Wochenrückblick/.test($("main").textContent));
   ok("Und sagt ehrlich, dass es kein echtes Push ist", (() => {
