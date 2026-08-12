@@ -5,7 +5,7 @@
 
 const NAV = [
   {
-    id: "liste", label: "Liste", title: "Liste", view: viewListe,
+    id: "liste", label: "Liste", title: "Einkaufsliste", view: viewListe,
     icon: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6.2l1.3 1.3 2.4-2.6"/><path d="M3.5 12.2l1.3 1.3 2.4-2.6"/><path d="M3.5 18.2l1.3 1.3 2.4-2.6"/>'
   },
   {
@@ -52,21 +52,26 @@ const App = {
   /* ---------- Zustand ändern ---------- */
   set(fn) { Data.update(fn); },
 
-  /** Eine Wochenentscheidung zu einer Position festhalten. */
-  choose(productId, patch) {
+  /**
+   * Eine Wochenentscheidung zu einer Position festhalten.
+   * `key` ist die Produktkennung — bei selbst ergänzten Zeilen deren
+   * eigene Kennung, denn die haben womöglich gar kein Produkt.
+   */
+  choose(key, patch) {
+    const item = App.ctx.items.find((i) => i.choiceKey === key);
     // Ein neu gesetzter Grund wird dauerhaft protokolliert, nicht nur
     // für diese Woche. Ohne das war die Rückmeldung folgenlos: wer
-    // dreimal „hab noch da" sagte, bekam das Produkt beim vierten Mal
-    // wieder vorgeschlagen.
-    const previous = (Data.get().listChoices[productId] || {}).reason || null;
-    if (patch.reason && patch.reason !== previous) {
-      const item = App.ctx.items.find((i) => i.productId === productId);
-      Data.recordFeedback(productId, patch.reason, item ? item.dueIn : 0);
+    // dreimal „hab noch da“ sagte, bekam das Produkt beim vierten Mal
+    // wieder vorgeschlagen. Eine selbst ergänzte Zeile korrigiert
+    // keinen Rhythmus — sie hat keinen.
+    const previous = (Data.get().listChoices[key] || {}).reason || null;
+    if (patch.reason && patch.reason !== previous && item && item.productId && item.basis !== "manuell") {
+      Data.recordFeedback(item.productId, patch.reason, item.dueIn || 0);
     }
 
     Data.update((s) => {
       if (s.listWeek !== App.ctx.weekKey) { s.listWeek = App.ctx.weekKey; s.listChoices = {}; }
-      const cur = s.listChoices[productId] || {};
+      const cur = s.listChoices[key] || {};
       const next = { ...cur, ...patch };
       if (patch.on === true) next.reason = null;
       // „War schon alle“ ist kein Abwahlgrund — das Produkt wird ja
@@ -74,7 +79,7 @@ const App = {
       if (patch.reason !== undefined && patch.on === undefined) {
         next.on = patch.reason === "empty" ? cur.on !== false : false;
       }
-      s.listChoices[productId] = next;
+      s.listChoices[key] = next;
     });
   },
 
@@ -450,9 +455,24 @@ const App = {
     large.innerHTML = "";
     large.append(el("h1", null, esc(entry.title)));
     const sub = el("div", "sub");
-    sub.append(document.createTextNode(ctx.history.length
-      ? `${ctx.weekday} · ${ctx.totals.receipts} Bons · ${ctx.rhythms.size} Produkte`
-      : "noch keine Daten — leg mit einem Einkauf los"));
+    // Auf der Liste beschreibt die Unterzeile die LISTE, nicht die
+    // Datenlage. „57 Bons · 29 Produkte“ beantwortet eine Frage, die
+    // hier niemand hat — die Frage ist: was steht drauf und was
+    // kostet es?
+    let subText;
+    if (!ctx.history.length) {
+      subText = "noch keine Daten — leg mit einem Einkauf los";
+    } else if (App.tab === "liste" && ctx.stage.stage >= 2) {
+      const on = ctx.items.filter((i) => i.on);
+      const sum = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+      const wann = ctx.pattern && ctx.pattern.dayName ? `für ${ctx.pattern.dayName}` : `ab ${ctx.weekday}`;
+      subText = on.length
+        ? `${wann} · ${on.length} ${on.length === 1 ? "Position" : "Positionen"} · ${eur(sum)}`
+        : `${wann} · noch nichts drauf`;
+    } else {
+      subText = `${ctx.weekday} · ${ctx.totals.receipts} Bons · ${ctx.rhythms.size} Produkte`;
+    }
+    sub.append(document.createTextNode(subText));
     // Erzeugte Historie bleibt dauerhaft als solche gekennzeichnet.
     if (S.settings.demo) {
       const tag = el("button", "pill warn", "Beispieldaten");
@@ -558,7 +578,7 @@ function boot() {
 
   window.addEventListener("scroll", App.onScroll, { passive: true });
 
-  // Systemweiter Wechsel hell/dunkel, solange „System" eingestellt ist.
+  // Systemweiter Wechsel hell/dunkel, solange „System“ eingestellt ist.
   if (window.matchMedia) {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => { if (Data.get().settings.theme === "system") App.applyTheme(); };

@@ -47,7 +47,7 @@ function emptyState() {
       household: 2,
       // Vorausschau: wie viele Tage der nächste Einkauf mit abdecken
       // soll. listGenerator.js kennt das als BUFFER_DAYS mit Vorgabe 1
-      // — für „einmal die Woche einkaufen" ist ein Tag zu knapp, sonst
+      // — für „einmal die Woche einkaufen“ ist ein Tag zu knapp, sonst
       // steht die Hälfte des Bedarfs erst übermorgen auf der Liste.
       lookaheadDays: 3,
       vacation: { active: false, from: null, to: null },
@@ -89,12 +89,21 @@ function emptyState() {
       forgotten: [],
       freeze: []
     },
-    purchases: [],        // {id, productId, date, quantity, unitPrice, weightG, store}
+    purchases: [],        // {id, productId, date, quantity, unitPrice, weightG, store, brand}
     receipts: [],         // {id, date, store, total, itemCount}
     aliases: {},          // gelernte Zuordnung Bonzeile -> Produkt
     listWeek: null,       // Woche, für die die Entscheidungen unten gelten
     listChoices: {},      // productId -> {on, reason, halved}
+    // Selbst ergänzte Positionen. Die App schlägt vor, was ihre
+    // Rhythmen hergeben — alles andere weiß nur der Haushalt: Gäste
+    // am Wochenende, ein Rezept, Blumen für Oma. Ohne diese Liste ist
+    // die App ein Automat, den man nicht bedienen kann.
+    manual: [],           // [{id, productId|null, name, price, aisle, category, week}]
     savingsAccepted: [],  // ids angenommener Sparvorschläge
+    // Produkte, für die kein Eigenmarken-Vergleich mehr gezeigt wird.
+    // Manches ist Geschmack und nicht Rechnen — wer seinen Kaffee mag,
+    // soll nicht jede Woche gefragt werden.
+    brandOff: [],
     storeChecked: [],     // im Ladenmodus abgehakt
     depositReturned: []   // zurückgegebene Pfandgebinde
   };
@@ -192,6 +201,13 @@ function addReceipt(receipt) {
 
   update((s) => {
     rows.forEach((i) => {
+      // Die Marke wird BEIM BUCHEN festgehalten, nicht später aus der
+      // Zeile gelesen: die Bonzeile selbst wird nicht gespeichert
+      // (sie ist lang, redundant und für nichts anderes nötig), und
+      // ohne diesen Schritt wäre die Information mit dem Buchen weg.
+      // Positionen aus dem Ladenmodus haben keine Zeile — die tragen
+      // `null` und zählen im Markenvergleich nirgends mit.
+      const b = i.raw ? brandOf(i.raw) : { tier: null, label: null };
       s.purchases.push({
         id: newId(),
         productId: i.productId,
@@ -199,7 +215,9 @@ function addReceipt(receipt) {
         quantity: Math.max(1, Number(i.quantity) || 1),
         unitPrice: Math.max(0, Number(i.unitPrice) || 0),
         weightG: i.weightG || null,
-        store
+        store,
+        brand: b.tier,
+        brandLabel: b.label
       });
     });
     s.receipts.push({
@@ -209,10 +227,13 @@ function addReceipt(receipt) {
       total: Math.round(rows.reduce((a, i) => a + i.unitPrice * i.quantity, 0) * 100) / 100,
       itemCount: rows.length
     });
-    // Neuer Einkauf: die Wochenentscheidungen sind verbraucht.
+    // Neuer Einkauf: die Wochenentscheidungen sind verbraucht — und
+    // die selbst ergänzten Positionen ebenso, die waren ja der Grund
+    // für den Einkauf.
     s.listWeek = null;
     s.listChoices = {};
     s.storeChecked = [];
+    s.manual = [];
   });
 
   logAction(ACTION.ERFASST, {
@@ -311,7 +332,7 @@ function markReviewNotified(wk) {
 
 /**
  * Eine Rückmeldung dauerhaft festhalten. `dueIn` sagt, wie weit die
- * Vorhersage danebenlag: 0 heißt „heute fällig", negativ „war schon
+ * Vorhersage danebenlag: 0 heißt „heute fällig“, negativ „war schon
  * überfällig". Ohne diesen Bezug ließe sich später nicht mehr sagen,
  * wie stark der Rhythmus verschoben werden muss.
  */
@@ -342,6 +363,39 @@ function recordSwapFor(productId) {
     s.swaps[productId] = { lastSwap: t, history: [...cur.history, t] };
   });
   logAction(ACTION.GETAUSCHT, { productId });
+}
+
+/**
+ * Eine Position von Hand auf die Liste setzen.
+ *
+ * Zwei Fälle: ein Produkt aus dem Katalog (dann kennt die App Preis,
+ * Gang und Kategorie) oder freier Text. Freier Text bekommt KEINE
+ * Produktkennung — er darf nicht in die Rhythmen einfließen, sonst
+ * lernte die App aus „Blumen für Oma“ einen Kaufabstand.
+ */
+function addManual({ productId = null, name, price = 0, week }) {
+  // Kommt eine Produktkennung, liefert der Katalog den Namen. Ohne
+  // diese Zeile bräuchte jeder Aufrufer beides — und der erste, der
+  // nur die Kennung übergab, bekam still `null` zurück.
+  const p = productId ? byId(productId) : null;
+  const label = p ? p.name : String(name || "").trim();
+  if (!label) return null;
+  const entry = {
+    id: newId(),
+    productId: p ? productId : null,
+    name: label,
+    price: p ? p.typicalPrice : Math.max(0, Number(price) || 0),
+    aisle: p ? p.aisle : "Sonstiges",
+    category: p ? p.category : "Sonstiges",
+    week: week || weekKey(today()),
+    addedAt: today()
+  };
+  update((s) => { s.manual.push(entry); });
+  return entry;
+}
+
+function removeManual(id) {
+  update((s) => { s.manual = s.manual.filter((m) => m.id !== id); });
 }
 
 function learnAlias(rawLine, productId) {
@@ -386,11 +440,13 @@ function buildDemoHistory(ref = today()) {
       lastGap = 0, qty = 1,
       priceLate = p.typicalPrice,
       priceEarly = priceLate,
-      jitter = 1
+      jitter = 1,
+      brandCycle = null
     } = opts;
 
     let offset = lastGap;
     let i = 0;
+    let gekauft = 0;
     let previous = null;
     while (offset <= DAYS) {
       const snapped = snap(offset);
@@ -398,11 +454,20 @@ function buildDemoHistory(ref = today()) {
         const date = plusDays(ref, -snapped);
         if (date >= start) {
           // Zweite Hälfte des Zeitraums teurer als die erste
+          const grundpreis = snapped <= DAYS / 2 ? priceLate : priceEarly;
+          // Marke reihum. Ohne Marken auf den Demo-Käufen bliebe der
+          // Eigenmarken-Vergleich in der Vorführung leer — und genau
+          // dort soll er zeigen, was er kann.
+          const b = brandCycle ? brandCycle[gekauft % brandCycle.length] : null;
+          const marke = b ? brandOf(b.raw) : { tier: null, label: null };
           H.push({
             productId: pid, date, quantity: qty,
-            unitPrice: snapped <= DAYS / 2 ? priceLate : priceEarly,
-            weightG: null
+            unitPrice: Math.round(grundpreis * (b && b.faktor ? b.faktor : 1) * 100) / 100,
+            weightG: null,
+            brand: marke.tier,
+            brandLabel: marke.label
           });
+          gekauft++;
         }
         previous = snapped;
       }
@@ -414,15 +479,24 @@ function buildDemoHistory(ref = today()) {
   }
 
   // Grundnahrung: kurze Rhythmen, teils überfällig, teils bald fällig
-  series("milch_vollmilch", 6, { lastGap: 6, qty: 2, priceLate: 1.29, priceEarly: 1.09 });
+  series("milch_vollmilch", 6, { lastGap: 6, qty: 2, priceLate: 1.29, priceEarly: 1.09,
+    brandCycle: [{ raw: "JA! H-MILCH 3,5%" }] });   // schon Eigenmarke: kein Vorschlag
   series("brot_vollkorn", 6, { lastGap: 7, priceLate: 2.49, priceEarly: 2.29 });
-  series("joghurt_natur", 5, { lastGap: 5, qty: 2, priceLate: 1.19, priceEarly: 1.09 });
+  series("joghurt_natur", 5, { lastGap: 5, qty: 2, priceLate: 1.19, priceEarly: 1.09,
+    // Meist Marke, ab und zu Eigenmarke — daraus wird eine BELEGTE Zahl.
+    brandCycle: [
+      { raw: "EHRMANN JOGHURT NATUR" },
+      { raw: "EHRMANN JOGHURT NATUR" },
+      { raw: "MILBONA JOGHURT NATUR", faktor: 0.5 }
+    ] });
   series("eier", 11, { lastGap: 10, priceLate: 3.49, priceEarly: 3.29 });
-  series("butter", 20, { lastGap: 19, priceLate: 2.79, priceEarly: 1.99 });
+  series("butter", 20, { lastGap: 19, priceLate: 2.79, priceEarly: 1.99,
+    brandCycle: [{ raw: "KERRYGOLD BUTTER" }] });
   series("kaese_gouda", 10, { lastGap: 4, priceLate: 2.39, priceEarly: 2.19 });
   series("nudeln", 21, { lastGap: 15, qty: 2, priceLate: 1.35, priceEarly: 1.29 });
   series("reis", 35, { lastGap: 30, priceLate: 2.29, priceEarly: 2.19 });
-  series("kaffee", 30, { lastGap: 28, priceLate: 7.49, priceEarly: 5.99 });
+  series("kaffee", 30, { lastGap: 28, priceLate: 7.49, priceEarly: 5.99,
+    brandCycle: [{ raw: "JACOBS KROENUNG" }] });   // nur Marke: GESCHÄTZTE Zahl
 
   // Obst und Gemüse
   series("bananen", 7, { lastGap: 6, priceLate: 1.89, priceEarly: 1.79 });
@@ -438,7 +512,12 @@ function buildDemoHistory(ref = today()) {
   series("wasser", 7, { lastGap: 4, qty: 6, priceLate: 0.39 });
   series("bier", 14, { lastGap: 9, qty: 6, priceLate: 0.85, priceEarly: 0.79 });
 
-  series("schokolade", 9, { lastGap: 2, qty: 2, priceLate: 1.29, priceEarly: 1.19 });
+  series("schokolade", 9, { lastGap: 2, qty: 2, priceLate: 1.29, priceEarly: 1.19,
+    // Probiert und verworfen: die letzten Käufe sind wieder Marke.
+    brandCycle: [
+      { raw: "MILKA ALPENMILCH" }, { raw: "MILKA ALPENMILCH" },
+      { raw: "MILKA ALPENMILCH" }, { raw: "FIN CARRE ALPENMILCH", faktor: 0.55 }
+    ] });
 
   // Haushaltsprodukte: eigene Rechnung (Rate statt Kaufabstand), also
   // auch eigene Muster. Klopapier knapp, Waschmittel mit Preiswellen
@@ -446,10 +525,12 @@ function buildDemoHistory(ref = today()) {
   series("klopapier", 40, { lastGap: 34, priceLate: 4.29, priceEarly: 3.99 });
   series("spuelmittel", 45, { lastGap: 40, priceLate: 1.39, priceEarly: 1.29 });
   series("zahnpasta", 25, { lastGap: 22, priceLate: 1.95, priceEarly: 1.79 });
-  series("waschmittel", 20, { lastGap: 17, priceLate: 6.99, priceEarly: 5.99 });
+  series("waschmittel", 20, { lastGap: 17, priceLate: 6.99, priceEarly: 5.99,
+    brandCycle: [{ raw: "PERSIL UNIVERSAL" }] });
   series("kuechenrolle", 35, { lastGap: 30, priceLate: 2.19, priceEarly: 1.99 });
   series("muellbeutel", 50, { lastGap: 44, priceLate: 2.69, priceEarly: 2.49 });
-  series("duschgel", 15, { lastGap: 12, priceLate: 2.19, priceEarly: 1.99 });
+  series("duschgel", 15, { lastGap: 12, priceLate: 2.19, priceEarly: 1.99,
+    brandCycle: [{ raw: "NIVEA MEN DUSCHGEL" }] });
 
   // INTERVAL: der Tausch ist überfällig, ohne dass etwas fehlt.
   series("zahnbuerste", 95, { lastGap: 97, priceLate: 1.95 });
@@ -630,7 +711,9 @@ function compute() {
     date: p.date,
     quantity: p.quantity,
     unitPrice: p.unitPrice,
-    weightG: p.weightG
+    weightG: p.weightG,
+    brand: p.brand || null,
+    brandLabel: p.brandLabel || null
   }));
 
   /* --- Rhythmen, dreifach nachgeschärft ---------------------------
@@ -856,13 +939,46 @@ function compute() {
     const c = choices[k.productId] || {};
     return {
       ...k,
+      // Schlüssel für die Wochenentscheidung. Bei Vorschlägen ist das
+      // die Produktkennung, bei selbst ergänzten Zeilen deren eigene —
+      // sonst teilten sich zwei Zeilen desselben Produkts einen Haken.
+      choiceKey: k.productId,
       on: c.on !== undefined ? c.on : true,
       reason: c.reason || null,
       halved: k.halved || c.halved || false
     };
   });
 
-  const duplicates = checkList(items, { history, rhythms, today: ref });
+  /* --- Selbst ergänzte Positionen -------------------------------
+   * Sie kommen NACH der Budgetprüfung dazu: was der Nutzer
+   * ausdrücklich auf die Liste gesetzt hat, streicht kein Optimierer
+   * wieder weg. Sie zählen in die Summe, sind aber als eigene
+   * Herkunft gekennzeichnet.                                        */
+  const manualItems = s.manual
+    .filter((m) => m.week === wk)
+    .map((m) => {
+      const c = choices[m.id] || {};
+      return {
+        productId: m.productId, manualId: m.id, choiceKey: m.id, name: m.name,
+        category: m.category, aisle: m.aisle,
+        price: m.price, rhythmDays: null, confidence: null, daysSince: null,
+        dueIn: null, wasteRate: 0, riskFlag: false,
+        shelfLifeDays: m.productId ? (byId(m.productId) || {}).shelfLifeDays : null,
+        perishable: false, basis: "manuell",
+        on: c.on !== undefined ? c.on : true,
+        reason: c.reason || null,
+        halved: c.halved || false
+      };
+    });
+  items.push(...manualItems);
+
+  /* Die auswertenden Module bekommen nur, was im Katalog steht. Eine
+   * freie Zeile wie „Blumen für Oma“ hat keine Haltbarkeit, keinen
+   * Gang und keinen Rhythmus — sie durch die Verderb-, Saison- und
+   * Doppelkauf-Prüfung zu schicken hieße, sich Werte auszudenken. */
+  const known = items.filter((i) => i.productId && byId(i.productId));
+
+  const duplicates = checkList(known, { history, rhythms, today: ref });
 
   /* --- Sparvorschläge --- */
   const statsForSavings = [];
@@ -933,13 +1049,13 @@ function compute() {
   // Weggetippte Hinweise gelten eine Woche, danach kommen sie wieder.
   const dis = s.dismissed.week === wk ? s.dismissed : { forgotten: [], freeze: [] };
 
-  const onList = new Set(items.filter((i) => i.on).map((i) => i.productId));
+  const onList = new Set(known.filter((i) => i.on).map((i) => i.productId));
   const forgotten = findForgotten(rhythms, ref, { exclude: onList })
     .filter((f) => !dis.forgotten.includes(f.productId));
 
   // Einfrieren bezieht sich auf das, was gerade gekauft wird.
   const freeze = freezeSuggestions(
-    items.filter((i) => i.on).map((i) => ({
+    known.filter((i) => i.on).map((i) => ({
       productId: i.productId,
       quantity: i.halved ? 0.5 : 1,
       unitPrice: (byId(i.productId) || {}).typicalPrice
@@ -947,9 +1063,9 @@ function compute() {
     rhythms
   ).filter((f) => !dis.freeze.includes(f.productId));
 
-  const safety = safetyAlert(items.filter((i) => i.on));
+  const safety = safetyAlert(known.filter((i) => i.on));
 
-  const season = offSeason(items.filter((i) => i.on), ref);
+  const season = offSeason(known.filter((i) => i.on), ref);
   const seasonNow = inSeasonNow(ref);
 
   // Gangreihenfolge des zuletzt benutzten Markts
@@ -975,13 +1091,21 @@ function compute() {
   const review = weeklyReview({ actions: s.actions, receipts: s.receipts }, reviewRange);
   review.due = !!dueRange && s.review.lastSeenWeek !== reviewRange.weekKey;
 
+  /* Marke gegen Eigenmarke. Rein informativ: nichts davon wandert in
+     die Liste, in die Ersparnis oder in eine Stufe. Wer wirklich
+     wechselt, wird ohnehin von `receiptSavings` erfasst — den Euro
+     hier ein zweites Mal zu zählen, wäre der Fehler, der in diesem
+     Projekt schon zweimal teuer war. */
+  const brands = brandSwapCandidates(history, { dismissed: s.brandOff });
+  const brandHeadline = swapHeadline(brands);
+
   const badges = milestoneState({ ...s.lifetime, wochen: streak.weeks });
   const freshBadges = newMilestones(badges, s.badgesSeen);
 
   return {
     ref, weekKey: wk, weekday: weekdayOf(ref),
     history, rhythms, stage, chronic, anomalies, wasteStats, inventory,
-    items, duplicates, budgetResult, vacation, savings,
+    items, manualItems, knownItems: known, duplicates, budgetResult, vacation, savings,
     deposit, depositEntries, openDepositEntries: openEntries, archive,
     inflation,
     range, prices, forgotten, freeze, safety,
@@ -989,8 +1113,9 @@ function compute() {
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog, absences,
     actions: s.actions, review, streak, streakWeeks, badges, freshBadges,
+    brands, brandHeadline,
     store, aisleList,
-    ethylene: checkEthyleneConflicts(items.filter((i) => i.on)),
+    ethylene: checkEthyleneConflicts(known.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
     impact: wasteInKilograms(
       chronic.map((c) => ({
@@ -1009,6 +1134,23 @@ function compute() {
       firstDate: history.length ? first : null
     }
   };
+}
+
+/**
+ * Eigenmarken-Vergleich für ein Produkt dauerhaft abstellen — oder
+ * wieder einschalten. Kein „für diese Woche": wer einmal gesagt hat,
+ * dass sein Kaffee nicht zur Debatte steht, hat es gesagt.
+ */
+function toggleBrandOff(productId) {
+  if (!productId) return false;
+  let jetztAus = false;
+  update((s) => {
+    const list = s.brandOff || (s.brandOff = []);
+    const i = list.indexOf(productId);
+    if (i >= 0) list.splice(i, 1);
+    else { list.push(productId); jetztAus = true; }
+  });
+  return jetztAus;
 }
 
 /* ---------- Bon-Text auswerten ---------- */
@@ -1050,26 +1192,24 @@ function parseReceiptText(text) {
   };
 }
 
-/** Produktsuche für die Nachfrage-Liste und das manuelle Erfassen. */
+/**
+ * Produktsuche für die Nachfrage-Liste und das manuelle Erfassen.
+ *
+ * Die Rangfolge steht in productSearch.js — hier wird nur ergänzt,
+ * was nur der Speicher weiß: was dieser Haushalt schon gekauft hat.
+ * Bei gleichem Rang steht das vorn. Wer einmal Haferdrink gekauft
+ * hat, meint bei „hafer" mit einiger Sicherheit wieder den.
+ */
 function searchProducts(query, limit = 12) {
-  const q = String(query).toLowerCase().trim();
-  if (!q) return [];
-  const hits = [];
-  for (const p of FOOD_DATABASE) {
-    const inName = p.name.toLowerCase().indexOf(q);
-    const inAlias = p.aliases.some((a) => a.toLowerCase().includes(q));
-    if (inName === 0) hits.push({ p, rank: 0 });
-    else if (inName > 0) hits.push({ p, rank: 1 });
-    else if (inAlias) hits.push({ p, rank: 2 });
-    if (hits.length > 200) break;
-  }
-  return hits.sort((a, b) => a.rank - b.rank || a.p.name.localeCompare(b.p.name)).slice(0, limit).map((h) => h.p);
+  return findProducts(query, limit, { boost: new Set(state.purchases.map((p) => p.productId)) });
 }
 
 const Data = {
   STORE_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
   addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
+  toggleBrandOff,
+  addManual, removeManual,
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,
   exportJson, importJson,

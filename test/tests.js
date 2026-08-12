@@ -33,7 +33,7 @@ const matchCases = [
   ["TK GEMUESE ERBSEN", "tk_gemuese"],         // mehr Wörter als der Katalogeintrag
   ["SPEISEQUARK MAGER 500G", "quark"],
   ["TORTILLA CHIPS", "chips"],                 // seit v3 im Katalog
-  ["SCHOKORIEGEL", "riegel"],                  // seit v3 im Katalog
+  ["SCHOKORIEGEL", "riegel_schoko"],           // eigenes Produkt, seit der Katalog breit ist
   ["XYZ PHANTASIEPRODUKT", null]               // muss weiterhin unerkannt bleiben
 ];
 matchCases.forEach(([input, expected]) => {

@@ -452,6 +452,31 @@ button.row:active,label.row:active{background:var(--fill)}
 .inlineActions{padding:9px 0 2px 37px}
 .item .opts{padding:9px 0 3px 37px}
 
+/* Die Liste sagt oben, was sie ist und woher sie kommt. */
+.listLead{
+  padding:11px 16px 10px;background:var(--surface);position:relative;
+  font-size:0.79rem;color:var(--ink-2);
+}
+.listLead::after{content:"";position:absolute;left:16px;right:0;bottom:0;height:1px;background:var(--hairline)}
+
+/* Der Hinzufügen-Knopf: dieselbe Zeilenform wie alles andere, aber
+   mit einem Pluszeichen, das man von weitem sieht. */
+.addRow{position:relative}
+.addRow::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
+.addRow .plusMark{
+  width:26px;height:26px;flex:0 0 auto;border-radius:99px;
+  background:var(--accent-soft);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.03rem;font-weight:600;line-height:1;
+  transition:transform .22s var(--spring);
+}
+.addRow:active .plusMark{transform:rotate(90deg) scale(.9)}
+.addRow .rowTitle{color:var(--accent);font-weight:600}
+
+/* Freie Zeile im Suchblatt — sichtbar anders als ein Katalogtreffer. */
+.results .freeRow{background:var(--accent-soft)}
+.results .freeRow .rn{color:var(--accent);font-weight:600}
+
 /* Getönte Chips: farbig, rund, ohne Rahmen */
 .pill{
   font-size:0.68rem;font-weight:650;padding:3px 9px;border-radius:99px;
@@ -464,6 +489,7 @@ button.row:active,label.row:active{background:var(--fill)}
 .pill.state{background:var(--fill-2);color:var(--ink-2)}
 .pill.safety{background:var(--red);color:#fff}
 .pill.cheap{background:var(--accent-soft);color:var(--accent)}
+.pill.own{background:var(--violet-soft);color:var(--violet)}
 
 .reasons{margin-top:11px;padding-left:37px}
 .reasons .q{font-size:0.79rem;color:var(--ink-2);margin-bottom:8px}

@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 842 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 874 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -342,6 +342,139 @@ Ehrlichkeit kostet das nichts. Quellen, Schätzcharakter und der
 ungeschönte Datenqualitätsbericht sind vollständig da — eine Tippgeste
 entfernt statt dauerhaft im Weg.
 
+### Die Liste gehört dir, nicht dem Algorithmus
+
+Zwei Dinge fehlten, und beide betrafen dasselbe: Die App war ein
+**Automat, dem man zusehen konnte.**
+
+**Sie sagte nicht, was sie ist.** Der Bereich hieß „Liste", die
+Sektion darin „Fällig", und die Unterzeile zählte Bons und Produkte.
+Das ist die Sprache des Algorithmus. Jetzt heißt der Bereich
+**Einkaufsliste**, die Unterzeile sagt `für Sonntag · 13 Positionen ·
+40,16 €`, und über der Liste steht **„Deine nächste Einkaufsliste"**
+mit einer Zeile darunter, woher die Vorschläge kommen.
+
+**Und man konnte nichts hinzufügen.** Was die App nicht wissen KANN —
+Gäste am Wochenende, ein Rezept, Blumen für Oma — hatte keinen Weg
+hinein. Jetzt schließt ein „Etwas hinzufügen" die Liste ab, mit zwei
+Wegen:
+
+- **aus dem Katalog** — Preis, Gang und Kategorie sind bekannt, die
+  Position verhält sich wie jede andere
+- **frei eingetippt** — für alles, was nicht im Katalog steht
+
+### Marke oder Eigenmarke
+
+Ein Potenzial, kein Auftrag (`brandSwap.js`). Die App tauscht nichts,
+setzt keine Eigenmarke auf die Liste und bucht keinen Betrag als
+Ersparnis — sie zeigt, was ein Wechsel im Jahr bedeuten würde, und
+überlässt die Entscheidung dem Haushalt. Wer seinen Kaffee mag, mag
+ihn; eine App, die das jede Woche in Frage stellt, wird deinstalliert,
+und zwar zu Recht.
+
+**Zwei Arten von Zahl, die nie addiert werden.** *Belegt* heißt: der
+Haushalt hat dasselbe Produkt schon beides Mal gekauft, verglichen
+werden die Mediane der eigenen Preise — die Differenz ist keine
+Behauptung, sondern der eigene Bon. *Geschätzt* heißt: es gibt nur
+Markenkäufe, gerechnet wird mit 25 % Abstand, dem unteren Ende der
+üblichen Spanne. Das ist ein **Schätzwert ohne belastbare Quelle**,
+dieselbe Auflage wie bei den geschätzten Haltbarkeiten im Katalog. Die
+beiden Summen stehen unter eigenen Zwischenüberschriften; ein Feld,
+das sie zusammenfasst, gibt es nicht — und ein Test prüft, dass es
+auch keines gibt.
+
+**Warum hier nichts gebucht wird.** Wer wirklich wechselt, zahlt unter
+seinem eigenen Median, und `receiptSavings` bucht die Differenz
+ohnehin als realisiert. Denselben Euro hier ein zweites Mal zu zählen
+wäre exakt der Fehler, der in diesem Projekt schon zweimal der
+teuerste war.
+
+**Drei Zurückhaltungen**, jede gegen einen konkreten Fehlschluss:
+
+- **Probiert und wieder verlassen** — folgen nach dem letzten
+  Eigenmarkenkauf mindestens drei Markenkäufe, schweigt die App. Das
+  ist eine Antwort, keine Wissenslücke. Ein einzelner Markenkauf
+  reicht nicht: dann wechseln sich beide ab, und der Vergleich ist
+  gerade dadurch belegt.
+- **Nur der Markenanteil wird hochgerechnet.** Was der Haushalt längst
+  als Eigenmarke holt, steht nicht noch einmal im Potenzial.
+- **Je 100 g, wenn Gewichte da sind.** Der nackte Stückpreis verglich
+  sonst 500 g Markenbutter mit 250 g Eigenmarke und meldete eine
+  Ersparnis, die es nicht gibt.
+
+Erkannt wird die Marke aus der **Klartextzeile des Bons** und beim
+Buchen festgehalten. Der Produktabgleich wirft Markennamen bewusst weg
+— sie stören die Zuordnung —, aber davor steht dort „MILBONA JOGHURT"
+oder „EHRMANN ALMIGHURT". Positionen, die im Ladenmodus abgehakt
+wurden, haben keine Zeile und zählen nirgends mit, weder dafür noch
+dagegen. Die beiden Markerlisten sind Pflegearbeit wie die Markenliste
+im Matcher; unvollständig ist in Ordnung, weil eine unerkannte Marke
+nur ein Potenzial kostet.
+
+Und was einen nicht interessiert, lässt sich dauerhaft abstellen —
+kein „für diese Woche".
+
+### 850 Produkte und eine Suche, die deutsch kann
+
+Der freie Text war der Notausgang, und er wurde zu oft benutzt: wer
+„Bananen" tippte, bekam eine Zeile ohne Haltbarkeit, ohne Gang, ohne
+Gewicht — für Rhythmus, Verderb und Wirkungsmessung unsichtbar. Der
+Katalog ist deshalb von 273 auf **846 Produkte** gewachsen, und
+darüber liegt eine eigene Suche (`productSearch.js`).
+
+Eigen, weil es eine andere Frage ist als die des Bonabgleichs.
+`productMatcher2` bekommt eine vollständige, kryptisch abgekürzte
+Zeile und bucht daraus Historie — ein Fehltreffer ist teuer, also
+fragt es lieber nach. Die Tippsuche bekommt ein Fragment und stellt
+zwölf Vorschläge daneben; ein Fehlvorschlag kostet nichts, ein
+fehlender Vorschlag alles.
+
+Acht Stufen, und die Reihenfolge der ersten beiden ist der Kern:
+
+1. ein ganzes Wort ist es (`milch` → H-Milch)
+2. **ein Wort endet darauf** (`brot` → Vollkornbrot)
+3. der Name beginnt damit (`ban` → Bananen)
+4. ein Wort beginnt damit, 5. der Name enthält es, 6. ein Alias
+   passt, 7. vertippt, aber nah dran (`jogurt` → Joghurt), 8. der
+   Gang passt
+
+Stufe 2 vor Stufe 3 ist deutsche Morphologie: im Kompositum steht das
+Grundwort **hinten**. „Vollmilch" ist Milch, „Milchreis" ist Reis. Wer
+`milch` tippt, meint fast nie Milchreis — eine Suche, die nur auf
+Wortanfänge schaut, zeigt ihm aber genau den zuerst.
+
+Dazu drei Regeln, die jede für sich einen Fehler verhindern:
+
+- **Der Tippfehler-Ausgleich verlangt denselben Anfangsbuchstaben.**
+  Ohne ihn wird aus `spargel` ein Haargel — Levenshtein-Abstand 2.
+- **Unter vier Zeichen wird nicht geraten.** Kurz ist alles zu allem
+  ähnlich.
+- **Was der Haushalt schon kauft, steht bei gleichem Rang vorn** — aber
+  nur bei gleichem Rang. Die Gewohnheit ordnet, sie entscheidet nicht.
+
+Umlaute, ß und Akzente sind gefaltet: `kaese`, `Käse` und `KAESE`
+führen zum selben Ergebnis. Dieselbe Faltung fehlte im Bonabgleich für
+Akzente — „Crème fraîche" zerfiel zu `cr me fra che`, und wer `creme`
+tippte, bekam Handcreme und Schuhcreme, aber nicht das Produkt, das so
+heißt. `test/search.js` prüft das mit 56 Tests, darunter 30 Eingaben,
+die ein Mensch wirklich tippt, und der Nachweis, dass **jedes** der 846
+Produkte über seinen eigenen Namen auffindbar ist.
+
+Freie Zeilen bekommen **keine Produktkennung**. Sie fließen
+ausdrücklich nicht in die Rhythmen ein, tauchen in keiner Verderb-,
+Saison- oder Doppelkauf-Prüfung auf und zeigen statt eines erfundenen
+Preises einen Strich. Aus „Blumen für Oma" darf die App keinen
+Kaufabstand lernen — sie merkt sich nur, dass die Zeile diese Woche
+gebraucht wird.
+
+Ergänzte Positionen stehen in einem eigenen Abschnitt **„Von dir
+ergänzt"** und tragen eine Marke. Das ist keine Formsache: es
+beantwortet die Frage „woher kommt das hier eigentlich?", ohne dass
+man eine Zeile antippen muss. Sie gelten für eine Woche, überstehen
+die Budgetprüfung (was der Nutzer ausdrücklich draufsetzt, streicht
+kein Optimierer weg) und werden mit dem nächsten gebuchten Einkauf
+abgeräumt.
+
 ### Hell, farbig, rund
 
 Zwei Anläufe waren daneben, und beide auf lehrreiche Weise.
@@ -427,7 +560,7 @@ gehört `npm run build` in denselben Commit.
 
 | Bereich | Was drin steckt |
 |---|---|
-| **Liste** | Wochenrückblick (ab Sonntagabend), Vorrats-Reichweite als Ring, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
+| **Liste** | Wochenrückblick (ab Sonntagabend), eigene Positionen ergänzen, Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
 | **Fällig** | Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
 | **Bestand** | geschätzter Vorrat, Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
@@ -459,9 +592,9 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 842
+npm test          # alle 874
 npm run test:algo # 597 Modultests (Regression, Stress, Funktionen, Haushalt, Lernen, Rückblick)
-npm run test:ui   # 209 Oberflächentests in jsdom
+npm run test:ui   # 241 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

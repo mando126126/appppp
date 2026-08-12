@@ -1,11 +1,20 @@
-/* Gebündelt aus 45 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 47 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
 
 /* ===== foodDatabase.js ===== */
 /**
- * foodDatabase.js — v3, stark erweitert
+ * foodDatabase.js — v4, stark erweitert
  * ================================================================
- * Rund 320 Produkte des deutschen Supermarkt-Sortiments.
+ * Rund 850 Produkte des deutschen Supermarkt-Sortiments.
+ *
+ * Die Größe ist kein Selbstzweck. Sie hat zwei Adressaten:
+ * den Bonabgleich (productMatcher2) und die Tippsuche
+ * (productSearch). Wer beim Hinzufügen „ban“ tippt, soll Bananen
+ * bekommen und damit ein Produkt MIT Haltbarkeit, Lagerort und
+ * Gewicht — keine freie Textzeile, die nichts lernt. Jede Zeile,
+ * die hier fehlt, fällt in der Oberfläche auf den freien Text
+ * zurück und ist für Rhythmus, Verderb und Wirkungsmessung
+ * unsichtbar.
  *
  * QUALITÄTSSTUFEN (unverändert, weiterhin verbindlich):
  *   "regulatorisch" = Verbrauchsdatum-Pflicht, rechtlich definiert.
@@ -147,16 +156,16 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["himbeeren","Himbeeren",M,3,2,LEIT,2.99,250,["HIMBEEREN"],{ethylene:ETHYLENE.SENSITIVE}],
   ["brombeeren","Brombeeren",M,3,2,LEIT,2.49,250,["BROMBEEREN"],{ethylene:ETHYLENE.SENSITIVE}],
   ["kirschen","Kirschen",M,5,3,LEIT,3.99,500,["KIRSCHEN"],{ethylene:ETHYLENE.SENSITIVE}],
-  ["pflaumen","Pflaumen",M,7,4,LEIT,2.49,500,["PFLAUMEN","ZWETSCHGEN"],{ethylene:ETHYLENE.PRODUCER}],
-  ["pfirsiche","Pfirsiche",M,6,3,LEIT,2.99,500,["PFIRSICHE","NEKTARINEN"],{ethylene:ETHYLENE.PRODUCER}],
+  ["pflaumen","Pflaumen",M,7,4,LEIT,2.49,500,["PFLAUMEN"],{ethylene:ETHYLENE.PRODUCER}],
+  ["pfirsiche","Pfirsiche",M,6,3,LEIT,2.99,500,["PFIRSICHE"],{ethylene:ETHYLENE.PRODUCER}],
   ["aprikosen","Aprikosen",M,6,3,LEIT,2.99,500,["APRIKOSEN","MARILLEN"],{ethylene:ETHYLENE.PRODUCER}],
   ["orangen","Orangen",M,18,7,LEIT,2.49,1000,["ORANGEN","APFELSINEN"],{ethylene:ETHYLENE.SENSITIVE}],
-  ["mandarinen","Mandarinen",M,14,7,LEIT,2.29,1000,["MANDARINEN","CLEMENTINEN"],{ethylene:ETHYLENE.SENSITIVE}],
+  ["mandarinen","Mandarinen",M,14,7,LEIT,2.29,1000,["MANDARINEN"],{ethylene:ETHYLENE.SENSITIVE}],
   ["zitronen","Zitronen",M,21,7,LEIT,1.29,500,["ZITRONEN"],{ethylene:ETHYLENE.SENSITIVE}],
   ["limetten","Limetten",M,18,7,LEIT,1.49,300,["LIMETTEN"],{ethylene:ETHYLENE.SENSITIVE}],
   ["kiwi","Kiwi",M,12,5,LEIT,1.99,500,["KIWI"],{ethylene:ETHYLENE.PRODUCER}],
   ["ananas","Ananas",M,7,3,LEIT,2.49,1200,["ANANAS"],{ethylene:ETHYLENE.SENSITIVE}],
-  ["melone","Melone",M,7,3,LEIT,3.49,2000,["WASSERMELONE","HONIGMELONE","MELONE"],{ethylene:ETHYLENE.PRODUCER}],
+  ["melone","Melone",M,7,3,LEIT,3.49,2000,["MELONE"],{ethylene:ETHYLENE.PRODUCER}],
   ["mango","Mango",M,7,3,LEIT,1.99,400,["MANGO"],{ethylene:ETHYLENE.PRODUCER}],
   ["granatapfel","Granatapfel",M,21,5,LEIT,2.49,400,["GRANATAPFEL"],{ethylene:ETHYLENE.SENSITIVE}],
   ["feigen","Feigen",M,5,3,LEIT,3.49,300,["FEIGEN"],{ethylene:ETHYLENE.PRODUCER}],
@@ -167,9 +176,9 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
 group("Frischware", "Obst & Gemüse", STORAGE.ROOM, [
   ["bananen","Bananen",M,7,3,LEIT,1.79,1000,["BANANEN"],{ethylene:ETHYLENE.PRODUCER,note:"Starker Ethylenproduzent — getrennt lagern."}],
   ["avocado","Avocado",M,6,1,LEIT,1.79,200,["AVOCADO"],{ethylene:ETHYLENE.PRODUCER,note:"BZfE: im Zimmer reifen, danach Kühlschrank."}],
-  ["tomaten","Tomaten",M,7,3,LEIT,2.49,500,["TOMATEN","RISPENTOMATEN","CHERRYTOMATEN","STRAUCHTOMATEN"],{ethylene:ETHYLENE.PRODUCER,note:"BZfE: Zimmertemperatur, nicht Kühlschrank."}],
+  ["tomaten","Tomaten",M,7,3,LEIT,2.49,500,["TOMATEN","STRAUCHTOMATEN"],{ethylene:ETHYLENE.PRODUCER,note:"BZfE: Zimmertemperatur, nicht Kühlschrank."}],
   ["gurke","Salatgurke",M,7,3,LEIT,0.99,400,["SALATGURKE","GURKE"],{ethylene:ETHYLENE.SENSITIVE,freezable:false}],
-  ["paprika","Paprika",M,8,4,LEIT,2.29,500,["PAPRIKA","PAPRIKA ROT","SPITZPAPRIKA"],{ethylene:ETHYLENE.SENSITIVE}],
+  ["paprika","Paprika",M,8,4,LEIT,2.29,500,["PAPRIKA"],{ethylene:ETHYLENE.SENSITIVE}],
   ["zucchini","Zucchini",M,8,4,LEIT,1.49,400,["ZUCCHINI"],{ethylene:ETHYLENE.SENSITIVE}],
   ["aubergine","Aubergine",M,7,4,LEIT,1.49,400,["AUBERGINE","MELANZANI"],{ethylene:ETHYLENE.SENSITIVE}],
   ["knoblauch","Knoblauch",M,60,21,LEIT,0.99,100,["KNOBLAUCH"]],
@@ -179,7 +188,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.ROOM, [
 ]);
 
 group("Frischware", "Obst & Gemüse", STORAGE.PANTRY, [
-  ["kartoffeln","Kartoffeln",M,60,21,LEIT,2.99,2000,["KARTOFFELN","SPEISEKARTOFFELN","DRILLINGE"],{note:"BZfE: kühl und dunkel, nicht Kühlschrank."}],
+  ["kartoffeln","Kartoffeln",M,60,21,LEIT,2.99,2000,["KARTOFFELN","SPEISEKARTOFFELN"],{note:"BZfE: kühl und dunkel, nicht Kühlschrank."}],
   ["suesskartoffel","Süßkartoffeln",M,30,10,LEIT,2.99,1000,["SUESSKARTOFFELN"]],
   ["zwiebeln","Zwiebeln",M,45,14,LEIT,1.49,1000,["ZWIEBELN","SPEISEZWIEBELN","GEMUESEZWIEBEL"]],
   ["schalotten","Schalotten",M,40,14,LEIT,1.99,250,["SCHALOTTEN"]],
@@ -188,8 +197,8 @@ group("Frischware", "Obst & Gemüse", STORAGE.PANTRY, [
 
 // ===================== GEMÜSE (Gemüsefach) ======================
 group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
-  ["salat_kopf","Kopfsalat",M,5,2,LEIT,1.39,400,["KOPFSALAT","SALAT KOPF","EISBERGSALAT","EISBERG"],{freezable:false,note:"BZfE: Gemüsefach, in Behälter oder feuchtem Tuch."}],
-  ["salat_geschnitten","Salatmischung, geschnitten",V,2,1,REG,1.29,150,["SALATMISCHUNG","BLATTSALAT GESCHNITTEN","FELDSALAT BEUTEL","ROHKOSTSALAT"],{freezable:false,note:"Vorgeschnittene Salate laut BZfE Verbrauchsdatum-Produkt."}],
+  ["salat_kopf","Kopfsalat",M,5,2,LEIT,1.39,400,["KOPFSALAT","SALAT KOPF","EISBERG"],{freezable:false,note:"BZfE: Gemüsefach, in Behälter oder feuchtem Tuch."}],
+  ["salat_geschnitten","Salatmischung, geschnitten",V,2,1,REG,1.29,150,["BLATTSALAT GESCHNITTEN","FELDSALAT BEUTEL","ROHKOSTSALAT"],{freezable:false,note:"Vorgeschnittene Salate laut BZfE Verbrauchsdatum-Produkt."}],
   ["feldsalat","Feldsalat",M,4,2,LEIT,1.99,150,["FELDSALAT","RAPUNZEL"],{freezable:false}],
   ["rucola","Rucola",M,4,2,LEIT,1.49,125,["RUCOLA","RAUKE"],{freezable:false}],
   ["moehren","Möhren",M,21,10,LEIT,1.29,1000,["MOEHREN","KAROTTEN","MÖHREN"],{note:"BZfE: aus dem Folienbeutel nehmen, Grün abschneiden."}],
@@ -197,11 +206,11 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["blumenkohl","Blumenkohl",M,7,3,LEIT,1.99,800,["BLUMENKOHL"]],
   ["champignons","Champignons",M,5,3,LEIT,1.69,250,["CHAMPIGNONS","PILZE","EGERLINGE"]],
   ["lauch","Lauch",M,10,5,LEIT,1.29,400,["LAUCH","PORREE"]],
-  ["spinat_frisch","Blattspinat frisch",M,3,2,LEIT,1.99,300,["BLATTSPINAT","SPINAT FRISCH","BABYSPINAT"]],
-  ["kraeuter","Frische Kräuter",M,5,3,LEIT,1.49,30,["PETERSILIE","SCHNITTLAUCH","KRAEUTER","DILL","KORIANDER"],{note:"BZfE: Kräuter ins Gemüsefach — ausgenommen Basilikum."}],
-  ["sellerie","Sellerie",M,14,7,LEIT,1.49,500,["SELLERIE","STAUDENSELLERIE","KNOLLENSELLERIE"]],
+  ["spinat_frisch","Blattspinat frisch",M,3,2,LEIT,1.99,300,["BLATTSPINAT","SPINAT FRISCH"]],
+  ["kraeuter","Frische Kräuter",M,5,3,LEIT,1.49,30,["KRAEUTER","KORIANDER"],{note:"BZfE: Kräuter ins Gemüsefach — ausgenommen Basilikum."}],
+  ["sellerie","Sellerie",M,14,7,LEIT,1.49,500,["SELLERIE"]],
   ["kohlrabi","Kohlrabi",M,10,5,LEIT,0.99,400,["KOHLRABI"]],
-  ["weisskohl","Weißkohl",M,21,10,LEIT,1.29,1000,["WEISSKOHL","SPITZKOHL"]],
+  ["weisskohl","Weißkohl",M,21,10,LEIT,1.29,1000,["WEISSKOHL"]],
   ["rotkohl","Rotkohl",M,21,10,LEIT,1.49,1000,["ROTKOHL","BLAUKRAUT"]],
   ["wirsing","Wirsing",M,12,6,LEIT,1.49,800,["WIRSING"]],
   ["rosenkohl","Rosenkohl",M,8,4,LEIT,2.29,500,["ROSENKOHL"]],
@@ -210,7 +219,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["rote_bete","Rote Bete",M,21,10,LEIT,1.49,500,["ROTE BETE","ROTE RUEBEN"]],
   ["bohnen_gruen","Grüne Bohnen",M,6,3,LEIT,2.49,500,["GRUENE BOHNEN","BUSCHBOHNEN"]],
   ["zuckerschoten","Zuckerschoten",M,5,3,LEIT,2.99,200,["ZUCKERSCHOTEN","ZUCKERERBSEN"]],
-  ["spargel","Spargel",M,4,2,LEIT,5.99,500,["SPARGEL","BLEICHSPARGEL","GRUENER SPARGEL"]],
+  ["spargel","Spargel",M,4,2,LEIT,5.99,500,["SPARGEL","BLEICHSPARGEL"]],
   ["fenchel","Fenchel",M,8,4,LEIT,1.99,400,["FENCHEL"]],
   ["mangold","Mangold",M,5,3,LEIT,1.99,400,["MANGOLD"]],
   ["pastinaken","Pastinaken",M,18,8,LEIT,1.99,500,["PASTINAKEN"]],
@@ -222,73 +231,73 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
 // ===================== BACKWAREN =================================
 group("Backwaren", "Backwaren", STORAGE.ROOM, [
   ["brot_vollkorn","Vollkornbrot",M,6,5,LEIT,2.49,750,["VOLLKORNBROT","BROT VOLLKORN"],{note:"BZfE: Brot trocknet im Kühlschrank aus — nicht kühlen."}],
-  ["brot_mischbrot","Mischbrot",M,5,4,EST,2.29,750,["MISCHBROT","ROGGENMISCHBROT","BAUERNBROT","LANDBROT"]],
-  ["brot_roggen","Roggenbrot",M,7,6,EST,2.49,750,["ROGGENBROT","SCHWARZBROT","PUMPERNICKEL"]],
-  ["brot_weiss","Weißbrot",M,4,3,EST,1.99,500,["WEISSBROT","BAGUETTE","CIABATTA"]],
+  ["brot_mischbrot","Mischbrot",M,5,4,EST,2.29,750,["MISCHBROT","ROGGENMISCHBROT","LANDBROT"]],
+  ["brot_roggen","Roggenbrot",M,7,6,EST,2.49,750,["ROGGENBROT","SCHWARZBROT"]],
+  ["brot_weiss","Weißbrot",M,4,3,EST,1.99,500,["WEISSBROT"]],
   ["toastbrot","Toastbrot",M,10,7,EST,1.29,500,["TOASTBROT","TOAST","SANDWICHTOAST"]],
   ["broetchen","Brötchen",M,2,1,EST,0.45,60,["BROETCHEN","BRÖTCHEN","SEMMEL","SCHRIPPE"]],
-  ["laugengebaeck","Laugengebäck",M,2,1,EST,0.89,80,["BREZEL","LAUGENSTANGE","LAUGENBROETCHEN"]],
+  ["laugengebaeck","Laugengebäck",M,2,1,EST,0.89,80,["BREZEL","LAUGENBROETCHEN"]],
   ["croissant","Croissant",M,3,2,EST,0.99,70,["CROISSANT","BUTTERCROISSANT"]],
   ["knaeckebrot","Knäckebrot",M,270,60,EST,1.49,250,["KNAECKEBROT"],{storage:STORAGE.PANTRY}],
   ["zwieback","Zwieback",M,270,30,EST,1.19,225,["ZWIEBACK"],{storage:STORAGE.PANTRY}],
-  ["kuchen","Kuchen",M,4,3,EST,3.99,500,["KUCHEN","OBSTKUCHEN","MARMORKUCHEN"]],
-  ["wraps","Wraps",M,60,7,EST,1.49,370,["WRAPS","TORTILLAS","FLADENBROT"]]
+  ["kuchen","Kuchen",M,4,3,EST,3.99,500,["KUCHEN","MARMORKUCHEN"]],
+  ["wraps","Wraps",M,60,7,EST,1.49,370,["WRAPS","TORTILLAS"]]
 ]);
 
 // ===================== TROCKEN & VORRAT ==========================
 group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
-  ["nudeln","Nudeln",M,730,180,LEIT,1.29,500,["SPAGHETTI","NUDELN","PENNE","FUSILLI","MAKKARONI","BANDNUDELN"],{note:"BZfE: oft Monate bis Jahre über MHD genießbar."}],
+  ["nudeln","Nudeln",M,730,180,LEIT,1.29,500,["NUDELN","MAKKARONI","BANDNUDELN"],{note:"BZfE: oft Monate bis Jahre über MHD genießbar."}],
   ["nudeln_vollkorn","Vollkornnudeln",M,540,180,EST,1.79,500,["VOLLKORNNUDELN"]],
-  ["reis","Reis",M,730,365,LEIT,2.19,1000,["REIS","LANGKORNREIS","BASMATIREIS","JASMINREIS"]],
+  ["reis","Reis",M,730,365,LEIT,2.19,1000,["REIS","LANGKORNREIS"]],
   ["risottoreis","Risottoreis",M,730,365,EST,2.49,500,["RISOTTOREIS","ARBORIO"]],
   ["couscous","Couscous",M,540,180,EST,1.49,500,["COUSCOUS"]],
   ["bulgur","Bulgur",M,540,180,EST,1.69,500,["BULGUR"]],
   ["quinoa","Quinoa",M,540,180,EST,2.99,400,["QUINOA"]],
-  ["mehl","Mehl",M,540,180,LEIT,0.89,1000,["MEHL","WEIZENMEHL","DINKELMEHL"],{note:"Helle Mehle oft Wochen bis Monate über MHD haltbar; auf Schädlinge achten."}],
+  ["mehl","Mehl",M,540,180,LEIT,0.89,1000,["MEHL","WEIZENMEHL"],{note:"Helle Mehle oft Wochen bis Monate über MHD haltbar; auf Schädlinge achten."}],
   ["haferflocken","Haferflocken",M,365,120,EST,0.99,500,["HAFERFLOCKEN"]],
-  ["muesli","Müsli",M,270,90,EST,2.49,750,["MUESLI","MÜSLI","KNUSPERMUESLI","GRANOLA"]],
+  ["muesli","Müsli",M,270,90,EST,2.49,750,["MUESLI","MÜSLI","KNUSPERMUESLI"]],
   ["cornflakes","Cornflakes",M,270,60,EST,2.29,500,["CORNFLAKES","CEREALIEN"]],
   ["zucker","Zucker",M,1460,1460,LEIT,0.99,1000,["ZUCKER","KRISTALLZUCKER"]],
   ["puderzucker","Puderzucker",M,730,365,EST,0.79,250,["PUDERZUCKER"]],
-  ["salz","Salz",M,3650,3650,LEIT,0.49,500,["SALZ","SPEISESALZ","MEERSALZ"]],
+  ["salz","Salz",M,3650,3650,LEIT,0.49,500,["SALZ","SPEISESALZ"]],
   ["pfeffer","Pfeffer",M,730,365,EST,1.49,50,["PFEFFER"]],
-  ["gewuerze","Gewürze",M,730,365,EST,1.29,30,["PAPRIKAPULVER","OREGANO","CURRY","ZIMT","KUEMMEL","THYMIAN"]],
-  ["backpulver","Backpulver",M,730,365,EST,0.49,45,["BACKPULVER","NATRON"]],
+  ["gewuerze","Gewürze",M,730,365,EST,1.29,30,["OREGANO","CURRY","KUEMMEL","THYMIAN"]],
+  ["backpulver","Backpulver",M,730,365,EST,0.49,45,["BACKPULVER"]],
   ["hefe","Trockenhefe",M,365,90,EST,0.59,21,["TROCKENHEFE","HEFE"]],
   ["oel_raps","Rapsöl",M,540,120,LEIT,2.49,1000,["RAPSOEL","SPEISEOEL"],{note:"BZfE: wird ranzig bei Sauerstoffkontakt, dunkel lagern."}],
   ["oel_oliven","Olivenöl",M,540,180,LEIT,5.99,500,["OLIVENOEL"]],
   ["oel_sonnenblumen","Sonnenblumenöl",M,540,120,LEIT,1.99,1000,["SONNENBLUMENOEL"]],
-  ["essig","Essig",M,1095,365,EST,1.19,500,["ESSIG","BALSAMICO","APFELESSIG","WEINESSIG"]],
-  ["nuesse","Nüsse",M,180,60,LEIT,2.99,200,["NUESSE","WALNUESSE","MANDELN","HASELNUESSE","CASHEWS"],{note:"BZfE: werden ranzig; Schimmel kann giftige Stoffe bilden."}],
-  ["trockenfruechte","Trockenfrüchte",M,270,90,EST,2.49,200,["ROSINEN","DATTELN","TROCKENPFLAUMEN"]],
-  ["linsen","Linsen",M,730,365,LEIT,1.49,500,["LINSEN","ROTE LINSEN","BELUGALINSEN"]],
+  ["essig","Essig",M,1095,365,EST,1.19,500,["ESSIG","WEINESSIG"]],
+  ["nuesse","Nüsse",M,180,60,LEIT,2.99,200,["NUESSE","CASHEWS"],{note:"BZfE: werden ranzig; Schimmel kann giftige Stoffe bilden."}],
+  ["trockenfruechte","Trockenfrüchte",M,270,90,EST,2.49,200,["TROCKENPFLAUMEN"]],
+  ["linsen","Linsen",M,730,365,LEIT,1.49,500,["LINSEN","BELUGALINSEN"]],
   ["bohnen_trocken","Trockenbohnen",M,730,365,LEIT,1.49,500,["WEISSE BOHNEN TROCKEN"]],
   ["kichererbsen","Kichererbsen trocken",M,730,365,LEIT,1.29,500,["KICHERERBSEN TROCKEN"]],
   ["kaffee","Kaffee, gemahlen",M,365,21,EST,6.49,500,["KAFFEE","KAFFEE GEMAHLEN","FILTERKAFFEE"]],
   ["kaffee_bohnen","Kaffeebohnen",M,365,30,EST,7.99,1000,["KAFFEEBOHNEN","ESPRESSOBOHNEN"]],
-  ["kaffee_kapseln","Kaffeekapseln",M,365,180,EST,3.49,100,["KAFFEEKAPSELN","KAFFEEPADS"]],
-  ["tee","Tee",M,730,365,EST,2.29,50,["TEE","SCHWARZTEE","KRAEUTERTEE","GRUENTEE"]],
+  ["kaffee_kapseln","Kaffeekapseln",M,365,180,EST,3.49,100,["KAFFEEKAPSELN"]],
+  ["tee","Tee",M,730,365,EST,2.29,50,["TEE"]],
   ["kakao","Kakaopulver",M,540,180,EST,2.49,250,["KAKAO","KAKAOPULVER"]],
   ["honig","Honig",M,1095,730,EST,4.49,500,["HONIG"]],
   ["marmelade","Marmelade",M,540,60,EST,1.99,450,["MARMELADE","KONFITUERE","FRUCHTAUFSTRICH"]],
   ["nussaufstrich","Nuss-Nougat-Creme",M,365,90,EST,2.99,400,["NUSS NOUGAT CREME"]],
   ["erdnussbutter","Erdnussbutter",M,365,90,EST,2.99,350,["ERDNUSSBUTTER","ERDNUSSMUS"]],
   ["ketchup","Ketchup",M,540,60,EST,1.79,500,["KETCHUP","TOMATENKETCHUP"]],
-  ["senf","Senf",M,540,90,EST,0.89,250,["SENF","MITTELSCHARFER SENF"]],
-  ["mayonnaise","Mayonnaise",M,270,60,EST,1.99,250,["MAYONNAISE","MAYO","REMOULADE"]],
+  ["senf","Senf",M,540,90,EST,0.89,250,["SENF"]],
+  ["mayonnaise","Mayonnaise",M,270,60,EST,1.99,250,["MAYONNAISE","MAYO"]],
   ["sojasauce","Sojasauce",M,730,180,EST,1.99,150,["SOJASAUCE","SOJASOSSE"]],
   ["bruehe","Brühe",M,540,180,EST,1.79,250,["GEMUESEBRUEHE","HUEHNERBRUEHE","BRUEHWUERFEL"]],
   ["tomatenmark","Tomatenmark",M,730,7,LEIT,0.69,200,["TOMATENMARK"]],
   ["passata","Passierte Tomaten",M,730,3,LEIT,0.99,500,["PASSATA","PASSIERTE TOMATEN"]],
   ["konserve_tomaten","Tomaten, Dose",M,730,3,LEIT,0.89,400,["GEHACKTE TOMATEN","TOMATEN DOSE","DOSENTOMATEN"],{note:"Geöffnete Konserve umfüllen und kühlen."}],
-  ["konserve_mais","Mais, Dose",M,730,3,LEIT,0.79,300,["MAIS DOSE","MAIS"]],
-  ["konserve_bohnen","Bohnen, Dose",M,730,3,LEIT,0.89,400,["KIDNEYBOHNEN DOSE","BOHNEN DOSE"]],
-  ["konserve_kichererbsen","Kichererbsen, Dose",M,730,3,LEIT,0.89,400,["KICHERERBSEN DOSE"]],
+  ["konserve_mais","Mais, Dose",M,730,3,LEIT,0.79,300,["MAIS"]],
+  ["konserve_bohnen","Bohnen, Dose",M,730,3,LEIT,0.89,400,["BOHNEN DOSE"]],
+  ["konserve_kichererbsen","Kichererbsen, Dose",M,730,3,LEIT,0.89,400,[]],
   ["kokosmilch","Kokosmilch",M,730,3,LEIT,1.29,400,["KOKOSMILCH"]],
   ["oliven","Oliven",M,540,14,EST,1.99,200,["OLIVEN"]],
   ["gurken_glas","Gewürzgurken",M,730,30,EST,1.49,330,["GEWUERZGURKEN","CORNICHONS","ESSIGGURKEN"]],
   ["sauerkraut","Sauerkraut",M,540,7,EST,1.19,500,["SAUERKRAUT"]],
-  ["pesto","Pesto",M,365,7,EST,1.99,190,["PESTO","PESTO GENOVESE"]],
+  ["pesto","Pesto",M,365,7,EST,1.99,190,["PESTO"]],
   ["fertigsauce","Fertigsauce",M,540,4,EST,1.79,400,["TOMATENSAUCE","BOLOGNESE SAUCE","PASTASAUCE"]],
   ["suppe_dose","Suppe, Dose",M,730,3,EST,1.29,400,["SUPPE DOSE","LINSENSUPPE","GULASCHSUPPE"]]
 ]);
@@ -297,38 +306,38 @@ group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
 group("Getränke", "Getränke", STORAGE.PANTRY, [
   ["wasser","Mineralwasser",M,365,5,EST,0.39,1500,["MINERALWASSER","WASSER","WASSER SPRUDEL","WASSER STILL"],{freezable:false}],
   ["saft_orange","Orangensaft",M,270,4,LEIT,1.79,1000,["ORANGENSAFT","O-SAFT"],{note:"BZfE: geöffnete Säfte können gären, gekühlt rasch verbrauchen."}],
-  ["saft_apfel","Apfelsaft",M,270,4,LEIT,1.49,1000,["APFELSAFT","APFELSCHORLE"]],
+  ["saft_apfel","Apfelsaft",M,270,4,LEIT,1.49,1000,["APFELSAFT"]],
   ["saft_multi","Multivitaminsaft",M,270,4,LEIT,1.69,1000,["MULTIVITAMINSAFT"]],
-  ["limonade","Limonade",M,270,3,EST,0.99,1500,["COLA","LIMONADE","BRAUSE"],{freezable:false}],
+  ["limonade","Limonade",M,270,3,EST,0.99,1500,["LIMONADE","BRAUSE"],{freezable:false}],
   ["eistee","Eistee",M,270,3,EST,0.99,1500,["EISTEE"],{freezable:false}],
-  ["bier","Bier",M,180,1,EST,0.79,500,["BIER","PILS","WEIZENBIER","RADLER"],{freezable:false}],
-  ["wein","Wein",M,1095,3,EST,4.99,750,["ROTWEIN","WEISSWEIN","WEIN"],{freezable:false}],
-  ["sekt","Sekt",M,730,1,EST,4.49,750,["SEKT","PROSECCO"],{freezable:false}],
-  ["spirituose","Spirituosen",M,1825,730,EST,12.99,700,["WODKA","GIN","WHISKY","RUM"],{freezable:false}]
+  ["bier","Bier",M,180,1,EST,0.79,500,["BIER"],{freezable:false}],
+  ["wein","Wein",M,1095,3,EST,4.99,750,["WEIN"],{freezable:false}],
+  ["sekt","Sekt",M,730,1,EST,4.49,750,["SEKT"],{freezable:false}],
+  ["spirituose","Spirituosen",M,1825,730,EST,12.99,700,[],{freezable:false}]
 ]);
 
 // ===================== TIEFKÜHL ==================================
 group("Tiefkühl", "Tiefkühl", STORAGE.FREEZER, [
-  ["tk_gemuese","TK-Gemüse",M,365,365,LEIT,1.49,750,["TK GEMUESE","ERBSEN TK","RAHMSPINAT","TK ERBSEN","TIEFKUEHLGEMUESE"]],
+  ["tk_gemuese","TK-Gemüse",M,365,365,LEIT,1.49,750,["TK GEMUESE","ERBSEN TK","RAHMSPINAT","TIEFKUEHLGEMUESE"]],
   ["tk_pommes","TK-Pommes",M,365,365,EST,2.29,1000,["POMMES","TK POMMES","KARTOFFELECKEN"]],
   ["tk_pizza","TK-Pizza",M,365,365,EST,2.99,350,["TK PIZZA","PIZZA SALAMI","STEINOFENPIZZA"]],
-  ["tk_fisch","TK-Fisch",M,365,365,EST,4.49,400,["FISCHSTAEBCHEN","TK FISCH","BACKFISCH"]],
+  ["tk_fisch","TK-Fisch",M,365,365,EST,4.49,400,["FISCHSTAEBCHEN","TK FISCH"]],
   ["tk_beeren","TK-Beeren",M,365,365,EST,2.99,300,["TK BEEREN","BEERENMISCHUNG TK"]],
   ["tk_kraeuter","TK-Kräuter",M,365,365,EST,0.99,50,["TK KRAEUTER"]],
-  ["eis","Speiseeis",M,365,90,EST,3.49,900,["SPEISEEIS","VANILLEEIS","EISCREME"]],
-  ["tk_fertiggericht","TK-Fertiggericht",M,365,365,EST,3.29,400,["TK LASAGNE","FERTIGGERICHT TK"]]
+  ["eis","Speiseeis",M,365,90,EST,3.49,900,["SPEISEEIS","EISCREME"]],
+  ["tk_fertiggericht","TK-Fertiggericht",M,365,365,EST,3.29,400,["FERTIGGERICHT TK"]]
 ]);
 
 // ===================== SÜSSES & SNACKS ===========================
 group("Süßes/Snacks", "Süßwaren", STORAGE.PANTRY, [
-  ["schokolade","Schokolade",M,365,30,EST,1.49,100,["SCHOKOLADE","VOLLMILCHSCHOKOLADE","ZARTBITTER"]],
-  ["kekse","Kekse",M,270,14,EST,1.79,300,["KEKSE","BUTTERKEKSE","SCHOKOKEKSE"]],
+  ["schokolade","Schokolade",M,365,30,EST,1.49,100,["SCHOKOLADE","ZARTBITTER"]],
+  ["kekse","Kekse",M,270,14,EST,1.79,300,["KEKSE"]],
   ["gummibaerchen","Fruchtgummi",M,365,30,EST,1.29,200,["GUMMIBAERCHEN","FRUCHTGUMMI","WEINGUMMI"]],
   ["chips","Chips",M,180,3,EST,1.99,175,["CHIPS","KARTOFFELCHIPS","TORTILLA CHIPS","NACHOS"]],
-  ["salzgebaeck","Salzgebäck",M,270,7,EST,0.99,200,["SALZSTANGEN","CRACKER","ERDNUSSFLIPS"]],
-  ["riegel","Müsliriegel",M,270,14,EST,1.99,150,["MUESLIRIEGEL","SCHOKORIEGEL","KOERNERRIEGEL"]],
+  ["salzgebaeck","Salzgebäck",M,270,7,EST,0.99,200,["CRACKER"]],
+  ["riegel","Müsliriegel",M,270,14,EST,1.99,150,["MUESLIRIEGEL","KOERNERRIEGEL"]],
   ["popcorn","Popcorn",M,180,5,EST,1.49,100,["POPCORN"]],
-  ["bonbons","Bonbons",M,540,90,EST,1.19,150,["BONBONS","LUTSCHER","KAUGUMMI"]]
+  ["bonbons","Bonbons",M,540,90,EST,1.19,150,["BONBONS","LUTSCHER"]]
 ]);
 
 // ===================== NON-FOOD ==================================
@@ -342,7 +351,7 @@ group("Haushalt", "Drogerie", STORAGE.NONE, [
   ["zahnpasta","Zahnpasta",N,1095,365,EST,1.79,75,["ZAHNPASTA","ZAHNCREME"]],
   ["duschgel","Duschgel",N,1095,365,EST,1.99,300,["DUSCHGEL","DUSCHBAD","SHOWER GEL"]],
   ["deo","Deodorant",N,1095,365,EST,2.49,150,["DEO","DEODORANT"]],
-  ["putztuecher","Reinigungstücher",N,1095,365,EST,1.49,200,["PUTZTUECHER","SCHWAMM","MIKROFASERTUCH"]],
+  ["putztuecher","Reinigungstücher",N,1095,365,EST,1.49,200,["PUTZTUECHER","SCHWAMM"]],
   ["tierfutter","Tierfutter",M,540,3,EST,1.29,400,["HUNDEFUTTER","KATZENFUTTER","TIERFUTTER"]],
   ["windeln","Windeln",N,1825,1825,EST,8.99,1000,["WINDELN"]]
 ], { isFood: false, freezable: false });
@@ -440,9 +449,700 @@ group("Haushaltszubehör", "Drogerie", STORAGE.NONE, [
   ["schuhcreme","Schuhcreme",N,3650,3650,EST,2.49,75,["SCHUHCREME","SCHUHPFLEGE","LEDERPFLEGE"]]
 ], { isFood: false, freezable: false });
 
+
+/* ================================================================
+   ERWEITERUNG: die Breite des Sortiments
+   ================================================================
+   Der Kern oben ist recherchiert — dort stehen die regulatorischen
+   und die aus behördlichen Lagerempfehlungen abgeleiteten Werte.
+   Was jetzt folgt, ist BREITE: damit „ban" auch dann Bananen findet,
+   wenn im Haushalt Baby-Bananen stehen, und damit eine selbst
+   ergänzte Zeile ein echtes Produkt wird statt freier Text.
+
+   Das ist der Unterschied, um den es geht: ein Katalogprodukt fließt
+   in ALLE Rechnungen ein — Rhythmus, Bestand, Reichweite, Verderb,
+   Saison, Preisgedächtnis, Gangreihenfolge, Einfrier-Empfehlung. Eine
+   freie Zeile kann das nicht, weil ihr jede Grundlage fehlt.
+
+   ALLE Werte hier tragen `schaetzwert`. Das ist keine Bescheidenheit,
+   sondern die Wahrheit: sie sind aus Warenkunde und Erfahrung
+   abgeleitet, nicht aus einer amtlichen Quelle. Der Qualitätsbericht
+   unter „Mehr → Datenbasis" weist den Anteil offen aus, und die
+   Sicherheitsregel bleibt unberührt — ein Verbrauchsdatum-Produkt
+   bekommt nie eine verlängerte Frist.
+
+   Aliase sind bewusst sparsam. Jeder Name und jeder Alias muss im
+   Stresstest sein EIGENES Produkt treffen; wer großzügig Synonyme
+   verteilt, baut sich Fehlzuordnungen ein, die dann echte Bons
+   falsch buchen.
+   ================================================================ */
+
+// ===================== OBST, breit ===============================
+group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
+  ["bananen_bio","Bio-Bananen",M,7,4,EST,2.29,1000,[],{ethylene:ETHYLENE.PRODUCER,storage:STORAGE.ROOM}],
+  ["baby_bananen","Baby-Bananen",M,6,3,EST,2.49,500,[],{ethylene:ETHYLENE.PRODUCER,storage:STORAGE.ROOM}],
+  ["kochbananen","Kochbananen",M,10,5,EST,2.99,600,[],{storage:STORAGE.ROOM}],
+  ["aepfel_gala","Äpfel Gala",M,21,10,EST,2.79,1000,[],{ethylene:ETHYLENE.PRODUCER}],
+  ["aepfel_granny","Äpfel Granny Smith",M,25,10,EST,2.99,1000,[],{ethylene:ETHYLENE.PRODUCER}],
+  ["aepfel_pink","Äpfel Pink Lady",M,25,10,EST,3.99,1000,[],{ethylene:ETHYLENE.PRODUCER}],
+  ["birnen_williams","Williams-Christ-Birnen",M,9,4,EST,2.79,1000,[],{ethylene:ETHYLENE.PRODUCER}],
+  ["birnen_abate","Abate-Birnen",M,11,5,EST,2.99,1000,[]],
+  ["nashi","Nashi-Birnen",M,14,6,EST,3.49,600,[]],
+  ["quitten","Quitten",M,21,10,EST,3.99,1000,[]],
+  ["blutorangen","Blutorangen",M,14,7,EST,3.29,1000,[],{storage:STORAGE.ROOM}],
+  ["clementinen","Clementinen",M,14,7,EST,2.99,1000,[],{storage:STORAGE.ROOM}],
+  ["satsumas","Satsumas",M,12,6,EST,2.89,1000,[],{storage:STORAGE.ROOM}],
+  ["grapefruit","Grapefruit",M,21,9,EST,1.49,400,[],{storage:STORAGE.ROOM}],
+  ["pomelo","Pomelo",M,25,10,EST,2.99,1000,[],{storage:STORAGE.ROOM}],
+  ["kumquat","Kumquats",M,12,6,EST,3.49,200,[]],
+  ["johannisbeeren","Johannisbeeren",M,4,2,EST,2.89,250,[]],
+  ["stachelbeeren","Stachelbeeren",M,7,3,EST,2.99,300,[]],
+  ["preiselbeeren_frisch","Preiselbeeren frisch",M,7,3,EST,3.49,200,[]],
+  ["cranberries_frisch","Cranberries frisch",M,14,7,EST,3.29,250,[]],
+  ["sauerkirschen","Sauerkirschen",M,4,2,EST,3.99,500,[]],
+  ["zwetschgen","Zwetschgen",M,8,4,EST,2.69,500,[],{ethylene:ETHYLENE.PRODUCER}],
+  ["mirabellen","Mirabellen",M,5,3,EST,3.49,500,[]],
+  ["nektarinen","Nektarinen",M,6,3,EST,2.99,500,[],{ethylene:ETHYLENE.PRODUCER}],
+  ["kaki","Kaki",M,10,5,EST,2.49,400,[],{ethylene:ETHYLENE.SENSITIVE}],
+  ["kiwi_gold","Gold-Kiwi",M,12,5,EST,3.49,400,[]],
+  ["papaya","Papaya",M,6,3,EST,3.49,600,[],{storage:STORAGE.ROOM}],
+  ["melone_wasser","Wassermelone",M,10,3,EST,3.99,4000,[],{storage:STORAGE.ROOM}],
+  ["melone_honig","Honigmelone",M,9,3,EST,2.99,1500,[],{storage:STORAGE.ROOM}],
+  ["melone_cantaloupe","Cantaloupe-Melone",M,8,3,EST,2.79,1200,[]],
+  ["galiamelone","Galiamelone",M,9,3,EST,2.89,1300,[]],
+  ["maracuja","Maracuja",M,10,4,EST,3.99,250,[]],
+  ["litschi","Litschis",M,7,3,EST,4.49,300,[]],
+  ["drachenfrucht","Drachenfrucht",M,8,3,EST,4.99,400,[]],
+  ["sharonfrucht","Sharonfrucht",M,10,5,EST,2.99,400,[]],
+  ["rhabarber","Rhabarber",M,7,4,EST,2.99,500,[]],
+  ["physalis","Physalis",M,14,7,EST,3.49,200,[]],
+  ["kokosnuss","Kokosnuss",M,21,3,EST,2.49,800,[],{storage:STORAGE.ROOM}],
+  ["obstsalat_frisch","Obstsalat frisch",M,2,1,EST,3.49,400,[],{freezable:false}]
+]);
+
+// ===================== GEMÜSE, breit =============================
+group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
+  ["tomaten_cherry","Cherrytomaten",M,8,4,EST,1.99,250,[],{ethylene:ETHYLENE.PRODUCER,storage:STORAGE.ROOM}],
+  ["tomaten_rispe","Rispentomaten",M,8,4,EST,2.79,500,[],{ethylene:ETHYLENE.PRODUCER,storage:STORAGE.ROOM}],
+  ["tomaten_fleisch","Fleischtomaten",M,7,3,EST,3.29,600,[],{storage:STORAGE.ROOM}],
+  ["tomaten_datteln","Datteltomaten",M,9,4,EST,2.29,250,[],{storage:STORAGE.ROOM}],
+  ["paprika_rot","Paprika rot",M,12,5,EST,1.29,200,[]],
+  ["paprika_gelb","Paprika gelb",M,12,5,EST,1.29,200,[]],
+  ["paprika_gruen","Paprika grün",M,14,5,EST,0.99,200,[]],
+  ["spitzpaprika","Spitzpaprika",M,10,4,EST,2.49,300,[]],
+  ["chili_frisch","Chilischoten",M,12,5,EST,1.49,50,[]],
+  ["minigurken","Minigurken",M,10,4,EST,1.79,300,[]],
+  ["kuerbis_hokkaido","Hokkaido-Kürbis",M,45,5,EST,2.99,1200,[],{storage:STORAGE.ROOM}],
+  ["kuerbis_butternut","Butternut-Kürbis",M,50,5,EST,3.49,1000,[],{storage:STORAGE.ROOM}],
+  ["bundmoehren","Bundmöhren",M,10,5,EST,1.79,500,[]],
+  ["petersilienwurzel","Petersilienwurzel",M,16,7,EST,2.29,400,[]],
+  ["sellerie_knolle","Knollensellerie",M,25,10,EST,1.99,700,[]],
+  ["staudensellerie","Staudensellerie",M,12,6,EST,1.79,400,[]],
+  ["steckruebe","Steckrübe",M,30,12,EST,1.49,800,[]],
+  ["rettich","Rettich",M,12,6,EST,1.29,400,[]],
+  ["schwarzwurzel","Schwarzwurzeln",M,14,6,EST,2.99,500,[]],
+  ["topinambur","Topinambur",M,14,6,EST,3.49,400,[]],
+  ["kurkuma_frisch","Kurkuma frisch",M,18,8,EST,2.99,100,[]],
+  ["meerrettich_frisch","Meerrettich frisch",M,21,7,EST,2.49,150,[]],
+  ["kartoffeln_fest","Kartoffeln festkochend",M,45,14,EST,2.49,2000,[],{storage:STORAGE.PANTRY,ethylene:ETHYLENE.SENSITIVE}],
+  ["kartoffeln_mehlig","Kartoffeln mehligkochend",M,45,14,EST,2.29,2000,[],{storage:STORAGE.PANTRY}],
+  ["drillinge","Drillinge",M,25,10,EST,2.99,1000,[],{storage:STORAGE.PANTRY}],
+  ["romanesco","Romanesco",M,7,4,EST,2.49,700,[]],
+  ["spitzkohl","Spitzkohl",M,14,6,EST,1.79,700,[]],
+  ["chinakohl","Chinakohl",M,12,6,EST,1.59,800,[]],
+  ["pak_choi","Pak Choi",M,7,4,EST,2.29,300,[]],
+  ["grunkohl","Grünkohl",M,7,4,EST,2.49,500,[]],
+  ["spargel_weiss","Weißer Spargel",M,4,2,EST,7.99,500,[]],
+  ["spargel_gruen","Grüner Spargel",M,5,3,EST,5.99,400,[]],
+  ["erbsen_frisch","Erbsen frisch",M,5,3,EST,2.79,400,[]],
+  ["mais_kolben","Maiskolben",M,6,3,EST,1.99,400,[]],
+  ["artischocke","Artischocken",M,8,4,EST,2.49,300,[]],
+  ["champignons_braun","Braune Champignons",M,7,3,EST,1.79,250,[]],
+  ["kraeuterseitlinge","Kräuterseitlinge",M,8,4,EST,2.99,200,[]],
+  ["austernpilze","Austernpilze",M,5,3,EST,2.79,200,[]],
+  ["pfifferlinge","Pfifferlinge",M,4,2,EST,6.99,200,[]],
+  ["shiitake","Shiitake",M,8,4,EST,3.49,150,[]],
+  ["oliven_frisch","Oliven lose",M,21,10,EST,2.49,200,[]],
+  ["sauerkraut_frisch","Sauerkraut frisch",M,21,7,EST,1.79,500,[]],
+  ["gemuesemix_suppe","Suppengemüse",M,7,4,EST,1.49,500,[]]
+]);
+
+// ===================== SALAT & KRÄUTER ===========================
+group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
+  ["eisbergsalat","Eisbergsalat",M,8,3,EST,1.29,500,[],{ethylene:ETHYLENE.SENSITIVE}],
+  ["romanasalat","Romanasalat",M,7,3,EST,1.49,400,[]],
+  ["endivien","Endiviensalat",M,7,3,EST,1.39,400,[]],
+  ["radicchio","Radicchio",M,9,4,EST,1.69,300,[]],
+  ["lollo_rosso","Lollo Rosso",M,5,2,EST,1.29,300,[]],
+  ["babyspinat","Babyspinat",M,4,2,EST,1.99,125,[]],
+  ["petersilie","Petersilie",M,7,3,EST,0.99,30,[]],
+  ["schnittlauch","Schnittlauch",M,6,3,EST,0.99,25,[]],
+  ["basilikum_topf","Basilikum im Topf",M,10,5,EST,1.49,60,[],{storage:STORAGE.ROOM}],
+  ["dill","Dill",M,5,3,EST,0.99,25,[]],
+  ["koriander_frisch","Koriander frisch",M,5,3,EST,1.19,25,[]],
+  ["minze_frisch","Minze frisch",M,6,3,EST,1.29,25,[]],
+  ["rosmarin_frisch","Rosmarin frisch",M,10,5,EST,1.29,25,[]],
+  ["thymian_frisch","Thymian frisch",M,10,5,EST,1.29,25,[]],
+  ["salbei_frisch","Salbei frisch",M,9,4,EST,1.29,20,[]]
+]);
+
+// ===================== MILCH & KÄSE, breit =======================
+group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
+  ["milch_laktosefrei","Laktosefreie Milch",M,10,3,EST,1.39,1000,[],{freezable:false}],
+  ["milch_bio","Bio-Vollmilch",M,8,3,EST,1.59,1000,[],{freezable:false}],
+  ["buttermilch","Buttermilch",M,14,3,EST,0.89,500,[],{freezable:false}],
+  ["kefir","Kefir",M,18,4,EST,1.19,500,[],{freezable:false}],
+  ["ayran","Ayran",M,18,2,EST,0.79,250,[],{freezable:false}],
+  ["reisdrink","Reisdrink",M,180,4,EST,1.69,1000,[],{storage:STORAGE.PANTRY}],
+  ["kokosdrink","Kokosdrink",M,180,4,EST,1.89,1000,[],{storage:STORAGE.PANTRY}],
+  ["dinkeldrink","Dinkeldrink",M,180,4,EST,1.89,1000,[],{storage:STORAGE.PANTRY}],
+  ["kondensmilch_dose","Kondensmilch Dose",M,300,4,EST,0.99,340,[],{storage:STORAGE.PANTRY}],
+  ["schmelzkaese","Schmelzkäse",M,60,14,EST,1.29,200,[]],
+  ["kaese_gorgonzola","Gorgonzola",M,25,7,EST,2.79,150,[]],
+  ["kaese_ziegen","Ziegenkäse",M,25,7,EST,2.49,150,[]],
+  ["kaese_raclette","Raclettekäse",M,30,10,EST,3.49,400,[]],
+  ["kaese_halloumi","Halloumi",M,60,5,EST,2.79,225,[]],
+  ["kaese_burrata","Burrata",M,14,1,EST,2.99,125,[],{freezable:false}],
+  ["kaese_ricotta","Ricotta",M,14,3,EST,1.79,250,[],{freezable:false}],
+  ["kaese_maasdamer","Maasdamer",M,30,10,EST,2.39,200,[]],
+  ["kaese_tilsiter","Tilsiter",M,30,10,EST,2.29,200,[]],
+  ["kaese_appenzeller","Appenzeller",M,40,12,EST,3.29,200,[]],
+  ["kaese_cheddar","Cheddar",M,40,12,EST,2.79,200,[]],
+  ["kaese_blau","Blauschimmelkäse",M,25,7,EST,2.69,150,[]],
+  ["kaese_ziegenfrisch","Ziegenfrischkäse",M,18,5,EST,2.29,150,[]],
+  ["kaese_veggie","Käsealternative",M,30,7,EST,2.99,200,[]],
+  ["joghurt_laktosefrei","Laktosefreier Joghurt",M,21,4,EST,1.29,500,[],{freezable:false}],
+  ["joghurt_pflanzlich","Pflanzlicher Joghurt",M,25,4,EST,1.49,400,[],{freezable:false}],
+  ["quark_frucht","Fruchtquark",M,18,3,EST,0.69,150,[],{freezable:false}],
+  ["kraeuterquark","Kräuterquark",M,14,3,EST,1.09,200,[],{freezable:false}],
+  ["mozzarella_bueffel","Büffelmozzarella",M,18,2,EST,2.29,125,[],{freezable:false}],
+  ["sahne_creme","Kochsahne",M,120,3,EST,0.79,200,[],{storage:STORAGE.PANTRY}],
+  ["sahne_pflanzlich","Pflanzliche Sahne",M,180,4,EST,1.19,200,[],{storage:STORAGE.PANTRY}],
+  ["desserts_becher","Dessertcreme",M,21,2,EST,0.79,150,[]],
+  ["tiramisu_frisch","Tiramisu Becher",M,14,1,EST,1.99,200,[],{freezable:false}],
+  ["eier_wachtel","Wachteleier",M,21,21,EST,2.99,150,[],{freezable:false}],
+  ["eier_gekocht","Gekochte Eier",M,14,7,EST,1.99,300,[],{freezable:false}]
+]);
+
+// ===================== FLEISCH & WURST, breit ====================
+group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
+  ["haehnchen_ganz","Hähnchen ganz",V,2,1,REG,5.99,1200,[]],
+  ["haehnchen_fluegel","Hähnchenflügel",V,2,1,REG,3.49,800,[]],
+  ["haehnchen_innen","Hähnchen-Innenfilet",V,2,1,REG,5.49,400,[]],
+  ["putengeschnetzeltes","Putengeschnetzeltes",V,2,1,REG,6.49,400,[]],
+  ["entenbrust","Entenbrust",V,3,1,REG,9.99,350,[]],
+  ["gans","Gans",V,3,1,REG,24.99,3000,[]],
+  ["schweinebauch","Schweinebauch",V,3,1,REG,4.99,600,[]],
+  ["schweinenacken","Schweinenacken",V,3,1,REG,5.49,700,[]],
+  ["kasseler","Kasseler",M,10,4,EST,5.99,500,[]],
+  ["schweinerueckensteak","Schweinesteak",V,3,1,REG,5.29,500,[]],
+  ["rinderbraten","Rinderbraten",V,3,1,REG,11.99,1000,[]],
+  ["rinderfilet","Rinderfilet",V,3,1,REG,16.99,400,[]],
+  ["tafelspitz","Tafelspitz",V,3,1,REG,12.99,800,[]],
+  ["suppenfleisch","Suppenfleisch",V,3,1,REG,6.99,600,[]],
+  ["lammkotelett","Lammkoteletts",V,3,1,REG,12.99,400,[]],
+  ["lammkeule","Lammkeule",V,3,1,REG,15.99,1200,[]],
+  ["kalbsschnitzel","Kalbsschnitzel",V,2,1,REG,11.99,400,[]],
+  ["leber","Leber",V,1,1,REG,4.49,300,[]],
+  ["hackbaellchen_frisch","Frikadellen frisch",V,2,1,REG,4.29,400,[]],
+  ["gyros_frisch","Gyros mariniert",V,3,1,REG,5.99,500,[]],
+  ["spiesse_grill","Grillspieße",V,2,1,REG,5.49,400,[]],
+  ["currywurst","Currywurst",M,14,3,EST,2.99,300,[]],
+  ["weisswurst","Weißwurst",M,7,2,EST,3.49,300,[]],
+  ["merguez","Merguez",V,3,1,REG,4.99,300,[]],
+  ["chorizo","Chorizo",M,40,14,EST,2.99,200,[]],
+  ["cabanossi","Cabanossi",M,35,12,EST,2.49,200,[]],
+  ["landjaeger","Landjäger",M,60,20,EST,2.79,100,[]],
+  ["schinkenwuerfel","Schinkenwürfel",M,14,4,EST,1.49,150,[]],
+  ["pastrami","Pastrami",M,14,4,EST,2.99,100,[]],
+  ["blutwurst","Blutwurst",M,14,4,EST,2.29,200,[]],
+  ["sulze","Sülze",M,10,3,EST,1.99,200,[]],
+  ["griebenschmalz","Griebenschmalz",M,60,21,EST,1.79,200,[]],
+  ["veggie_schnitzel","Veggie-Schnitzel",M,14,2,EST,2.99,200,[]],
+  ["veggie_hack","Veggie-Hack",M,14,2,EST,2.49,200,[]],
+  ["tofu_natur","Tofu natur",M,21,3,EST,1.79,200,[]],
+  ["tofu_geraeuchert","Räuchertofu",M,25,4,EST,2.19,200,[]],
+  ["tempeh","Tempeh",M,21,3,EST,2.99,200,[]],
+  ["seitan","Seitan",M,18,3,EST,2.79,200,[]],
+  ["veggie_wuerstchen","Veggie-Würstchen",M,21,3,EST,2.49,200,[]]
+]);
+
+group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
+  ["forelle","Forelle",V,1,1,REG,5.99,300,[]],
+  ["zander","Zanderfilet",V,1,1,REG,12.99,300,[]],
+  ["dorade","Dorade",V,1,1,REG,7.99,400,[]],
+  ["wolfsbarsch","Wolfsbarsch",V,1,1,REG,9.99,400,[]],
+  ["rotbarsch","Rotbarschfilet",V,1,1,REG,7.49,300,[]],
+  ["scholle","Schollenfilet",V,1,1,REG,6.99,300,[]],
+  ["hering_frisch","Hering frisch",V,1,1,REG,3.99,300,[]],
+  ["makrele_frisch","Makrele frisch",V,1,1,REG,4.99,400,[]],
+  ["thunfisch_frisch","Thunfischsteak",V,1,1,REG,13.99,250,[]],
+  ["muscheln","Miesmuscheln",V,1,1,REG,4.99,1000,[]],
+  ["tintenfisch","Tintenfischringe",V,1,1,REG,6.49,300,[]],
+  ["surimi","Surimi",M,14,2,EST,1.99,200,[]],
+  ["matjes","Matjesfilet",M,10,3,EST,3.49,200,[]],
+  ["rollmops","Rollmops",M,21,5,EST,2.79,250,[]],
+  ["bismarckhering","Bismarckhering",M,18,5,EST,2.49,250,[]],
+  ["forelle_geraeuchert","Räucherforelle",M,10,3,EST,4.49,150,[]],
+  ["makrele_geraeuchert","Räuchermakrele",M,10,3,EST,3.29,200,[]],
+  ["sardellen","Sardellenfilets",M,365,5,EST,2.49,50,[],{storage:STORAGE.PANTRY}],
+  ["kaviar_ersatz","Seehasenrogen",M,60,7,EST,3.49,100,[]],
+  ["fischstaebchen_frisch","Backfisch",V,2,1,REG,4.49,400,[]]
+]);
+
+// ===================== BACKWAREN, breit ==========================
+group("Backwaren", "Backwaren", STORAGE.ROOM, [
+  ["brot_weizen","Weizenbrot",M,4,4,EST,2.19,750,[]],
+  ["brot_mehrkorn","Mehrkornbrot",M,6,6,EST,2.69,750,[]],
+  ["brot_dinkel","Dinkelbrot",M,5,5,EST,2.89,750,[]],
+  ["brot_sauerteig","Sauerteigbrot",M,7,7,EST,3.49,1000,[]],
+  ["brot_bauern","Bauernbrot",M,6,6,EST,2.79,1000,[]],
+  ["brot_pumpernickel","Pumpernickel",M,90,14,EST,1.99,500,[],{storage:STORAGE.PANTRY}],
+  ["brot_toast_vollkorn","Vollkorntoast",M,10,10,EST,1.49,500,[]],
+  ["brot_glutenfrei","Glutenfreies Brot",M,14,7,EST,3.49,400,[]],
+  ["baguette","Baguette",M,2,2,EST,1.29,250,[]],
+  ["ciabatta","Ciabatta",M,3,3,EST,1.59,250,[]],
+  ["fladenbrot","Fladenbrot",M,3,3,EST,1.19,400,[]],
+  ["naan","Naan-Brot",M,7,3,EST,1.99,250,[]],
+  ["tortillas","Weizentortillas",M,60,5,EST,1.99,320,[],{storage:STORAGE.PANTRY}],
+  ["wraps_vollkorn","Vollkorn-Wraps",M,60,5,EST,2.29,320,[],{storage:STORAGE.PANTRY}],
+  ["pita","Pitabrot",M,5,3,EST,1.49,300,[]],
+  ["laugenbrezel","Laugenbrezel",M,2,1,EST,0.89,100,[]],
+  ["laugenstange","Laugenstange",M,2,1,EST,0.99,110,[]],
+  ["schokobroetchen","Schokobrötchen",M,2,1,EST,1.09,80,[]],
+  ["franzbroetchen","Franzbrötchen",M,2,1,EST,1.19,90,[]],
+  ["roggenbroetchen","Roggenbrötchen",M,2,2,EST,0.55,60,[]],
+  ["koernerbroetchen","Körnerbrötchen",M,2,2,EST,0.65,70,[]],
+  ["kaisersemmel","Kaisersemmel",M,2,1,EST,0.45,55,[]],
+  ["hefezopf","Hefezopf",M,4,3,EST,2.49,500,[]],
+  ["rosinenbroetchen","Rosinenbrötchen",M,3,2,EST,0.89,80,[]],
+  ["donut","Donut",M,3,2,EST,1.19,70,[]],
+  ["muffin","Muffin",M,5,3,EST,1.29,90,[]],
+  ["kuchen_stueck","Kuchenstück",M,3,2,EST,2.29,120,[]],
+  ["obstkuchen","Obstkuchen",M,3,2,EST,7.99,800,[]],
+  ["kaesekuchen","Käsekuchen",M,4,2,EST,8.99,900,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["baguettebroetchen","Aufbackbrötchen",M,30,3,EST,1.29,300,[],{storage:STORAGE.PANTRY}]
+]);
+
+// ===================== TROCKEN & VORRAT, breit ===================
+group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
+  ["spaghetti","Spaghetti",M,900,180,EST,1.29,500,[]],
+  ["penne","Penne",M,900,180,EST,1.29,500,[]],
+  ["fusilli","Fusilli",M,900,180,EST,1.29,500,[]],
+  ["farfalle","Farfalle",M,900,180,EST,1.35,500,[]],
+  ["tagliatelle","Tagliatelle",M,900,180,EST,1.59,500,[]],
+  ["lasagneplatten","Lasagneplatten",M,900,180,EST,1.69,250,[]],
+  ["nudeln_glutenfrei","Glutenfreie Nudeln",M,730,150,EST,2.49,400,[]],
+  ["spaetzle","Spätzle",M,365,60,EST,1.99,500,[]],
+  ["gnocchi","Gnocchi",M,120,3,EST,1.49,500,[]],
+  ["hirse","Hirse",M,730,120,EST,2.29,500,[]],
+  ["buchweizen","Buchweizen",M,730,120,EST,2.49,500,[]],
+  ["polenta","Polenta",M,730,120,EST,1.79,500,[]],
+  ["reis_basmati","Basmatireis",M,900,180,EST,2.99,500,[]],
+  ["reis_jasmin","Jasminreis",M,900,180,EST,2.79,500,[]],
+  ["reis_vollkorn","Naturreis",M,540,120,EST,2.19,500,[]],
+  ["reis_milchreis","Milchreis roh",M,900,180,EST,1.49,500,[]],
+  ["dinkelflocken","Dinkelflocken",M,540,120,EST,1.79,500,[]],
+  ["muesli_basis","Basismüsli",M,270,60,EST,2.49,750,[]],
+  ["muesli_schoko","Schokomüsli",M,270,60,EST,2.99,750,[]],
+  ["granola","Granola",M,270,45,EST,3.49,500,[]],
+  ["porridge","Porridge",M,270,60,EST,2.49,400,[]],
+  ["linsen_rot","Rote Linsen",M,900,180,EST,1.79,500,[]],
+  ["linsen_braun","Braune Linsen",M,900,180,EST,1.59,500,[]],
+  ["erbsen_trocken","Trockenerbsen",M,900,180,EST,1.49,500,[]],
+  ["sojaschnetzel","Sojaschnetzel",M,540,120,EST,2.29,300,[]],
+  ["semmelbroesel","Semmelbrösel",M,365,90,EST,0.99,400,[]]
+]);
+
+group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
+  ["tomaten_dose","Tomaten stückig",M,900,3,EST,0.89,400,[]],
+  ["mais_dose","Mais Dose",M,900,3,EST,0.89,300,[]],
+  ["kidneybohnen","Kidneybohnen Dose",M,900,3,EST,0.89,400,[]],
+  ["kichererbsen_dose","Kichererbsen Dose",M,900,3,EST,0.99,400,[]],
+  ["weisse_bohnen","Weiße Bohnen Dose",M,900,3,EST,0.85,400,[]],
+  ["linsen_dose","Linsen Dose",M,900,3,EST,1.09,400,[]],
+  ["erbsen_dose","Erbsen Dose",M,900,3,EST,0.99,400,[]],
+  ["champignons_dose","Champignons Dose",M,900,3,EST,1.19,300,[]],
+  ["rotkohl_glas","Rotkohl Glas",M,540,7,EST,1.29,700,[]],
+  ["sauerkraut_glas","Sauerkraut Glas",M,540,7,EST,1.19,700,[]],
+  ["silberzwiebeln","Silberzwiebeln",M,540,21,EST,1.59,300,[]],
+  ["oliven_glas","Oliven Glas",M,540,14,EST,2.29,300,[]],
+  ["kapern","Kapern",M,730,60,EST,1.99,100,[]],
+  ["antipasti","Antipasti eingelegt",M,365,10,EST,2.99,300,[]],
+  ["paprika_glas","Paprika eingelegt",M,540,14,EST,1.99,350,[]],
+  ["ananas_dose","Ananas Dose",M,900,3,EST,1.29,400,[]],
+  ["pfirsich_dose","Pfirsiche Dose",M,900,3,EST,1.19,400,[]],
+  ["mandarinen_dose","Mandarinen Dose",M,900,3,EST,1.09,300,[]],
+  ["apfelmus","Apfelmus",M,540,7,EST,1.09,700,[]],
+  ["rote_bete_glas","Rote Bete Glas",M,540,10,EST,1.29,400,[]],
+  ["ravioli_dose","Ravioli Dose",M,730,2,EST,1.79,800,[]],
+  ["eintopf_dose","Eintopf Dose",M,730,2,EST,1.99,800,[]],
+  ["bruehe_pulver","Gemüsebrühe Pulver",M,540,180,EST,1.99,250,[]],
+  ["fond","Fond im Glas",M,540,4,EST,2.49,400,[]],
+  ["passierte_paprika","Ajvar",M,540,14,EST,2.29,350,[]]
+]);
+
+group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
+  ["sesamoel","Sesamöl",M,365,120,EST,3.99,250,[]],
+  ["kokosoel","Kokosöl",M,540,180,EST,4.99,400,[]],
+  ["walnussoel","Walnussöl",M,270,90,EST,5.99,250,[]],
+  ["essig_balsamico","Balsamico",M,900,365,EST,2.99,500,[]],
+  ["essig_apfel","Apfelessig",M,900,365,EST,1.49,500,[]],
+  ["essig_weiss","Weißweinessig",M,900,365,EST,1.29,500,[]],
+  ["fischsauce","Fischsauce",M,730,180,EST,2.49,200,[]],
+  ["worcestershire","Worcestershiresauce",M,730,180,EST,2.79,150,[]],
+  ["senf_mittelscharf","Mittelscharfer Senf",M,540,90,EST,0.89,250,[]],
+  ["senf_dijon","Dijonsenf",M,540,90,EST,1.49,200,[]],
+  ["remoulade","Remoulade",M,270,45,EST,1.89,250,[]],
+  ["bbq_sauce","Barbecuesauce",M,540,60,EST,2.29,300,[]],
+  ["chilisauce","Chilisauce",M,540,90,EST,2.49,200,[]],
+  ["sriracha","Sriracha",M,540,120,EST,2.99,250,[]],
+  ["pesto_gruen","Pesto Genovese",M,365,5,EST,2.49,190,[]],
+  ["pesto_rot","Pesto Rosso",M,365,5,EST,2.49,190,[]],
+  ["hummus","Hummus",M,21,3,EST,1.99,200,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["tzatziki","Tzatziki",M,14,3,EST,1.49,200,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["guacamole","Guacamole",M,10,2,EST,2.29,200,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["salsa","Salsa",M,365,7,EST,1.99,300,[]],
+  ["currypaste","Currypaste",M,540,30,EST,2.49,110,[]],
+  ["tahini","Tahini",M,540,60,EST,3.99,300,[]],
+  ["ahornsirup","Ahornsirup",M,730,180,EST,5.99,250,[]],
+  ["agavendicksaft","Agavendicksaft",M,730,180,EST,2.99,250,[]],
+  ["marmelade_erdbeer","Erdbeermarmelade",M,540,30,EST,1.99,340,[]],
+  ["marmelade_kirsch","Kirschmarmelade",M,540,30,EST,1.99,340,[]],
+  ["marmelade_aprikose","Aprikosenkonfitüre",M,540,30,EST,1.99,340,[]],
+  ["orangenmarmelade","Orangenmarmelade",M,540,30,EST,2.19,340,[]],
+  ["meersalz","Meersalz",M,3650,3650,EST,1.49,500,[]],
+  ["pfeffer_schwarz","Schwarzer Pfeffer",M,900,365,EST,1.99,50,[]],
+  ["paprikapulver","Paprikapulver",M,730,365,EST,1.29,50,[]],
+  ["curry_pulver","Currypulver",M,730,365,EST,1.49,50,[]],
+  ["oregano","Oregano getrocknet",M,730,365,EST,0.99,15,[]],
+  ["basilikum_getrocknet","Basilikum getrocknet",M,730,365,EST,0.99,15,[]],
+  ["thymian_getrocknet","Thymian getrocknet",M,730,365,EST,0.99,15,[]],
+  ["rosmarin_getrocknet","Rosmarin getrocknet",M,730,365,EST,0.99,15,[]],
+  ["lorbeer","Lorbeerblätter",M,730,365,EST,0.99,10,[]],
+  ["muskat","Muskatnuss",M,900,365,EST,1.99,20,[]],
+  ["zimt","Zimt",M,730,365,EST,1.19,45,[]],
+  ["kreuzkuemmel","Kreuzkümmel",M,730,365,EST,1.29,40,[]],
+  ["koriander_gemahlen","Koriander gemahlen",M,730,365,EST,1.19,35,[]],
+  ["chiliflocken","Chiliflocken",M,730,365,EST,1.49,35,[]],
+  ["knoblauchpulver","Knoblauchpulver",M,730,365,EST,1.29,50,[]],
+  ["zwiebelpulver","Zwiebelpulver",M,730,365,EST,1.29,50,[]],
+  ["kraeuter_provence","Kräuter der Provence",M,730,365,EST,1.19,20,[]],
+  ["gewuerzmischung_grill","Grillgewürz",M,730,365,EST,1.99,60,[]],
+  ["vanillezucker","Vanillezucker",M,730,365,EST,0.79,40,[]],
+  ["safran","Safran",M,730,365,EST,4.99,1,[]]
+]);
+
+group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
+  ["mehl_weizen","Weizenmehl 405",M,540,180,EST,0.89,1000,[]],
+  ["mehl_dinkel","Dinkelmehl",M,450,150,EST,1.79,1000,[]],
+  ["mehl_vollkorn","Vollkornmehl",M,270,90,EST,1.49,1000,[]],
+  ["mehl_roggen","Roggenmehl",M,450,150,EST,1.29,1000,[]],
+  ["brauner_zucker","Brauner Zucker",M,900,365,EST,1.49,500,[]],
+  ["natron","Natron",M,900,365,EST,0.99,50,[]],
+  ["hefe_frisch","Frischhefe",M,14,3,EST,0.35,42,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["speisestaerke","Speisestärke",M,900,365,EST,0.99,400,[]],
+  ["gelatine","Gelatine",M,900,365,EST,1.19,20,[]],
+  ["agar","Agar-Agar",M,900,365,EST,2.49,30,[]],
+  ["schokoladenstueckchen","Schokotropfen",M,365,120,EST,1.79,100,[]],
+  ["marzipan","Marzipanrohmasse",M,270,30,EST,2.29,200,[]],
+  ["rosinen","Rosinen",M,365,90,EST,1.49,250,[]],
+  ["datteln","Datteln",M,270,60,EST,2.99,200,[]],
+  ["feigen_getrocknet","Getrocknete Feigen",M,270,60,EST,3.49,200,[]],
+  ["aprikosen_getrocknet","Getrocknete Aprikosen",M,270,60,EST,2.99,200,[]],
+  ["cranberries_getrocknet","Getrocknete Cranberries",M,270,60,EST,2.79,150,[]],
+  ["kokosraspel","Kokosraspeln",M,365,90,EST,1.29,200,[]],
+  ["mandeln","Mandeln",M,270,90,EST,3.49,200,[]],
+  ["haselnuesse","Haselnüsse",M,270,90,EST,3.29,200,[]],
+  ["walnuesse","Walnüsse",M,180,60,EST,3.99,200,[]],
+  ["cashewkerne","Cashewkerne",M,270,90,EST,3.79,200,[]],
+  ["pistazien","Pistazien",M,270,90,EST,4.49,150,[]],
+  ["erdnuesse","Erdnüsse",M,270,90,EST,1.99,200,[]],
+  ["pinienkerne","Pinienkerne",M,180,60,EST,4.99,100,[]],
+  ["sonnenblumenkerne","Sonnenblumenkerne",M,270,90,EST,1.29,250,[]],
+  ["kuerbiskerne","Kürbiskerne",M,270,90,EST,2.49,200,[]],
+  ["leinsamen","Leinsamen",M,270,90,EST,1.49,250,[]],
+  ["chiasamen","Chiasamen",M,540,120,EST,2.99,250,[]],
+  ["sesam","Sesam",M,270,90,EST,1.49,200,[]]
+]);
+
+// ===================== GETRÄNKE, breit ===========================
+group("Getränke", "Getränke", STORAGE.PANTRY, [
+  ["wasser_still","Stilles Wasser",M,540,3,EST,0.29,1500,[]],
+  ["wasser_medium","Wasser medium",M,540,3,EST,0.29,1500,[]],
+  ["mineralwasser_glas","Mineralwasser Glasflasche",M,540,3,EST,0.45,700,[]],
+  ["traubensaft","Traubensaft",M,270,5,EST,1.99,1000,[]],
+  ["kirschsaft","Kirschsaft",M,270,5,EST,2.29,1000,[]],
+  ["tomatensaft","Tomatensaft",M,270,4,EST,1.29,1000,[]],
+  ["gemuesesaft","Gemüsesaft",M,270,4,EST,1.99,750,[]],
+  ["johannisbeersaft","Johannisbeernektar",M,270,5,EST,2.49,750,[]],
+  ["apfelschorle","Apfelschorle",M,270,3,EST,0.89,1000,[]],
+  ["limonade_zitrone","Zitronenlimonade",M,270,3,EST,0.79,1000,[]],
+  ["cola","Cola",M,270,3,EST,1.19,1500,[]],
+  ["cola_zero","Cola zuckerfrei",M,270,3,EST,1.19,1500,[]],
+  ["orangenlimonade","Orangenlimonade",M,270,3,EST,0.99,1500,[]],
+  ["tonic","Tonic Water",M,270,2,EST,0.89,1000,[]],
+  ["ginger_ale","Ginger Ale",M,270,2,EST,0.99,1000,[]],
+  ["eistee_pfirsich","Eistee Pfirsich",M,180,3,EST,0.89,1500,[]],
+  ["energydrink","Energydrink",M,365,1,EST,1.09,250,[]],
+  ["sirup_himbeer","Himbeersirup",M,540,60,EST,2.49,500,[]],
+  ["kaffee_pads","Kaffeepads",M,365,30,EST,3.49,120,[]],
+  ["espresso_gemahlen","Espresso gemahlen",M,365,21,EST,4.49,250,[]],
+  ["instantkaffee","Löslicher Kaffee",M,540,90,EST,4.99,200,[]],
+  ["kakao_trinken","Trinkschokolade",M,365,120,EST,2.49,400,[]],
+  ["tee_schwarz","Schwarztee",M,730,180,EST,2.29,50,[]],
+  ["tee_gruen","Grüntee",M,730,180,EST,2.79,40,[]],
+  ["tee_kraeuter","Kräutertee",M,730,180,EST,1.99,40,[]],
+  ["tee_frucht","Früchtetee",M,730,180,EST,1.79,50,[]],
+  ["tee_pfefferminz","Pfefferminztee",M,730,180,EST,1.69,35,[]],
+  ["tee_kamille","Kamillentee",M,730,180,EST,1.79,30,[]],
+  ["tee_rooibos","Rooibostee",M,730,180,EST,2.49,40,[]],
+  ["bier_pils","Pils",M,180,1,EST,0.89,500,[]],
+  ["bier_weizen","Weizenbier",M,180,1,EST,0.99,500,[]],
+  ["bier_hell","Helles",M,180,1,EST,0.95,500,[]],
+  ["bier_alkoholfrei","Alkoholfreies Bier",M,180,1,EST,0.85,500,[]],
+  ["radler","Radler",M,180,1,EST,0.89,500,[]],
+  ["wein_rot","Rotwein",M,900,3,EST,5.99,750,[]],
+  ["wein_weiss","Weißwein",M,540,3,EST,5.49,750,[]],
+  ["wein_rose","Roséwein",M,365,3,EST,5.49,750,[]],
+  ["prosecco","Prosecco",M,540,1,EST,5.99,750,[]],
+  ["aperitif","Aperitif",M,900,90,EST,9.99,700,[]],
+  ["gin","Gin",M,3650,900,EST,15.99,700,[]],
+  ["wodka","Wodka",M,3650,900,EST,12.99,700,[]],
+  ["rum","Rum",M,3650,900,EST,14.99,700,[]],
+  ["whisky","Whisky",M,3650,900,EST,19.99,700,[]],
+  ["likoer","Likör",M,900,180,EST,9.99,700,[]]
+]);
+
+// ===================== TIEFKÜHL, breit ===========================
+group("Tiefkühl", "Tiefkühl", STORAGE.FREEZER, [
+  ["tk_erbsen","TK-Erbsen",M,365,2,EST,1.19,750,[]],
+  ["tk_spinat","TK-Spinat",M,365,2,EST,1.09,450,[]],
+  ["tk_broccoli","TK-Brokkoli",M,365,2,EST,1.49,750,[]],
+  ["tk_gemuesemix","TK-Gemüsemischung",M,365,2,EST,1.79,750,[]],
+  ["tk_rahmspinat","TK-Rahmspinat",M,300,2,EST,1.29,450,[]],
+  ["tk_himbeeren","TK-Himbeeren",M,365,2,EST,2.79,300,[]],
+  ["tk_mango","TK-Mangostücke",M,365,2,EST,2.49,300,[]],
+  ["tk_kroketten","TK-Kroketten",M,365,2,EST,2.29,600,[]],
+  ["tk_roesti","TK-Rösti",M,365,2,EST,2.49,500,[]],
+  ["tk_kartoffelecken","TK-Kartoffelecken",M,365,2,EST,2.19,750,[]],
+  ["tk_pizza_salami","TK-Pizza Salami",M,300,1,EST,2.49,320,[]],
+  ["tk_pizza_margherita","TK-Pizza Margherita",M,300,1,EST,2.29,300,[]],
+  ["tk_baguette","TK-Baguette belegt",M,270,1,EST,1.99,250,[]],
+  ["tk_lasagne","TK-Lasagne",M,270,1,EST,2.99,400,[]],
+  ["tk_fischstaebchen","TK-Fischstäbchen",M,300,1,EST,2.99,450,[]],
+  ["tk_backfisch","TK-Backfisch",M,300,1,EST,3.49,400,[]],
+  ["tk_lachs","TK-Lachsfilet",M,180,1,EST,5.99,250,[]],
+  ["tk_garnelen","TK-Garnelen",M,180,1,EST,4.99,200,[]],
+  ["tk_haehnchen","TK-Hähnchenbrust",M,180,1,EST,5.49,500,[]],
+  ["tk_hackbaellchen","TK-Hackbällchen",M,180,1,EST,3.49,400,[]],
+  ["tk_gyros","TK-Gyros",M,180,1,EST,4.29,400,[]],
+  ["tk_blaetterteig","TK-Blätterteig",M,270,2,EST,1.79,270,[]],
+  ["tk_pizzateig","TK-Pizzateig",M,270,2,EST,1.49,300,[]],
+  ["tk_broetchen","TK-Brötchen",M,270,2,EST,1.99,400,[]],
+  ["tk_eis_vanille","Vanilleeis",M,270,1,EST,2.99,1000,[]],
+  ["tk_eis_schoko","Schokoladeneis",M,270,1,EST,2.99,1000,[]],
+  ["tk_eis_stiel","Eis am Stiel",M,270,1,EST,2.49,300,[]],
+  ["tk_kuchen","TK-Kuchen",M,270,1,EST,3.49,400,[]]
+]);
+
+// ===================== SÜSSES & SNACKS, breit ====================
+group("Süßes/Snacks", "Süßwaren", STORAGE.PANTRY, [
+  ["schokolade_vollmilch","Vollmilchschokolade",M,365,30,EST,1.29,100,[]],
+  ["schokolade_zart","Zartbitterschokolade",M,540,30,EST,1.49,100,[]],
+  ["schokolade_weiss","Weiße Schokolade",M,300,30,EST,1.39,100,[]],
+  ["schokolade_nuss","Nussschokolade",M,330,30,EST,1.59,100,[]],
+  ["pralinen","Pralinen",M,180,14,EST,4.99,200,[]],
+  ["riegel_schoko","Schokoriegel",M,270,7,EST,0.89,50,[]],
+  ["kekse_butter","Butterkekse",M,270,14,EST,1.29,200,[]],
+  ["kekse_schoko","Schokokekse",M,270,14,EST,1.79,200,[]],
+  ["spekulatius","Spekulatius",M,180,14,EST,1.49,200,[]],
+  ["lebkuchen","Lebkuchen",M,180,14,EST,2.49,200,[]],
+  ["waffeln","Waffeln",M,180,10,EST,1.99,250,[]],
+  ["reiswaffeln","Reiswaffeln",M,270,14,EST,1.29,100,[]],
+  ["salzstangen","Salzstangen",M,180,7,EST,0.99,250,[]],
+  ["chips_paprika","Paprikachips",M,120,3,EST,1.79,175,[]],
+  ["chips_salz","Salzchips",M,120,3,EST,1.69,175,[]],
+  ["tortillachips","Tortillachips",M,180,5,EST,1.99,300,[]],
+  ["erdnussflips","Erdnussflips",M,150,4,EST,1.29,200,[]],
+  ["salzbrezeln","Salzbrezeln",M,180,7,EST,1.19,200,[]],
+  ["studentenfutter","Studentenfutter",M,240,30,EST,2.49,200,[]],
+  ["lakritz","Lakritz",M,365,14,EST,1.49,200,[]],
+  ["kaugummi","Kaugummi",M,540,90,EST,1.19,30,[]],
+  ["schokoriegel_gross","Schokotafel groß",M,300,21,EST,2.49,300,[]],
+  ["adventskalender","Adventskalender",M,180,14,EST,4.99,200,[]],
+  ["pudding_pulver","Puddingpulver",M,540,180,EST,0.49,40,[]],
+  ["backmischung","Backmischung",M,365,60,EST,1.99,400,[]]
+]);
+
+// ===================== BABY & TIER ===============================
+group("Baby", "Drogerie", STORAGE.PANTRY, [
+  ["babybrei_obst","Obstbrei",M,540,1,EST,0.79,190,[],{isFood:true}],
+  ["babybrei_gemuese","Gemüsebrei",M,540,1,EST,0.99,190,[],{isFood:true}],
+  ["babymilch","Säuglingsmilchnahrung",M,540,21,EST,12.99,800,[],{isFood:true}],
+  ["babybrei_getreide","Getreidebrei",M,365,30,EST,2.49,400,[],{isFood:true}],
+  ["quetschie","Quetschbeutel",M,365,1,EST,0.89,100,[],{isFood:true}],
+  ["feuchttuecher","Feuchttücher",N,1095,60,EST,1.49,300,[],{isFood:false,freezable:false}],
+  ["wundschutzcreme","Wundschutzcreme",N,1095,180,EST,3.49,75,[],{isFood:false,freezable:false}],
+  ["babyshampoo","Babyshampoo",N,1095,365,EST,2.99,250,[],{isFood:false,freezable:false}],
+  ["schnuller","Schnuller",N,3650,3650,EST,4.99,20,[],{isFood:false,freezable:false}]
+], { freezable: false });
+
+group("Tierbedarf", "Drogerie", STORAGE.PANTRY, [
+  ["katzenfutter_nass","Katzenfutter nass",M,540,2,EST,0.69,400,[],{isFood:false}],
+  ["katzenfutter_trocken","Katzenfutter trocken",M,540,60,EST,6.99,2000,[],{isFood:false}],
+  ["hundefutter_nass","Hundefutter nass",M,540,2,EST,1.19,800,[],{isFood:false}],
+  ["hundefutter_trocken","Hundefutter trocken",M,540,60,EST,9.99,3000,[],{isFood:false}],
+  ["katzenstreu","Katzenstreu",N,3650,3650,EST,5.99,10000,[],{isFood:false}],
+  ["hundeleckerli","Hundeleckerli",M,365,30,EST,2.99,200,[],{isFood:false}],
+  ["katzensnack","Katzensnack",M,365,14,EST,1.49,60,[],{isFood:false}],
+  ["vogelfutter","Vogelfutter",M,365,90,EST,3.99,1000,[],{isFood:false}],
+  ["nagerstreu","Nagerstreu",N,3650,3650,EST,4.49,3000,[],{isFood:false}],
+  ["fischfutter","Fischfutter",M,540,90,EST,3.49,100,[],{isFood:false}]
+], { freezable: false });
+
+// ===================== DROGERIE, breit ===========================
+group("Körperpflege", "Drogerie", STORAGE.NONE, [
+  ["shampoo_trocken","Trockenshampoo",N,1095,365,EST,3.49,200,[]],
+  ["haarkur","Haarkur",N,1095,365,EST,3.99,200,[]],
+  ["haarspray","Haarspray",N,1095,365,EST,2.99,250,[]],
+  ["haargel","Haargel",N,1095,365,EST,2.49,150,[]],
+  ["haarfarbe","Haarfarbe",N,1095,30,EST,6.99,150,[]],
+  ["duschgel_herren","Duschgel für Herren",N,1095,365,EST,2.29,300,[]],
+  ["badezusatz","Badezusatz",N,1095,365,EST,2.99,500,[]],
+  ["bodylotion","Bodylotion",N,1095,365,EST,3.49,400,[]],
+  ["handcreme","Handcreme",N,1095,365,EST,2.49,100,[]],
+  ["fusscreme","Fußcreme",N,1095,365,EST,2.99,100,[]],
+  ["gesichtscreme","Gesichtscreme",N,1095,180,EST,5.99,50,[]],
+  ["gesichtsreinigung","Gesichtsreinigung",N,1095,365,EST,3.99,150,[]],
+  ["gesichtsmaske","Gesichtsmaske",N,1095,30,EST,1.99,20,[]],
+  ["lippenpflege","Lippenpflege",N,1095,365,EST,1.99,5,[]],
+  ["rasierschaum","Rasierschaum",N,1095,365,EST,2.49,200,[]],
+  ["rasiergel","Rasiergel",N,1095,365,EST,3.29,200,[]],
+  ["aftershave","Aftershave",N,1095,365,EST,5.99,100,[]],
+  ["deo_roller","Deo Roll-on",N,1095,365,EST,1.99,50,[]],
+  ["deo_spray","Deospray",N,1095,365,EST,2.29,200,[]],
+  ["parfum","Parfüm",N,1825,730,EST,24.99,50,[]],
+  ["zahnseide","Zahnseide",N,3650,3650,EST,2.49,50,[]],
+  ["interdentalbuersten","Interdentalbürsten",N,3650,3650,EST,3.99,20,[]],
+  ["mundspuelung","Mundspülung",N,1095,180,EST,2.99,500,[]],
+  ["zungenreiniger","Zungenreiniger",N,3650,3650,EST,2.49,15,[]],
+  ["wattestaebchen","Wattestäbchen",N,3650,3650,EST,1.29,100,[]],
+  ["wattepads","Wattepads",N,3650,3650,EST,1.19,80,[]],
+  ["nagelfeile","Nagelfeile",N,3650,3650,EST,1.49,10,[]],
+  ["nagellack","Nagellack",N,1095,730,EST,3.99,10,[]],
+  ["nagellackentferner","Nagellackentferner",N,1095,365,EST,1.99,100,[]],
+  ["pflaster","Pflaster",N,1825,730,EST,2.49,30,[]],
+  ["binden","Binden",N,3650,3650,EST,2.29,200,[]],
+  ["tampons","Tampons",N,3650,3650,EST,2.99,100,[]],
+  ["slipeinlagen","Slipeinlagen",N,3650,3650,EST,1.99,150,[]],
+  ["intimpflege","Intimwaschlotion",N,1095,365,EST,2.79,250,[]],
+  ["haarbuerste","Haarbürste",N,3650,3650,EST,4.99,80,[]]
+], { isFood: false, freezable: false });
+
+group("Waschen & Reinigen", "Drogerie", STORAGE.NONE, [
+  ["waschmittel_color","Colorwaschmittel",N,1095,1095,EST,6.49,1500,[]],
+  ["waschmittel_fein","Feinwaschmittel",N,1095,1095,EST,4.99,1000,[]],
+  ["waschmittel_pulver","Waschpulver",N,1095,1095,EST,7.99,2000,[]],
+  ["fleckenentferner","Fleckenentferner",N,1095,1095,EST,3.49,500,[]],
+  ["waschmittel_black","Schwarzwaschmittel",N,1095,1095,EST,5.49,1000,[]],
+  ["klarspueler","Klarspüler",N,1095,1095,EST,3.29,500,[]],
+  ["spuelmaschinensalz","Spülmaschinensalz",N,3650,3650,EST,1.29,2000,[]],
+  ["badreiniger","Badreiniger",N,1095,1095,EST,2.29,750,[]],
+  ["wc_reiniger","WC-Reiniger",N,1095,1095,EST,1.99,750,[]],
+  ["wc_stein","WC-Stein",N,1095,1095,EST,2.49,100,[]],
+  ["glasreiniger","Glasreiniger",N,1095,1095,EST,1.99,500,[]],
+  ["bodenreiniger","Bodenreiniger",N,1095,1095,EST,2.79,1000,[]],
+  ["backofenreiniger","Backofenreiniger",N,1095,1095,EST,3.49,500,[]],
+  ["kalkreiniger","Kalkreiniger",N,1095,1095,EST,2.49,750,[]],
+  ["moebelpolitur","Möbelpolitur",N,1095,1095,EST,3.29,300,[]],
+  ["abflussreiniger","Abflussreiniger",N,1095,1095,EST,3.99,1000,[]],
+  ["mikrofasertuch","Mikrofasertuch",N,3650,3650,EST,2.49,50,[]],
+  ["putzlappen","Putzlappen",N,3650,3650,EST,1.99,100,[]],
+  ["gummihandschuhe","Gummihandschuhe",N,3650,3650,EST,1.79,80,[]],
+  ["muellbeutel_klein","Müllbeutel klein",N,3650,3650,EST,1.99,200,[]],
+  ["biomuellbeutel","Biomüllbeutel",N,3650,3650,EST,2.29,150,[]],
+  ["gelbe_saecke","Gelbe Säcke",N,3650,3650,EST,1.49,150,[]],
+  ["lufterfrischer","Lufterfrischer",N,1095,365,EST,2.99,250,[]],
+  ["mottenschutz","Mottenschutz",N,1095,365,EST,3.49,50,[]],
+  ["insektenspray","Insektenspray",N,1095,365,EST,4.49,400,[]]
+], { isFood: false, freezable: false });
+
+group("Papier & Folie", "Drogerie", STORAGE.NONE, [
+  ["servietten","Servietten",N,3650,3650,EST,1.49,100,[]],
+  ["kuechentuecher_papier","Papiertücher",N,3650,3650,EST,2.29,400,[]],
+  ["butterbrotpapier","Butterbrotpapier",N,3650,3650,EST,1.29,150,[]],
+  ["muffinfoermchen","Muffinförmchen",N,3650,3650,EST,1.49,50,[]],
+  ["zahnstocher","Zahnstocher",N,3650,3650,EST,0.99,30,[]],
+  ["strohhalme","Strohhalme",N,3650,3650,EST,1.29,40,[]],
+  ["grillschale","Grillschalen",N,3650,3650,EST,2.49,200,[]],
+  ["gefrierdosen","Gefrierdosen",N,3650,3650,EST,3.99,300,[]]
+], { isFood: false, freezable: false });
+
+group("Haushaltszubehör", "Drogerie", STORAGE.NONE, [
+  ["schwammtuecher","Schwammtücher",N,3650,3650,EST,2.29,80,[]],
+  ["topfkratzer","Topfkratzer",N,3650,3650,EST,1.49,40,[]],
+  ["waescheklammern","Wäscheklammern",N,3650,3650,EST,1.99,200,[]],
+  ["buegelbrettbezug","Bügelbrettbezug",N,3650,3650,EST,7.99,400,[]],
+  ["schuhbeutel","Schuhbeutel",N,3650,3650,EST,2.49,60,[]],
+  ["feuerzeug","Feuerzeug",N,3650,3650,EST,1.19,20,[]],
+  ["streichhoelzer","Streichhölzer",N,3650,3650,EST,0.79,30,[]],
+  ["blumenerde","Blumenerde",N,3650,3650,EST,3.99,10000,[]],
+  ["blumenduenger","Blumendünger",N,1095,1095,EST,3.49,500,[]],
+  ["schneidebrett","Schneidebrett",N,3650,3650,EST,5.99,400,[]]
+], { isFood: false, freezable: false });
+
+// ===================== FERTIG & INTERNATIONAL ====================
+group("Fertiggerichte", "Trockenware", STORAGE.PANTRY, [
+  ["fertigsuppe_tuete","Tütensuppe",M,540,1,EST,0.69,60,[]],
+  ["instantnudeln","Instantnudeln",M,365,1,EST,0.79,85,[]],
+  ["kartoffelpueree_pulver","Kartoffelpüree Pulver",M,540,30,EST,1.29,400,[]],
+  ["knoedel","Knödel Fertigmischung",M,365,7,EST,1.99,200,[]],
+  ["sossenbinder","Soßenbinder",M,540,90,EST,0.99,250,[]],
+  ["bratensosse","Bratensoße Pulver",M,540,90,EST,0.89,250,[]],
+  ["pizzabrot_fertig","Pizzateig frisch",M,21,1,EST,1.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["nudelsauce_glas","Nudelsauce Glas",M,540,5,EST,1.79,400,[]],
+  ["fixprodukt","Fix-Würzmischung",M,540,30,EST,0.89,40,[]],
+  ["sandwich_fertig","Fertigsandwich",V,2,1,REG,2.99,180,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["salat_fertig","Fertigsalat",V,2,1,REG,3.49,250,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["sushi_fertig","Sushi Box",V,1,1,REG,6.99,250,[],{storage:STORAGE.FRIDGE_BOTTOM}],
+  ["suppe_frisch","Frischesuppe",M,14,2,EST,2.99,600,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["auflauf_fertig","Fertigauflauf",M,10,1,EST,3.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["reisgericht_fertig","Reisgericht Becher",M,300,1,EST,2.49,300,[]]
+]);
+
+group("International", "Trockenware", STORAGE.PANTRY, [
+  ["reisnudeln","Reisnudeln",M,730,120,EST,1.99,250,[]],
+  ["glasnudeln","Glasnudeln",M,730,120,EST,2.29,200,[]],
+  ["mie_nudeln","Mie-Nudeln",M,540,90,EST,1.79,250,[]],
+  ["reispapier","Reispapier",M,540,90,EST,2.49,200,[]],
+  ["nori","Noriblätter",M,540,60,EST,2.99,25,[]],
+  ["wasabi","Wasabipaste",M,540,60,EST,2.79,40,[]],
+  ["misopaste","Misopaste",M,365,90,EST,3.99,300,[]],
+  ["kimchi","Kimchi",M,60,14,EST,3.49,300,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["harissa","Harissa",M,540,30,EST,2.49,100,[]],
+  ["ras_el_hanout","Ras el Hanout",M,730,365,EST,2.29,50,[]],
+  ["garam_masala","Garam Masala",M,730,365,EST,1.99,50,[]],
+  ["falafelmischung","Falafelmischung",M,540,60,EST,1.99,200,[]],
+  ["bohnenpaste","Bohnenpaste",M,540,30,EST,2.49,200,[]],
+  ["tortillachips_blau","Blaue Maischips",M,180,5,EST,2.49,200,[]],
+  ["taco_shells","Taco Shells",M,365,7,EST,1.99,150,[]]
+]);
+
 // ---- Zugriffsfunktionen ----------------------------------------
 
-const byId = (id) => FOOD_DATABASE.find((p) => p.id === id) || null;
+/* Bei 850 Produkten wird `find()` in den Schleifen von compute()
+   spürbar: dort läuft byId einige tausend Mal je Durchgang. Der Index
+   wird beim ersten Zugriff gebaut — nicht beim Laden, denn zu dem
+   Zeitpunkt füllen die group()-Aufrufe die Liste noch. */
+let ID_INDEX = null;
+function byId(id) {
+  if (!ID_INDEX) {
+    ID_INDEX = new Map();
+    FOOD_DATABASE.forEach((p) => ID_INDEX.set(p.id, p));
+  }
+  return ID_INDEX.get(id) || null;
+}
 
 function isSafetyCritical(productId) {
   const p = byId(productId);
@@ -918,16 +1618,37 @@ const FILLER_WORDS = new Set([
  * Vereinheitlicht Umlaute. Deutsche Kassenbons schreiben denselben
  * Artikel mal "HÄHNCHEN", mal "HAEHNCHEN" -- ohne diese Normalisierung
  * gelten beide als verschiedene Produkte.
+ *
+ * Danach fallen die übrigen Akzente weg: "Crème fraîche" und
+ * "CREME FRAICHE" sind dasselbe, und eine Kasse schreibt zuverlässig
+ * die zweite Form. Die Reihenfolge ist wichtig -- erst ae/oe/ue, dann
+ * die Akzente. Umgekehrt würde aus "ä" ein "a", und "HAEHNCHEN" träfe
+ * "Hähnchen" nicht mehr.
  */
 function foldUmlauts(s) {
   return s
     .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue")
-    .replace(/ß/g, "ss");
+    .replace(/ß/g, "ss")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
+
+/**
+ * Längste sinnvolle Bonzeile. Der längste Katalogname liegt bei rund
+ * 40 Zeichen; alles jenseits von 120 ist keine Artikelbezeichnung
+ * mehr, sondern ein Einlesefehler oder eine zusammengelaufene Zeile.
+ *
+ * Die Grenze ist nicht Kosmetik: Levenshtein kostet Länge mal Länge,
+ * und seit der Katalog auf 846 Produkte gewachsen ist, wird jede
+ * Zeile gegen über tausend Namen und Aliase gehalten. Eine Zeile mit
+ * 5000 Zeichen brauchte damit fast eine halbe Sekunde — auf einem
+ * Telefon mit einem ganzen Bon voller solcher Zeilen wäre das eine
+ * hängende Oberfläche. Der Stresstest hat genau das gemeldet.
+ */
+const MAX_RAW_LENGTH = 120;
 
 /** Zerlegt "H-MILCH 3,5% 1L" in { core:"h milch 3,5%", quantity:1, unit:"l" } */
 function parseProductName(raw) {
-  let s = foldUmlauts(String(raw || "").toLowerCase());
+  let s = foldUmlauts(String(raw || "").slice(0, MAX_RAW_LENGTH).toLowerCase());
 
   // Mengenangabe herausziehen (1l, 500g, 10er, 2x)
   let quantity = 1;
@@ -1188,7 +1909,27 @@ function matchProduct(rawName, catalog = FOOD_DATABASE) {
   let best = { productId: null, confidence: 0 };
 
   for (const entry of candidates) {
-    for (const variant of entry.variants) {
+    for (let vi = 0; vi < entry.variants.length; vi++) {
+      const variant = entry.variants[vi];
+
+      /* Der eigene NAME schlägt alles — auch die Kategorieprüfung.
+       *
+       * Die Prüfung ist eine Sicherung gegen Fehlzuordnung: „Fischstäbchen"
+       * soll nicht bei den Nudeln landen. Sie arbeitet über Wortstämme und
+       * schlägt deshalb auch bei „Fischsauce" (Trockenware) und
+       * „Fischfutter" (Tierbedarf) an — beide heißen wirklich so und sind
+       * kein Fisch. Steht die Eingabe exakt auf dem Produkt, ist das keine
+       * Vermutung mehr, die abgesichert werden müsste.
+       *
+       * `variants[0]` ist der Name, alles danach sind Aliase. Für Aliase
+       * bleibt die Prüfung scharf: dort IST es eine Vermutung. */
+      if (vi === 0 && variant.core === parsed.core) {
+        return {
+          productId: entry.product.id, confidence: 1, method: "exakt",
+          quantity: parsed.quantity, needsConfirmation: false
+        };
+      }
+
       // Exakter Treffer nach Normalisierung
       if (variant.core === parsed.core && !conflictsWithCategory(parsed.tokens, entry.product.category)) {
         return {
@@ -1226,6 +1967,637 @@ function matchReceipt(rawItems) {
     else unmatched.push(enriched);
   }
   return { matched, toConfirm, unmatched };
+}
+
+/* ===== productSearch.js ===== */
+/**
+ * productSearch.js — Produkte finden, während man tippt
+ * ================================================================
+ * `productMatcher2` beantwortet eine andere Frage: „welches Produkt
+ * ist diese BONZEILE?" Dort geht es um eine vollständige, oft kryptisch
+ * abgekürzte Zeichenkette, und ein falscher Treffer bucht eine falsche
+ * Historie — deshalb ist der Matcher streng und fragt lieber nach.
+ *
+ * Hier ist es umgekehrt. Der Nutzer tippt „ban" und erwartet Bananen,
+ * bevor er das dritte Zeichen loslässt. Ein Fragment ist kein Fehler,
+ * sondern der Normalfall, und eine Fehlanzeige kostet nichts: die
+ * Liste steht daneben, man sieht sofort, ob das Richtige dabei ist.
+ *
+ * FÜNF STUFEN, in dieser Reihenfolge:
+ *
+ *   1. Ein ganzes Wort ist es        „milch"  -> H-Milch
+ *   2. Ein Wort endet darauf         „brot"   -> Vollkornbrot
+ *   3. Der Name beginnt damit        „ban"    -> Bananen
+ *   4. Ein Wort beginnt damit        „toma"   -> Tomaten
+ *   5. Der Name enthält es           „creme"  -> Crème fraîche
+ *   6. Ein Alias passt               „tempo"  -> Taschentücher
+ *   7. Vertippt, aber nah dran       „jogurt" -> Joghurt
+ *
+ * Die Reihenfolge der ersten beiden Stufen ist der Kern und deutsch
+ * begründet: in einem Kompositum steht das Grundwort HINTEN.
+ * „Vollmilch" ist Milch, „Milchreis" ist Reis. Wer „milch" tippt,
+ * meint fast nie Milchreis — eine Suche, die nur auf Wortanfänge
+ * schaut, zeigt ihm aber genau den zuerst.
+ *
+ * Innerhalb einer Stufe gewinnt der kürzere Name. Das ist keine
+ * Willkür: „Milch" ist die wahrscheinlichere Absicht als
+ * „Milchreis fertig", und wer das Längere will, tippt weiter.
+ *
+ * Umlaute, ß und Groß-/Kleinschreibung sind egal — „kaese", „Käse"
+ * und „KAESE" führen zum selben Ergebnis. Auf einer Telefontastatur
+ * ist das kein Komfort, sondern Voraussetzung.
+ * ================================================================
+ */
+
+
+
+
+const MAX_RESULTS = 12;
+const MIN_FUZZY_LENGTH = 4;      // unter vier Zeichen ist alles „nah dran“
+const MAX_FUZZY_DISTANCE = 2;
+
+// Die Stufen als Zahlen — kleiner ist besser.
+const RANK = {
+  WORD_EXACT: 0,
+  WORD_SUFFIX: 1,
+  NAME_PREFIX: 2,
+  WORD_PREFIX: 3,
+  NAME_PART: 4,
+  ALIAS: 5,
+  FUZZY: 6,
+  AISLE: 7
+};
+
+/**
+ * Vereinheitlichen, was auf einer Tastatur verschieden aussieht und
+ * dasselbe meint. Heißt nicht `norm` oder `foldUmlauts` — beide Namen
+ * vergibt productMatcher2, und im Bündel teilen sich alle Module
+ * denselben Namensraum.
+ */
+function searchNorm(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    // Erst die Umlaute, dann die übrigen Akzente: sonst würde aus „ä“
+    // ein „a“ und „kaese“ fände „Käse“ nicht mehr. Ohne diesen Schritt
+    // zerfiel „Crème fraîche“ zu „cr me fra che“ — wer „creme“ tippte,
+    // bekam Handcreme und Schuhcreme, aber nicht das Produkt, das so
+    // heißt.
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/* Der Suchindex wird einmal gebaut und danach nur gelesen. Bei 850
+   Produkten ist die Alternative — bei jedem Tastendruck alle Namen
+   normalisieren — spürbar: das sind 850 Zeichenkettenoperationen pro
+   Anschlag, auf einem älteren Telefon zu viel. */
+let SEARCH_INDEX = null;
+
+function buildSearchIndex(catalog = FOOD_DATABASE) {
+  SEARCH_INDEX = catalog.map((p) => {
+    const name = searchNorm(p.name);
+    return {
+      product: p,
+      name,
+      words: name.split(" ").filter(Boolean),
+      aliases: p.aliases.map(searchNorm),
+      aisle: searchNorm(p.aisle),
+      category: searchNorm(p.category)
+    };
+  });
+  return SEARCH_INDEX;
+}
+
+/** Nach einer Katalogänderung neu bauen. */
+function resetSearchIndex() { SEARCH_INDEX = null; }
+
+/**
+ * Bewertung eines Eintrags gegen eine Suchanfrage.
+ * @returns {null|{rank, hit}} null = kein Treffer
+ */
+function rankEntry(entry, q) {
+  if (entry.words.some((w) => w === q)) return { rank: RANK.WORD_EXACT };
+  // Grundwort hinten: „brot“ findet Vollkornbrot, „milch“ Vollmilch.
+  if (q.length >= 3 && entry.words.some((w) => w !== q && w.endsWith(q))) return { rank: RANK.WORD_SUFFIX };
+  if (entry.name.startsWith(q)) return { rank: RANK.NAME_PREFIX };
+  if (entry.words.some((w) => w.startsWith(q))) return { rank: RANK.WORD_PREFIX };
+  if (entry.name.includes(q)) return { rank: RANK.NAME_PART };
+  if (entry.aliases.some((a) => a.startsWith(q) || a.includes(q))) return { rank: RANK.ALIAS };
+
+  // Vertippt: nur bei ausreichend langer Eingabe, sonst wird jedes
+  // kurze Fragment zu jedem Produkt „ähnlich“. Zusätzlich muss der
+  // erste Buchstabe stimmen — sonst wird aus „spargel“ ein „Haargel“,
+  // und der Tippfehler-Ausgleich kostet mehr, als er einbringt.
+  if (q.length >= MIN_FUZZY_LENGTH) {
+    for (const w of entry.words) {
+      if (w[0] !== q[0]) continue;
+      // Nur Wörter ähnlicher Länge vergleichen — „jogurt“ gegen
+      // „joghurt“ ist eine Frage, „jogurt“ gegen „joghurtbereiter“
+      // ist keine.
+      if (Math.abs(w.length - q.length) > MAX_FUZZY_DISTANCE) continue;
+      if (levenshtein(w, q) <= MAX_FUZZY_DISTANCE) return { rank: RANK.FUZZY };
+    }
+  }
+
+  // Zuletzt der Gang: „obst“ soll das Obstregal zeigen, wenn sonst
+  // nichts passt.
+  if (q.length >= 3 && (entry.aisle.includes(q) || entry.category.includes(q))) {
+    return { rank: RANK.AISLE };
+  }
+  return null;
+}
+
+/**
+ * Produkte zu einer Eingabe finden.
+ *
+ * @param {string} query
+ * @param {number} limit
+ * @param {{catalog, boost}} [opts] `boost` = Kennungen, die bei
+ *   gleichem Rang vorn stehen (z. B. was der Haushalt schon kauft).
+ * @returns {Array} Produkte in Reihenfolge der Passung
+ */
+function findProducts(query, limit = MAX_RESULTS, opts = {}) {
+  const q = searchNorm(query);
+  if (!q) return [];
+
+  const index = opts.catalog ? buildSearchIndex(opts.catalog) : (SEARCH_INDEX || buildSearchIndex());
+  const boost = opts.boost instanceof Set ? opts.boost : new Set(opts.boost || []);
+
+  const hits = [];
+  for (const entry of index) {
+    const r = rankEntry(entry, q);
+    if (!r) continue;
+    hits.push({
+      product: entry.product,
+      rank: r.rank,
+      // Was der Haushalt ohnehin kauft, steht bei gleichem Rang vorn.
+      known: boost.has(entry.product.id) ? 0 : 1,
+      length: entry.name.length,
+      name: entry.name
+    });
+  }
+
+  hits.sort((a, b) =>
+    a.rank - b.rank ||
+    a.known - b.known ||
+    a.length - b.length ||
+    a.name.localeCompare(b.name));
+
+  return hits.slice(0, Math.max(1, limit)).map((h) => h.product);
+}
+
+/* ===== brandSwap.js ===== */
+/**
+ * brandSwap.js — Marke gegen Eigenmarke, als Potenzial
+ * ================================================================
+ * „Du kaufst Joghurt fast immer als Marke. Wärst du im letzten Jahr
+ *  auf die Eigenmarke gegangen, wären das rund 31 € gewesen."
+ *
+ * WAS DIESES MODUL NICHT TUT, und das ist die wichtigere Hälfte:
+ *
+ *   Es tauscht nichts. Es setzt keine Eigenmarke auf die Liste, es
+ *   ändert keine Position, es rechnet keinen Betrag in die Ersparnis
+ *   ein. Es zeigt eine Möglichkeit und überlässt die Entscheidung
+ *   dem Haushalt. Wer seinen Kaffee mag, mag ihn — eine App, die das
+ *   jede Woche in Frage stellt, wird deinstalliert, und zwar zu
+ *   Recht.
+ *
+ * ZWEI ARTEN VON ZAHL, DIE NIE ADDIERT WERDEN:
+ *
+ *   BELEGT     Der Haushalt hat dasselbe Produkt schon beides Mal
+ *              gekauft — als Marke und als Eigenmarke. Dann ist die
+ *              Differenz keine Behauptung, sondern der eigene Bon.
+ *              Das ist die starke Aussage, und sie steht zuerst.
+ *
+ *   GESCHÄTZT  Es gibt nur Markenkäufe. Dann bleibt ein
+ *              Erfahrungswert (ESTIMATED_SHARE), und er ist als
+ *              solcher gekennzeichnet — derselbe Grundsatz wie bei
+ *              den Haltbarkeiten im Katalog, wo „schaetzwert" neben
+ *              „regulatorisch" steht und nicht so tut, als wäre es
+ *              dasselbe.
+ *
+ * Die Trennung ist nicht Formsache. `activityLog` bucht als
+ * `guenstig` nur, was tatsächlich unter dem eigenen üblichen Preis
+ * bezahlt wurde. Wer hier geschätzte Potenziale einrechnete, hätte
+ * eine Ersparnis-Zahl, die aus Hoffnung und Bon gemischt ist — und
+ * damit eine Zahl, die nichts mehr bedeutet.
+ *
+ * WER TATSÄCHLICH WECHSELT, wird von der bestehenden Logik ohne
+ * Zutun erfasst: der niedrigere Preis liegt unter dem eigenen
+ * Median, `receiptSavings` bucht die Differenz als realisiert. Genau
+ * deshalb darf hier nichts gebucht werden — sonst stünde derselbe
+ * Euro zweimal in der Bilanz. Doppelzählung war in diesem Projekt
+ * schon zweimal der teuerste Fehler.
+ *
+ * ZWEI ZURÜCKHALTUNGEN, die keine Vorsicht sind, sondern Respekt:
+ *
+ *   1. Wer die Eigenmarke PROBIERT UND WIEDER VERLASSEN hat, bekommt
+ *      den Vorschlag nicht mehr. Das ist keine Wissenslücke, das ist
+ *      eine Antwort — sie schmeckte nicht.
+ *   2. Vorschläge lassen sich dauerhaft abstellen. Manches ist
+ *      Geschmack und nicht Rechnen.
+ *
+ * DATENQUELLE ist die Klartextzeile des Bons. Der Produktabgleich
+ * wirft Markennamen bewusst weg (sie stören die Zuordnung), aber
+ * bevor er das tut, steht dort „MILBONA JOGHURT" oder „EHRMANN
+ * ALMIGHURT" — und genau darin steckt die Antwort. Positionen ohne
+ * Bonzeile (im Ladenmodus abgehakt) tragen keine Marke und zählen
+ * hier nirgends mit, weder dafür noch dagegen.
+ * ================================================================
+ */
+
+
+
+const BRAND_TIER = {
+  EIGEN: "eigen",       // Handelsmarke des Händlers
+  MARKE: "marke",       // Herstellermarke
+  UNBEKANNT: null       // keine Zeile, kein Marker — keine Aussage
+};
+
+/* Ab wann eine Aussage überhaupt zulässig ist. Ein einzelner Kauf
+   ist kein Muster, und ein Vorschlag auf einer Beobachtung wäre
+   geraten. */
+const MIN_BRANDED_PURCHASES = 2;
+const MIN_TOTAL_PURCHASES = 3;      // für die Häufigkeit im Jahr
+
+/* Wann gilt die Eigenmarke als PROBIERT UND VERWORFEN: erst, wenn
+   nach dem letzten Eigenmarkenkauf mindestens so viele Markenkäufe
+   folgen. Einer allein wäre zu wenig — ein Regal ist auch mal leer,
+   und aus einem einzigen Griff zur Marke eine Geschmacksentscheidung
+   zu lesen, wäre dieselbe Überinterpretation, die anderswo schon zu
+   Doppelzählungen geführt hat. */
+const MIN_RETURN_PURCHASES = 3;
+
+/* Schwellen gegen Kleinkram. Zehn Cent im Jahr sind kein Potenzial,
+   sondern eine Meldung, die man wegtippt. */
+const MIN_DIFF_EUROS = 0.15;
+const MIN_YEAR_EUROS = 3;
+
+/**
+ * Erfahrungswert für den Fall ohne eigenen Vergleich: Handelsmarken
+ * liegen typischerweise deutlich unter der Herstellermarke. 25 % ist
+ * bewusst das untere Ende der gängigen Spanne — lieber zu wenig
+ * versprechen. Ein zu hoher Wert erzeugt eine Zahl, die beim ersten
+ * echten Wechsel nicht eintritt, und damit Misstrauen gegen jede
+ * andere Zahl der App.
+ *
+ * ACHTUNG: Dies ist ein SCHÄTZWERT ohne belastbare Quelle. Vor
+ * Produktivbetrieb gegen eine solche prüfen — dieselbe Auflage wie
+ * für die geschätzten Haltbarkeiten im Katalog.
+ */
+const ESTIMATED_SHARE = 0.25;
+
+/* Häufigkeit deckeln: bei einem einmaligen Doppelkauf ergäbe die
+   Hochrechnung sonst „365 mal im Jahr". */
+const MAX_PER_YEAR = 104;
+
+/**
+ * Handelsmarken der großen deutschen Ketten.
+ *
+ * Die Liste ist Pflegearbeit, genau wie die Markenliste in
+ * productMatcher2 — Kandidaten liefert die Auswertung der Zeilen,
+ * die als „unbekannt" durchlaufen. Sie muss nicht vollständig sein:
+ * eine unerkannte Eigenmarke führt dazu, dass ein Potenzial NICHT
+ * gezeigt wird. Das ist der harmlose Fehler.
+ */
+const OWN_BRAND_MARKERS = [
+  // Lidl
+  "milbona", "combino", "crownfield", "pilos", "dulano", "chef select",
+  "alesto", "bellarom", "vitasia", "saskia", "solevita", "kania", "baresa",
+  "cien", "w5", "formil", "livarno", "silvercrest", "ernesto", "floralys",
+  "lupilu", "freeway", "nixe", "argus", "perlenbacher", "linessa",
+  "fin carre", "mister choc", "sondey", "milla", "harvest basket",
+  // Aldi
+  "milsani", "milfina", "gut bio", "tandil", "ombia", "rio d oro", "river",
+  "almare", "mamia", "goldaehren", "wonnemeyer", "le gusto", "westcliff",
+  "fair und gut", "meine metzgerei", "sonnentracht",
+  // Rewe
+  "ja", "rewe beste wahl", "beste wahl", "rewe bio", "rewe feine welt",
+  // Edeka
+  "gut und guenstig", "gut guenstig", "gg", "edeka bio", "edeka",
+  // Kaufland
+  "k classic", "k bio", "k take it veggie", "purland", "bevola",
+  // Netto / Penny
+  "biobio", "elkos", "mibell", "gutes land", "bon ri", "ichbins",
+  "san fabio", "today",
+  // Drogerie
+  "balea", "denkmit", "alverde", "isana", "domol", "sunozon", "facelle",
+  "babydream", "prokudent", "perlodent", "sanft und sicher", "das gesunde plus",
+  "dmbio", "enerbio", "alnavit"
+];
+
+/**
+ * Herstellermarken. Auch hier gilt: unvollständig ist in Ordnung.
+ * Eine unerkannte Marke kostet ein Potenzial, eine falsch als Marke
+ * gelesene Eigenmarke erzeugt einen Vorschlag, der ins Leere geht —
+ * deshalb steht im Zweifel nichts in dieser Liste.
+ */
+const MANUFACTURER_MARKERS = [
+  // Molkerei
+  "mueller", "danone", "ehrmann", "zott", "landliebe", "weihenstephan",
+  "baerenmarke", "meggle", "kerrygold", "exquisa", "hochland", "almighurt",
+  "activia", "actimel", "fruchtzwerge", "alpenhain", "bauer", "andechser",
+  "arla", "hansano", "berchtesgadener", "rama", "becel",
+  // Trocken, Konserve, Backen
+  "oetker", "barilla", "knorr", "maggi", "kuehne", "hengstenberg", "develey",
+  "thomy", "bahlsen", "leibniz", "wasa", "harry", "golden toast", "mestemacher",
+  "rapunzel", "alnatura", "bonduelle", "erasco", "iglo", "frosta", "birds eye",
+  "uncle ben s", "reis fit", "buitoni", "miracoli",
+  // Süß und Snack
+  "milka", "ritter sport", "haribo", "nutella", "ferrero", "duplo",
+  "hanuta", "mars", "snickers", "twix", "bounty", "toffifee", "merci",
+  "pringles", "lorenz", "chio", "funny frisch", "lay s", "nestle", "lindt",
+  "storck", "werther s", "katjes", "trolli",
+  // Getränke
+  "coca cola", "fanta", "sprite", "pepsi", "volvic", "gerolsteiner",
+  "adelholzener", "vittel", "evian", "granini", "hohes c", "valensina",
+  "jacobs", "dallmayr", "tchibo", "melitta", "moevenpick", "lavazza",
+  "segafredo", "teekanne", "messmer", "bitburger", "krombacher",
+  "beck s", "warsteiner", "jever", "paulaner", "erdinger", "radeberger",
+  "veltins", "hasseroeder", "koenig pilsener", "red bull",
+  // Drogerie und Haushalt
+  "persil", "ariel", "lenor", "frosch", "pril", "fairy", "domestos",
+  "meister proper", "sagrotan", "nivea", "dove", "garnier", "l oreal",
+  "colgate", "odol", "elmex", "aronal", "sensodyne", "signal", "blend a med",
+  "oral b", "always", "o b", "tempo", "zewa", "hakle", "pampers", "penaten",
+  "bebivita", "hipp", "alete", "swiffer", "vanish", "calgon", "somat",
+  "finish", "weisser riese", "spee", "perwoll", "coral",
+  // Tier
+  "whiskas", "sheba", "felix", "pedigree", "frolic", "chappi", "kitekat",
+  "royal canin", "purina", "gourmet"
+];
+
+/**
+ * Bonzeilen normalisieren. Eigener Name, weil `norm`, `foldUmlauts`
+ * und `searchNorm` im Bündel schon vergeben sind — alle Module
+ * teilen sich einen Namensraum.
+ */
+function brandNorm(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Steht `marker` als ganzes Wort (oder ganze Wortfolge) in `line`? */
+function markerHits(line, marker) {
+  return (" " + line + " ").includes(" " + marker + " ");
+}
+
+/**
+ * Marke einer Bonzeile bestimmen.
+ *
+ * Eigenmarken werden ZUERST geprüft. Grund: „EDEKA GUT&GUENSTIG
+ * BUTTER" enthält beides — den Händler und seine Handelsmarke — und
+ * ist eindeutig die Eigenmarke. Andersherum gelesen wäre daraus eine
+ * Herstellermarke geworden, und der Haushalt bekäme den Rat, das zu
+ * kaufen, was er längst kauft.
+ *
+ * @returns {{tier: string|null, label: string|null}}
+ */
+function brandOf(rawLine) {
+  const line = brandNorm(rawLine);
+  if (!line) return { tier: BRAND_TIER.UNBEKANNT, label: null };
+
+  for (const m of OWN_BRAND_MARKERS) {
+    if (markerHits(line, m)) return { tier: BRAND_TIER.EIGEN, label: m };
+  }
+  for (const m of MANUFACTURER_MARKERS) {
+    if (markerHits(line, m)) return { tier: BRAND_TIER.MARKE, label: m };
+  }
+  return { tier: BRAND_TIER.UNBEKANNT, label: null };
+}
+
+/**
+ * Aus dem normalisierten Marker wieder etwas Lesbares machen:
+ * „gut und guenstig" -> „Gut Und Guenstig". Bewusst schlicht — der
+ * Marker steht in der Oberfläche als Beleg neben dem Preis, nicht
+ * als Werbung. Eine gepflegte Schreibweisen-Tabelle wäre dritte
+ * Pflegearbeit für einen Nebensatz.
+ */
+function brandLabel(marker) {
+  if (!marker) return null;
+  return String(marker).split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/**
+ * Die Marke eines gespeicherten Kaufs. Bevorzugt das, was beim
+ * Buchen festgehalten wurde; sonst wird die Bonzeile nachträglich
+ * gelesen. Alte Käufe aus der Zeit vor diesem Modul haben beides
+ * nicht — die zählen als „unbekannt" und stören nichts.
+ */
+function purchaseBrand(p) {
+  if (p && p.brand && (p.brand === BRAND_TIER.EIGEN || p.brand === BRAND_TIER.MARKE)) {
+    return { tier: p.brand, label: p.brandLabel || null };
+  }
+  if (p && p.brand && typeof p.brand === "object" && p.brand.tier) return p.brand;
+  if (p && p.raw) return brandOf(p.raw);
+  return { tier: BRAND_TIER.UNBEKANNT, label: null };
+}
+
+/**
+ * Vergleichsbasis eines Kaufs.
+ *
+ * Der nackte Stückpreis vergleicht sonst 500 g Markenbutter mit
+ * 250 g Eigenmarke und meldet eine Ersparnis, die es nicht gibt.
+ * Liegt ein Gewicht vor, wird auf 100 g gerechnet; sonst bleibt es
+ * beim Stück. Verglichen wird nur INNERHALB einer Basis — gemischte
+ * Vergleiche sind der schnellste Weg zu einer falschen Zahl.
+ */
+function pricePointOf(p) {
+  const price = Number(p.unitPrice);
+  if (!Number.isFinite(price) || price <= 0) return null;
+  const g = Number(p.weightG);
+  if (Number.isFinite(g) && g > 0) return { basis: "100g", value: (price / g) * 100 };
+  return { basis: "stueck", value: price };
+}
+
+function brandMedian(values) {
+  if (!values.length) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/** Median der Abstände zwischen Käufen, hochgerechnet aufs Jahr. */
+function purchasesPerYear(dates) {
+  const sorted = [...new Set(dates)].sort();
+  if (sorted.length < 2) return null;
+  const gaps = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const d = (new Date(sorted[i]) - new Date(sorted[i - 1])) / 86400000;
+    if (Number.isFinite(d) && d > 0) gaps.push(d);
+  }
+  const med = brandMedian(gaps);
+  if (!med || med <= 0) return null;
+  return Math.min(MAX_PER_YEAR, 365 / med);
+}
+
+/**
+ * Käufe eines Produkts in die drei Lager sortieren und daraus
+ * ableiten, ob sich eine Aussage lohnt.
+ *
+ * @returns {null|object} null, wenn zu wenig oder zu uneindeutig
+ */
+function candidateFor(productId, rows) {
+  const marke = [], eigen = [];
+  rows.forEach((p) => {
+    const b = purchaseBrand(p);
+    if (b.tier === BRAND_TIER.MARKE) marke.push({ ...p, _label: b.label });
+    else if (b.tier === BRAND_TIER.EIGEN) eigen.push({ ...p, _label: b.label });
+  });
+
+  if (marke.length < MIN_BRANDED_PURCHASES) return null;
+  if (rows.length < MIN_TOTAL_PURCHASES) return null;
+
+  /* Probiert und wieder verlassen: seit dem letzten Eigenmarkenkauf
+     nur noch Marke, und das mehrfach. Das ist eine Antwort, keine
+     Lücke — hier hat der Haushalt entschieden, und die App hat zu
+     schweigen. Ein einzelner Markenkauf danach reicht nicht: dann
+     wechseln sich beide ab, und der Vergleich ist gerade dadurch
+     belegt. */
+  if (eigen.length) {
+    const letzteEigen = eigen.map((p) => p.date).sort().pop();
+    const seither = marke.filter((p) => p.date > letzteEigen).length;
+    if (seither >= MIN_RETURN_PURCHASES) return { productId, abgelehnt: true };
+  }
+
+  // Die Basis mit der besseren Datenlage gewinnt; gemischt wird nicht.
+  const punkte = (list) => list.map(pricePointOf).filter(Boolean);
+  const markePunkte = punkte(marke);
+  const eigenPunkte = punkte(eigen);
+  const basisZaehler = {};
+  markePunkte.forEach((x) => { basisZaehler[x.basis] = (basisZaehler[x.basis] || 0) + 1; });
+  const basis = Object.keys(basisZaehler).sort((a, b) => basisZaehler[b] - basisZaehler[a])[0];
+  if (!basis) return null;
+
+  const markePreis = brandMedian(markePunkte.filter((x) => x.basis === basis).map((x) => x.value));
+  const eigenGleicheBasis = eigenPunkte.filter((x) => x.basis === basis).map((x) => x.value);
+  const eigenPreis = eigenGleicheBasis.length ? brandMedian(eigenGleicheBasis) : null;
+  if (!markePreis) return null;
+
+  const belegt = eigenPreis !== null && eigenPreis < markePreis;
+  const referenz = belegt ? eigenPreis : markePreis * (1 - ESTIMATED_SHARE);
+  const diffJeEinheit = markePreis - referenz;
+  if (diffJeEinheit < MIN_DIFF_EUROS) return null;
+
+  const proJahr = purchasesPerYear(rows.map((p) => p.date));
+  if (!proJahr) return null;
+
+  /* Hochgerechnet wird auf den MARKENANTEIL: wer schon zur Hälfte
+     Eigenmarke kauft, hat die andere Hälfte bereits gehoben. Alles
+     andere wäre doppelt gezählt. */
+  const markenAnteil = marke.length / (marke.length + eigen.length);
+  const jahresPotenzial = diffJeEinheit * proJahr * markenAnteil;
+  if (jahresPotenzial < MIN_YEAR_EUROS) return null;
+
+  const produkt = byId(productId);
+  return {
+    productId,
+    name: produkt ? produkt.name : productId,
+    aisle: produkt ? produkt.aisle : null,
+    belegt,
+    basis,
+    markenPreis: Math.round(markePreis * 100) / 100,
+    eigenPreis: Math.round(referenz * 100) / 100,
+    differenz: Math.round(diffJeEinheit * 100) / 100,
+    anteilProzent: Math.round((diffJeEinheit / markePreis) * 100),
+    markenKaeufe: marke.length,
+    eigenKaeufe: eigen.length,
+    proJahr: Math.round(proJahr * 10) / 10,
+    jahresPotenzial: Math.round(jahresPotenzial * 100) / 100,
+    marke: marke.map((p) => p._label).filter(Boolean).pop() || null,
+    eigenmarke: eigen.map((p) => p._label).filter(Boolean).pop() || null
+  };
+}
+
+/**
+ * Alle Tauschmöglichkeiten eines Haushalts.
+ *
+ * @param {Array} purchases Käufe mit `raw` oder `brand`
+ * @param {{dismissed:Array<string>}} [opts] dauerhaft abgestellte Produkte
+ * @returns {{belegt:Array, geschaetzt:Array, proJahrBelegt:number,
+ *            proJahrGeschaetzt:number, abgelehnt:number, erkannt:number,
+ *            zeilenMitMarke:number, zeilenGesamt:number}}
+ */
+function brandSwapCandidates(purchases, opts = {}) {
+  const dismissed = new Set(opts.dismissed || []);
+  const list = Array.isArray(purchases) ? purchases : [];
+
+  const byProduct = new Map();
+  let zeilenMitMarke = 0;
+  list.forEach((p) => {
+    if (!p || !p.productId || !p.date) return;
+    if (purchaseBrand(p).tier) zeilenMitMarke++;
+    if (!byProduct.has(p.productId)) byProduct.set(p.productId, []);
+    byProduct.get(p.productId).push(p);
+  });
+
+  const belegt = [], geschaetzt = [];
+  let abgelehnt = 0;
+  byProduct.forEach((rows, productId) => {
+    if (dismissed.has(productId)) return;
+    const c = candidateFor(productId, rows);
+    if (!c) return;
+    if (c.abgelehnt) { abgelehnt++; return; }
+    (c.belegt ? belegt : geschaetzt).push(c);
+  });
+
+  const nachPotenzial = (a, b) => b.jahresPotenzial - a.jahresPotenzial;
+  belegt.sort(nachPotenzial);
+  geschaetzt.sort(nachPotenzial);
+
+  const summe = (arr) => Math.round(arr.reduce((a, x) => a + x.jahresPotenzial, 0) * 100) / 100;
+
+  return {
+    belegt,
+    geschaetzt,
+    // Getrennt, und zwar bis in die Oberfläche. Eine Summe aus beidem
+    // gäbe es hier nicht zu berechnen, sondern nur zu verwechseln.
+    proJahrBelegt: summe(belegt),
+    proJahrGeschaetzt: summe(geschaetzt),
+    abgelehnt,
+    erkannt: belegt.length + geschaetzt.length,
+    zeilenMitMarke,
+    zeilenGesamt: list.length
+  };
+}
+
+/**
+ * Ein Satz für die Übersicht — oder null, wenn es nichts zu sagen
+ * gibt. Kein „0,00 € Potenzial": eine Null ist keine Nachricht.
+ */
+function swapHeadline(result) {
+  const eur = (n) => n.toFixed(2).replace(".", ",") + " €";
+  if (!result || !result.erkannt) {
+    // Ohne jeden Kauf ist auch der Hinweis „noch keine Marken" eine
+    // Meldung zu viel — da ist nicht die Erkennung das Problem,
+    // sondern dass noch nichts erfasst wurde.
+    if (result && result.zeilenGesamt && !result.zeilenMitMarke) {
+      return {
+        text: "Noch keine Marken erkannt",
+        hint: "Marken stehen auf der Bonzeile. Wer den Bontext erfasst statt nur abzuhaken, bekommt diesen Vergleich."
+      };
+    }
+    return null;
+  }
+  if (result.belegt.length) {
+    const top = result.belegt[0];
+    return {
+      text: `${eur(result.proJahrBelegt)} im Jahr`,
+      hint: `Belegt aus deinen eigenen Bons, z. B. ${top.name}: ` +
+            `${eur(top.markenPreis)} gegen ${eur(top.eigenPreis)}.`
+    };
+  }
+  const top = result.geschaetzt[0];
+  return {
+    text: `rund ${eur(result.proJahrGeschaetzt)} im Jahr`,
+    hint: `Geschätzt: ${top.name} und ${result.geschaetzt.length - 1} weitere. ` +
+          `Sobald du eine Eigenmarke einmal kaufst, wird daraus eine belegte Zahl.`
+  };
 }
 
 /* ===== wasteInference2.js ===== */
