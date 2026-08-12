@@ -780,25 +780,31 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
   ok("Meilensteine sind erreicht", c.badges.count > 0, c.badges.count);
   ok("Aber keiner wird gefeiert — sie wurden nicht jetzt erreicht",
     c.freshBadges.length === 0, c.freshBadges.length);
-  ok("Der Rückblick hat Inhalt", c.review.lines.length > 0, c.review.lines.map((l) => l.key).join(","));
+  // Ob die LAUFENDE Woche Inhalt hat, hängt vom Wochentag ab: montags
+  // ist sie zwei Tage alt. Geprüft wird deshalb die abgeschlossene
+  // Vorwoche — sonst liefe der Test nur an bestimmten Tagen durch.
+  const past = T.weeklyReview(
+    { actions: c.actions, receipts: D.get().receipts }, T.weekRangeFor(c.ref, -1));
+  const pastCtx = { ...c, review: past };
+  ok("Der Rückblick der Vorwoche hat Inhalt", past.lines.length > 0, past.lines.map((l) => l.key).join(","));
   ok("Und eine Überschrift ohne Platzhalter",
-    !/undefined|NaN/.test(c.review.headline), c.review.headline);
+    !/undefined|NaN/.test(past.headline), past.headline);
+  ok("Auch die laufende Woche liefert eine Überschrift",
+    !!c.review.headline && !/undefined|NaN/.test(c.review.headline), c.review.headline);
 
-  // Die Karte hängt am Wochentag — deshalb wird sie unabhängig davon
-  // geprüft, sonst liefe der Test nur dienstags durch.
-  const cardNode = T.reviewCard(c, App);
+  const cardNode = T.reviewCard(pastCtx, App);
   ok("Die Rückblick-Karte rendert", cardNode.querySelectorAll(".rvItem").length > 0);
   ok("Sie trägt eine Überschrift", cardNode.querySelector(".rvHead2").textContent.length > 0);
   ok("Und lässt sich schließen", !!cardNode.querySelector(".rvClose"));
 
-  T.reviewSheet(c, App);
+  T.reviewSheet(pastCtx, App);
   ok("Das Rückblick-Blatt öffnet", !$("sheet").hidden);
   ok("Es nennt die Herkunft der Zahlen",
     /geschätzt|nachrechenbar|Medianpreis/.test($("sheetOpts").textContent));
   ok("Es zeigt die Wochenpunkte", $("sheetOpts").querySelectorAll(".sDot").length === 8);
   click($("sheetCancel"));
 
-  const dots = T.streakStrip(c);
+  const dots = T.streakStrip(pastCtx);
   ok("Die laufende Woche ist markiert", !!dots.querySelector(".sDot.now"));
 
   const badges = T.badgeScroller(c, App);
@@ -972,6 +978,110 @@ console.log("\n--- Kreis ohne Haken, Strich mit Bewegung ---");
   const ctxA = App.ctx;
   ok("Abwesenheiten werden mitgeliefert", Array.isArray(ctxA.absences));
   ok("Eine dichte Demo-Historie hat keine", ctxA.absences.length === 0, ctxA.absences.length);
+}
+
+console.log("\n--- Selbst etwas hinzufügen ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+
+  ok("Die Liste nennt sich Einkaufsliste",
+    /Einkaufsliste/.test($("largeTitle").textContent), $("largeTitle").textContent.slice(0, 60));
+  ok("Die Unterzeile beschreibt die Liste, nicht die Datenlage",
+    /Position/.test($("largeTitle").querySelector(".sub").textContent),
+    $("largeTitle").querySelector(".sub").textContent);
+  ok("Die Überschrift sagt, worum es geht",
+    /Deine nächste Einkaufsliste/.test($("main").textContent));
+
+  const addRow = $("main").querySelector(".addRow");
+  ok("Es gibt einen Hinzufügen-Knopf", !!addRow);
+  click(addRow);
+  ok("Das Suchblatt öffnet", !$("sheet").hidden && /hinzufügen/i.test($("sheetTitle").textContent));
+
+  const input = $("sheetOpts").querySelector("input");
+  ok("Es gibt ein Suchfeld", !!input);
+  input.value = "Kaffee";
+  input.dispatchEvent(new window.Event("input", { bubbles: true }));
+  const treffer = $("sheetOpts").querySelectorAll(".results button");
+  ok("Der Katalog wird durchsucht", treffer.length > 1, treffer.length);
+  ok("Freier Text steht immer als letzte Möglichkeit",
+    !!$("sheetOpts").querySelector(".freeRow"));
+
+  const vorher = App.ctx.items.length;
+  click(treffer[0]);
+  ok("Das Blatt schließt nach der Wahl", $("sheet").hidden);
+  ok("Die Position steht in der Liste", App.ctx.items.length === vorher + 1,
+    `${vorher} -> ${App.ctx.items.length}`);
+  ok("Sie ist als selbst ergänzt gekennzeichnet",
+    App.ctx.items.some((i) => i.basis === "manuell"));
+  ok("Und im Speicher", D.get().manual.length === 1, D.get().manual.length);
+  ok("Die Liste zeigt den Abschnitt „Von dir ergänzt“",
+    /Von dir ergänzt/.test($("main").textContent));
+  ok("Die Zeile trägt eine Marke", !!$("main").querySelector(".pill.own"));
+}
+{
+  // Freier Text: keine Produktkennung, keine erfundenen Werte.
+  const addRow = $("main").querySelector(".addRow");
+  click(addRow);
+  const input = $("sheetOpts").querySelector("input");
+  input.value = "Blumen für Oma";
+  input.dispatchEvent(new window.Event("input", { bubbles: true }));
+  click($("sheetOpts").querySelector(".freeRow button"));
+
+  const frei = D.get().manual.find((m) => m.name === "Blumen für Oma");
+  ok("Freier Text kommt auf die Liste", !!frei);
+  ok("Er bekommt keine Produktkennung", frei && frei.productId === null);
+  ok("Und keinen erfundenen Preis", frei && frei.price === 0);
+  ok("Er landet im Gang „Sonstiges“", frei && frei.aisle === "Sonstiges");
+
+  const ctxF = App.ctx;
+  const zeile = ctxF.items.find((i) => i.name === "Blumen für Oma");
+  ok("Die Position erscheint in der Liste", !!zeile);
+  ok("Ohne Preis steht ein Strich",
+    [...$("main").querySelectorAll(".item")].some((li) =>
+      /Blumen für Oma/.test(li.textContent) && /—/.test(li.querySelector(".price").textContent)));
+
+  // Der entscheidende Punkt: die auswertenden Module dürfen sie nicht
+  // sehen, sonst rechnete die App mit erfundenen Werten.
+  ok("Die Auswertung übergeht sie",
+    !ctxF.knownItems.some((i) => i.name === "Blumen für Oma"));
+  ok("Sie zählt trotzdem in die Summe",
+    ctxF.items.filter((i) => i.on).length > ctxF.knownItems.filter((i) => i.on).length);
+}
+{
+  // Abhaken und Entfernen einer eigenen Zeile.
+  const zeile = App.ctx.items.find((i) => i.name === "Blumen für Oma");
+  App.choose(zeile.choiceKey, { on: false });
+  ok("Eine eigene Zeile lässt sich abwählen",
+    App.ctx.items.find((i) => i.name === "Blumen für Oma").on === false);
+  ok("Ohne eine Rückmeldung zu protokollieren",
+    !D.get().feedbackLog.some((f) => !f.productId));
+
+  App.choose(zeile.choiceKey, { on: true });
+  const li = [...$("main").querySelectorAll(".item")].find((x) => /Blumen für Oma/.test(x.textContent));
+  click(li.querySelector(".main"));
+  ok("Sie hat ein eigenes Blatt", !$("sheet").hidden && /Blumen für Oma/.test($("sheetTitle").textContent));
+  ok("Das Blatt erklärt die Herkunft", /Von dir ergänzt/.test($("sheetOpts").textContent));
+  click($("sheetOpts").querySelector(".cta.danger"));
+  ok("Sie lässt sich entfernen",
+    !D.get().manual.some((m) => m.name === "Blumen für Oma"), D.get().manual.length);
+}
+{
+  // Ein Einkauf verbraucht die eigenen Positionen mit.
+  D.addManual({ productId: "kaffee", week: App.ctx.weekKey });
+  ok("Vor dem Einkauf steht sie drauf", D.get().manual.length >= 1);
+  D.addReceipt({ date: D.today(), store: "Test", items: [{ productId: "kaffee", quantity: 1, unitPrice: 7 }] });
+  ok("Nach dem Einkauf ist die Liste leer geräumt", D.get().manual.length === 0);
+}
+{
+  // Eine Woche später gilt die Ergänzung nicht mehr.
+  D.reset();
+  D.loadDemo("full");
+  D.addManual({ productId: "kaffee", week: "2020-W01" });
+  ok("Eine Ergänzung aus einer anderen Woche taucht nicht auf",
+    !App.ctx.items.some((i) => i.basis === "manuell"));
+  ok("Sie bleibt aber gespeichert", D.get().manual.length === 1);
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

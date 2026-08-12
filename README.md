@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 842 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 874 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -342,6 +342,42 @@ Ehrlichkeit kostet das nichts. Quellen, Schätzcharakter und der
 ungeschönte Datenqualitätsbericht sind vollständig da — eine Tippgeste
 entfernt statt dauerhaft im Weg.
 
+### Die Liste gehört dir, nicht dem Algorithmus
+
+Zwei Dinge fehlten, und beide betrafen dasselbe: Die App war ein
+**Automat, dem man zusehen konnte.**
+
+**Sie sagte nicht, was sie ist.** Der Bereich hieß „Liste", die
+Sektion darin „Fällig", und die Unterzeile zählte Bons und Produkte.
+Das ist die Sprache des Algorithmus. Jetzt heißt der Bereich
+**Einkaufsliste**, die Unterzeile sagt `für Sonntag · 13 Positionen ·
+40,16 €`, und über der Liste steht **„Deine nächste Einkaufsliste"**
+mit einer Zeile darunter, woher die Vorschläge kommen.
+
+**Und man konnte nichts hinzufügen.** Was die App nicht wissen KANN —
+Gäste am Wochenende, ein Rezept, Blumen für Oma — hatte keinen Weg
+hinein. Jetzt schließt ein „Etwas hinzufügen" die Liste ab, mit zwei
+Wegen:
+
+- **aus dem Katalog** — Preis, Gang und Kategorie sind bekannt, die
+  Position verhält sich wie jede andere
+- **frei eingetippt** — für alles, was nicht im Katalog steht
+
+Freie Zeilen bekommen **keine Produktkennung**. Sie fließen
+ausdrücklich nicht in die Rhythmen ein, tauchen in keiner Verderb-,
+Saison- oder Doppelkauf-Prüfung auf und zeigen statt eines erfundenen
+Preises einen Strich. Aus „Blumen für Oma" darf die App keinen
+Kaufabstand lernen — sie merkt sich nur, dass die Zeile diese Woche
+gebraucht wird.
+
+Ergänzte Positionen stehen in einem eigenen Abschnitt **„Von dir
+ergänzt"** und tragen eine Marke. Das ist keine Formsache: es
+beantwortet die Frage „woher kommt das hier eigentlich?", ohne dass
+man eine Zeile antippen muss. Sie gelten für eine Woche, überstehen
+die Budgetprüfung (was der Nutzer ausdrücklich draufsetzt, streicht
+kein Optimierer weg) und werden mit dem nächsten gebuchten Einkauf
+abgeräumt.
+
 ### Hell, farbig, rund
 
 Zwei Anläufe waren daneben, und beide auf lehrreiche Weise.
@@ -427,7 +463,7 @@ gehört `npm run build` in denselben Commit.
 
 | Bereich | Was drin steckt |
 |---|---|
-| **Liste** | Wochenrückblick (ab Sonntagabend), Vorrats-Reichweite als Ring, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
+| **Liste** | Wochenrückblick (ab Sonntagabend), eigene Positionen ergänzen, Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
 | **Fällig** | Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
 | **Bestand** | geschätzter Vorrat, Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
@@ -459,9 +495,9 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 842
+npm test          # alle 874
 npm run test:algo # 597 Modultests (Regression, Stress, Funktionen, Haushalt, Lernen, Rückblick)
-npm run test:ui   # 209 Oberflächentests in jsdom
+npm run test:ui   # 241 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

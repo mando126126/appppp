@@ -47,7 +47,7 @@ function emptyState() {
       household: 2,
       // Vorausschau: wie viele Tage der nächste Einkauf mit abdecken
       // soll. listGenerator.js kennt das als BUFFER_DAYS mit Vorgabe 1
-      // — für „einmal die Woche einkaufen" ist ein Tag zu knapp, sonst
+      // — für „einmal die Woche einkaufen“ ist ein Tag zu knapp, sonst
       // steht die Hälfte des Bedarfs erst übermorgen auf der Liste.
       lookaheadDays: 3,
       vacation: { active: false, from: null, to: null },
@@ -94,6 +94,11 @@ function emptyState() {
     aliases: {},          // gelernte Zuordnung Bonzeile -> Produkt
     listWeek: null,       // Woche, für die die Entscheidungen unten gelten
     listChoices: {},      // productId -> {on, reason, halved}
+    // Selbst ergänzte Positionen. Die App schlägt vor, was ihre
+    // Rhythmen hergeben — alles andere weiß nur der Haushalt: Gäste
+    // am Wochenende, ein Rezept, Blumen für Oma. Ohne diese Liste ist
+    // die App ein Automat, den man nicht bedienen kann.
+    manual: [],           // [{id, productId|null, name, price, aisle, category, week}]
     savingsAccepted: [],  // ids angenommener Sparvorschläge
     storeChecked: [],     // im Ladenmodus abgehakt
     depositReturned: []   // zurückgegebene Pfandgebinde
@@ -209,10 +214,13 @@ function addReceipt(receipt) {
       total: Math.round(rows.reduce((a, i) => a + i.unitPrice * i.quantity, 0) * 100) / 100,
       itemCount: rows.length
     });
-    // Neuer Einkauf: die Wochenentscheidungen sind verbraucht.
+    // Neuer Einkauf: die Wochenentscheidungen sind verbraucht — und
+    // die selbst ergänzten Positionen ebenso, die waren ja der Grund
+    // für den Einkauf.
     s.listWeek = null;
     s.listChoices = {};
     s.storeChecked = [];
+    s.manual = [];
   });
 
   logAction(ACTION.ERFASST, {
@@ -311,7 +319,7 @@ function markReviewNotified(wk) {
 
 /**
  * Eine Rückmeldung dauerhaft festhalten. `dueIn` sagt, wie weit die
- * Vorhersage danebenlag: 0 heißt „heute fällig", negativ „war schon
+ * Vorhersage danebenlag: 0 heißt „heute fällig“, negativ „war schon
  * überfällig". Ohne diesen Bezug ließe sich später nicht mehr sagen,
  * wie stark der Rhythmus verschoben werden muss.
  */
@@ -342,6 +350,39 @@ function recordSwapFor(productId) {
     s.swaps[productId] = { lastSwap: t, history: [...cur.history, t] };
   });
   logAction(ACTION.GETAUSCHT, { productId });
+}
+
+/**
+ * Eine Position von Hand auf die Liste setzen.
+ *
+ * Zwei Fälle: ein Produkt aus dem Katalog (dann kennt die App Preis,
+ * Gang und Kategorie) oder freier Text. Freier Text bekommt KEINE
+ * Produktkennung — er darf nicht in die Rhythmen einfließen, sonst
+ * lernte die App aus „Blumen für Oma“ einen Kaufabstand.
+ */
+function addManual({ productId = null, name, price = 0, week }) {
+  // Kommt eine Produktkennung, liefert der Katalog den Namen. Ohne
+  // diese Zeile bräuchte jeder Aufrufer beides — und der erste, der
+  // nur die Kennung übergab, bekam still `null` zurück.
+  const p = productId ? byId(productId) : null;
+  const label = p ? p.name : String(name || "").trim();
+  if (!label) return null;
+  const entry = {
+    id: newId(),
+    productId: p ? productId : null,
+    name: label,
+    price: p ? p.typicalPrice : Math.max(0, Number(price) || 0),
+    aisle: p ? p.aisle : "Sonstiges",
+    category: p ? p.category : "Sonstiges",
+    week: week || weekKey(today()),
+    addedAt: today()
+  };
+  update((s) => { s.manual.push(entry); });
+  return entry;
+}
+
+function removeManual(id) {
+  update((s) => { s.manual = s.manual.filter((m) => m.id !== id); });
 }
 
 function learnAlias(rawLine, productId) {
@@ -856,13 +897,46 @@ function compute() {
     const c = choices[k.productId] || {};
     return {
       ...k,
+      // Schlüssel für die Wochenentscheidung. Bei Vorschlägen ist das
+      // die Produktkennung, bei selbst ergänzten Zeilen deren eigene —
+      // sonst teilten sich zwei Zeilen desselben Produkts einen Haken.
+      choiceKey: k.productId,
       on: c.on !== undefined ? c.on : true,
       reason: c.reason || null,
       halved: k.halved || c.halved || false
     };
   });
 
-  const duplicates = checkList(items, { history, rhythms, today: ref });
+  /* --- Selbst ergänzte Positionen -------------------------------
+   * Sie kommen NACH der Budgetprüfung dazu: was der Nutzer
+   * ausdrücklich auf die Liste gesetzt hat, streicht kein Optimierer
+   * wieder weg. Sie zählen in die Summe, sind aber als eigene
+   * Herkunft gekennzeichnet.                                        */
+  const manualItems = s.manual
+    .filter((m) => m.week === wk)
+    .map((m) => {
+      const c = choices[m.id] || {};
+      return {
+        productId: m.productId, manualId: m.id, choiceKey: m.id, name: m.name,
+        category: m.category, aisle: m.aisle,
+        price: m.price, rhythmDays: null, confidence: null, daysSince: null,
+        dueIn: null, wasteRate: 0, riskFlag: false,
+        shelfLifeDays: m.productId ? (byId(m.productId) || {}).shelfLifeDays : null,
+        perishable: false, basis: "manuell",
+        on: c.on !== undefined ? c.on : true,
+        reason: c.reason || null,
+        halved: c.halved || false
+      };
+    });
+  items.push(...manualItems);
+
+  /* Die auswertenden Module bekommen nur, was im Katalog steht. Eine
+   * freie Zeile wie „Blumen für Oma“ hat keine Haltbarkeit, keinen
+   * Gang und keinen Rhythmus — sie durch die Verderb-, Saison- und
+   * Doppelkauf-Prüfung zu schicken hieße, sich Werte auszudenken. */
+  const known = items.filter((i) => i.productId && byId(i.productId));
+
+  const duplicates = checkList(known, { history, rhythms, today: ref });
 
   /* --- Sparvorschläge --- */
   const statsForSavings = [];
@@ -933,13 +1007,13 @@ function compute() {
   // Weggetippte Hinweise gelten eine Woche, danach kommen sie wieder.
   const dis = s.dismissed.week === wk ? s.dismissed : { forgotten: [], freeze: [] };
 
-  const onList = new Set(items.filter((i) => i.on).map((i) => i.productId));
+  const onList = new Set(known.filter((i) => i.on).map((i) => i.productId));
   const forgotten = findForgotten(rhythms, ref, { exclude: onList })
     .filter((f) => !dis.forgotten.includes(f.productId));
 
   // Einfrieren bezieht sich auf das, was gerade gekauft wird.
   const freeze = freezeSuggestions(
-    items.filter((i) => i.on).map((i) => ({
+    known.filter((i) => i.on).map((i) => ({
       productId: i.productId,
       quantity: i.halved ? 0.5 : 1,
       unitPrice: (byId(i.productId) || {}).typicalPrice
@@ -947,9 +1021,9 @@ function compute() {
     rhythms
   ).filter((f) => !dis.freeze.includes(f.productId));
 
-  const safety = safetyAlert(items.filter((i) => i.on));
+  const safety = safetyAlert(known.filter((i) => i.on));
 
-  const season = offSeason(items.filter((i) => i.on), ref);
+  const season = offSeason(known.filter((i) => i.on), ref);
   const seasonNow = inSeasonNow(ref);
 
   // Gangreihenfolge des zuletzt benutzten Markts
@@ -981,7 +1055,7 @@ function compute() {
   return {
     ref, weekKey: wk, weekday: weekdayOf(ref),
     history, rhythms, stage, chronic, anomalies, wasteStats, inventory,
-    items, duplicates, budgetResult, vacation, savings,
+    items, manualItems, knownItems: known, duplicates, budgetResult, vacation, savings,
     deposit, depositEntries, openDepositEntries: openEntries, archive,
     inflation,
     range, prices, forgotten, freeze, safety,
@@ -990,7 +1064,7 @@ function compute() {
     changes, feedbackLog: s.feedbackLog, absences,
     actions: s.actions, review, streak, streakWeeks, badges, freshBadges,
     store, aisleList,
-    ethylene: checkEthyleneConflicts(items.filter((i) => i.on)),
+    ethylene: checkEthyleneConflicts(known.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
     impact: wasteInKilograms(
       chronic.map((c) => ({
@@ -1070,6 +1144,7 @@ const Data = {
   STORE_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
   addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
+  addManual, removeManual,
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,
   exportJson, importJson,

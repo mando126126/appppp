@@ -228,7 +228,7 @@ function productSheet(productId, ctx) {
   // Haushaltsprodukte rechnen anders — und zeigen deshalb andere
   // Fakten. Ein Kaufrhythmus wäre dort irreführend (die Menge zählt,
   // nicht der Abstand), und die Lebensmittel-Bestandsschätzung liefert
-  // bei einer Haltbarkeit von zehn Jahren „noch 3633 Tage".
+  // bei einer Haltbarkeit von zehn Jahren „noch 3633 Tage“.
   const nf = nonFoodFor(productId);
 
   fact("Kategorie", p.category);
@@ -379,11 +379,17 @@ function viewListe(ctx, app) {
   const on = ctx.items.filter((i) => i.on);
   const sumOn = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
 
-  const list = uiGroup("Fällig",
-    "Lebensmittel: was nach dem gelernten Kaufrhythmus dran ist, zuzüglich der eingestellten Vorausschau.\n\n" +
-    "Haushaltsprodukte: was nach der Verbrauchsrate zur Neige geht. Sie verderben nicht, also entspricht " +
-    "die gekaufte Menge der verbrauchten — ein Kaufrhythmus wäre dort das falsche Maß.\n\n" +
-    "Der Rechenweg jeder Position steht in ihrem Detail-Blatt — Zeile antippen.");
+  // „Fällig“ war die Sprache des Algorithmus, nicht die des Nutzers.
+  // Was hier steht, ist eine Einkaufsliste — und das darf sie sagen.
+  const list = uiGroup("Deine nächste Einkaufsliste",
+    "Die App füllt die Liste aus deinen Rhythmen vor: Lebensmittel nach dem gelernten Kaufabstand " +
+    "zuzüglich der eingestellten Vorausschau, Haushaltsprodukte nach ihrer Verbrauchsrate.\n\n" +
+    "Sie gehört trotzdem dir. Haken wegnehmen, halbe Menge wählen, eigene Positionen ergänzen — " +
+    "alles unten über „Etwas hinzufügen“. Der Rechenweg jeder vorgeschlagenen Zeile steht in ihrem " +
+    "Detail-Blatt, einfach antippen.");
+  list.body.append(el("div", "listLead",
+    `<span>Vorgeschlagen aus deinen Rhythmen${ctx.pattern && ctx.pattern.dayName
+      ? " · nächster Einkauf " + esc(ctx.pattern.dayName) : ""}</span>`));
 
   if (ctx.budgetResult.removed.length) {
     list.body.append(uiRow(`${ctx.budgetResult.removed.length} wegen Budget gestrichen`,
@@ -397,18 +403,37 @@ function viewListe(ctx, app) {
       ctx.vacation.skip.map((s) => s.name).join(", "), null, { value: "− " + eur(ctx.vacation.savedEuros) }));
   }
 
-  // Zwei Sektionen statt zweier Tabs: ein zweiter Tab erzeugte zwei
-  // mentale Modelle und halbierte die Nutzung beider.
-  const food = ctx.items.filter((i) => !isNonFood(i.productId));
-  const home = ctx.items.filter((i) => isNonFood(i.productId));
+  // Drei Sektionen: was die App vorschlägt (Lebensmittel, Haushalt)
+  // und was du selbst ergänzt hast. Die Trennung ist keine Formsache —
+  // sie beantwortet die Frage „woher kommt das hier eigentlich?“, ohne
+  // dass man eine Zeile antippen muss.
+  const auto = ctx.items.filter((i) => i.basis !== "manuell");
+  const eigene = ctx.items.filter((i) => i.basis === "manuell");
+  const food = auto.filter((i) => !isNonFood(i.productId));
+  const home = auto.filter((i) => isNonFood(i.productId));
 
   const ul = el("ul", "items");
-  if (!ctx.items.length) ul.append(el("li", "item", '<p class="empty">Nichts fällig.</p>'));
+  if (!ctx.items.length) {
+    ul.append(el("li", "item", '<p class="empty">Nichts fällig — die Liste ist leer.</p>'));
+  }
   if (home.length && food.length) ul.append(el("li", "sectionRow", "Lebensmittel"));
   food.forEach((it) => ul.append(listItem(it, ctx, app)));
   if (home.length && food.length) ul.append(el("li", "sectionRow", "Haushalt"));
   home.forEach((it) => ul.append(listItem(it, ctx, app)));
+  if (eigene.length) {
+    ul.append(el("li", "sectionRow", "Von dir ergänzt"));
+    eigene.forEach((it) => ul.append(listItem(it, ctx, app)));
+  }
   list.body.append(ul);
+
+  // Der wichtigste Knopf dieser Seite: ohne ihn ist die App ein
+  // Automat, den man nur zusehen kann.
+  const add = el("button", "row action addRow");
+  add.innerHTML = '<span class="plusMark">+</span>' +
+    '<div class="rowMain"><div class="rowTitle">Etwas hinzufügen</div>' +
+    '<div class="rowSub">Produkt suchen oder frei eintippen</div></div>';
+  add.addEventListener("click", () => addSheet(ctx, app));
+  list.body.append(add);
 
   const full = ctx.items.reduce((a, i) => a + i.price, 0);
   const tot = el("div", "totals");
@@ -708,21 +733,117 @@ function badgeSheet(row, app) {
   app.sheet(row.label, row.currentTitle || `Stand: ${row.euros ? eur(row.value) : row.value} ${row.euros ? "" : row.unit}`, body);
 }
 
+/* ================================================================
+   Etwas hinzufügen
+   ================================================================
+   Bis hierher war die Liste ein Automat: sie füllte sich selbst und
+   ließ sich nur abwählen. Was die App nicht wissen KANN — Gäste am
+   Wochenende, ein Rezept, Blumen für Oma — hatte keinen Weg hinein.
+
+   Zwei Wege, einer davon ohne Katalog: wer etwas eintippt, das die
+   Datenbank nicht kennt, bekommt es trotzdem auf die Liste. Diese
+   freien Zeilen fließen ausdrücklich NICHT in die Rhythmen ein — aus
+   „Blumen für Oma“ darf die App keinen Kaufabstand lernen.
+   ================================================================ */
+function addSheet(ctx, app) {
+  const body = el("div");
+
+  const field = el("label", "field");
+  const input = el("input");
+  input.type = "search";
+  input.placeholder = "Was fehlt noch?";
+  input.setAttribute("aria-label", "Produkt suchen oder frei eintippen");
+  field.append(input);
+  body.append(field);
+
+  const results = el("ul", "results");
+  body.append(results);
+
+  const put = (opts) => {
+    const entry = Data.addManual({ ...opts, week: ctx.weekKey });
+    if (!entry) return;
+    app.closeSheet();
+    app.toast(`${entry.name} auf der Liste`, { icon: "+" });
+  };
+
+  function render() {
+    const q = input.value.trim();
+    results.innerHTML = "";
+
+    Data.searchProducts(q, 8).forEach((p) => {
+      const li = el("li");
+      const b = el("button", null,
+        `<span class="rn">${esc(p.name)}</span><span class="rc">${eur(p.typicalPrice)}</span>`);
+      b.addEventListener("click", () => put({ productId: p.id }));
+      li.append(b);
+      results.append(li);
+    });
+
+    // Freie Zeile immer als letzte Möglichkeit — auch wenn der Katalog
+    // etwas gefunden hat. Vielleicht ist „Brot“ hier die Sorte vom
+    // Bäcker und nicht das Produkt aus der Datenbank.
+    if (q) {
+      const li = el("li", "freeRow");
+      const b = el("button", null,
+        `<span class="rn">„${esc(q)}“ frei eintragen</span><span class="rc">ohne Preis</span>`);
+      b.addEventListener("click", () => put({ name: q }));
+      li.append(b);
+      results.append(li);
+    }
+    if (!q) results.append(el("li", null, '<div class="noHit">Tippe los — Katalog oder eigener Text.</div>'));
+  }
+
+  input.addEventListener("input", render);
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const first = results.querySelector("button");
+    if (first) first.click();
+  });
+  render();
+
+  app.sheet("Etwas hinzufügen", "Kommt auf die Liste dieser Woche.", body);
+  // Nach dem Öffnen des Blatts: sonst nimmt der Schließen-Knopf den
+  // Fokus und die Tastatur bleibt zu.
+  setTimeout(() => input.focus(), 0);
+}
+
+/** Kleines Blatt für eine frei eingetragene Zeile. */
+function manualSheet(it, app) {
+  const body = el("div");
+  body.append(el("p", "sheetPara", "Von dir ergänzt — die App hat diese Zeile nicht vorgeschlagen."));
+  if (!it.productId) {
+    body.append(el("p", "sheetPara",
+      "Sie steht nicht im Katalog. Deshalb rechnet die App damit keinen Rhythmus, keinen Vorrat und keinen Preis — " +
+      "sie merkt sich nur, dass du sie diese Woche brauchst."));
+  }
+  const del = el("button", "cta danger", "Von der Liste nehmen");
+  del.addEventListener("click", () => {
+    Data.removeManual(it.manualId);
+    app.closeSheet();
+    app.toast(`${it.name} entfernt`, { icon: "−" });
+  });
+  body.append(del);
+  app.sheet(it.name, null, body);
+}
+
 /** Eine Position der Vorschlagsliste. Knapp — Details im Blatt. */
 function listItem(it, ctx, app) {
   const p = byId(it.productId) || {};
+  const manuell = it.basis === "manuell";
   const li = el("li", "item" + (it.on ? "" : " off"));
 
   const top = el("div", "top");
   const cb = el("input");
   cb.type = "checkbox"; cb.className = "box"; cb.checked = it.on;
   cb.setAttribute("aria-label", it.name);
-  cb.addEventListener("change", () => app.choose(it.productId, { on: cb.checked, reason: cb.checked ? null : undefined }));
+  cb.addEventListener("change", () => app.choose(it.choiceKey, { on: cb.checked, reason: cb.checked ? null : undefined }));
 
   const main = el("button", "main");
   main.setAttribute("aria-label", `Details zu ${it.name}`);
   const nm = el("div", "nm", esc(it.name));
-  if (it.dueIn < 0) nm.append(el("span", "pill warn", `${-it.dueIn} T überfällig`));
+  if (manuell) nm.append(el("span", "pill own", "von dir"));
+  if (!manuell && it.dueIn < 0) nm.append(el("span", "pill warn", `${-it.dueIn} T überfällig`));
   if (it.riskFlag) nm.append(el("span", "pill risk", pct(it.wasteRate)));
   if (p.safetyCritical) nm.append(el("span", "pill safety", "VD"));
   const pm = ctx.prices.get(it.productId);
@@ -735,9 +856,16 @@ function listItem(it, ctx, app) {
     if (rr) nm.append(el("span", "pill state", rr.label));
   }
   main.append(nm);
-  main.addEventListener("click", () => productSheet(it.productId, ctx));
+  main.addEventListener("click", () => {
+    // Eine frei eingetragene Zeile hat kein Detail-Blatt — sie hat ja
+    // keine Daten. Sie bekommt ihr eigenes, kleines.
+    if (manuell && (!it.productId || !byId(it.productId))) manualSheet(it, app);
+    else if (manuell) manualSheet(it, app);
+    else productSheet(it.productId, ctx);
+  });
 
-  top.append(cb, main, el("div", "price", eur(it.halved ? it.price / 2 : it.price)));
+  // Ohne Preis keine Preisspalte — „0,00 €“ wäre eine Behauptung.
+  top.append(cb, main, el("div", "price", it.price > 0 ? eur(it.halved ? it.price / 2 : it.price) : "—"));
   li.append(top);
 
   if (it.on && it.riskFlag) {
@@ -746,7 +874,7 @@ function listItem(it, ctx, app) {
     h.setAttribute("aria-pressed", it.halved ? "true" : "false");
     h.addEventListener("click", () => {
       const now = !it.halved;
-      app.choose(it.productId, { halved: now });
+      app.choose(it.choiceKey, { halved: now });
       // Nur beim Setzen. Gegen mehrfaches Zählen sperrt zusätzlich
       // Data.recordRescue — ein Produkt kann höchstens einmal am Tag
       // gerettet werden.
@@ -756,12 +884,14 @@ function listItem(it, ctx, app) {
     li.append(acts);
   }
 
-  if (!it.on && (it.perishable || it.price > 3)) {
+  // Die vier Antworten korrigieren einen Rhythmus. Eine selbst
+  // ergänzte Zeile hat keinen, also gibt es dort auch nichts zu fragen.
+  if (!manuell && !it.on && (it.perishable || it.price > 3)) {
     const opts = el("div", "opts");
     REASONS.forEach((rr) => {
       const b = el("button", "opt", esc(rr.label));
       b.setAttribute("aria-pressed", it.reason === rr.key ? "true" : "false");
-      b.addEventListener("click", () => app.choose(it.productId, { reason: rr.key }));
+      b.addEventListener("click", () => app.choose(it.choiceKey, { reason: rr.key }));
       opts.append(b);
     });
     li.append(opts);
@@ -775,7 +905,7 @@ function listItem(it, ctx, app) {
    ================================================================
    Die Klasse INTERVAL braucht kein Verbrauchsmodell und keine
    Historie: Kaufdatum plus Intervall genügt. Das Ergebnis sind
-   Handlungen, keine Käufe — „getauscht" setzt den Zähler zurück,
+   Handlungen, keine Käufe — „getauscht“ setzt den Zähler zurück,
    ohne dass etwas gekauft wurde.
    ================================================================ */
 function viewFaellig(ctx, app) {
@@ -799,7 +929,7 @@ function viewFaellig(ctx, app) {
   if (due.length) {
     const g = uiGroup("Jetzt tauschen",
       "Austausch nach Zeit, unabhängig vom Verbrauch — meist hygienisch begründet. " +
-      "Ein Tippen auf „Getauscht\" setzt den Zähler zurück, auch ohne Kauf.");
+      "Ein Tippen auf „Getauscht\“ setzt den Zähler zurück, auch ohne Kauf.");
     due.forEach((x) => g.body.append(swapRow(x, ctx, app)));
     c.append(g);
   }
@@ -990,7 +1120,7 @@ function viewBestand(ctx, app) {
   c.append(g);
 
   /* --- Einräumen --- */
-  const guide = buildStorageGuide(ctx.items.filter((i) => i.on));
+  const guide = buildStorageGuide(ctx.knownItems.filter((i) => i.on));
   if (guide.length) {
     const s = uiGroup("Einräumen", "Reihenfolge nach der Kühlschrankgrafik des BZfE: das Kritischste zuerst.");
     guide.forEach((z) => s.body.append(uiRow(z.zone.split("(")[0].trim(), z.items.map((i) => i.name).join(", "))));
@@ -1578,8 +1708,8 @@ function viewMehr(ctx, app) {
   m.body.append(uiRow("Über", `Bauversion ${window.__BUILD__ || "dev"}`, null, {
     onClick: () => app.notice("Einkaufs-Anker",
       "Alle Zahlen werden im Browser gerechnet. Kein Server, kein Konto, keine Übertragung.\n\n" +
-      "Quellen: BZfE/BLE „Haltbarkeit von Lebensmitteln\" und „Lebensmittel richtig lagern\" (20.02.2025), " +
-      "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\".")
+      "Quellen: BZfE/BLE „Haltbarkeit von Lebensmitteln\“ und „Lebensmittel richtig lagern\“ (20.02.2025), " +
+      "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\“.")
   }));
   c.append(m);
 
