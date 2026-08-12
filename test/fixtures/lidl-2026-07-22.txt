@@ -1,0 +1,46 @@
+/**
+ * fixtures/lidl-2026-07-22.txt
+ *
+ * ECHTER BON, aus dem Lidl-Plus-App-Screenshot abgetippt.
+ * Einrückungen sind bewusst erhalten — sie tragen Bedeutung:
+ * eingerückte Zeilen gehören zur Position darüber.
+ *
+ * Das ist die erste echte Datei im Projekt. Alles davor war
+ * erfunden.
+ */
+Rinderhüftsteak                          4,58 A
+  0,199 kg x 22,99  EUR/kg
+    Preisvorteil                        -0,08
+Zucchini                                 0,56 A
+  0,474 kg x 1,19   EUR/kg
+Romatomaten                              1,29 A
+    Preisvorteil                        -0,18
+    Lidl Plus Rabatt                    -0,23
+Heidelbeeren                             1,49 A
+Paprika rot                              1,11 A
+ChickenNug.Cornflak.                     3,99 A
+Pute Gorgonzola                          2,69 A
+Frosta XXL ReisHähn.                     4,79 A
+Skyr Erdbeere                            1,49 A
+    Lidl Plus Rabatt                    -0,22
+High Protein Kaffee     1,15 x    2      2,30 A
+Pfand 0,25 7%EM         0,25 x    2      0,50 A
+2Kammer JoghErdbeere    0,79 x    2      1,58 A
+2Kammer JoghSauerk.     0,79 x    4      3,16 A
+2Kammer JoghPfirsich    0,79 x    4      3,16 A
+Protein Drink Schoko                     1,19 A
+Pfand 0,25 7%EM                          0,25 A
+Zott Jogobella Erd.                      0,39 A
+Bio-Eier OKT 10er                        3,99 A
+    Lidl Plus Rabatt                    -0,40
+Bioland Din. Fussili                     1,45 A
+Vit.-Was. Pfir.-Holu    0,69 x    8      5,52 B
+Pfand 0,25 EM           0,25 x    8      2,00 B
+Pr.Riegel Peanut                         2,49 A
+Prot.Riegel Erdn-Car    1,19 x    2      2,38 A
+IronMa.100% Sahne P.                    18,99 A
+Ca-Choco Riegel                          1,19 A
+Protein-Riegel Tiger                     1,19 A
+Perm. Tragetasc                          0,59 B
+Toilettenpapier 3lag                     2,69 B
+    Preisvorteil                        -0,04
