@@ -3,13 +3,13 @@
    zuerst von dort antworten. Für eine App ohne Serverdaten ist das
    die einfachste und zuverlässigste Variante.
 
-   Der Cache-Name trägt die Bauversion (build.js ersetzt 1v5t7rw).
+   Der Cache-Name trägt die Bauversion (build.js ersetzt 167smez).
    Dadurch verwirft ein neuer Stand die alten Dateien zuverlässig —
    sonst bekämen Nutzer nach einem Update wochenlang die alte App. */
-const CACHE = "einkaufsanker-1v5t7rw";
+const CACHE = "einkaufsanker-167smez";
 const FILES = [
   "./", "./index.html", "./app.css",
-  "./bundle.js", "./data.js", "./views.js", "./app.js",
+  "./bundle.js", "./data.js", "./ocr.js", "./views.js", "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"
 ];

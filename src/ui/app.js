@@ -504,7 +504,22 @@ const App = {
   },
 
   /* ---------- Hauptdurchlauf ---------- */
+  /**
+   * Aufräumarbeit für die nächste Neuzeichnung anmelden.
+   *
+   * Die Ansichten hängen ihre Hörer an ihre eigenen Elemente — die
+   * verschwinden mit `innerHTML = ""` von selbst. Wer aber am
+   * Dokument lauscht (die Bilderfassung tut das, für Einfügen mit
+   * der Tastatur), überlebt jede Neuzeichnung. Nach zehn Wechseln
+   * hingen sonst zehn Hörer da und ein eingefügtes Bild würde
+   * zehnmal gelesen.
+   */
+  onLeaveView(fn) { (App._cleanup || (App._cleanup = [])).push(fn); },
+
   render() {
+    (App._cleanup || []).forEach((fn) => { try { fn(); } catch (e) { /* egal */ } });
+    App._cleanup = [];
+
     App.ctx = Data.compute();
     App.applyTheme();
     App.renderBar();

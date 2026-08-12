@@ -91,7 +91,7 @@ try {
     sources.join("\n;\n") +
     "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
-    " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill };"
+    " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -971,6 +971,90 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
     click($("sheetCancel"));
     return /keine echte Push|KEINE echte Push/i.test(t);
   })());
+}
+
+console.log("\n--- Einkauf aus einem Bild ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.goto("erfassen");
+  App.capture.tab = "scan";
+  App.render();
+
+  // Ohne WebAssembly-Worker (jsdom hat keinen) sagt die Oberfläche
+  // das und bietet den Textweg an, statt eine tote Schaltfläche zu
+  // zeigen.
+  ok("Ohne Texterkennung wird das gesagt, nicht verschwiegen",
+    /keine Texterkennung/.test($("main").textContent));
+  ok("Und der Textweg steht bereit", !!$("main").querySelector("textarea"));
+
+  // Die Erkennung selbst läuft in dieser Umgebung nicht (kein
+  // WebAssembly-Worker, kein Canvas). Ausgetauscht wird deshalb nur
+  // die Erkennung — alles danach ist echt: Ausrichten, Zuordnen,
+  // Buchen.
+  const BILD = [
+    "LIDL",
+    "Musterstr. 12",
+    "12.08.2026 17:42",
+    "Vollmilch 3,5% l,29 A",
+    "Naturjoghurt O,59 A",
+    "Bananen lose 1,89 A",
+    "SUMME 3,77",
+    "Vielen Dank"
+  ].join("\n");
+
+  T.OCR.engine = () => BILD;
+  App.render();
+  const txt = $("main").textContent;
+  ok("Mit Texterkennung erscheint der Bildweg", /fotografieren|Bild wählen/.test(txt));
+  ok("Und sagt, wo das Bild bleibt", /bleibt auf dem Gerät/.test(txt));
+  const knopf = [...$("main").querySelectorAll("button")].find((b) => /Bild wählen/.test(b.textContent));
+  ok("Es gibt eine Schaltfläche zum Wählen", !!knopf);
+  const kamera = [...$("main").querySelectorAll("input[type=file]")].find((i) => i.hasAttribute("capture"));
+  ok("Und einen Weg direkt in die Kamera", !!kamera);
+
+  // Den Weg über den echten Dateidialog kann jsdom nicht gehen —
+  // also wird die Datei direkt eingespeist, so wie es der Hörer täte.
+  const vorher = D.get().receipts.length;
+  const gelesen = T.readReceiptImage(BILD, { today: "2026-08-12" });
+  ok("Das Bild wird zu Bon-Text", gelesen.kept === 3, gelesen.kept + ": " + gelesen.text);
+  ok("Datum kommt aus dem Bild", gelesen.date === "2026-08-12", gelesen.date);
+  ok("Markt auch", gelesen.store === "Lidl", gelesen.store);
+  ok("Die Ziffern sind zurückgedreht", /1,29/.test(gelesen.text) && /0,59/.test(gelesen.text));
+
+  const p = D.parseReceiptText(gelesen.text);
+  ok("Die Zeilen werden Produkten zugeordnet", p.rows.length === 3, p.rows.length);
+  ok("Und die sicheren sind wirklich sicher",
+    p.rows.filter((r) => r.productId).length === 3,
+    p.rows.map((r) => r.raw + "->" + r.productId).join(" | "));
+
+  const res = D.addReceipt({ date: gelesen.date, store: gelesen.store, items: p.rows });
+  ok("Der Bon lässt sich buchen", res.count === 3, res.count);
+  ok("Und steht in der Historie", D.get().receipts.length === vorher + 1);
+
+  // Aus dem Bild kommt die Bonzeile — und damit die Marke. Ohne sie
+  // wäre der Eigenmarken-Vergleich für alles blind, was fotografiert
+  // statt abgehakt wurde.
+  const neueste = [...D.get().purchases].sort((a, b) => b.id.localeCompare(a.id))[0];
+  ok("Gebuchte Positionen tragen ihre Markenkennung",
+    D.get().purchases.some((x) => x.brand !== undefined), JSON.stringify(neueste));
+
+  // Ein Bild, das kein Bon ist, darf nichts buchen.
+  const quatsch = T.readReceiptImage("Herzlichen Glueckwunsch\nAlles Gute zum Geburtstag");
+  ok("Ein Bild ohne Bon wird abgelehnt", quatsch.quality.ok === false);
+  ok("Mit einem Hinweis statt einer Fehlermeldung", /näher|Schatten|kein Text/.test(quatsch.quality.message));
+
+  T.OCR.engine = null;
+  ok("Die Erkennung meldet sich ehrlich, wenn sie nicht kann",
+    typeof T.OCR.supported() === "boolean");
+  ok("Und hält keinen Worker offen", (T.OCR.release(), T.OCR.worker === null));
+
+  // Der Einfüge-Hörer hängt am Dokument und muss beim Wechsel weg.
+  App.goto("liste");
+  App.goto("erfassen");
+  App.goto("liste");
+  ok("Kein Hörer bleibt nach dem Wechsel hängen",
+    !App._cleanup || App._cleanup.length === 0, App._cleanup && App._cleanup.length);
 }
 
 console.log("\n--- Marken erklären sich ---");

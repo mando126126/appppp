@@ -1396,10 +1396,153 @@ function viewErfassen(ctx, app) {
   return c;
 }
 
+/* ================================================================
+   Bild statt Abtippen
+   ================================================================
+   Zwei Wege führen zum selben Ziel: das Foto eines Papierbons und
+   der Screenshot eines digitalen Bons aus der Händler-App. Beides
+   ist ein Bild, beides landet nach der Erkennung im selben Textfeld
+   und derselben Prüfliste — die Zuordnung bestätigt weiterhin ein
+   Mensch, Zeile für Zeile.
+
+   Das ist keine Bequemlichkeit, sondern die Bedingung: eine
+   Texterkennung liest, sie versteht nicht. Sie darf Vorschläge
+   machen und niemals buchen.
+   ================================================================ */
+function ocrPicker(box, cap, app) {
+  const wrap = el("div", "shot");
+
+  if (!OCR.supported()) {
+    // Kein Vorwurf und kein Fehler: der Textweg steht ja darunter.
+    wrap.append(el("p", "srcnote",
+      "Dieser Browser kann keine Texterkennung. Der Bontext lässt sich weiter unten einfügen."));
+    box.append(wrap);
+    return;
+  }
+
+  const status = el("div", "shotStatus");
+  const bar = el("div", "shotBar");
+  const fill = el("i");
+  bar.append(fill);
+
+  const setStatus = (text, anteil) => {
+    status.textContent = text;
+    bar.hidden = anteil === null;
+    fill.style.width = Math.round((anteil || 0) * 100) + "%";
+  };
+
+  const input = el("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.hidden = true;
+  input.setAttribute("aria-label", "Bon-Bild wählen");
+
+  const kamera = el("input");
+  kamera.type = "file";
+  kamera.accept = "image/*";
+  // Sagt dem Telefon: Kamera, Rückseite. Auf dem Rechner ohne Wirkung.
+  // Als Attribut, nicht als Eigenschaft: `capture` ist nicht überall
+  // an eine Eigenschaft gebunden, das Attribut wird dagegen von jedem
+  // Browser gelesen, der es kennt.
+  kamera.setAttribute("capture", "environment");
+  kamera.hidden = true;
+  kamera.setAttribute("aria-label", "Bon fotografieren");
+
+  let laeuft = false;
+
+  const lies = (datei) => {
+    if (!datei || laeuft) return;
+    if (!/^image\//.test(datei.type || "")) { app.toast("Das ist kein Bild"); return; }
+    laeuft = true;
+    cap.shotName = datei.name || "Bild";
+    setStatus("Bild wird gelesen …", 0);
+    app.render();
+
+    OCR.read(datei, (phase, anteil) => {
+      setStatus(phase === "liest" ? "Text wird gelesen …" : "Texterkennung wird geladen …", anteil);
+    })
+      .then((text) => {
+        const gelesen = readReceiptImage(text, { today: Data.today() });
+        laeuft = false;
+        cap.text = gelesen.text;
+        cap.ocr = gelesen;
+        // Datum und Markt nur setzen, wenn im Bild etwas stand —
+        // eine leere Vorgabe zu überschreiben hilft, eine bewusst
+        // gesetzte zu überschreiben ärgert.
+        if (gelesen.date) cap.date = gelesen.date;
+        if (gelesen.store) cap.store = gelesen.store;
+        cap.parsed = gelesen.quality.ok ? Data.parseReceiptText(gelesen.text) : null;
+        app.render();
+        if (!gelesen.quality.ok) app.notice("Nicht genug erkannt", gelesen.quality.message);
+      })
+      .catch((e) => {
+        laeuft = false;
+        cap.ocr = null;
+        app.render();
+        app.notice("Texterkennung fehlgeschlagen",
+          (e && e.message ? e.message + ".\n\n" : "") +
+          "Der Bontext lässt sich weiter unten von Hand einfügen — daran ändert das nichts.");
+      });
+  };
+
+  input.addEventListener("change", () => lies(input.files && input.files[0]));
+  kamera.addEventListener("change", () => lies(kamera.files && kamera.files[0]));
+
+  const knoepfe = el("div", "shotRow");
+  const foto = el("button", "cta", "Fotografieren");
+  foto.addEventListener("click", () => kamera.click());
+  const waehlen = el("button", "cta light", "Bild wählen");
+  waehlen.addEventListener("click", () => input.click());
+  knoepfe.append(foto, waehlen);
+
+  wrap.append(knoepfe, input, kamera, status, bar);
+  bar.hidden = true;
+
+  // Auf dem Rechner ist Einfügen der schnellste Weg: Screenshot
+  // machen, hierher, Strg+V. Der Hörer bekommt das Fenster, nicht
+  // die Schaltfläche — sonst müsste man erst hineinklicken.
+  const einfuegen = (ev) => {
+    const items = (ev.clipboardData && ev.clipboardData.items) || [];
+    for (const it of items) {
+      if (it.type && it.type.startsWith("image/")) {
+        ev.preventDefault();
+        lies(it.getAsFile());
+        return;
+      }
+    }
+  };
+  document.addEventListener("paste", einfuegen);
+  // Beim nächsten Aufbau der Ansicht wieder abmelden, sonst hängen
+  // nach zehn Wechseln zehn Hörer am Fenster.
+  app.onLeaveView(() => document.removeEventListener("paste", einfuegen));
+
+  wrap.addEventListener("dragover", (ev) => { ev.preventDefault(); wrap.classList.add("over"); });
+  wrap.addEventListener("dragleave", () => wrap.classList.remove("over"));
+  wrap.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    wrap.classList.remove("over");
+    const datei = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+    lies(datei);
+  });
+
+  wrap.append(el("p", "srcnote",
+    "Foto eines Papierbons oder Screenshot aus der Händler-App. Das Bild bleibt auf dem Gerät — " +
+    "die Erkennung läuft hier, nicht auf einem Server."));
+
+  if (cap.ocr) {
+    const q = cap.ocr.quality;
+    wrap.append(uiRow(q.level === "gut" ? "Erkannt" : "Durchsehen", q.message, null, {}));
+  }
+
+  box.append(wrap);
+}
+
 function renderScan(box, cap, app) {
+  ocrPicker(box, cap, app);
+
   const ta = el("textarea");
   ta.value = cap.text || "";
-  ta.placeholder = "Bon-Text einfügen …";
+  ta.placeholder = "… oder Bon-Text einfügen";
   ta.setAttribute("aria-label", "Bon-Text");
   ta.addEventListener("input", () => { cap.text = ta.value; });
   const f = el("label", "field");

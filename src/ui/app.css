@@ -480,6 +480,18 @@ button.row:active,label.row:active{background:var(--fill)}
 .results .freeRow{background:var(--accent-soft)}
 .results .freeRow .rn{color:var(--accent);font-weight:600}
 
+/* Bilderfassung: Fotografieren, wählen, hineinziehen */
+.shot{margin-bottom:14px}
+.shotRow{display:flex;gap:10px}
+.shotRow .cta{margin-top:0;flex:1}
+.shotRow .cta.light{flex:0 0 42%}
+/* Zwei Wörter auf einem Knopf brechen sonst auf 390 Pixeln um. */
+.shotRow .cta{font-size:0.95rem;white-space:nowrap}
+.shot.over{outline:2px dashed var(--accent);outline-offset:6px;border-radius:var(--r-lg)}
+.shotStatus{font-size:0.82rem;color:var(--ink-2);margin-top:10px;min-height:1.1em}
+.shotBar{height:6px;border-radius:99px;background:var(--fill);overflow:hidden;margin-top:6px}
+.shotBar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .2s linear}
+
 /* Getönte Chips: farbig, rund, ohne Rahmen */
 .pill{
   font-size:0.68rem;font-weight:650;padding:3px 9px;border-radius:99px;

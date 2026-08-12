@@ -9,7 +9,7 @@
 const CACHE = "einkaufsanker-%%BUILD%%";
 const FILES = [
   "./", "./index.html", "./app.css",
-  "./bundle.js", "./data.js", "./views.js", "./app.js",
+  "./bundle.js", "./data.js", "./ocr.js", "./views.js", "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"
 ];

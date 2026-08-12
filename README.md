@@ -363,6 +363,67 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### Ein Bild statt Abtippen
+
+Bis hierher gab es genau einen Weg in die Historie: den Bontext
+einfügen. Auf einem Telefon ist das eine Zumutung — abtippen ist
+genau die Arbeit, die die App abnehmen soll —, und ein digitaler Bon
+aus einer Händler-App liegt ohnehin nur als Screenshot vor. Jetzt
+führen zwei Wege zum selben Ziel: **Foto eines Papierbons** oder
+**Screenshot eines digitalen Bons**, dazu Einfügen aus der
+Zwischenablage (Strg+V) und Hineinziehen auf dem Rechner.
+
+**Die Erkennung läuft auf dem Gerät.** Tesseract als WebAssembly,
+alle Dateien unter `web/vendor/` (Herkunft und Fassungen:
+`src/ui/vendor/HERKUNFT.md`). Kein Bild geht irgendwohin, keine
+fremde Anfrage, ohne Netz funktioniert es genauso. Das kostet 4,4 MB
+— und ist die einzige Fassung, die zu einer App passt, deren ganzes
+Versprechen lautet, dass die Daten auf dem Gerät bleiben. Ein
+Erkennungsdienst in der Cloud hätte es genau dort gebrochen, wo die
+empfindlichsten Daten anfallen: beim vollständigen Einkauf. Geladen
+wird erst beim ersten Bild; wer nur tippt, zahlt die Megabyte nie.
+
+**Erkennen ist der leichtere Teil.** Was danach kommt, steht in
+`receiptOcr.js`, und dort sitzen die Fehler, die still Schaden
+anrichten:
+
+- **Spalten werden zu Leerzeichen.** `lidlParser` erkennt eine
+  Position an mindestens zwei Leerzeichen zwischen Name und Preis —
+  auf dem Bon ist das eine Spalte. Die Erkennung macht daraus mal
+  zwei, mal eins. Jede Zeile wird deshalb wieder ausgerichtet, statt
+  eine zweite Bon-Grammatik zu schreiben: die eine, die an einem
+  echten Bon kalibriert ist, bleibt die einzige.
+- **Ziffern werden zu Buchstaben.** Auf Thermopapier ist die Null ein
+  O, die Eins ein l. Im Namen ist das harmlos — der Produktabgleich
+  verträgt Tippfehler. Im Preis verschwindet die Zeile. Deshalb wird
+  ausschließlich **innerhalb eines Betragsworts** zurückübersetzt und
+  nur, wenn darin mindestens eine echte Ziffer steht: `2,O9` wird zu
+  `2,09`, `Joghurt` bleibt `Joghurt`, `SOO g Mehl` bleibt stehen.
+- **Auf dem Bild steht mehr als der Einkauf.** Adresse, Steuernummer,
+  Kartenbeleg, Werbespruch — alles mit Zahlen, nichts davon ein
+  Produkt.
+
+**Im Zweifel eine Zeile zu wenig.** Eine übersehene Position sieht
+man sofort in der Prüfliste und tippt sie nach. Eine erfundene
+wandert still in die Historie und verschiebt einen Rhythmus, den
+danach niemand mehr erklären kann. Deshalb: kein negativer Preis (das
+ist ein Abzug, kein Produkt — der Zufallstest hat genau das gefunden),
+kein Betrag über 300 €, kein Name ohne Buchstaben, keine Position
+ohne Betrag.
+
+Danach ist der Weg derselbe wie beim Text: dieselbe Prüfliste,
+dieselbe Bestätigung Zeile für Zeile. **Eine Texterkennung liest, sie
+versteht nicht** — sie darf vorschlagen und niemals buchen. Datum und
+Markt werden aus dem Bild übernommen, aber nur, wenn dort etwas
+stand.
+
+Gemessen an zwei erzeugten Bon-Fotos (gerade und um 3° gedreht, mit
+Schatten und Unschärfe): 2–3 Sekunden, alle Positionen erkannt, alle
+Produkte richtig zugeordnet, Rabattzeile und Gewichtszeile korrekt
+der Position darüber zugeschlagen. `test/ocr.js` prüft mit 53 Tests
+den Weg vom erkannten Text zum Bon — nicht die Erkennung selbst, die
+ist ein fremdes Programm mit eigenen Tests.
+
 ### Jede Marke erklärt sich
 
 Die Liste ist voller kurzer Zeichen: „von dir", „+8 %", „doppelt?",

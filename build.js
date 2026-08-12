@@ -76,6 +76,7 @@ const MODULES = [
   "feedbackLearner.js",
   "seasonalRhythm.js",
   "changeDetector.js",
+  "receiptOcr.js",
   "activityLog.js",
   "streakTracker.js",
   "weeklyReview.js",
@@ -84,9 +85,22 @@ const MODULES = [
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt
 // index.html für die <script>-Zeilen und sw.js für den Cache.
-const UI_SCRIPTS = ["bundle.js", "data.js", "views.js", "app.js"];
+const UI_SCRIPTS = ["bundle.js", "data.js", "ocr.js", "views.js", "app.js"];
 const UI_ASSETS = ["index.html", "app.css", "manifest.webmanifest", "sw.js"];
 const ICONS = ["icon-180.png", "icon-192.png", "icon-512.png"];
+
+// Fremde Dateien (Texterkennung). Sie werden nur kopiert, nie
+// angefasst — Herkunft und Fassungen stehen in src/ui/vendor/HERKUNFT.md.
+// Bewusst NICHT im Service-Worker-Vorrat: 4,4 MB bei der Installation
+// für eine Funktion, die viele nie benutzen, wäre unverschämt. Der
+// Worker legt sie beim ersten Bild von selbst ab.
+const VENDOR = [
+  "tesseract.min.js",
+  "worker.min.js",
+  "tesseract-core-simd-lstm.js",
+  "tesseract-core-simd-lstm.wasm",
+  "deu.traineddata.gz"
+];
 
 function strip(src) {
   return src
@@ -194,13 +208,23 @@ function build({ quiet = false } = {}) {
     fs.copyFileSync(path.join(UI, "icons", f), path.join(OUT, "icons", f));
   });
 
+  fs.mkdirSync(path.join(OUT, "vendor"), { recursive: true });
+  let vendorFehlt = 0;
+  VENDOR.forEach((f) => {
+    const src = path.join(UI, "vendor", f);
+    if (!fs.existsSync(src)) { vendorFehlt++; return; }
+    fs.copyFileSync(src, path.join(OUT, "vendor", f));
+  });
+
   const kb = (s) => Math.round(s.length / 1024) + " KB";
   log(`Bündel:      ${MODULES.length} Module, ${kb(bundle)}`);
   log(`Oberfläche:  ${UI_SCRIPTS.length - 1} Skripte, ${UI_ASSETS.length} Dateien, ${ICONS.length} Symbole`);
+  log(`Fremdteile:  ${VENDOR.length - vendorFehlt} von ${VENDOR.length} (Texterkennung)`);
+  if (vendorFehlt) log(`             ${vendorFehlt} fehlen — Bilderfassung bleibt aus, siehe src/ui/vendor/HERKUNFT.md`);
   log(`Bauversion:  ${version}`);
   log(`Ziel:        ${path.relative(ROOT, OUT)}/`);
   return { bundle, version };
 }
 
 if (require.main === module) build();
-module.exports = { build, buildBundle, MODULES, UI_SCRIPTS, UI_ASSETS, ICONS };
+module.exports = { build, buildBundle, MODULES, UI_SCRIPTS, UI_ASSETS, ICONS, VENDOR };

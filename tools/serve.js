@@ -23,7 +23,18 @@ const TYPES = {
   ".json": "application/json; charset=utf-8",
   ".webmanifest": "application/manifest+json; charset=utf-8",
   ".png": "image/png",
-  ".svg": "image/svg+xml"
+  ".svg": "image/svg+xml",
+  // WebAssembly braucht seinen eigenen Typ, sonst lehnt der Browser
+  // das schnelle Übersetzen im Datenstrom ab („Incorrect response
+  // MIME type") und fällt auf den langsamen Weg über einen Puffer
+  // zurück. Es funktioniert dann noch, aber die Texterkennung
+  // startet spürbar träger.
+  ".wasm": "application/wasm",
+  // Die Sprachdatei wird ausdrücklich NICHT als „gzip-kodiert"
+  // ausgeliefert: Tesseract packt sie selbst aus. Wer hier
+  // Content-Encoding: gzip setzt, lässt den Browser auspacken —
+  // und Tesseract bekommt Klartext, wo es ein Archiv erwartet.
+  ".gz": "application/octet-stream"
 };
 
 if (!fs.existsSync(path.join(ROOT, "index.html"))) build({ quiet: true });
