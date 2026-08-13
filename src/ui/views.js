@@ -153,6 +153,16 @@ const PILL_INFO = {
     "festgehalten. Für die Produktzuordnung wird sie weggeworfen — sonst wären „Marken-Butter“ und " +
     "„Butter“ für die App zwei verschiedene Dinge."],
 
+  gesichert: ["Sicherung",
+    "Zeigt, ob die Daten außerhalb dieses Browsers liegen.\n\nEine Sicherungsdatei ist das Einzige, " +
+    "was „Browserdaten löschen“, ein neues Gerät oder einen kaputten Speicher überlebt. Die App hat " +
+    "keinen Server, der einspringen könnte — das ist Absicht und deshalb deine Datei."],
+
+  gefaehrdet: ["Nicht gesichert",
+    "Alles Gelernte liegt nur in diesem Browser: Rhythmen, Rückmeldungen, Meilensteine.\n\nEs gibt " +
+    "kein Konto, mit dem sich das wiederherstellen ließe. Eine Datei herunterzuladen dauert einen " +
+    "Wimpernschlag und ist der Unterschied zwischen einem Ärgernis und drei verlorenen Jahren."],
+
   eigenmarke: ["Eigenmarke",
     "Die Handelsmarke des Händlers — ja!, Gut&Günstig, K-Classic, Milbona und so weiter.\n\n" +
     "Die App empfiehlt nichts davon. Sie zeigt nur, was der Unterschied bei dir ausmachen würde."]
@@ -911,6 +921,112 @@ function badgeSheet(row, app) {
   body.append(list);
   body.append(el("p", "srcnote", esc(row.note)));
   app.sheet(row.label, row.currentTitle || `Stand: ${row.euros ? eur(row.value) : row.value} ${row.euros ? "" : row.unit}`, body);
+}
+
+/* ================================================================
+   Sicherung
+   ================================================================
+   Der Text hier ist Teil der Funktion. Eine Zeile „nicht gesichert“
+   bewegt niemanden; „40 Bons und drei Jahre gelernter Rhythmus liegen
+   nur in diesem Browser“ schon. Deshalb nennt jede Meldung, was
+   konkret auf dem Spiel steht, und jede bietet den Handgriff daneben
+   an, statt ihn in eine zweite Ebene zu legen.
+   ================================================================ */
+function backupGroup(ctx, app) {
+  const S = Data.get();
+  const h = ctx.backup;
+  const g = uiGroup("Sicherung",
+    "Diese App hat keinen Server und kein Konto — das ist Absicht, und es hat einen Preis: die Daten " +
+    "liegen ausschließlich in diesem Browser.\n\n" +
+    "Browser dürfen ihren Speicher aufräumen. Auf iPhone und iPad löscht Safari die Daten einer nicht " +
+    "installierten Web-App nach sieben Tagen ohne Nutzung. Und „Browserdaten löschen“ trifft die App mit.\n\n" +
+    "Drei Stufen helfen dagegen, in dieser Reihenfolge: dauerhaften Speicher erlauben, die App zum " +
+    "Startbildschirm hinzufügen, und eine Sicherungsdatei außerhalb des Browsers halten. Nur die letzte " +
+    "überlebt wirklich alles.");
+
+  const klasse = { gesichert: "f-ok", ok: "f-ok", erinnerung: "f-gold", gefaehrdet: "f-miss", unkritisch: "" }[h.level] || "";
+  g.body.append(uiRow(h.title, h.message, flag(
+    h.level === "gefaehrdet" ? "gefaehrdet" : "gesichert",
+    klasse,
+    { gesichert: "sicher", ok: "sicher", erinnerung: "fällig", gefaehrdet: "Achtung", unkritisch: "—" }[h.level] || "—"
+  )));
+
+  /* Dauerhafter Speicher. Wenn der Browser ihn schon gewährt hat,
+     steht es da; sonst ist es ein Tippen. */
+  if (!h.risk.fluechtig) {
+    g.body.append(uiRow("Dauerhafter Speicher", "Der Browser räumt diese Daten nicht mehr weg.", null, { value: "an" }));
+  } else {
+    const b = el("button", "row action");
+    // Nicht denselben Satz wie oben: der Grund steht schon im
+    // Zustand darüber, und zweimal dasselbe zu lesen lässt beide
+    // Zeilen unwichtig wirken.
+    b.append(el("div", "rowMain",
+      '<div class="rowTitle">Dauerhaften Speicher erlauben</div>' +
+      '<div class="rowSub">Nimmt die Daten vom automatischen Aufräumen aus. Kostet nichts, hilft sofort.</div>'));
+    b.addEventListener("click", () => {
+      Backup.requestPersist().then((ok) => {
+        app.render();
+        app.notice(ok ? "Erlaubt" : "Nicht erlaubt", ok
+          ? "Der Browser räumt diese Daten jetzt nicht mehr von selbst weg. Gegen „Browserdaten löschen“ hilft trotzdem nur eine Datei."
+          : "Dieser Browser hat abgelehnt — das entscheidet er selbst, oft nach Nutzungsdauer. Umso wichtiger ist eine Sicherungsdatei; " +
+            "auf iPhone und iPad hilft zusätzlich, die App zum Startbildschirm hinzuzufügen.");
+      });
+    });
+    g.body.append(b);
+  }
+
+  /* Automatische Datei — der einzige Zustand, der ohne Disziplin
+     auskommt. Wo der Browser sie nicht kann, wird das gesagt statt
+     eine tote Schaltfläche zu zeigen. */
+  if (Backup.supportsAutoFile()) {
+    if (Backup.handle) {
+      const row = el("button", "row action");
+      row.append(el("div", "rowMain",
+        '<div class="rowTitle">Automatische Sicherung läuft</div>' +
+        `<div class="rowSub">${esc(Backup.handle.name || "gewählte Datei")} — wird bei jeder Änderung mitgeschrieben</div>`));
+      row.addEventListener("click", () => app.confirm("Automatik beenden?",
+        "Die Datei bleibt liegen, sie wird nur nicht mehr fortgeschrieben.",
+        () => { Backup.forgetTarget().then(() => { app.render(); app.toast("Beendet"); }); }, "Beenden"));
+      g.body.append(row);
+    } else {
+      const row = el("button", "row action");
+      row.append(el("div", "rowMain",
+        '<div class="rowTitle">Datei wählen und automatisch sichern</div>' +
+        '<div class="rowSub">Einmal auswählen, danach schreibt die App bei jeder Änderung selbst hinein</div>'));
+      row.addEventListener("click", () => {
+        Backup.chooseTarget(backupFileName(Data.today()))
+          .then(() => Backup.writeNow(Data.exportJson()))
+          .then((ok) => {
+            if (ok) Data.noteBackup("auto");
+            app.render();
+            app.toast(ok ? "Automatik läuft" : "Nicht geschrieben");
+          })
+          .catch(() => { /* abgebrochen — keine Meldung nötig */ });
+      });
+      g.body.append(row);
+    }
+  }
+
+  /* Der Weg, der überall geht. */
+  const dl = el("button", "row action");
+  dl.append(el("div", "rowMain",
+    '<div class="rowTitle">Sicherung jetzt herunterladen</div>' +
+    `<div class="rowSub">${S.purchases.length} Käufe, ${S.receipts.length} Bons, alles Gelernte</div>`));
+  dl.addEventListener("click", () => {
+    const ok = Backup.download(Data.exportJson(), backupFileName(Data.today()));
+    if (ok) Data.noteBackup("datei");
+    app.render();
+    app.toast(ok ? "Gesichert" : "Nicht möglich");
+  });
+  g.body.append(dl);
+
+  if (!Backup.supportsAutoFile()) {
+    g.body.append(el("p", "srcnote",
+      "Dieser Browser kann keine Datei automatisch fortschreiben. Deshalb erinnert die App daran — " +
+      "und deshalb ist es hier wichtiger als anderswo, die Datei irgendwohin zu legen, wo sie gesichert wird."));
+  }
+
+  return g;
 }
 
 /* ================================================================
@@ -1682,6 +1798,7 @@ function renderScan(box, cap, app) {
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
     const res = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
+    app.askPersist();
     cap.parsed = null; cap.text = "";
     app.toast(`${res.count} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
@@ -2019,6 +2136,7 @@ function chartCard(ctx) {
    ================================================================ */
 function viewMehr(ctx, app) {
   const c = frag();
+  if (ctx.backup.urgent) c.append(backupGroup(ctx, app));
   const S = Data.get();
 
   /* --- Darstellung --- */
@@ -2163,6 +2281,14 @@ function viewMehr(ctx, app) {
       "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\“.")
   }));
   c.append(m);
+
+  /* --- Sicherung ---
+     Steht normalerweise hier unten bei den Daten, wo man sie sucht.
+     Ist der Bestand aber wirklich gefährdet, wandert sie nach ganz
+     oben — eine Warnung, die man erst erscrollen muss, ist keine.
+     Der Zustand kommt aus backupGuard, die Handgriffe aus
+     ui/backup.js. */
+  if (!ctx.backup.urgent) c.append(backupGroup(ctx, app));
 
   /* --- Daten --- */
   const dat = uiGroup("Daten",

@@ -21,6 +21,16 @@
    ================================================================ */
 
 const STORE_KEY = "einkaufsanker.v1";
+
+/* Die Schattenkopie. Sie schützt NICHT gegen das Löschen des
+   Browsers — dagegen hilft nichts, was im selben Speicher liegt —,
+   sondern gegen den abgebrochenen Schreibvorgang: volle Quote,
+   Absturz, halb geschriebene Zeichenkette. Das ist der Fall, der
+   ohne Zutun eintritt, und er hinterlässt einen Speicher, der
+   vorhanden und unlesbar ist. Beim Start entscheidet der Inhalt,
+   welche Kopie gilt, nicht der Zeitstempel: eine abgeschnittene
+   Datei ist neuer und trotzdem schlechter. */
+const SHADOW_KEY = "einkaufsanker.v1.schatten";
 const SCHEMA = 1;
 
 /* ---------- Datumshilfen ---------- */
@@ -110,7 +120,11 @@ function emptyState() {
     // soll nicht jede Woche gefragt werden.
     brandOff: [],
     storeChecked: [],     // im Ladenmodus abgehakt
-    depositReturned: []   // zurückgegebene Pfandgebinde
+    depositReturned: [],  // zurückgegebene Pfandgebinde
+    // Wann zuletzt gesichert wurde und wie. Ohne diese drei Felder
+    // kann die App nicht sagen, ob eine Sicherung fehlt — und eine
+    // Erinnerung, die nicht weiß, wovon sie redet, ist Lärm.
+    backup: { lastDate: null, lastKind: null, receiptsAt: 0, lastNag: null }
   };
 }
 
@@ -129,41 +143,115 @@ const listeners = new Set();
 function merge(parsed) {
   const base = emptyState();
   const out = { ...base, ...parsed };
-  for (const key of ["settings", "dismissed", "household", "lifetime", "review"]) {
+  for (const key of ["settings", "dismissed", "household", "lifetime", "review", "backup"]) {
     out[key] = { ...base[key], ...(parsed[key] || {}) };
   }
   out.settings.vacation = { ...base.settings.vacation, ...(parsed.settings || {}).vacation };
   return out;
 }
 
-function load() {
+/** Eine Kopie lesen und lesbar zurückgeben — oder null. */
+function readSlot(key) {
   let raw = null;
   try {
-    raw = localStorage.getItem(STORE_KEY);
+    raw = localStorage.getItem(key);
   } catch (e) {
-    // Privater Modus oder blockierter Speicher: die App läuft weiter,
-    // merkt sich aber nichts. Besser als ein Absturz beim Start.
-    console.warn("Speicher nicht verfügbar — Daten gehen beim Neuladen verloren.", e);
+    return null;
   }
-  if (raw) {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+/* Was beim letzten Start passiert ist — die Oberfläche sagt es dem
+   Nutzer, wenn die Schattenkopie einspringen musste. Ein stiller
+   Rückgriff wäre bequemer und würde verschweigen, dass gerade etwas
+   schiefgegangen ist. */
+let lastRecovery = null;
+
+function load() {
+  const haupt = readSlot(STORE_KEY);
+  const schatten = readSlot(SHADOW_KEY);
+  lastRecovery = null;
+
+  if (haupt === null && schatten === null) {
     try {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.schema === SCHEMA) state = merge(parsed);
+      if (localStorage.getItem(STORE_KEY)) {
+        lastRecovery = { level: "verloren", message: "Der gespeicherte Stand war unlesbar." };
+      }
     } catch (e) {
-      console.warn("Gespeicherte Daten unlesbar — starte leer.", e);
+      console.warn("Speicher nicht verfügbar — Daten gehen beim Neuladen verloren.", e);
+    }
+  } else {
+    const wahl = pickBetter(haupt, schatten, { schema: SCHEMA });
+    if (wahl.chosen) {
+      state = merge(wahl.chosen);
+      // Nur melden, wenn die Schattenkopie wirklich gerettet hat.
+      if (wahl.chosen === schatten && haupt !== null) {
+        lastRecovery = { level: "gerettet", message: `Der Hauptstand war unbrauchbar (${wahl.why}) — die Sicherungskopie im Browser ist eingesprungen.` };
+      } else if (wahl.chosen === schatten && haupt === null) {
+        lastRecovery = { level: "gerettet", message: "Der Hauptstand fehlte — die Sicherungskopie im Browser ist eingesprungen." };
+      }
+    } else {
+      lastRecovery = { level: "verloren", message: "Beide gespeicherten Stände waren unbrauchbar." };
     }
   }
   if (!state.purchases.length && !state.settings.demo && !state.createdAt) state.createdAt = today();
   return state;
 }
 
+/* Wie oft die Schattenkopie mitgezogen wird. Nicht bei jeder
+   Änderung: dann wären beide Kopien gleichzeitig kaputt, wenn der
+   Speicher mitten im Schreiben ausgeht — und genau davor soll sie
+   schützen. Sie hinkt bewusst hinterher. */
+const SHADOW_EVERY = 10;
+let saveCount = 0;
+
 function save() {
+  let text;
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    text = JSON.stringify(state);
+  } catch (e) {
+    console.warn("Zustand nicht serialisierbar.", e);
+    return;
+  }
+  try {
+    localStorage.setItem(STORE_KEY, text);
   } catch (e) {
     console.warn("Konnte nicht speichern.", e);
+    return;
+  }
+  // Erst NACH dem erfolgreichen Hauptschreiben, und nur ab und zu.
+  if (saveCount++ % SHADOW_EVERY === 0) {
+    try {
+      localStorage.setItem(SHADOW_KEY, text);
+    } catch (e) {
+      // Kein Drama: die Schattenkopie ist ein Extra, kein Muss.
+    }
+  }
+  if (typeof Backup !== "undefined" && Backup.handle) {
+    Backup.schedule(() => exportJson(), (ok) => { if (ok) noteBackup("auto"); });
   }
 }
+
+/** Eine erfolgte Sicherung festhalten. */
+function noteBackup(kind) {
+  state.backup = {
+    ...(state.backup || {}),
+    lastDate: today(),
+    lastKind: kind,
+    receiptsAt: state.receipts.length
+  };
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) { /* dann eben beim nächsten Mal */ }
+  listeners.forEach((l) => l());
+}
+
+function recoveryNotice() { return lastRecovery; }
 
 function get() { return state; }
 
@@ -1104,6 +1192,18 @@ function compute() {
   const brands = brandSwapCandidates(history, { dismissed: s.brandOff });
   const brandHeadline = swapHeadline(brands);
 
+  /* Wie gefährdet ist der Bestand? Die Frage gehört in jede
+     Neuzeichnung, nicht in eine Einstellung, die niemand aufsucht. */
+  const bak = s.backup || {};
+  const backup = backupHealth({
+    receipts: s.receipts.length,
+    receiptsAtBackup: bak.receiptsAt || 0,
+    lastBackupDate: bak.lastDate || null,
+    today: ref,
+    auto: typeof Backup !== "undefined" && !!Backup.handle,
+    env: typeof Backup !== "undefined" ? Backup.envSync() : {}
+  });
+
   const badges = milestoneState({ ...s.lifetime, wochen: streak.weeks });
   const freshBadges = newMilestones(badges, s.badgesSeen);
 
@@ -1118,7 +1218,7 @@ function compute() {
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog, absences,
     actions: s.actions, review, streak, streakWeeks, badges, freshBadges,
-    brands, brandHeadline,
+    brands, brandHeadline, backup, recovery: lastRecovery,
     store, aisleList,
     ethylene: checkEthyleneConflicts(known.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
@@ -1238,10 +1338,10 @@ function searchProducts(query, limit = 12) {
 }
 
 const Data = {
-  STORE_KEY, SCHEMA,
+  STORE_KEY, SHADOW_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
   addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
-  toggleBrandOff, setUseBy,
+  toggleBrandOff, setUseBy, noteBackup, recoveryNotice,
   addManual, removeManual,
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,

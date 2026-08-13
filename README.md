@@ -363,6 +363,115 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### Die Haltbarkeiten, geprüft — und die Herkunft war falsch
+
+Die 54 sicherheitskritischen Produkte trugen für ihre Tageszahl die
+Stufe **„regulatorisch"**, also „rechtlich definiert". Die
+Quellenprüfung ergibt: das stimmt nicht, und zwar an der
+empfindlichsten Stelle des Katalogs.
+
+Rechtlich definiert sind genau zwei Dinge:
+
+1. **Die Pflicht zum Verbrauchsdatum.** VO (EU) 1169/2011 (LMIV),
+   Art. 24 und Anhang X — bei Lebensmitteln, die „in mikrobiologischer
+   Hinsicht sehr leicht verderblich" sind, ersetzt das Verbrauchsdatum
+   das MHD; nach Ablauf ist die Abgabe verboten.
+2. **Die Höchsttemperatur.** Tier-LMHV Anlage 5 i. V. m. VO (EG)
+   853/2004 — Hackfleisch +2 °C, Innereien +3 °C, Fleischzubereitungen
+   und Geflügel +4 °C.
+
+**Die Anzahl der Tage ist nicht geregelt.** Kein Gesetz sagt, dass
+Hähnchenbrust zwei Tage hält, und die Behörden nennen bewusst keine
+Zahl — es gibt keine, die für jedes Produkt, jede Kühlkette und jeden
+Kühlschrank stimmt. BZfE und BMEL sagen stattdessen zweierlei: es gilt
+das **aufgedruckte** Datum, und als grobe Orientierung existieren
+Lagerempfehlungen (Geflügel und rohe Innereien 1–2 Tage, Rindfleisch
+am Stück 3–4, Fisch höchstens 2; loses Hackfleisch am selben Tag).
+
+Daraus folgt dreierlei:
+
+- **Die Tageszahlen heißen jetzt „leitlinie".** Eine App, die ihre
+  unsicherste Zahl als ihre sicherste ausweist, ist genau dort
+  unehrlich, wo es gefährlich wird.
+- **Wo eine Empfehlung eine Spanne nennt, gilt die untere Grenze.**
+  Sieben Werte lagen darüber und wurden gesenkt: Entenbrust, Gans und
+  Hähnchen-Nuggets (Geflügel), Bratwurst, Gyros und Merguez
+  (Fleischzubereitungen) sowie Sprossen — je von 3 auf 2 Tage. Dass
+  „Entenbrust" Geflügel ist, erkennt keine Namensheuristik; die
+  Zuordnung steht deshalb als ausdrückliche Liste in `safetyRules.js`.
+- **Das aufgedruckte Datum schlägt jede Schätzung**, in beide
+  Richtungen. Es lässt sich im Produktblatt eintragen, und ab dann
+  rechnet die App damit statt mit ihrer Empfehlung.
+
+`safetyRules.js` ist dabei keine Dokumentation, sondern eine Prüfung:
+`checkSafetyData` hält den Katalog gegen sieben belegte Gruppen, und
+`test/safety.js` bricht ab, sobald ein Produkt darüber liegt, ohne
+Gruppe dasteht oder seine Tageszahl wieder als Recht ausgibt. Eine
+einmalige Durchsicht wäre in drei Monaten wertlos.
+
+Zwei Fehler fielen dabei nebenbei auf: `„2026-13-45"` kam durch die
+Formprüfung des Datums (Monat 13, Tag 45), und der Bestand rechnete
+die Frage „ist es überhaupt noch da?" weiter mit der Schätzung,
+während die Anzeige schon das Etikett nahm.
+
+### Damit drei Jahre nicht an einem Dienstag verschwinden
+
+Alles, was diese App weiß, liegt im `localStorage`. Das ist kein
+Tresor, sondern ein Zwischenspeicher mit guten Manieren: er wird
+geleert, wenn der Browser Platz braucht, wenn jemand „Browserdaten
+löschen" tippt — und auf iPhone und iPad räumt Safari die Daten einer
+**nicht installierten** Web-App nach sieben Tagen ohne Nutzung ab.
+Sieben Tage sind ein Urlaub.
+
+Der Verlust wäre hier besonders bitter, weil er nicht eine Einstellung
+kostet, sondern Gelerntes: drei Jahre Rhythmen, jede Rückmeldung,
+jeden Meilenstein. Es gibt kein Konto, mit dem sich das
+wiederherstellen ließe — das ist ja der Punkt.
+
+**Drei Stufen, in aufsteigender Wirksamkeit:**
+
+1. **Dauerhafter Speicher** (`navigator.storage.persist()`). Kostet
+   nichts, hilft am meisten. Gefragt wird **nach dem ersten erfassten
+   Einkauf**, nicht beim ersten Start: Browser entscheiden nach
+   Nutzungssignalen, und ein zu früh gestelltes Gesuch wird abgelehnt
+   — dauerhaft.
+2. **Eine Schattenkopie** im selben Speicher. Sie hilft *nicht* gegen
+   Löschen; dagegen hilft nichts, was im selben Speicher liegt. Sie
+   hilft gegen den abgebrochenen Schreibvorgang — volle Quote,
+   Absturz, halbe Datei —, und der tritt ohne Zutun ein. Sie hinkt
+   bewusst hinterher (jede zehnte Speicherung), denn zwei gleichzeitig
+   geschriebene Kopien sind zwei gleichzeitig kaputte. Beim Start
+   entscheidet der **Inhalt**, welche gilt, nicht der Zeitstempel:
+   eine abgeschnittene Datei ist neuer und trotzdem schlechter. Und
+   wenn die Schattenkopie einspringt, sagt die App das, statt es still
+   zu tun.
+3. **Eine Datei außerhalb des Browsers.** Nur sie überlebt wirklich
+   alles. Wo die File System Access API vorhanden ist (Chrome, Edge,
+   Android), wählt man das Ziel einmal aus, und die App schreibt
+   danach bei jeder Änderung selbst hinein — gebündelt über vier
+   Sekunden, damit das Abhaken einer Liste nicht zwanzig Schreibvorgänge
+   auslöst, und beim Verlassen der Seite noch einmal (`pagehide` und
+   `visibilitychange`, weil ein Telefon eine Seite selten schließt und
+   meist nur wegschiebt). Wo die API fehlt (Safari, Firefox), bleibt
+   der Download — und die App erinnert daran, statt so zu tun, als
+   wäre alles geregelt.
+
+Die Erinnerung ist bewusst selten: nur bei echter Gefährdung und
+höchstens einmal pro Woche. Eine Meldung, die bei jedem Start
+erscheint, wird nach dem dritten Mal weggetippt, ohne gelesen zu
+werden — und fehlt dann an dem Tag, an dem sie zählt. Und sie nennt,
+was auf dem Spiel steht: „57 Bons und alles Gelernte liegen nur in
+diesem Browser" bewegt jemanden, „nicht gesichert" nicht.
+
+Ist der Zustand gefährdet, steht die Gruppe ganz oben in „Mehr" statt
+unten bei den Daten. Eine Warnung, die man erst erscrollen muss, ist
+keine.
+
+**Was hier bewusst fehlt: eine Wolke.** Ein Server würde das Problem
+lösen und dabei das Versprechen brechen, auf dem die ganze App steht.
+Die Antwort ist deshalb nicht „vertraut uns", sondern „nehmt eure
+Datei mit".
+
 ### Der Auftritt bei einem Meilenstein
 
 Ein erreichter Meilenstein bekam bisher dasselbe nüchterne Blatt wie

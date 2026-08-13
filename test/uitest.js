@@ -91,7 +91,8 @@ try {
     sources.join("\n;\n") +
     "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
-    " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage };"
+    " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
+    " Backup, backupHealth, backupFileName, pickBetter };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -1031,6 +1032,114 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
   })());
 }
 
+console.log("\n--- Sicherung ---");
+{
+  D.reset();
+  D.loadDemo("full");
+
+  // Der Browser wird ersetzt, nicht die Logik: Datei-Auswahl,
+  // Schreiben und dauerhafter Speicher laufen gegen einen Doppelgänger,
+  // alles andere ist echt.
+  T.Backup.adapter = {
+    persisted: false, installed: false, webkit: false,
+    supportsAutoFile: true, grantPersist: true, handle: null
+  };
+  T.Backup._persisted = false;
+  T.Backup.handle = null;
+
+  App.goto("mehr");
+  const txt = () => $("main").textContent;
+  ok("Mehr zeigt die Sicherung", /Sicherung/.test(txt()));
+  ok("Und sagt beim ersten Mal, dass nichts gesichert ist",
+    /Noch nie gesichert/.test(txt()), txt().slice(0, 120));
+  ok("Der Zustand steht auch im Kontext", App.ctx.backup.level === "gefaehrdet", App.ctx.backup.level);
+
+  /* --- Dauerhafter Speicher --- */
+  const persistBtn = [...$("main").querySelectorAll("button")]
+    .find((b) => /Dauerhaften Speicher erlauben/.test(b.textContent));
+  ok("Es gibt einen Weg zum dauerhaften Speicher", !!persistBtn);
+
+  /* --- Herunterladen --- */
+  const dlBtn = [...$("main").querySelectorAll("button")]
+    .find((b) => /herunterladen/i.test(b.textContent));
+  ok("Und einen zum Herunterladen", !!dlBtn);
+  click(dlBtn);
+  ok("Die Datei wird erzeugt", !!T.Backup.adapter.lastDownload,
+    JSON.stringify(T.Backup.adapter.lastDownload && T.Backup.adapter.lastDownload.filename));
+  ok("Sie trägt das Datum im Namen",
+    T.Backup.adapter.lastDownload.filename === T.backupFileName(D.today()),
+    T.Backup.adapter.lastDownload.filename);
+  ok("Und enthält die Käufe",
+    JSON.parse(T.Backup.adapter.lastDownload.text).purchases.length === D.get().purchases.length);
+  ok("Die Sicherung ist vermerkt", D.get().backup.lastDate === D.today(), JSON.stringify(D.get().backup));
+  App.goto("mehr");
+  ok("Danach meldet die App nicht mehr „nie gesichert“", !/Noch nie gesichert/.test(txt()));
+
+  /* --- Automatische Datei --- */
+  ok("Wo der Browser es kann, wird die Automatik angeboten",
+    [...$("main").querySelectorAll("button")].some((b) => /Datei wählen und automatisch/.test(b.textContent)));
+
+  /* --- Wo der Browser es NICHT kann, wird das gesagt --- */
+  T.Backup.adapter.supportsAutoFile = false;
+  T.Backup.handle = null;
+  App.goto("mehr");
+  ok("Ohne Dateizugriff steht kein toter Knopf da",
+    ![...$("main").querySelectorAll("button")].some((b) => /automatisch sichern/.test(b.textContent)));
+  ok("Stattdessen wird erklärt, warum es beim Erinnern bleibt",
+    /kann keine Datei automatisch fortschreiben/.test(txt()));
+  T.Backup.adapter.supportsAutoFile = true;
+
+  /* --- Die Schattenkopie springt ein --- */
+  {
+    // Ein halb geschriebener Hauptstand, wie ihn eine volle Quote
+    // hinterlässt — die Schattenkopie muss ihn ersetzen.
+    const guter = D.exportJson();
+    window.localStorage.setItem(D.STORE_KEY, guter.slice(0, Math.floor(guter.length / 2)));
+    window.localStorage.setItem(D.SHADOW_KEY, guter);
+    D.load();
+    const rec = D.recoveryNotice();
+    ok("Der kaputte Hauptstand wird erkannt", !!rec, JSON.stringify(rec));
+    ok("Und die Schattenkopie springt ein", rec && rec.level === "gerettet", rec && rec.level);
+    ok("Die Käufe sind wieder da", D.get().purchases.length > 200, D.get().purchases.length);
+    ok("Es wird nicht verschwiegen", rec && /Sicherungskopie/.test(rec.message));
+  }
+  {
+    // Sind beide kaputt, wird das gesagt statt still leer zu starten.
+    window.localStorage.setItem(D.STORE_KEY, "{kaputt");
+    window.localStorage.setItem(D.SHADOW_KEY, "auch kaputt");
+    D.load();
+    const rec = D.recoveryNotice();
+    ok("Zwei kaputte Stände werden gemeldet", rec && rec.level === "verloren", JSON.stringify(rec));
+  }
+  D.reset();
+  D.loadDemo("full");
+
+  /* --- Die Erinnerung bleibt selten --- */
+  {
+    D.update((st) => { st.backup = { lastDate: null, lastKind: null, receiptsAt: 0, lastNag: null }; });
+    App.render();
+    const h = App.ctx.backup;
+    ok("Ohne Sicherung ist der Zustand dringend", h.urgent === true, h.level);
+    App.maybeRemindBackup();
+    ok("Es wird einmal erinnert", !$("sheet").hidden);
+    click($("sheetCancel"));
+    const nag = D.get().backup.lastNag;
+    ok("Und der Zeitpunkt festgehalten", nag === D.today(), nag);
+    App.maybeRemindBackup();
+    ok("Beim nächsten Start nicht sofort wieder", $("sheet").hidden);
+  }
+
+  /* --- Die Automatik zuletzt: ihre Kette läuft über Versprechen, und
+     alles, was danach synchron am Zustand dreht, käme ihr zuvor. Genau
+     das ist beim ersten Anlauf passiert — der Test setzte den
+     Dateigriff zurück, bevor geschrieben war, und prüfte dann, warum
+     nichts geschrieben wurde. --- */
+  App.goto("mehr");
+  const autoBtn = [...$("main").querySelectorAll("button")]
+    .find((b) => /Datei wählen und automatisch/.test(b.textContent));
+  click(autoBtn);
+}
+
 console.log("\n--- Einkauf aus einem Bild ---");
 {
   D.reset();
@@ -1324,16 +1433,34 @@ console.log("\n--- Selbst etwas hinzufügen ---");
   ok("Sie bleibt aber gespeichert", D.get().manual.length === 1);
 }
 
-console.log("\n--- Keine unbeaufsichtigten Fehler ---");
-ok("Konsole blieb fehlerfrei", errors.length === 0, errors.slice(0, 3).join(" | "));
+/* Der Weg über die Datei-Automatik läuft über Versprechen. Er steht
+   deshalb hier unten: erst wenn alle Mikroaufgaben abgearbeitet sind,
+   lässt sich prüfen, ob wirklich geschrieben wurde. */
+/* Kurz warten statt Mikroaufgaben zählen: die Kette aus Auswahl,
+   Schreiben und Neuzeichnen ist mehrere Versprechen tief, und eine
+   feste Anzahl `then` zu raten wäre ein Test, der bei der nächsten
+   Änderung stillschweigend zu früh prüft. */
+setTimeout(() => {
+  const ad = T.Backup.adapter;
+  ok("Die Automatik hat ein Ziel gewählt", !!(ad && ad.handle), JSON.stringify(ad && ad.handle && ad.handle.name));
+  ok("Und sofort einmal geschrieben", !!(ad && ad.lastWrite), typeof (ad && ad.lastWrite));
+  ok("Was geschrieben wurde, ist ein gültiger Stand", (() => {
+    try { return JSON.parse(ad.lastWrite).schema === D.SCHEMA; } catch (e) { return false; }
+  })());
+  T.Backup.adapter = null;
+  T.Backup.handle = null;
 
-console.log("\n" + "=".repeat(60));
-console.log(`OBERFLÄCHE: ${pass} bestanden, ${fail} fehlgeschlagen`);
-if (errors.length) {
-  console.log("\nGesammelte Fehler:");
-  errors.slice(0, 10).forEach((e) => console.log("  " + e));
-}
-console.log("=".repeat(60));
-process.exit(fail || errors.length ? 1 : 0);
+  console.log("\n--- Keine unbeaufsichtigten Fehler ---");
+  ok("Konsole blieb fehlerfrei", errors.length === 0, errors.slice(0, 3).join(" | "));
+
+  console.log("\n" + "=".repeat(60));
+  console.log(`OBERFLÄCHE: ${pass} bestanden, ${fail} fehlgeschlagen`);
+  if (errors.length) {
+    console.log("\nGesammelte Fehler:");
+    errors.slice(0, 10).forEach((e) => console.log("  " + e));
+  }
+  console.log("=".repeat(60));
+  process.exit(fail || errors.length ? 1 : 0);
+}, 40);
 
 });
