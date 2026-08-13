@@ -1,0 +1,65 @@
+# Veröffentlicht den Inhalt von web/ auf GitHub Pages.
+#
+# Warum ein Arbeitsablauf und nicht die einfache Einstellung
+# „Branch + Ordner“: die kennt nur das Wurzelverzeichnis und /docs.
+# Ausgeliefert wird hier aber web/, und dieses Verzeichnis soll auch
+# web/ bleiben — es ist das Bauergebnis, und der Name sagt das.
+#
+# Gebaut wird vor dem Hochladen, obwohl web/ eingecheckt ist: so
+# stimmt das Veröffentlichte auch dann mit src/ überein, wenn jemand
+# den Bauschritt vergessen hat. Die Tests laufen mit, damit nichts
+# online geht, das nicht durch sie durchkommt.
+name: Auslieferung auf GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Von Hand auslösbar — nützlich für einen Zweig, der noch nicht
+  # in main ist.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Eine Auslieferung zur Zeit. Eine laufende wird nicht abgebrochen,
+# sonst steht am Ende die ältere Fassung online.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  bauen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # jsdom ist die einzige Abhängigkeit, und nur für die Tests.
+      - run: npm ci || npm install
+
+      - name: Tests
+        run: npm test
+
+      - name: Bauen
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  ausliefern:
+    needs: bauen
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

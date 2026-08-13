@@ -62,6 +62,15 @@ const OCR = {
   /** Für Tests austauschbar: eine Funktion (bild) => Text. */
   engine: null,
 
+  /* Abschaltgrund. Gesetzt heißt: die Erkennung steht hier nicht zur
+     Verfügung, und DAS HIER ist der Grund. Der Weg über einen Grund
+     statt über ein `false` existiert wegen der Vorschaudatei
+     (tools/preview.js): dort fehlt die Erkennung nicht, weil der
+     Browser sie nicht kann, sondern weil 4,4 MB nicht in eine
+     Vorschau gehören. Eine App, die in diesem Fall „dein Browser kann
+     das nicht" sagt, schiebt die Schuld auf das falsche Gerät. */
+  off: null,
+
   /**
    * Ist die Erkennung überhaupt möglich?
    *
@@ -72,9 +81,16 @@ const OCR = {
    */
   supported() {
     if (OCR.engine) return true;
+    if (OCR.off) return false;
     return typeof Worker !== "undefined" &&
            typeof WebAssembly === "object" &&
            typeof createImageBitmap === "function";
+  },
+
+  /** Warum geht es hier nicht? Ein Satz, der stimmt. */
+  reason() {
+    return OCR.off ||
+      "Dieser Browser kann keine Texterkennung. Der Bontext lässt sich weiter unten einfügen.";
   },
 
   /**

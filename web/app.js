@@ -844,9 +844,18 @@ function boot() {
     App.maybeRemindBackup();
   }
 
-  // Service Worker: macht die App offline nutzbar. Fehlschlag ist
-  // kein Grund zum Abbruch — die App läuft auch ohne.
-  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  /* Service Worker: macht die App offline nutzbar. Fehlschlag ist
+     kein Grund zum Abbruch — die App läuft auch ohne.
+
+     Übersprungen wird er, wenn kein Manifest verlinkt ist. Das ist
+     kein Umweg, sondern das ehrliche Kennzeichen: eine Seite ohne
+     Manifest ist keine installierbare App, sondern eine Vorschau in
+     einer einzelnen Datei (tools/preview.js). Dort gäbe es keine
+     sw.js, und die Anmeldung liefe in einen 404 — sichtbar nur in
+     der Entwicklerkonsole, aber eben doch ein Fehler, der keiner
+     sein muss. */
+  const alsAppInstallierbar = !!document.querySelector('link[rel="manifest"]');
+  if ("serviceWorker" in navigator && location.protocol !== "file:" && alsAppInstallierbar) {
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Offline-Betrieb nicht verfügbar:", e));
     });

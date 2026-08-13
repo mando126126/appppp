@@ -1585,8 +1585,7 @@ function ocrPicker(box, cap, app) {
 
   if (!OCR.supported()) {
     // Kein Vorwurf und kein Fehler: der Textweg steht ja darunter.
-    wrap.append(el("p", "srcnote",
-      "Dieser Browser kann keine Texterkennung. Der Bontext lässt sich weiter unten einfügen."));
+    wrap.append(el("p", "srcnote", esc(OCR.reason())));
     box.append(wrap);
     return;
   }
