@@ -996,6 +996,12 @@ button.row.action,label.row.action{cursor:pointer}
 .dot.half{background:linear-gradient(90deg,var(--accent) 50%,transparent 50%);border-color:var(--accent)}
 .dot.none{border-style:dashed;opacity:.5}
 
+/* Die Öffnen-Fläche einer Bonzeile. Sie liegt neben dem Betrag und
+   dem ×, deshalb eine eigene schmale Schaltfläche statt einer Zeile,
+   die als Ganzes klickt — sonst träfe man beim Löschen daneben. */
+.rowOpen{flex:0 0 auto;padding:8px 2px 8px 8px;display:flex;align-items:center;background:none}
+.rowOpen:active{opacity:.5}
+
 .plainBtn{text-align:left;padding:0;background:none;display:block}
 .plainBtn:active{opacity:.55}
 .card:empty{display:none}

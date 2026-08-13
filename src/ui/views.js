@@ -924,6 +924,110 @@ function badgeSheet(row, app) {
 }
 
 /* ================================================================
+   Einen gebuchten Bon korrigieren
+   ================================================================
+   Die Texterkennung liest, sie versteht nicht — und die Prüfliste
+   fängt nicht alles ab. Wer einen Fehltreffer erst später bemerkt,
+   musste bisher den ganzen Bon löschen und neu erfassen. Das ist der
+   Moment, in dem eine App zum ersten Mal als lästig erlebt wird.
+
+   Die Korrektur zieht Summe, Anzahl und den Erfassungsbetrag im
+   Protokoll mit; was dabei passiert, steht in data.js. Hier steht
+   nur, wie man drankommt.
+   ================================================================ */
+function receiptSheet(rec, app) {
+  const body = el("div");
+  const zeilen = Data.receiptLines(rec.id);
+
+  // Datum und Markt stehen schon in der Überschrift des Blatts.
+  body.append(el("p", "sheetPara",
+    `${zeilen.length} ${zeilen.length === 1 ? "Position" : "Positionen"}. Eine antippen, um sie einem ` +
+    "anderen Produkt zuzuordnen — oder mit × entfernen."));
+
+  const liste = el("div");
+  zeilen.forEach((kauf) => {
+    const p = byId(kauf.productId);
+    const r = el("div", "row");
+    const haupt = el("button", "rowMain plainBtn");
+    haupt.innerHTML =
+      `<div class="rowTitle">${esc(p ? p.name : kauf.productId)}</div>` +
+      `<div class="rowSub">${esc(`${de(kauf.quantity)}× ${eur(kauf.unitPrice)}`)}</div>`;
+    haupt.addEventListener("click", () => reassignSheet(kauf, rec, app));
+    r.append(haupt);
+    r.append(el("div", "rowValue", eur(kauf.unitPrice * kauf.quantity)));
+
+    const del = el("button", "del", "×");
+    del.setAttribute("aria-label", `${p ? p.name : "Position"} entfernen`);
+    del.addEventListener("click", () => {
+      Data.updatePurchase(kauf.id, null);
+      app.closeSheet();
+      app.toast("Position entfernt");
+    });
+    r.append(del);
+    liste.append(r);
+  });
+  body.append(liste);
+
+  body.append(el("p", "srcnote",
+    "Eine Korrektur zieht Summe und Anzahl mit. Erreichte Meilensteine bleiben — was einmal " +
+    "geschafft war, verfällt nicht, auch nicht durch einen behobenen Tippfehler."));
+
+  const del = el("button", "cta danger", "Ganzen Bon löschen");
+  del.addEventListener("click", () => app.confirm("Bon löschen?",
+    `${rec.store}, ${deDate(rec.date)} — ${zeilen.length} Positionen und alles, was daraus gelernt wurde.`,
+    () => { Data.removeReceipt(rec.id); app.closeSheet(); app.toast("Gelöscht"); }, "Löschen"));
+  body.append(del);
+
+  app.sheet(rec.store, deDate(rec.date), body);
+}
+
+/** Eine Position einem anderen Produkt zuordnen. */
+function reassignSheet(kauf, rec, app) {
+  const body = el("div");
+  const p = byId(kauf.productId);
+  body.append(el("p", "sheetPara",
+    `Zurzeit gebucht als ${p ? p.name : kauf.productId}. Ein anderes Produkt suchen — ` +
+    "der Rhythmus zieht mit um."));
+
+  const feld = el("label", "field");
+  const eingabe = el("input");
+  eingabe.type = "search";
+  eingabe.placeholder = "Produkt suchen";
+  eingabe.setAttribute("aria-label", "Anderes Produkt suchen");
+  feld.append(eingabe);
+  body.append(feld);
+
+  const treffer = el("ul", "results");
+  body.append(treffer);
+
+  const zeigen = () => {
+    treffer.innerHTML = "";
+    const query = eingabe.value.trim();
+    if (!query) return;
+    Data.searchProducts(query, 8).forEach((x) => {
+      const li = el("li");
+      const b = el("button");
+      b.innerHTML = `<span class="rn">${esc(x.name)}</span><span class="rc">${esc(x.aisle)}</span>`;
+      b.addEventListener("click", () => {
+        Data.updatePurchase(kauf.id, { productId: x.id });
+        // Und die Schreibweise merken, damit derselbe Fehltreffer
+        // beim nächsten Bon nicht wieder passiert.
+        if (kauf.raw) Data.learnAlias(kauf.raw, x.id);
+        app.closeSheet();
+        app.toast(`Jetzt ${x.name}`);
+      });
+      li.append(b);
+      treffer.append(li);
+    });
+  };
+  eingabe.addEventListener("input", zeigen);
+  body.append(el("p", "srcnote",
+    "Die Zuordnung gilt rückwirkend: der alte Rhythmus verliert diesen Kauf, der neue bekommt ihn."));
+
+  app.sheet("Anders zuordnen", p ? p.name : null, body);
+}
+
+/* ================================================================
    Sicherung
    ================================================================
    Der Text hier ist Teil der Funktion. Eine Zeile „nicht gesichert“
@@ -1554,12 +1658,14 @@ function viewErfassen(ctx, app) {
       r.append(el("div", "rowMain",
         `<div class="rowTitle">${esc(rec.store)}</div><div class="rowSub">${deDate(rec.date)} · ${rec.itemCount} Positionen</div>`));
       r.append(el("div", "rowValue", eur(rec.total)));
-      const del = el("button", "del", "×");
-      del.setAttribute("aria-label", `Bon vom ${deDate(rec.date)} löschen`);
-      del.addEventListener("click", () => app.confirm("Bon löschen?",
-        `${rec.store}, ${deDate(rec.date)}`,
-        () => { Data.removeReceipt(rec.id); app.toast("Gelöscht"); }));
-      r.append(del);
+      // Antippen öffnet die Positionen. Bis hierher konnte man einen
+      // Bon nur ganz löschen — nach einem Fehltreffer der Erkennung
+      // hieß das: alles wegwerfen und neu erfassen.
+      const oeffnen = el("button", "rowOpen");
+      oeffnen.setAttribute("aria-label", `Bon vom ${deDate(rec.date)} ansehen`);
+      oeffnen.append(el("div", "chev"));
+      oeffnen.addEventListener("click", () => receiptSheet(rec, app));
+      r.append(oeffnen);
       g.body.append(r);
     });
     c.append(g);

@@ -349,6 +349,99 @@ function removeReceipt(receiptId) {
   });
 }
 
+/**
+ * Die Positionen eines Bons.
+ *
+ * Käufe tragen keine Bon-Kennung — sie werden über Tag und Markt
+ * zugeordnet, wie beim Löschen auch. Zwei Einkäufe am selben Tag im
+ * selben Markt wären für diese Zuordnung dasselbe; das kommt vor,
+ * bleibt aber die seltene Ausnahme, und die Alternative (eine Kennung
+ * nachträglich in jede alte Sicherung schreiben) wäre teurer als der
+ * Fehler.
+ */
+function receiptLines(receiptId) {
+  const r = state.receipts.find((x) => x.id === receiptId);
+  if (!r) return [];
+  return state.purchases.filter((p) => p.date === r.date && p.store === r.store);
+}
+
+/**
+ * Eine gebuchte Position ändern oder entfernen.
+ * ================================================================
+ * WARUM ES DAS BRAUCHT: bis hierher gab es nur „ganzen Bon löschen“.
+ * Nach einem Fehltreffer der Texterkennung — und die Prüfliste fängt
+ * nicht alles ab — hieß das: alles wegwerfen und neu erfassen. Das
+ * ist der Moment, in dem eine App zum ersten Mal als lästig erlebt
+ * wird, und er tritt beim Fotografieren häufiger ein als beim Tippen.
+ *
+ * WAS DABEI MITGEZOGEN WIRD, und das ist der heikle Teil:
+ *
+ *   - Der Bon selbst: Summe und Anzahl stimmen danach wieder.
+ *   - Das Ereignis-Protokoll: der `erfasst`-Eintrag dieses Tages
+ *     trägt einen Betrag, und der wäre nach einer Korrektur falsch.
+ *     Er wird um die Differenz angepasst, nicht neu erfunden.
+ *   - Eine als `guenstig` gebuchte Ersparnis, die an der entfernten
+ *     Position hing, verschwindet mit ihr. Sie war die Differenz zu
+ *     einem Preis, den es nicht gab.
+ *
+ * NICHT angepasst werden die Lebenszähler der Meilensteine. Das ist
+ * Absicht: Erreichtes verfällt in dieser App nicht, auch nicht durch
+ * eine Korrektur. Ein Abzeichen, das wieder verschwindet, weil man
+ * einen Tippfehler behoben hat, wäre die schlechtere Botschaft.
+ * ================================================================
+ *
+ * @param {string} purchaseId
+ * @param {null|{productId, quantity, unitPrice}} patch null = entfernen
+ * @returns {boolean} ob etwas geändert wurde
+ */
+function updatePurchase(purchaseId, patch) {
+  const alt = state.purchases.find((p) => p.id === purchaseId);
+  if (!alt) return false;
+
+  const alterWert = (Number(alt.unitPrice) || 0) * (Number(alt.quantity) || 1);
+  let neuerWert = 0;
+
+  update((s) => {
+    const i = s.purchases.findIndex((p) => p.id === purchaseId);
+    if (i < 0) return;
+
+    if (patch === null) {
+      s.purchases.splice(i, 1);
+    } else {
+      const p = s.purchases[i];
+      if (patch.productId) p.productId = patch.productId;
+      if (Number.isFinite(patch.quantity)) p.quantity = Math.max(1, patch.quantity);
+      if (Number.isFinite(patch.unitPrice)) p.unitPrice = Math.max(0, patch.unitPrice);
+      neuerWert = (Number(p.unitPrice) || 0) * (Number(p.quantity) || 1);
+    }
+
+    // Bon nachziehen. Ohne das zeigte die Liste weiter die alte Summe
+    // — und der Nutzer hätte die Korrektur gemacht und keine Wirkung
+    // gesehen.
+    const bon = s.receipts.find((x) => x.date === alt.date && x.store === alt.store);
+    if (bon) {
+      const zeilen = s.purchases.filter((p) => p.date === bon.date && p.store === bon.store);
+      bon.itemCount = zeilen.length;
+      bon.total = Math.round(zeilen.reduce((a, p) => a + p.unitPrice * p.quantity, 0) * 100) / 100;
+      if (!zeilen.length) s.receipts = s.receipts.filter((x) => x.id !== bon.id);
+    }
+
+    // Protokoll: den Erfassungsbetrag dieses Tages um die Differenz
+    // verschieben, nie unter null.
+    const differenz = neuerWert - alterWert;
+    if (differenz !== 0) {
+      const eintrag = s.actions.find((a) => a.date === alt.date && a.kind === ACTION.ERFASST);
+      if (eintrag) eintrag.euros = Math.max(0, Math.round((eintrag.euros + differenz) * 100) / 100);
+    }
+
+    if (patch === null || (patch.productId && patch.productId !== alt.productId)) {
+      s.actions = s.actions.filter((a) =>
+        !(a.kind === ACTION.GUENSTIG && a.date === alt.date && a.productId === alt.productId));
+    }
+  });
+  return true;
+}
+
 /** Packung als angebrochen markieren oder die Markierung entfernen. */
 function toggleOpened(productId) {
   update((s) => {
@@ -1345,7 +1438,7 @@ function searchProducts(query, limit = 12) {
 const Data = {
   STORE_KEY, SHADOW_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
-  addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
+  addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
   toggleBrandOff, setUseBy, noteBackup, recoveryNotice,
   addManual, removeManual,
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,

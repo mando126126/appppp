@@ -363,6 +363,37 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### Einen Bon korrigieren, statt ihn wegzuwerfen
+
+Bis hierher gab es genau eine Möglichkeit, einen gebuchten Bon
+anzufassen: ganz löschen. Nach einem Fehltreffer der Texterkennung —
+und die Prüfliste fängt nicht alles ab — hieß das: alles wegwerfen und
+neu erfassen. Das ist der Moment, in dem eine App zum ersten Mal als
+lästig erlebt wird, und beim Fotografieren tritt er häufiger ein als
+beim Tippen.
+
+Jetzt öffnet ein Tippen auf einen Bon seine Positionen. Jede lässt
+sich **entfernen** oder **einem anderen Produkt zuordnen** — und wer
+umbucht, dessen Schreibweise wird gleich mitgelernt, damit derselbe
+Fehltreffer beim nächsten Bon nicht wieder passiert.
+
+Was dabei mitgezogen wird, ist der heikle Teil:
+
+- **Summe und Anzahl des Bons.** Ohne das hätte man korrigiert und
+  keine Wirkung gesehen.
+- **Der Erfassungsbetrag im Ereignis-Protokoll**, um die Differenz
+  verschoben statt neu erfunden — sonst meldete der Wochenrückblick
+  weiter die alte Summe.
+- **Eine als „günstig" gebuchte Ersparnis**, die an der entfernten
+  Position hing, verschwindet mit ihr. Sie war die Differenz zu einem
+  Preis, den es nicht gab.
+- **Ein Bon ohne Positionen** verschwindet von selbst.
+
+Nicht angepasst werden die Lebenszähler der Meilensteine. Das ist
+Absicht: Erreichtes verfällt in dieser App nicht, auch nicht durch
+eine Korrektur. Ein Abzeichen, das wieder verschwindet, weil man einen
+Tippfehler behoben hat, wäre die schlechtere Botschaft.
+
 ### Zwei Zahlen, die nicht stimmten
 
 **Die Verschwendungsquote konnte über 100 % gehen.** In der Demo stand

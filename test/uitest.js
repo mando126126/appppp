@@ -92,7 +92,7 @@ try {
     "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
-    " Backup, backupHealth, backupFileName, pickBetter };"
+    " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -1030,6 +1030,72 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
     click($("sheetCancel"));
     return /keine echte Push|KEINE echte Push/i.test(t);
   })());
+}
+
+console.log("\n--- Einen Bon korrigieren ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.goto("erfassen");
+
+  const bon = [...D.get().receipts].sort((a, b) => b.date.localeCompare(a.date))[0];
+  const zeilen = D.receiptLines(bon.id);
+  ok("Ein Bon kennt seine Positionen", zeilen.length === bon.itemCount, `${zeilen.length} zu ${bon.itemCount}`);
+
+  T.receiptSheet(bon, App);
+  ok("Das Bon-Blatt öffnet sich", !$("sheet").hidden && /Position/.test($("sheetOpts").textContent));
+  ok("Es zeigt jede Position", $("sheetOpts").querySelectorAll(".row").length === zeilen.length);
+
+  /* --- Eine Position entfernen --- */
+  const vorherSumme = bon.total;
+  const vorherAnzahl = bon.itemCount;
+  const weg = zeilen[0];
+  const wegWert = weg.unitPrice * weg.quantity;
+  const erfasstVorher = (D.get().actions.find((a) => a.date === bon.date && a.kind === "erfasst") || {}).euros;
+
+  const loeschen = [...$("sheetOpts").querySelectorAll("button")].find((b) => b.textContent === "×");
+  ok("Jede Position lässt sich entfernen", !!loeschen);
+  click(loeschen);
+
+  const danach = D.get().receipts.find((r) => r.id === bon.id);
+  ok("Die Position ist weg", D.receiptLines(bon.id).length === vorherAnzahl - 1);
+  ok("Die Anzahl stimmt wieder", danach.itemCount === vorherAnzahl - 1, danach.itemCount);
+  ok("Die Summe stimmt wieder",
+    Math.abs(danach.total - (vorherSumme - wegWert)) < 0.02,
+    `${danach.total} statt ${(vorherSumme - wegWert).toFixed(2)}`);
+  ok("Und der Erfassungsbetrag im Protokoll zieht mit", (() => {
+    const jetzt = (D.get().actions.find((a) => a.date === bon.date && a.kind === "erfasst") || {}).euros;
+    return Math.abs(jetzt - (erfasstVorher - wegWert)) < 0.02;
+  })());
+  ok("Der Kauf ist auch aus der Historie verschwunden",
+    !D.get().purchases.some((p) => p.id === weg.id));
+
+  /* --- Eine Position anders zuordnen --- */
+  const rest = D.receiptLines(bon.id);
+  const zeile = rest[0];
+  const altesProdukt = zeile.productId;
+  const neuesProdukt = altesProdukt === "kaffee" ? "reis" : "kaffee";
+  ok("Umbuchen ändert das Produkt", D.updatePurchase(zeile.id, { productId: neuesProdukt }));
+  const nachher = D.get().purchases.find((p) => p.id === zeile.id);
+  ok("Der Kauf trägt jetzt das andere Produkt", nachher.productId === neuesProdukt, nachher.productId);
+  ok("Die Summe des Bons bleibt gleich",
+    Math.abs(D.get().receipts.find((r) => r.id === bon.id).total - danach.total) < 0.02);
+
+  /* --- Der letzte Löschvorgang räumt den Bon ab --- */
+  const klein = D.get().receipts.find((r) => r.itemCount === 1)
+    || D.get().receipts.sort((a, b) => a.itemCount - b.itemCount)[0];
+  const kleinZeilen = D.receiptLines(klein.id);
+  kleinZeilen.forEach((z) => D.updatePurchase(z.id, null));
+  ok("Ein Bon ohne Positionen verschwindet",
+    !D.get().receipts.some((r) => r.id === klein.id));
+
+  /* --- Nichts geht kaputt --- */
+  ok("Eine unbekannte Kennung ändert nichts", D.updatePurchase("gibtsnicht", null) === false);
+  App.goto("zahlen");
+  ok("Die Zahlen rechnen danach weiter", App.ctx.totals.receipts >= 0 && $("main").children.length > 0);
+  ok("Und keine Verschwendungsquote über 100 %",
+    [...App.ctx.wasteStats.values()].every((s) => s.wasteRate <= 1));
+  App.closeSheet();
 }
 
 console.log("\n--- Sicherung ---");
