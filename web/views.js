@@ -391,10 +391,19 @@ function productSheet(productId, ctx) {
       ? `${eur(st.wastedEuros)} über ${st.purchased} Käufe (${pct(st.wasteRate)})`
       : "keiner erkannt");
     fact("Datenqualität", {
-      regulatorisch: "regulatorisch (BZfE)",
-      leitlinie: "Leitlinie (BZfE)",
+      regulatorisch: "rechtlich definiert",
+      leitlinie: "behördliche Lagerempfehlung",
       schaetzwert: "Schätzwert ohne amtliche Quelle"
     }[p.quality]);
+    // Bei sicherheitskritischen Produkten reicht die Stufe nicht: dort
+    // steht die Rechtsgrundlage daneben, und der wichtigste Satz ist,
+    // dass das aufgedruckte Datum jede Schätzung schlägt.
+    if (p.safetyCritical) {
+      const f = safetyFacts(productId);
+      if (f) {
+        fact("Verbrauchsdatum", `höchstens ${f.maxDays} ${f.maxDays === 1 ? "Tag" : "Tage"} · max. ${de(f.maxTempC)} °C`);
+      }
+    }
   }
   if (nf) {
     const sup = ctx.supplies.find((x) => x.productId === productId);
@@ -444,8 +453,54 @@ function productSheet(productId, ctx) {
     if (chg && chg.found) body.append(el("div", "note blue", esc(chg.message)));
   }
   if (p.safetyCritical) {
-    body.append(el("div", "note red",
-      "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. Die App verlängert diese Frist nie."));
+    const f = safetyFacts(productId);
+    const note = el("div", "note red");
+    note.innerHTML = "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. " +
+      "Die App verlängert diese Frist nie.";
+    body.append(note);
+    if (f) {
+      // Rechtsgrundlage und Empfehlung getrennt, nie vermischt: das
+      // eine ist Gesetz, das andere ein Erfahrungswert. Wer beides in
+      // einen Satz packt, verleiht dem Erfahrungswert eine Autorität,
+      // die er nicht hat.
+      const q = el("button", "linkBtn", "Worauf beruht das?");
+      q.addEventListener("click", () => App.notice(p.name,
+        `Gruppe: ${f.label}.\n\n` +
+        `RECHTLICH GEREGELT ist zweierlei:\n${f.legal.join("\n\n")}\n\n` +
+        `NICHT geregelt ist die Anzahl der Tage. Dafür gibt es keine amtliche Zahl. ` +
+        `Die App rechnet mit höchstens ${f.maxDays} ${f.maxDays === 1 ? "Tag" : "Tagen"} — das ist die untere Grenze ` +
+        `dieser Lagerempfehlung:\n\n${f.guide}\n\n${f.printedWins}`));
+      body.append(q);
+    }
+  }
+
+  /* Das aufgedruckte Datum eintragen.
+     Für sicherheitskritische Produkte ist das die einzige belastbare
+     Angabe, die es gibt — und sie steht auf der Packung, die gerade
+     in der Hand liegt. Ab dem Eintrag rechnet die App damit statt mit
+     ihrer Lagerempfehlung, und die Bestandsanzeige sagt, dass die
+     Zahl nicht mehr geschätzt ist. */
+  if (p.isFood && ctx.history.some((h) => h.productId === productId)) {
+    const gesetzt = (Data.get().useBy || {})[productId] || "";
+    const wrap = el("label", "field");
+    wrap.append(el("span", "lbl", p.safetyCritical
+      ? "Aufgedrucktes Verbrauchsdatum"
+      : "Aufgedrucktes Mindesthaltbarkeitsdatum"));
+    const inp = el("input");
+    inp.type = "date";
+    inp.value = gesetzt;
+    inp.setAttribute("aria-label", `Aufgedrucktes Datum für ${p.name}`);
+    inp.addEventListener("change", () => {
+      const ok = Data.setUseBy(productId, inp.value || null);
+      if (!ok) { App.toast("Das Datum liegt vor dem Kauf"); inp.value = gesetzt; return; }
+      App.closeSheet();
+      App.toast(inp.value ? "Es gilt jetzt dein Datum" : "Wieder geschätzt");
+    });
+    wrap.append(inp);
+    body.append(wrap);
+    body.append(el("p", "srcnote", gesetzt
+      ? "Die Bestandsanzeige rechnet mit diesem Datum, nicht mehr mit der Schätzung."
+      : "Ohne Eintrag rechnet die App mit einer Lagerempfehlung. Das Etikett ist genauer — es gilt für genau diese Packung."));
   }
   if (season && season.status === "importware") body.append(el("div", "note gold", esc(season.message)));
   if (p.note) body.append(el("div", "note", esc(p.note)));
@@ -2092,11 +2147,14 @@ function viewMehr(ctx, app) {
   m.body.append(uiRow("Datenbasis", `${q.total} Produkte · ${q.anteilGeschaetzt} % geschätzt`, null, {
     onClick: () => app.notice("Datenbasis, ungeschönt",
       `${q.total} Produkte, ${q.kategorien} Kategorien, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
-      `regulatorisch: ${q.regulatorisch} — Verbrauchsdatum-Pflicht, rechtlich definiert (BZfE/BLE)\n` +
-      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE/BLE)\n` +
+      `rechtlich definiert: ${q.regulatorisch}\n` +
+      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE, BMEL)\n` +
       `Schätzwert: ${q.schaetzwert} — ohne amtliche Quelle, vor Produktivbetrieb prüfen\n\n` +
       `${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen. Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten.\n\n` +
-      `${q.safetyCritical} Produkte tragen ein Verbrauchsdatum — für sie schlägt die App nie eine Weiterverwendung vor.`)
+      `${q.safetyCritical} Produkte tragen ein Verbrauchsdatum. Für sie schlägt die App nie eine Weiterverwendung vor — und ihre Tageszahlen ` +
+      `stehen ausdrücklich NICHT als „rechtlich definiert“ da: geregelt sind die Pflicht zum Verbrauchsdatum (LMIV Art. 24) und die ` +
+      `Höchsttemperatur (Tier-LMHV Anlage 5), nicht die Anzahl der Tage. Die Tage sind Lagerempfehlungen, jeweils an der unteren Grenze. ` +
+      `Es gilt immer das aufgedruckte Datum.`)
   }));
   m.body.append(uiRow("Über", `Bauversion ${window.__BUILD__ || "dev"}`, null, {
     onClick: () => app.notice("Einkaufs-Anker",

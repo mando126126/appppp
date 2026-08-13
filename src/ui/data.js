@@ -83,6 +83,11 @@ function emptyState() {
     },
     aisleOrders: {},            // Markt -> Gangreihenfolge
     opened: [],                 // angebrochene Packungen [{productId, openedDate}]
+    // Aufgedruckte Verbrauchs- und Mindesthaltbarkeitsdaten, je
+    // Produkt für den jeweils letzten Kauf. Das ist die einzige
+    // belastbare Zahl, die es gibt — alles andere im Katalog ist
+    // Lagerempfehlung. Sie schlägt deshalb jede Schätzung.
+    useBy: {},                  // productId -> "JJJJ-MM-TT"
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
     dismissed: {                // weggetippte Hinweise, je Woche
       week: null,
@@ -773,7 +778,7 @@ function compute() {
   // Angebrochenes hält kürzer als die Packung — die Korrektur muss vor
   // Reichweite und Rezepten greifen, sonst rechnen beide mit der Frist
   // der ungeöffneten Ware.
-  const inventory = applyOpened(estimateInventory(history, rhythms, ref), s.opened, ref)
+  const inventory = applyOpened(estimateInventory(history, rhythms, ref, { useBy: s.useBy }), s.opened, ref)
     .filter((i) => !isNonFood(i.productId));
   const opened = openedItems(s.opened, ref);
 
@@ -1137,6 +1142,34 @@ function compute() {
 }
 
 /**
+ * Aufgedrucktes Datum eintragen — oder wieder entfernen.
+ *
+ * Es gilt für den jeweils letzten Kauf dieses Produkts. Ein Datum,
+ * das vor dem Kauf liegt, wird abgelehnt: das ist ein Vertipper,
+ * kein abgelaufenes Produkt, und es würde den Bestand sofort auf
+ * „verdorben" setzen.
+ */
+function setUseBy(productId, date) {
+  if (!productId) return false;
+  // Dieselbe echte Datumsprüfung wie im Bestand — die Form allein
+  // lässt „2026-13-45" durch.
+  const gueltig = isRealDate(date);
+  if (date && !gueltig) return false;
+  const letzter = state.purchases
+    .filter((p) => p.productId === productId)
+    .map((p) => p.date)
+    .sort()
+    .pop();
+  if (gueltig && letzter && date < letzter) return false;
+  update((st) => {
+    if (!st.useBy) st.useBy = {};
+    if (gueltig) st.useBy[productId] = date;
+    else delete st.useBy[productId];
+  });
+  return true;
+}
+
+/**
  * Eigenmarken-Vergleich für ein Produkt dauerhaft abstellen — oder
  * wieder einschalten. Kein „für diese Woche": wer einmal gesagt hat,
  * dass sein Kaffee nicht zur Debatte steht, hat es gesagt.
@@ -1208,7 +1241,7 @@ const Data = {
   STORE_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
   addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
-  toggleBrandOff,
+  toggleBrandOff, setUseBy,
   addManual, removeManual,
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,

@@ -1,5 +1,270 @@
-/* Gebündelt aus 48 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 49 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
+
+/* ===== safetyRules.js ===== */
+/**
+ * safetyRules.js — die Prüfgrundlage für verderbliche Lebensmittel
+ * ================================================================
+ * DAS ERGEBNIS DER QUELLENPRÜFUNG, UND ES IST UNBEQUEM:
+ *
+ * Die Haltbarkeitszahlen der 54 sicherheitskritischen Produkte trugen
+ * bisher die Stufe „regulatorisch“ — also „rechtlich definiert“. Das
+ * war falsch, und zwar an der empfindlichsten Stelle des Katalogs.
+ *
+ * Rechtlich definiert ist nämlich NICHT die Anzahl der Tage. Kein
+ * Gesetz sagt, dass Hähnchenbrust zwei Tage hält. Rechtlich definiert
+ * sind genau zwei andere Dinge:
+ *
+ *   1. DIE PFLICHT ZUM VERBRAUCHSDATUM.
+ *      VO (EU) 1169/2011 (LMIV), Art. 24 und Anhang X: Bei
+ *      Lebensmitteln, die „in mikrobiologischer Hinsicht sehr leicht
+ *      verderblich sind und daher nach kurzer Zeit eine unmittelbare
+ *      Gefahr für die Gesundheit darstellen können", ersetzt das
+ *      Verbrauchsdatum das Mindesthaltbarkeitsdatum. Nach dessen
+ *      Ablauf ist der Verkauf verboten.
+ *
+ *   2. DIE HÖCHSTTEMPERATUR.
+ *      Tier-LMHV (Anlage 5) in Verbindung mit VO (EG) 853/2004:
+ *      Hackfleisch höchstens +2 °C, Innereien +3 °C,
+ *      Fleischzubereitungen und Geflügelfleisch +4 °C.
+ *
+ * Für die TAGE gibt es dagegen bewusst keine amtliche Zahl. Die
+ * Behörden nennen keine, weil es keine gibt, die für jedes Produkt,
+ * jede Kette und jeden Kühlschrank stimmt. BZfE und BMEL sagen
+ * stattdessen zweierlei: es gilt das AUFGEDRUCKTE Datum, und als
+ * grobe Orientierung existieren Lagerempfehlungen — Geflügel und rohe
+ * Innereien ein bis zwei Tage, Rindfleisch am Stück drei bis vier,
+ * Fisch nicht länger als zwei; loses Hackfleisch am selben Tag.
+ *
+ * DARAUS FOLGEN DREI ENTSCHEIDUNGEN:
+ *
+ *   a) Die Tageszahlen heißen jetzt ehrlich „leitlinie“ statt
+ *      „regulatorisch“. Eine App, die ihre unsicherste Zahl als ihre
+ *      sicherste ausweist, ist an genau der Stelle unehrlich, an der
+ *      es gefährlich wird.
+ *   b) Wo eine Empfehlung eine Spanne nennt, gilt die UNTERE Grenze.
+ *      Bei Sicherheit ist der optimistische Wert der falsche.
+ *   c) Das aufgedruckte Datum schlägt jede Schätzung. Die Oberfläche
+ *      lässt es eintragen, und ab dann rechnet die App damit.
+ *
+ * Diese Datei ist keine Dokumentation, sondern eine PRÜFUNG:
+ * `checkSafetyData` hält den Katalog gegen die Gruppen, und
+ * `test/safety.js` bricht ab, sobald ein Produkt darüber liegt oder
+ * ohne Beleg dasteht. Damit bleibt die Prüfung gültig, wenn der
+ * Katalog wächst — eine einmalige Durchsicht wäre in drei Monaten
+ * wieder wertlos.
+ * ================================================================
+ */
+
+/* Bewusst OHNE Zugriff auf den Katalog: dieses Modul ist die
+   Prüfgrundlage, und der Katalog liest sie (für die Temperaturen).
+   Andersherum entstünde ein Ring, und die Prüfung würde von dem
+   abhängen, was sie prüfen soll. */
+
+/** Rechtsgrundlagen, einmal benannt und überall referenziert. */
+const LEGAL = {
+  LMIV_24: "VO (EU) 1169/2011 (LMIV), Art. 24 i. V. m. Anhang X — Verbrauchsdatum " +
+           "statt MHD bei sehr leicht verderblichen Lebensmitteln; nach Ablauf Abgabeverbot.",
+  TIER_LMHV: "Tier-LMHV Anlage 5 i. V. m. VO (EG) 853/2004 — Höchsttemperaturen " +
+             "bei Lagerung und Abgabe.",
+  BMEL_LAGER: "BMEL, „Zu gut für die Tonne!“, Lagerempfehlungen — Geflügel und rohe " +
+              "Innereien 1–2 Tage, Rindfleisch am Stück 3–4 Tage, Fisch höchstens 2 Tage.",
+  BZFE_HACK: "BZfE, „Lebensmittel richtig lagern“ — loses Hackfleisch am selben Tag " +
+             "(6 bis 8 Stunden), abgepacktes innerhalb des aufgedruckten Verbrauchsdatums."
+};
+
+/**
+ * Gruppen mit ihren Obergrenzen.
+ *
+ * `maxDays` ist eine OBERGRENZE, keine Vorgabe: ein Produkt darf
+ * kürzer angesetzt sein, nie länger. `maxTempC` ist dagegen die
+ * rechtliche Zahl und wird unverändert angezeigt.
+ *
+ * Die Zuordnung steht als ausdrückliche Liste da und wird NICHT aus
+ * Kategorie oder Namen abgeleitet. Bei Sicherheit ist eine Heuristik
+ * der falsche Ort für Bequemlichkeit: „Entenbrust“ enthält kein Wort,
+ * an dem eine Regel erkennt, dass es Geflügel ist — und genau dieser
+ * Eintrag stand vorher mit drei Tagen im Katalog, ein Tag über der
+ * Empfehlung für Geflügel.
+ */
+const SAFETY_GROUPS = [
+  {
+    id: "hack",
+    label: "Hackfleisch, zerkleinertes rohes Fleisch",
+    maxDays: 1,
+    maxTempC: 2,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: LEGAL.BZFE_HACK,
+    ids: ["hackfleisch", "hack_rind"]
+  },
+  {
+    id: "gefluegel",
+    label: "Geflügelfleisch und Zubereitungen daraus",
+    maxDays: 2,
+    maxTempC: 4,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: LEGAL.BMEL_LAGER,
+    ids: ["haehnchen", "haehnchen_schenkel", "haehnchen_ganz", "haehnchen_fluegel",
+      "haehnchen_innen", "haehnchen_nuggets", "putenbrust", "putengeschnetzeltes",
+      "entenbrust", "gans"]
+  },
+  {
+    id: "innereien",
+    label: "Innereien",
+    maxDays: 2,
+    maxTempC: 3,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: LEGAL.BMEL_LAGER,
+    ids: ["leber"]
+  },
+  {
+    id: "zubereitung",
+    label: "Fleischzubereitungen (mariniert, gewürzt, gewürfelt)",
+    maxDays: 2,
+    maxTempC: 4,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: "Abgeleitet aus der Hackfleisch- und Geflügelempfehlung: durch das " +
+           "Zerkleinern und Würzen ist die Oberfläche größer und die Haltbarkeit " +
+           "kürzer als bei einem Stück Fleisch.",
+    ids: ["bratwurst", "gyros_frisch", "merguez", "spiesse_grill", "hackbaellchen_frisch",
+      "gulasch"]
+  },
+  {
+    id: "rotfleisch",
+    label: "Rotes Fleisch am Stück",
+    maxDays: 3,
+    maxTempC: 7,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: LEGAL.BMEL_LAGER,
+    ids: ["rindersteak", "rinderhueftsteak", "rinderbraten", "rinderfilet", "tafelspitz",
+      "suppenfleisch", "schweineschnitzel", "schweinefilet", "schweinebauch",
+      "schweinenacken", "schweinerueckensteak", "lammkotelett", "lammkeule",
+      "kalbsschnitzel"]
+  },
+  {
+    id: "fisch",
+    label: "Frischer Fisch, Meeresfrüchte",
+    maxDays: 2,
+    maxTempC: 2,
+    legal: [LEGAL.LMIV_24,
+      "VO (EG) 853/2004 Anhang III Abschnitt VIII — frische Fischereierzeugnisse " +
+      "bei annähernd der Temperatur von schmelzendem Eis."],
+    guide: LEGAL.BMEL_LAGER,
+    ids: ["fisch_lachs", "fisch_weiss", "forelle", "zander", "dorade", "wolfsbarsch",
+      "rotbarsch", "scholle", "hering_frisch", "makrele_frisch", "thunfisch_frisch",
+      "garnelen", "muscheln", "tintenfisch", "fischstaebchen_frisch"]
+  },
+  {
+    id: "verzehrfertig",
+    label: "Vorzerkleinert und verzehrfertig",
+    maxDays: 2,
+    maxTempC: 7,
+    legal: [LEGAL.LMIV_24],
+    guide: "BZfE nennt vorgeschnittene Salate und kleingeschnittenes Obst " +
+           "ausdrücklich als Verbrauchsdatum-Produkte; eine Tageszahl nennt keine " +
+           "amtliche Quelle. Angesetzt wird deshalb der kürzeste Wert der " +
+           "vergleichbaren Gruppen.",
+    ids: ["obst_geschnitten", "salat_geschnitten", "sprossen", "sandwich_fertig",
+      "salat_fertig", "sushi_fertig"]
+  }
+];
+
+/** Gruppe eines Produkts — null, wenn es keiner zugeordnet ist. */
+function safetyGroupOf(productId) {
+  return SAFETY_GROUPS.find((g) => g.ids.includes(productId)) || null;
+}
+
+/**
+ * Katalog gegen die Gruppen prüfen.
+ *
+ * @returns {Array<{productId, level, message}>} leer = alles in Ordnung
+ */
+function checkSafetyData(catalog) {
+  const probleme = [];
+  if (!Array.isArray(catalog)) return [{ productId: null, level: "fehler", message: "kein Katalog übergeben" }];
+  const zugeordnet = new Set();
+
+  catalog.forEach((p) => {
+    if (!p.safetyCritical) {
+      // Umgekehrt gilt auch: was in einer Gruppe steht, MUSS als
+      // sicherheitskritisch geführt sein. Sonst greifen die Sperren
+      // in Rezepten und Verlängerungen nicht.
+      if (safetyGroupOf(p.id)) {
+        probleme.push({ productId: p.id, level: "fehler",
+          message: "steht in einer Sicherheitsgruppe, ist aber nicht safetyCritical" });
+      }
+      return;
+    }
+
+    const g = safetyGroupOf(p.id);
+    if (!g) {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: "sicherheitskritisch, aber keiner geprüften Gruppe zugeordnet" });
+      return;
+    }
+    zugeordnet.add(p.id);
+
+    if (p.dateType !== "verbrauchsdatum") {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: `dateType „${p.dateType}“ statt „verbrauchsdatum“` });
+    }
+    if (p.shelfLifeDays > g.maxDays) {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: `${p.shelfLifeDays} Tage — die Gruppe „${g.label}“ erlaubt höchstens ${g.maxDays}` });
+    }
+    if (p.shelfLifeDays < 0 || !Number.isFinite(p.shelfLifeDays)) {
+      probleme.push({ productId: p.id, level: "fehler", message: `unbrauchbare Haltbarkeit: ${p.shelfLifeDays}` });
+    }
+    if (Number.isFinite(p.shelfLifeOpenedDays) && p.shelfLifeOpenedDays > p.shelfLifeDays) {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: "angebrochen hält länger als ungeöffnet" });
+    }
+    // Die Tageszahl ist eine Empfehlung, kein Gesetz. Wer sie als
+    // „regulatorisch“ ausweist, behauptet eine Sicherheit, die es
+    // nicht gibt — das war der eigentliche Befund der Prüfung.
+    if (p.quality === "regulatorisch") {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: "Haltbarkeit als „regulatorisch“ ausgewiesen — für die Tageszahl gibt es keine Rechtsgrundlage" });
+    }
+    if (p.maxTempC !== g.maxTempC) {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: `maxTempC ${p.maxTempC} statt ${g.maxTempC} (${g.label})` });
+    }
+    if (!p.checked) {
+      probleme.push({ productId: p.id, level: "fehler", message: "ohne Prüfdatum" });
+    }
+  });
+
+  SAFETY_GROUPS.forEach((g) => {
+    g.ids.forEach((id) => {
+      if (!zugeordnet.has(id) && !catalog.some((p) => p.id === id)) {
+        probleme.push({ productId: id, level: "hinweis",
+          message: `steht in Gruppe „${g.label}“, fehlt aber im Katalog` });
+      }
+    });
+  });
+
+  return probleme;
+}
+
+/**
+ * Was die Oberfläche über ein sicherheitskritisches Produkt sagen
+ * darf — Rechtsgrundlage und Empfehlung getrennt, nie vermischt.
+ */
+function safetyFacts(productId) {
+  const g = safetyGroupOf(productId);
+  if (!g) return null;
+  return {
+    group: g.id,
+    label: g.label,
+    maxDays: g.maxDays,
+    maxTempC: g.maxTempC,
+    legal: g.legal,
+    guide: g.guide,
+    printedWins: "Es gilt immer das aufgedruckte Verbrauchsdatum. Danach gehört das " +
+                 "Produkt in den Abfall — auch wenn es unauffällig aussieht und riecht."
+  };
+}
 
 /* ===== foodDatabase.js ===== */
 /**
@@ -49,11 +314,20 @@ const STORAGE = {
 const DATE_TYPE = { MHD: "mhd", VERBRAUCHSDATUM: "verbrauchsdatum", NONE: "keins" };
 const ETHYLENE = { PRODUCER: "produziert", SENSITIVE: "empfindlich", NEUTRAL: "neutral" };
 
+
+
+/* Tag der letzten Quellenprüfung der sicherheitskritischen Produkte.
+   Steht hier und nicht je Zeile: geprüft wurde alles auf einmal, und
+   54-mal dasselbe Datum in die Tabelle zu schreiben lädt nur dazu
+   ein, dass eines davon irgendwann nicht mitgezogen wird. */
+const SAFETY_CHECKED = "2026-08-13";
+
 const FOOD_DATABASE = [];
 
 function group(category, aisle, storage, rows, groupOpts = {}) {
   rows.forEach((r) => {
     const [id, name, dateType, su, so, quality, price, weightG, aliases = [], opts = {}] = r;
+    const sg = safetyGroupOf(id);
     FOOD_DATABASE.push({
       id, name, category, aisle,
       storage: opts.storage || storage,
@@ -68,7 +342,15 @@ function group(category, aisle, storage, rows, groupOpts = {}) {
       typicalPrice: price,
       typicalWeightG: weightG,
       aliases,
-      note: opts.note || null
+      note: opts.note || null,
+      /* Die rechtliche Höchsttemperatur kommt aus safetyRules und
+         wird NICHT je Zeile gepflegt — sie hängt an der Gruppe, nicht
+         am einzelnen Produkt, und eine Zahl, die an 54 Stellen
+         wiederholt wird, ist 54 Gelegenheiten, sie falsch zu
+         schreiben. */
+      maxTempC: sg ? sg.maxTempC : null,
+      safetyGroup: sg ? sg.id : null,
+      checked: sg ? SAFETY_CHECKED : null
     });
   });
 }
@@ -117,19 +399,19 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 
 // ===================== FLEISCH & FISCH ===========================
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["hackfleisch","Hackfleisch gemischt",V,1,1,REG,4.99,500,["HACKFLEISCH","GEMISCHTES HACK","METT"],{note:"BZfE nennt Hackfleisch ausdrücklich als Verbrauchsdatum-Produkt."}],
-  ["hack_rind","Rinderhackfleisch",V,1,1,REG,5.99,500,["RINDERHACK","HACKFLEISCH RIND"]],
-  ["haehnchen","Hähnchenbrust",V,2,1,REG,6.99,400,["HAEHNCHENBRUST","HÄHNCHENBRUSTFILET","GEFLUEGEL BRUST","HAEHNCHENFILET"],{note:"Geflügel laut BZfE Verbrauchsdatum-Produkt."}],
-  ["haehnchen_schenkel","Hähnchenschenkel",V,2,1,REG,3.99,600,["HAEHNCHENSCHENKEL","HAEHNCHENKEULE"]],
-  ["putenbrust","Putenbrust",V,2,1,REG,7.49,400,["PUTENBRUST","PUTENSCHNITZEL"]],
-  ["schweineschnitzel","Schweineschnitzel",V,3,1,REG,5.49,500,["SCHNITZEL","SCHWEINESCHNITZEL"]],
-  ["schweinefilet","Schweinefilet",V,3,1,REG,7.99,400,["SCHWEINEFILET"]],
-  ["rindersteak","Rindersteak",V,3,1,REG,9.99,300,["RUMPSTEAK","RINDERSTEAK","ENTRECOTE"]],
-  ["gulasch","Gulasch",V,2,1,REG,6.49,500,["GULASCH","GULASCHFLEISCH"]],
-  ["bratwurst","Bratwurst",V,3,1,REG,3.49,400,["BRATWURST","ROSTBRATWURST","NUERNBERGER"]],
-  ["fisch_lachs","Lachsfilet",V,1,1,REG,8.99,250,["LACHSFILET","LACHS"],{note:"Roher Fisch laut BZfE Verbrauchsdatum-Produkt."}],
-  ["fisch_weiss","Weißfischfilet",V,1,1,REG,6.99,300,["SEELACHS","KABELJAU","FISCHFILET","PANGASIUS"]],
-  ["garnelen","Garnelen",V,1,1,REG,5.99,200,["GARNELEN","SHRIMPS"]],
+  ["hackfleisch","Hackfleisch gemischt",V,1,1,LEIT,4.99,500,["HACKFLEISCH","GEMISCHTES HACK","METT"],{note:"BZfE nennt Hackfleisch ausdrücklich als Verbrauchsdatum-Produkt."}],
+  ["hack_rind","Rinderhackfleisch",V,1,1,LEIT,5.99,500,["RINDERHACK","HACKFLEISCH RIND"]],
+  ["haehnchen","Hähnchenbrust",V,2,1,LEIT,6.99,400,["HAEHNCHENBRUST","HÄHNCHENBRUSTFILET","GEFLUEGEL BRUST","HAEHNCHENFILET"],{note:"Geflügel laut BZfE Verbrauchsdatum-Produkt."}],
+  ["haehnchen_schenkel","Hähnchenschenkel",V,2,1,LEIT,3.99,600,["HAEHNCHENSCHENKEL","HAEHNCHENKEULE"]],
+  ["putenbrust","Putenbrust",V,2,1,LEIT,7.49,400,["PUTENBRUST","PUTENSCHNITZEL"]],
+  ["schweineschnitzel","Schweineschnitzel",V,3,1,LEIT,5.49,500,["SCHNITZEL","SCHWEINESCHNITZEL"]],
+  ["schweinefilet","Schweinefilet",V,3,1,LEIT,7.99,400,["SCHWEINEFILET"]],
+  ["rindersteak","Rindersteak",V,3,1,LEIT,9.99,300,["RUMPSTEAK","RINDERSTEAK","ENTRECOTE"]],
+  ["gulasch","Gulasch",V,2,1,LEIT,6.49,500,["GULASCH","GULASCHFLEISCH"]],
+  ["bratwurst","Bratwurst",V,2,1,LEIT,3.49,400,["BRATWURST","ROSTBRATWURST","NUERNBERGER"]],
+  ["fisch_lachs","Lachsfilet",V,1,1,LEIT,8.99,250,["LACHSFILET","LACHS"],{note:"Roher Fisch laut BZfE Verbrauchsdatum-Produkt."}],
+  ["fisch_weiss","Weißfischfilet",V,1,1,LEIT,6.99,300,["SEELACHS","KABELJAU","FISCHFILET","PANGASIUS"]],
+  ["garnelen","Garnelen",V,1,1,LEIT,5.99,200,["GARNELEN","SHRIMPS"]],
   ["raeucherlachs","Räucherlachs",M,14,2,EST,3.99,100,["RAEUCHERLACHS","GRAVED LACHS"],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["thunfisch_dose","Thunfisch, Dose",M,900,2,LEIT,1.29,150,["THUNFISCH DOSE","THUNFISCH"],{storage:STORAGE.PANTRY}]
 ]);
@@ -169,7 +451,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["mango","Mango",M,7,3,LEIT,1.99,400,["MANGO"],{ethylene:ETHYLENE.PRODUCER}],
   ["granatapfel","Granatapfel",M,21,5,LEIT,2.49,400,["GRANATAPFEL"],{ethylene:ETHYLENE.SENSITIVE}],
   ["feigen","Feigen",M,5,3,LEIT,3.49,300,["FEIGEN"],{ethylene:ETHYLENE.PRODUCER}],
-  ["obst_geschnitten","Obst, geschnitten",V,1,1,REG,2.99,300,["OBSTSALAT","MELONE GESCHNITTEN","ANANAS GESCHNITTEN"],{freezable:false,note:"Kleingeschnittenes Obst laut BZfE Verbrauchsdatum-Produkt."}]
+  ["obst_geschnitten","Obst, geschnitten",V,1,1,LEIT,2.99,300,["OBSTSALAT","MELONE GESCHNITTEN","ANANAS GESCHNITTEN"],{freezable:false,note:"Kleingeschnittenes Obst laut BZfE Verbrauchsdatum-Produkt."}]
 ]);
 
 // ===================== OBST/GEMÜSE (Zimmertemperatur) ============
@@ -198,7 +480,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.PANTRY, [
 // ===================== GEMÜSE (Gemüsefach) ======================
 group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["salat_kopf","Kopfsalat",M,5,2,LEIT,1.39,400,["KOPFSALAT","SALAT KOPF","EISBERG"],{freezable:false,note:"BZfE: Gemüsefach, in Behälter oder feuchtem Tuch."}],
-  ["salat_geschnitten","Salatmischung, geschnitten",V,2,1,REG,1.29,150,["BLATTSALAT GESCHNITTEN","FELDSALAT BEUTEL","ROHKOSTSALAT"],{freezable:false,note:"Vorgeschnittene Salate laut BZfE Verbrauchsdatum-Produkt."}],
+  ["salat_geschnitten","Salatmischung, geschnitten",V,2,1,LEIT,1.29,150,["BLATTSALAT GESCHNITTEN","FELDSALAT BEUTEL","ROHKOSTSALAT"],{freezable:false,note:"Vorgeschnittene Salate laut BZfE Verbrauchsdatum-Produkt."}],
   ["feldsalat","Feldsalat",M,4,2,LEIT,1.99,150,["FELDSALAT","RAPUNZEL"],{freezable:false}],
   ["rucola","Rucola",M,4,2,LEIT,1.49,125,["RUCOLA","RAUKE"],{freezable:false}],
   ["moehren","Möhren",M,21,10,LEIT,1.29,1000,["MOEHREN","KAROTTEN","MÖHREN"],{note:"BZfE: aus dem Folienbeutel nehmen, Grün abschneiden."}],
@@ -225,7 +507,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["pastinaken","Pastinaken",M,18,8,LEIT,1.99,500,["PASTINAKEN"]],
   ["lauchzwiebeln","Frühlingszwiebeln",M,7,4,LEIT,0.89,150,["FRUEHLINGSZWIEBELN","LAUCHZWIEBELN"]],
   ["kresse","Kresse",M,5,3,LEIT,0.99,50,["KRESSE"],{freezable:false}],
-  ["sprossen","Sprossen",V,3,1,REG,1.49,100,["SPROSSEN","MUNGBOHNENSPROSSEN"],{freezable:false}]
+  ["sprossen","Sprossen",V,2,1,LEIT,1.49,100,["SPROSSEN","MUNGBOHNENSPROSSEN"],{freezable:false}]
 ]);
 
 // ===================== BACKWAREN =================================
@@ -376,9 +658,9 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 ]);
 
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["haehnchen_nuggets","Hähnchen-Nuggets",V,3,1,REG,3.99,400,["CHICKENNUG","CHICKEN NUGGETS","HAEHNCHEN NUGGETS","CHICKENNUG.CORNFLAK","NUGGETS"]],
+  ["haehnchen_nuggets","Hähnchen-Nuggets",V,2,1,LEIT,3.99,400,["CHICKENNUG","CHICKEN NUGGETS","HAEHNCHEN NUGGETS","CHICKENNUG.CORNFLAK","NUGGETS"]],
   ["putenaufschnitt","Puten-Aufschnitt",M,10,4,EST,2.69,150,["PUTE GORGONZOLA","PUTENBRUST AUFSCHNITT","PUTE AUFSCHNITT"],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["rinderhueftsteak","Rinderhüftsteak",V,3,1,REG,4.58,200,["RINDERHUEFTSTEAK","HUEFTSTEAK","RINDERHUEFTE"]]
+  ["rinderhueftsteak","Rinderhüftsteak",V,3,1,LEIT,4.58,200,["RINDERHUEFTSTEAK","HUEFTSTEAK","RINDERHUEFTE"]]
 ]);
 
 group("Tiefkühl", "Tiefkühl", STORAGE.FREEZER, [
@@ -626,30 +908,30 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 
 // ===================== FLEISCH & WURST, breit ====================
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["haehnchen_ganz","Hähnchen ganz",V,2,1,REG,5.99,1200,[]],
-  ["haehnchen_fluegel","Hähnchenflügel",V,2,1,REG,3.49,800,[]],
-  ["haehnchen_innen","Hähnchen-Innenfilet",V,2,1,REG,5.49,400,[]],
-  ["putengeschnetzeltes","Putengeschnetzeltes",V,2,1,REG,6.49,400,[]],
-  ["entenbrust","Entenbrust",V,3,1,REG,9.99,350,[]],
-  ["gans","Gans",V,3,1,REG,24.99,3000,[]],
-  ["schweinebauch","Schweinebauch",V,3,1,REG,4.99,600,[]],
-  ["schweinenacken","Schweinenacken",V,3,1,REG,5.49,700,[]],
+  ["haehnchen_ganz","Hähnchen ganz",V,2,1,LEIT,5.99,1200,[]],
+  ["haehnchen_fluegel","Hähnchenflügel",V,2,1,LEIT,3.49,800,[]],
+  ["haehnchen_innen","Hähnchen-Innenfilet",V,2,1,LEIT,5.49,400,[]],
+  ["putengeschnetzeltes","Putengeschnetzeltes",V,2,1,LEIT,6.49,400,[]],
+  ["entenbrust","Entenbrust",V,2,1,LEIT,9.99,350,[]],
+  ["gans","Gans",V,2,1,LEIT,24.99,3000,[]],
+  ["schweinebauch","Schweinebauch",V,3,1,LEIT,4.99,600,[]],
+  ["schweinenacken","Schweinenacken",V,3,1,LEIT,5.49,700,[]],
   ["kasseler","Kasseler",M,10,4,EST,5.99,500,[]],
-  ["schweinerueckensteak","Schweinesteak",V,3,1,REG,5.29,500,[]],
-  ["rinderbraten","Rinderbraten",V,3,1,REG,11.99,1000,[]],
-  ["rinderfilet","Rinderfilet",V,3,1,REG,16.99,400,[]],
-  ["tafelspitz","Tafelspitz",V,3,1,REG,12.99,800,[]],
-  ["suppenfleisch","Suppenfleisch",V,3,1,REG,6.99,600,[]],
-  ["lammkotelett","Lammkoteletts",V,3,1,REG,12.99,400,[]],
-  ["lammkeule","Lammkeule",V,3,1,REG,15.99,1200,[]],
-  ["kalbsschnitzel","Kalbsschnitzel",V,2,1,REG,11.99,400,[]],
-  ["leber","Leber",V,1,1,REG,4.49,300,[]],
-  ["hackbaellchen_frisch","Frikadellen frisch",V,2,1,REG,4.29,400,[]],
-  ["gyros_frisch","Gyros mariniert",V,3,1,REG,5.99,500,[]],
-  ["spiesse_grill","Grillspieße",V,2,1,REG,5.49,400,[]],
+  ["schweinerueckensteak","Schweinesteak",V,3,1,LEIT,5.29,500,[]],
+  ["rinderbraten","Rinderbraten",V,3,1,LEIT,11.99,1000,[]],
+  ["rinderfilet","Rinderfilet",V,3,1,LEIT,16.99,400,[]],
+  ["tafelspitz","Tafelspitz",V,3,1,LEIT,12.99,800,[]],
+  ["suppenfleisch","Suppenfleisch",V,3,1,LEIT,6.99,600,[]],
+  ["lammkotelett","Lammkoteletts",V,3,1,LEIT,12.99,400,[]],
+  ["lammkeule","Lammkeule",V,3,1,LEIT,15.99,1200,[]],
+  ["kalbsschnitzel","Kalbsschnitzel",V,2,1,LEIT,11.99,400,[]],
+  ["leber","Leber",V,1,1,LEIT,4.49,300,[]],
+  ["hackbaellchen_frisch","Frikadellen frisch",V,2,1,LEIT,4.29,400,[]],
+  ["gyros_frisch","Gyros mariniert",V,2,1,LEIT,5.99,500,[]],
+  ["spiesse_grill","Grillspieße",V,2,1,LEIT,5.49,400,[]],
   ["currywurst","Currywurst",M,14,3,EST,2.99,300,[]],
   ["weisswurst","Weißwurst",M,7,2,EST,3.49,300,[]],
-  ["merguez","Merguez",V,3,1,REG,4.99,300,[]],
+  ["merguez","Merguez",V,2,1,LEIT,4.99,300,[]],
   ["chorizo","Chorizo",M,40,14,EST,2.99,200,[]],
   ["cabanossi","Cabanossi",M,35,12,EST,2.49,200,[]],
   ["landjaeger","Landjäger",M,60,20,EST,2.79,100,[]],
@@ -668,17 +950,17 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
 ]);
 
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["forelle","Forelle",V,1,1,REG,5.99,300,[]],
-  ["zander","Zanderfilet",V,1,1,REG,12.99,300,[]],
-  ["dorade","Dorade",V,1,1,REG,7.99,400,[]],
-  ["wolfsbarsch","Wolfsbarsch",V,1,1,REG,9.99,400,[]],
-  ["rotbarsch","Rotbarschfilet",V,1,1,REG,7.49,300,[]],
-  ["scholle","Schollenfilet",V,1,1,REG,6.99,300,[]],
-  ["hering_frisch","Hering frisch",V,1,1,REG,3.99,300,[]],
-  ["makrele_frisch","Makrele frisch",V,1,1,REG,4.99,400,[]],
-  ["thunfisch_frisch","Thunfischsteak",V,1,1,REG,13.99,250,[]],
-  ["muscheln","Miesmuscheln",V,1,1,REG,4.99,1000,[]],
-  ["tintenfisch","Tintenfischringe",V,1,1,REG,6.49,300,[]],
+  ["forelle","Forelle",V,1,1,LEIT,5.99,300,[]],
+  ["zander","Zanderfilet",V,1,1,LEIT,12.99,300,[]],
+  ["dorade","Dorade",V,1,1,LEIT,7.99,400,[]],
+  ["wolfsbarsch","Wolfsbarsch",V,1,1,LEIT,9.99,400,[]],
+  ["rotbarsch","Rotbarschfilet",V,1,1,LEIT,7.49,300,[]],
+  ["scholle","Schollenfilet",V,1,1,LEIT,6.99,300,[]],
+  ["hering_frisch","Hering frisch",V,1,1,LEIT,3.99,300,[]],
+  ["makrele_frisch","Makrele frisch",V,1,1,LEIT,4.99,400,[]],
+  ["thunfisch_frisch","Thunfischsteak",V,1,1,LEIT,13.99,250,[]],
+  ["muscheln","Miesmuscheln",V,1,1,LEIT,4.99,1000,[]],
+  ["tintenfisch","Tintenfischringe",V,1,1,LEIT,6.49,300,[]],
   ["surimi","Surimi",M,14,2,EST,1.99,200,[]],
   ["matjes","Matjesfilet",M,10,3,EST,3.49,200,[]],
   ["rollmops","Rollmops",M,21,5,EST,2.79,250,[]],
@@ -687,7 +969,7 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
   ["makrele_geraeuchert","Räuchermakrele",M,10,3,EST,3.29,200,[]],
   ["sardellen","Sardellenfilets",M,365,5,EST,2.49,50,[],{storage:STORAGE.PANTRY}],
   ["kaviar_ersatz","Seehasenrogen",M,60,7,EST,3.49,100,[]],
-  ["fischstaebchen_frisch","Backfisch",V,2,1,REG,4.49,400,[]]
+  ["fischstaebchen_frisch","Backfisch",V,2,1,LEIT,4.49,400,[]]
 ]);
 
 // ===================== BACKWAREN, breit ==========================
@@ -1103,9 +1385,9 @@ group("Fertiggerichte", "Trockenware", STORAGE.PANTRY, [
   ["pizzabrot_fertig","Pizzateig frisch",M,21,1,EST,1.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["nudelsauce_glas","Nudelsauce Glas",M,540,5,EST,1.79,400,[]],
   ["fixprodukt","Fix-Würzmischung",M,540,30,EST,0.89,40,[]],
-  ["sandwich_fertig","Fertigsandwich",V,2,1,REG,2.99,180,[],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["salat_fertig","Fertigsalat",V,2,1,REG,3.49,250,[],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["sushi_fertig","Sushi Box",V,1,1,REG,6.99,250,[],{storage:STORAGE.FRIDGE_BOTTOM}],
+  ["sandwich_fertig","Fertigsandwich",V,2,1,LEIT,2.99,180,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["salat_fertig","Fertigsalat",V,2,1,LEIT,3.49,250,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["sushi_fertig","Sushi Box",V,1,1,LEIT,6.99,250,[],{storage:STORAGE.FRIDGE_BOTTOM}],
   ["suppe_frisch","Frischesuppe",M,14,2,EST,2.99,600,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["auflauf_fertig","Fertigauflauf",M,10,1,EST,3.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["reisgericht_fertig","Reisgericht Becher",M,300,1,EST,2.49,300,[]]
@@ -2879,13 +3161,26 @@ function urgentStorageItems(items) {
 
 
 /**
+ * Ein echtes Kalenderdatum, nicht bloß die richtige Form.
+ *
+ * `/\d{4}-\d{2}-\d{2}/` lässt „2026-13-45" durch, und daraus wird
+ * eine Restzeit von einigen hundert Tagen — auf einem Produkt mit
+ * Verbrauchsdatum. Der Test hat genau das gefunden.
+ */
+function isRealDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(value + "T12:00:00Z");
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+/**
  * Schätzt den Restbestand eines Produkts.
  *
  * @param {object} lastPurchase - {date, quantity, unitPrice}
  * @param {object} rhythm - Ergebnis aus computeRhythm
  * @param {string} today
  */
-function estimateRemaining(productId, lastPurchase, rhythm, today) {
+function estimateRemaining(productId, lastPurchase, rhythm, today, opts = {}) {
   const p = byId(productId);
   if (!p || !lastPurchase) return null;
 
@@ -2897,20 +3192,46 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
   // Verbrauch pro Einheit: aus dem Rhythmus, sonst Kategorie-Annahme
   const perUnitDays = rhythm && rhythm.perUnitDays ? rhythm.perUnitDays : null;
 
+  const printed = opts.useBy && opts.useBy[productId];
+  const printedValid = isRealDate(printed) && printed >= lastPurchase.date;
+
   let remainingUnits;
   let basis;
   if (perUnitDays && perUnitDays > 0) {
     const consumed = daysSince / perUnitDays;
     remainingUnits = Math.max(0, quantity - consumed);
     basis = "rhythmus";
+  } else if (printedValid) {
+    // Auch hier zählt das Etikett und nicht die Katalogzahl. Ohne
+    // diesen Zweig verschwand ein Produkt aus dem Bestand, obwohl auf
+    // der Packung noch fünf Tage standen — die Anzeige rechnete mit
+    // dem aufgedruckten Datum, die Frage „ist es überhaupt noch da?"
+    // aber weiter mit der Schätzung.
+    remainingUnits = today <= printed ? quantity : 0;
+    basis = "aufgedruckt";
   } else {
     // Ohne Rhythmus: nur die Haltbarkeit als grobe Schranke
     remainingUnits = daysSince < p.shelfLifeDays ? quantity : 0;
     basis = "haltbarkeit";
   }
 
-  // Restzeit bis Ablauf, gerechnet ab Kaufdatum
-  const daysLeft = p.shelfLifeDays - daysSince;
+  /* Restzeit bis Ablauf.
+   *
+   * Vorrang hat IMMER das aufgedruckte Datum, wenn es eingetragen
+   * wurde. Das ist keine Feinheit: die Katalogzahl ist eine
+   * Lagerempfehlung an der unteren Grenze, das Etikett dagegen die
+   * Aussage des Herstellers für genau diese Packung. Bei einem
+   * Verbrauchsdatum ist es zusätzlich die rechtlich maßgebliche
+   * Angabe — nach ihrem Ablauf gehört das Produkt in den Abfall,
+   * egal was eine App schätzt.
+   *
+   * Das aufgedruckte Datum darf dabei in beide Richtungen wirken. Es
+   * zu deckeln („höchstens so lange wie geschätzt") klänge vorsichtig,
+   * wäre aber Unfug: dann zeigte die App weiter ihre Schätzung und
+   * ignorierte die Packung, die der Nutzer in der Hand hält. */
+  const daysLeft = printedValid
+    ? daysBetween(today, printed)
+    : p.shelfLifeDays - daysSince;
 
   // Vertrauen: hoher Rhythmus-Vertrauenswert und kurze Zeit seit Kauf
   const rhythmConfidence = rhythm ? rhythm.confidence : 0;
@@ -2929,6 +3250,10 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
     weightG: Math.round(remainingUnits * (p.typicalWeightG || 0)),
     confidence,
     basis,
+    // Wer das Etikett eingetragen hat, bekommt keine Schätzung mehr
+    // angezeigt, sondern eine Tatsache — und die Oberfläche sagt das.
+    dateSource: printedValid ? "aufgedruckt" : "geschaetzt",
+    useBy: printedValid ? printed : null,
     estimated: true
   };
 }
@@ -2937,7 +3262,7 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
  * Schätzt den kompletten Haushaltsbestand.
  * @returns {Array} nur Produkte, die wahrscheinlich noch da sind
  */
-function estimateInventory(history, rhythms, today) {
+function estimateInventory(history, rhythms, today, opts = {}) {
   const lastByProduct = new Map();
   for (const h of history) {
     const prev = lastByProduct.get(h.productId);
@@ -2946,7 +3271,7 @@ function estimateInventory(history, rhythms, today) {
 
   const inventory = [];
   for (const [productId, last] of lastByProduct.entries()) {
-    const est = estimateRemaining(productId, last, rhythms.get(productId), today);
+    const est = estimateRemaining(productId, last, rhythms.get(productId), today, opts);
     if (est && est.likelyPresent) inventory.push(est);
   }
 

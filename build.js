@@ -33,6 +33,8 @@ const OUT = path.join(ROOT, "web");
 
 // Reihenfolge = Abhängigkeitsreihenfolge
 const MODULES = [
+  // Vor dem Katalog: er liest die Höchsttemperaturen daraus.
+  "safetyRules.js",
   "foodDatabase.js",
   "rhythmEngine2.js",
   "absenceDetector.js",
