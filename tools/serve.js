@@ -10,6 +10,7 @@
  */
 const http = require("http");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { build } = require("../build");
 
@@ -65,5 +66,29 @@ http
   })
   .listen(PORT, () => {
     console.log(`Einkaufs-Anker läuft auf http://localhost:${PORT}`);
+
+    /* Und dieselbe Adresse für das Telefon im selben Netz. Der Server
+       hört ohnehin auf allen Schnittstellen — er hat es bisher nur
+       nicht gesagt, und dann sucht man die IP von Hand.
+
+       WICHTIG und deshalb hier ausgeschrieben: über eine solche
+       Adresse ist die Seite KEIN sicherer Kontext. Der Service
+       Worker meldet sich nicht an (kein Offline-Betrieb), und
+       dauerhafter Speicher lässt sich nicht erbitten. Die
+       Texterkennung, die Liste und alles andere funktionieren. Zum
+       Ausprobieren reicht das; zum Benutzen gehört die App auf eine
+       https-Adresse. */
+    const adressen = [];
+    Object.values(os.networkInterfaces()).forEach((liste) => {
+      (liste || []).forEach((n) => {
+        if (n.family === "IPv4" && !n.internal) adressen.push(n.address);
+      });
+    });
+    if (adressen.length) {
+      console.log("");
+      console.log("Vom Telefon im selben WLAN:");
+      adressen.forEach((a) => console.log(`  http://${a}:${PORT}`));
+      console.log("  (ohne https: kein Offline-Betrieb, kein dauerhafter Speicher)");
+    }
     console.log(`Nach Änderungen in src/: npm run build`);
   });
