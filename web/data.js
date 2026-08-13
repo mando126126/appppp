@@ -850,17 +850,22 @@ function compute() {
   const { chronic, anomalies } = inferWaste(history, rhythms);
 
   // Verschwendung je Produkt zusammenfassen (für Warnungen und Sparen)
+  /* Die Zusammenführung beider Verschwendungssignale steht in
+     wasteInference2 und nicht mehr hier. Hier gerechnet, war sie eine
+     Doppelzählung: chronischer Anteil plus Ausreißer ergaben 21 von
+     20 Käufen. Fachlogik gehört nach src/algo — auch damit sie
+     geprüft werden kann. */
   const wasteStats = new Map();
   for (const [pid] of rhythms) {
-    const purchased = history.filter((h) => h.productId === pid).length;
-    const c = chronic.find((x) => x.productId === pid);
-    const an = anomalies.filter((x) => x.productId === pid);
-    const euros = (c ? c.eurosPerCycle.mid * purchased : 0) + an.reduce((a, x) => a + x.euros.mid, 0);
-    const wasted = (c ? Math.round(c.wastedFraction * purchased) : 0) + an.length;
-    wasteStats.set(pid, {
-      purchased, wasted, wastedEuros: euros,
-      wasteRate: purchased ? wasted / purchased : 0, chronic: c
-    });
+    const kaeufe = history
+      .filter((h) => h.productId === pid)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    wasteStats.set(pid, wasteSummary(
+      pid,
+      kaeufe,
+      chronic.find((x) => x.productId === pid) || null,
+      anomalies.filter((x) => x.productId === pid)
+    ));
   }
 
   // Angebrochenes hält kürzer als die Packung — die Korrektur muss vor
