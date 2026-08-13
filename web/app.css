@@ -38,8 +38,15 @@
   --surface-2:#F0F2F5;        /* eingelassene Felder */
   --material:rgba(244,245,247,.82);
   --ink:#15181E;
-  --ink-2:#6A7180;
-  --ink-3:#A3AAB6;
+  --ink-2:#626977;
+  /* War #A3AAB6 und damit 2,14:1 auf dem Seitengrund — für die
+     Quellenhinweise, Kachelbeschriftungen und die Rohzeilen des Bons,
+     die alle in dieser Farbe stehen, deutlich zu wenig. Der Abstand
+     zu --ink-2 ist dadurch kleiner geworden; die Rangfolge tragen
+     jetzt Größe und Gewicht, nicht mehr die Helligkeit. Das ist die
+     ehrlichere Lösung: drei Graustufen, von denen zwei lesbar sein
+     müssen, lassen keinen Platz für eine dritte. */
+  --ink-3:#667080;
   --on-accent:#FFFFFF;
 
   --hairline:rgba(21,24,30,.07);
@@ -48,6 +55,10 @@
   /* Die Palette. Jede Farbe hat eine Aufgabe. */
   --accent:#0EA46B;           /* erledigt, im Vorrat, gespart */
   --accent-soft:rgba(14,164,107,.11);
+  /* Für gefüllte Flächen mit weißer Schrift. Auf dem hellen Grün lag
+     Weiß bei 3,21:1 — bei der Schaltfläche, die in dieser App am
+     häufigsten gedrückt wird. Derselbe Farbton, nur tief genug. */
+  --accent-strong:#0B8557;
   --green:#0EA46B;
   --red:#F0533B;              /* dringend, verdorben */
   --red-soft:rgba(240,83,59,.11);
@@ -59,6 +70,28 @@
   --violet-soft:rgba(123,92,240,.11);
   --pink:#E4499A;             /* nur Abzeichen — hält Korall für Dringendes frei */
   --pink-soft:rgba(228,73,154,.12);
+
+  /* ---- Schriftfarben AUF den getönten Flächen -------------------
+     Die Palettenfarbe selbst ist als Schrift auf ihrer eigenen
+     11-prozentigen Tönung zu hell: gemessen 1,93:1 beim Gelb, 2,84:1
+     beim Grün — die Norm verlangt 4,5:1 für Text. Und diese Chips
+     tragen Bedeutung („+8 %", „doppelt?", „VD", „3 T"), sie sind
+     keine Dekoration.
+
+     Deshalb ein zweiter Satz Werte: derselbe Farbton, nur tiefer, und
+     ausschließlich für Schrift auf der zugehörigen Tönung. Die helle
+     Farbe bleibt, wo sie stark genug ist — auf Flächen, Balken,
+     Punkten. Im dunklen Modus sind die hellen Töne auf dunklem Grund
+     ohnehin über 4,9:1; dort zeigen die Marken deshalb auf dieselben
+     Werte. Nachgerechnet wird das in test/contrast.js. */
+  --accent-ink:#0A774E;
+  --red-ink:#C5270F;
+  --on-red:#FFFFFF;          /* Schrift auf voller roter Fläche */
+  --red-strong:#DF2C11;      /* rote Fläche mit weißer Schrift */
+  --amber-ink:#945D0B;
+  --blue-ink:#0B5DE8;
+  --violet-ink:#6845EE;
+  --pink-ink:#BF1C71;
   /* Die farbige Karte des Wochenrückblicks. Als eigener Wert, damit
      der dunkle Modus eigene Deckkräfte bekommt statt derselben. */
   --wash:linear-gradient(150deg,rgba(14,164,107,.20),rgba(61,130,246,.13) 52%,rgba(123,92,240,.20));
@@ -93,12 +126,13 @@
     --material:rgba(14,16,19,.84);
     --ink:#F2F4F7;
     --ink-2:#98A1B0;
-    --ink-3:#666E7C;
+    --ink-3:#89919E;
     --on-accent:#04150D;
     --hairline:rgba(255,255,255,.07);
     --hairline-strong:rgba(255,255,255,.13);
     --accent:#34D48D;
     --accent-soft:rgba(52,212,141,.15);
+    --accent-strong:#34D48D;   /* dort steht dunkle Schrift darauf */
     --green:#34D48D;
     --red:#FF7A62;
     --red-soft:rgba(255,122,98,.15);
@@ -114,6 +148,15 @@
     --pink:#FF7CC0;
     --pink-soft:rgba(255,124,192,.16);
     --wash:linear-gradient(150deg,rgba(52,212,141,.20),rgba(107,163,255,.13) 52%,rgba(164,140,255,.20));
+    /* Auf dunklem Grund reichen die hellen Töne (4,9 bis 7,3:1). */
+    --accent-ink:#34D48D;
+    --red-ink:#FF7A62;
+    --on-red:#2A0B04;          /* im Dunkeln ist Rot hell — Weiß darauf lag bei 2,56:1 */
+    --red-strong:#FF7A62;      /* dort steht dunkle Schrift darauf */
+    --amber-ink:#FFBE4D;
+    --blue-ink:#6BA3FF;
+    --violet-ink:#A48CFF;
+    --pink-ink:#FF7CC0;
     --fill:rgba(255,255,255,.06);
     --fill-2:rgba(255,255,255,.11);
     --lift:0 1px 2px rgba(0,0,0,.30), 0 10px 26px -12px rgba(0,0,0,.60);
@@ -202,12 +245,12 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 .appbar.scrolled .barTitle{opacity:1;transform:none}
 .barActions{display:flex;gap:9px;margin-left:auto}
 .barBtn{
-  color:var(--accent);font-size:0.94rem;font-weight:600;
+  color:var(--accent-ink);font-size:0.94rem;font-weight:600;
   padding:7px 2px;min-height:38px;white-space:nowrap;border-radius:99px;
 }
 .barBtn:active{opacity:.45}
 .barBtn.filled{
-  background:var(--accent);color:var(--on-accent);
+  background:var(--accent-strong);color:var(--on-accent);
   padding:9px 17px;box-shadow:var(--lift);
   transition:transform .16s var(--spring);
 }
@@ -402,14 +445,14 @@ button.row:active,label.row:active{background:var(--fill)}
 /* ---------------- Knöpfe ---------------- */
 .cta{
   display:block;width:100%;margin-top:14px;padding:14px;border-radius:var(--r-md);
-  background:var(--accent);color:var(--on-accent);font-weight:650;font-size:1rem;min-height:50px;
+  background:var(--accent-strong);color:var(--on-accent);font-weight:650;font-size:1rem;min-height:50px;
   letter-spacing:-.015em;box-shadow:var(--lift);
   transition:transform .18s var(--spring),opacity .14s linear;
 }
 .cta:active{transform:scale(.975)}
 .cta:disabled{opacity:.35;cursor:default;transform:none;box-shadow:none}
-.cta.light{background:var(--fill);color:var(--accent);box-shadow:none}
-.cta.danger{background:var(--red-soft);color:var(--red);box-shadow:none}
+.cta.light{background:var(--fill);color:var(--accent-ink);box-shadow:none}
+.cta.danger{background:var(--red-soft);color:var(--red-ink);box-shadow:none}
 .ctaRow{display:flex;gap:10px;margin-top:14px}
 .ctaRow .cta{margin-top:0;flex:1}
 .ctaRow .cta.light{flex:0 0 34%}
@@ -419,11 +462,11 @@ button.row:active,label.row:active{background:var(--fill)}
   font-size:0.85rem;font-weight:600;color:var(--ink);min-height:34px;white-space:nowrap;
   transition:transform .18s var(--spring),background .14s linear;
 }
-.pillBtn.on{background:var(--accent);color:var(--on-accent)}
+.pillBtn.on{background:var(--accent-strong);color:var(--on-accent)}
 .pillBtn:active{transform:scale(.92)}
 .pillBtn:disabled{opacity:.3;cursor:default;transform:none}
 .rowActions{display:flex;gap:7px;flex:0 0 auto}
-.linkBtn{color:var(--accent);font-size:0.9rem;font-weight:600;padding:6px 0}
+.linkBtn{color:var(--accent-ink);font-size:0.9rem;font-weight:600;padding:6px 0}
 .linkBtn:active{opacity:.5}
 
 /* ---------------- Positionen ---------------- */
@@ -468,17 +511,17 @@ button.row:active,label.row:active{background:var(--fill)}
 .addRow::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
 .addRow .plusMark{
   width:26px;height:26px;flex:0 0 auto;border-radius:99px;
-  background:var(--accent-soft);color:var(--accent);
+  background:var(--accent-soft);color:var(--accent-ink);
   display:flex;align-items:center;justify-content:center;
   font-size:1.03rem;font-weight:600;line-height:1;
   transition:transform .22s var(--spring);
 }
 .addRow:active .plusMark{transform:rotate(90deg) scale(.9)}
-.addRow .rowTitle{color:var(--accent);font-weight:600}
+.addRow .rowTitle{color:var(--accent-ink);font-weight:600}
 
 /* Freie Zeile im Suchblatt — sichtbar anders als ein Katalogtreffer. */
 .results .freeRow{background:var(--accent-soft)}
-.results .freeRow .rn{color:var(--accent);font-weight:600}
+.results .freeRow .rn{color:var(--accent-ink);font-weight:600}
 
 /* Bilderfassung: Fotografieren, wählen, hineinziehen */
 .shot{margin-bottom:14px}
@@ -497,14 +540,14 @@ button.row:active,label.row:active{background:var(--fill)}
   font-size:0.68rem;font-weight:650;padding:3px 9px;border-radius:99px;
   background:var(--fill);color:var(--ink-2);white-space:nowrap;letter-spacing:0;
 }
-.pill.rh{background:var(--accent-soft);color:var(--accent)}
-.pill.risk{background:var(--red-soft);color:var(--red)}
-.pill.dup{background:var(--blue-soft);color:var(--blue)}
-.pill.warn{background:var(--amber-soft);color:var(--amber)}
+.pill.rh{background:var(--accent-soft);color:var(--accent-ink)}
+.pill.risk{background:var(--red-soft);color:var(--red-ink)}
+.pill.dup{background:var(--blue-soft);color:var(--blue-ink)}
+.pill.warn{background:var(--amber-soft);color:var(--amber-ink)}
 .pill.state{background:var(--fill-2);color:var(--ink-2)}
-.pill.safety{background:var(--red);color:#fff}
-.pill.cheap{background:var(--accent-soft);color:var(--accent)}
-.pill.own{background:var(--violet-soft);color:var(--violet)}
+.pill.safety{background:var(--red-strong);color:var(--on-red)}
+.pill.cheap{background:var(--accent-soft);color:var(--accent-ink)}
+.pill.own{background:var(--violet-soft);color:var(--violet-ink)}
 
 /* Antippbare Marken: erklären sich auf Tippen (Telefon) oder beim
    Verweilen mit dem Zeiger (Rechner). Der Unterschied zur stummen
@@ -525,7 +568,7 @@ button.row:active,label.row:active{background:var(--fill)}
   font-size:0.85rem;font-weight:550;color:var(--ink-2);
   transition:border-color .16s linear,color .16s linear,background .16s linear;
 }
-.opt[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.opt[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
 .opt span{display:block}
 .out{margin-top:10px;font-size:0.82rem;padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2)}
 .out.watch{background:var(--amber-soft)}
@@ -562,10 +605,10 @@ tbody tr:last-child td{border-bottom:none}
   flex:0 0 auto;font-size:0.73rem;font-weight:650;padding:4px 10px;border-radius:99px;
   white-space:nowrap;min-width:52px;text-align:center;background:var(--fill);color:var(--ink-2);
 }
-.f-ok{background:var(--accent-soft);color:var(--accent)}
-.f-gold{background:var(--amber-soft);color:var(--amber)}
-.f-miss{background:var(--red-soft);color:var(--red)}
-.f-new{background:var(--blue-soft);color:var(--blue)}
+.f-ok{background:var(--accent-soft);color:var(--accent-ink)}
+.f-gold{background:var(--amber-soft);color:var(--amber-ink)}
+.f-miss{background:var(--red-soft);color:var(--red-ink)}
+.f-new{background:var(--blue-soft);color:var(--blue-ink)}
 
 .chartBox{padding:15px 16px 16px}
 .chart{width:100%;height:auto;display:block}
@@ -783,11 +826,11 @@ button.row.action,label.row.action{cursor:pointer}
 .badge .bIcon svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 /* Jede Reihe hat ihre eigene Farbe — das ist der eine Ort, an dem die
    App bunt sein darf. Erreicht heißt getönt, offen heißt grau. */
-.badge.m-gerettet.on  .bIcon{background:var(--accent-soft);color:var(--accent)}
-.badge.m-guenstig.on  .bIcon{background:var(--amber-soft);color:var(--amber)}
-.badge.m-getauscht.on .bIcon{background:var(--blue-soft);color:var(--blue)}
-.badge.m-erfasst.on   .bIcon{background:var(--violet-soft);color:var(--violet)}
-.badge.m-wochen.on    .bIcon{background:var(--pink-soft);color:var(--pink)}
+.badge.m-gerettet.on  .bIcon{background:var(--accent-soft);color:var(--accent-ink)}
+.badge.m-guenstig.on  .bIcon{background:var(--amber-soft);color:var(--amber-ink)}
+.badge.m-getauscht.on .bIcon{background:var(--blue-soft);color:var(--blue-ink)}
+.badge.m-erfasst.on   .bIcon{background:var(--violet-soft);color:var(--violet-ink)}
+.badge.m-wochen.on    .bIcon{background:var(--pink-soft);color:var(--pink-ink)}
 .badge.m-gerettet  .bBar i{background:var(--accent)}
 .badge.m-guenstig  .bBar i{background:var(--amber)}
 .badge.m-getauscht .bBar i{background:var(--blue)}
@@ -930,11 +973,11 @@ button.row.action,label.row.action{cursor:pointer}
 
 /* Farbe je Reihe. Sie kommt aus derselben Palette wie die Abzeichen
    in „Zahlen" — dieselbe Sache, dieselbe Farbe. */
-.party{--party:rgba(14,164,107,.42);--party-soft:var(--accent-soft);--party-ink:var(--accent)}
-.party.m-guenstig{--party:rgba(239,161,42,.42);--party-soft:var(--amber-soft);--party-ink:var(--amber)}
-.party.m-getauscht{--party:rgba(61,130,246,.42);--party-soft:var(--blue-soft);--party-ink:var(--blue)}
-.party.m-erfasst{--party:rgba(123,92,240,.42);--party-soft:var(--violet-soft);--party-ink:var(--violet)}
-.party.m-wochen{--party:rgba(228,73,154,.42);--party-soft:var(--pink-soft);--party-ink:var(--pink)}
+.party{--party:rgba(14,164,107,.42);--party-soft:var(--accent-soft);--party-ink:var(--accent-ink)}
+.party.m-guenstig{--party:rgba(239,161,42,.42);--party-soft:var(--amber-soft);--party-ink:var(--amber-ink)}
+.party.m-getauscht{--party:rgba(61,130,246,.42);--party-soft:var(--blue-soft);--party-ink:var(--blue-ink)}
+.party.m-erfasst{--party:rgba(123,92,240,.42);--party-soft:var(--violet-soft);--party-ink:var(--violet-ink)}
+.party.m-wochen{--party:rgba(228,73,154,.42);--party-soft:var(--pink-soft);--party-ink:var(--pink-ink)}
 
 /* Weniger Bewegung heißt: keine. Nicht „etwas weniger". */
 @media (prefers-reduced-motion: reduce){

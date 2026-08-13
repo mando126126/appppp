@@ -363,6 +363,68 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### Zwei Zahlen, die nicht stimmten
+
+**Die Verschwendungsquote konnte über 100 % gehen.** In der Demo stand
+bei Hähnchenbrust „21 von 20 Käufen verdorben". Ursache: chronischer
+Anteil und Ausreißer wurden addiert.
+
+Der chronische Anteil sagt „bei **jedem** Zyklus geht ein Teil
+verloren", der Ausreißer sagt „**dieser eine** ging ganz verloren" —
+ein Ausreißer ist kein zusätzlicher Verlust, sondern ein besonders
+schlimmer Fall desselben. Es ist dieselbe Fehlerklasse wie die zwei
+teuersten Fehler dieses Projekts: **ein Ereignis, das über zwei Kanäle
+in dieselbe Summe läuft.**
+
+`wasteSummary()` rechnet jetzt je Kauf den **größeren** der beiden
+Anteile, nie ihre Summe. Damit gilt „verdorben ≤ gekauft" von der
+Konstruktion her statt durch eine angeklebte Deckelung. Zwei Dinge
+fielen dabei mit ab: der Eurobetrag rechnet mit dem tatsächlich
+gezahlten Preis je Kauf statt mit dem letzten Preis für alle (bei
+steigenden Preisen war der Verlust systematisch zu hoch), und die
+Rechnung steht nicht mehr in der Oberfläche, sondern in `src/algo`, wo
+sie geprüft werden kann. Betroffen war nicht nur die Anzeige: dieselbe
+Quote steuert das Risiko-Zeichen auf der Liste, die Schwelle der
+Sparvorschläge und den Verlustbetrag.
+
+**Und die farbigen Marken waren nicht lesbar.** Gemessen nach WCAG 2.1,
+mit echter Überlagerung der halbdurchsichtigen Tönungen:
+
+| | vorher | jetzt |
+|---|---|---|
+| Gelb (`+8 %`, „überfällig") | 1,93:1 | 4,57:1 |
+| Grün (`−12 %`) | 2,84:1 | 4,57:1 |
+| Rot (VD, Risiko) | 3,06:1 | 4,61:1 |
+| Blau (`doppelt?`) | 3,24:1 | 4,56:1 |
+| Violett (`von dir`) | 3,94:1 | 4,58:1 |
+| Rosa (Streak) | 3,16:1 | 4,61:1 |
+
+Die Norm verlangt 4,5:1, und diese Marken tragen die Aussagen, für die
+es die App gibt. Die Lösung ist ein zweiter Satz Werte — derselbe
+Farbton, nur tiefer, ausschließlich für Schrift auf der zugehörigen
+Tönung (`--amber-ink` neben `--amber`). Die helle Farbe bleibt, wo sie
+stark genug ist: auf Flächen, Balken, Punkten.
+
+Der Test fand dabei mehr als die Handprüfung:
+
+- **Die Hauptschaltfläche.** Weiß auf dem hellen Grün lag bei 3,21:1 —
+  bei dem Knopf, der in dieser App am häufigsten gedrückt wird.
+- **Der dritte Grauton** (`--ink-3`) lag bei 2,14:1 und trägt die
+  Quellenhinweise, Kachelbeschriftungen und die Rohzeilen des Bons. Er
+  ist jetzt lesbar; der Abstand zu `--ink-2` ist dadurch kleiner, und
+  die Rangfolge tragen Größe und Gewicht statt der Helligkeit. Drei
+  Graustufen, von denen zwei lesbar sein müssen, lassen keinen Platz
+  für eine dritte.
+- **Die Sicherheitsmarke im dunklen Modus.** Weiß auf dem hellen
+  Korall lag bei 2,56:1 — die Lösung ist nicht ein anderes Rot,
+  sondern dunkle Schrift darauf.
+
+`test/contrast.js` rechnet das aus `app.css` nach, in beiden Modi, und
+prüft **jede** Paarung aus getönter Fläche und Schrift, die im
+Stylesheet vorkommt — nicht eine Namensregel, sondern das Ergebnis.
+Farben werden angefasst; ein Ton wird „etwas freundlicher", und
+niemand rechnet nach, weil Nachrechnen von Hand niemand macht.
+
 ### Die Haltbarkeiten, geprüft — und die Herkunft war falsch
 
 Die 54 sicherheitskritischen Produkte trugen für ihre Tageszahl die
