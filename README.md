@@ -363,6 +363,58 @@ Wegen:
   Position verhält sich wie jede andere
 - **frei eingetippt** — für alles, was nicht im Katalog steht
 
+### Die Startseite beantwortet wieder eine Frage
+
+Die Rückmeldung aus der Zielgruppe war eindeutig: **zu überladen.**
+Sie hatte recht, und die Zahl sagt es deutlich — die Seite war bei
+Beispieldaten **2610 Pixel** lang und bestand aus bis zu **zehn
+Blöcken**: Vorratsanzeige, Sicherheit, die Liste, zwei Knöpfe,
+vergessene Produkte, Einfrieren, Saison, Lagerhinweis und vier
+Einstellungen.
+
+Jeder Block war für sich begründet. Zusammen beantworteten sie zehn
+Fragen, obwohl beim Öffnen genau eine im Kopf ist: **Was muss ich
+einkaufen?**
+
+Jetzt sind es **drei Blöcke und 1153 Pixel**. Nichts wurde gelöscht —
+alles ist einen Tipp entfernt:
+
+| war auf der Startseite | steht jetzt |
+|---|---|
+| Vorrat, Reichweite | Bestand — dort sucht man den Vorrat |
+| Budget, Personen, Vorausschau, Urlaub | Mehr — das sind Einstellungen, die man einmal anfasst |
+| Sicherheit, Vergessenes, Einfrieren, Saison, Lagern | eine Zeile „Hinweise", die ein Sammelblatt öffnet |
+
+Die Hinweis-Zeile steht **oben**, wenn etwas Dringendes dabei ist
+(Kühlkette), sonst unten. Eine Warnung, die man erst erscrollen muss,
+ist keine — dieselbe Regel wie bei der Sicherung unter „Mehr". Und im
+Sammelblatt behält jeder Hinweis seine Handlung: „Dazu", „Nein",
+„Eingefroren". Das ist der Unterschied zwischen einem Sammelblatt und
+einer Abstellkammer.
+
+**Höchstens ein Zeichen je Zeile, und nur wenn es eine Handlung
+auslöst.** Vorher konnten fünf nebeneinander stehen — „von dir", „3 T
+überfällig", „38 %", „VD", „+8,4 %", „doppelt?". Der Grund ist nicht
+die Menge allein: `+8,4 %` ändert nichts an der Entscheidung, die
+Milch zu kaufen. Es ist eine Beobachtung, keine Aufforderung — und
+Beobachtungen stehen unverändert im Detail-Blatt. Übrig bleiben die
+vier, die eine Entscheidung verlangen, **bevor** man losgeht:
+`doppelt?`, die eigene Antwort, `von dir`, `VD`. „Überfällig" ist
+ohnehin der Grund, warum die Zeile dasteht — sie erklärt sich selbst.
+
+Zwei kleinere Sachen aus derselben Richtung: die Karte trägt keine
+eigene Überschrift mehr (die Seite heißt schon „Einkaufsliste"; die
+Erklärung sitzt jetzt am (i) neben der Summe). Und aus dem grauen
+Knopf „Halbe Menge" — der einzigen Zeile, die doppelt so hoch war,
+ohne zu sagen warum — ist ein Satz geworden, den man antippt: **„Hält
+2 Tage — halbe Menge?"** Dieselbe Handlung, nur verständlich.
+
+`test/uitest.js` hält das fest: **höchstens vier Blöcke** auf der
+Startseite, höchstens ein Zeichen je Zeile, keine Preisabweichung auf
+der Liste — und der Nachweis, dass jeder umgezogene Inhalt an seinem
+neuen Ort wirklich ankommt. Ohne Grenze wächst so eine Seite von
+selbst wieder zu.
+
 ### Einen Bon korrigieren, statt ihn wegzuwerfen
 
 Bis hierher gab es genau eine Möglichkeit, einen gebuchten Bon

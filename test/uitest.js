@@ -92,7 +92,8 @@ try {
     "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
-    " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary };"
+    " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
+    " collectHints, hintsSheet };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -301,7 +302,15 @@ D.loadDemo("full");
 App.goto("liste");
 const c3 = App.ctx;
 ok("Vorrats-Reichweite wird berechnet", c3.range.days !== null, String(c3.range.days));
-ok("Reichweite erscheint als Ring", !!$("main").querySelector(".hero .heroRing svg"));
+// Die Reichweite steht seit der Entrümpelung der Startseite im
+// Bestand — dort, wo man nach dem Vorrat sucht.
+App.goto("bestand");
+ok("Reichweite erscheint im Bestand", !!$("main").querySelector(".hero .heroRing svg"));
+ok("Und nicht mehr auf der Startseite", (() => {
+  App.goto("liste");
+  return !$("main").querySelector(".hero .heroRing svg");
+})());
+App.goto("liste");
 ok("Preis-Gedächtnis wird gefüllt", c3.prices.size > 0, `${c3.prices.size} Produkte`);
 ok("Gangreihenfolge liegt vor", Array.isArray(c3.aisleList) && c3.aisleList.length > 5);
 
@@ -397,6 +406,7 @@ App.goto("liste");
   App.closeSheet();
 }
 {
+  App.goto("bestand");
   const hero = $("main").querySelector("button.hero");
   ok("Reichweite ist antippbar", !!hero);
   if (hero) {
@@ -404,6 +414,7 @@ App.goto("liste");
     ok("Reichweite erklärt ihre Herleitung", /Haltbarkeit/.test($("sheet").textContent));
     App.closeSheet();
   }
+  App.goto("liste");
 }
 
 console.log("\n--- Weitere neue Funktionen ---");
@@ -1032,6 +1043,75 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
   })());
 }
 
+console.log("\n--- Die Startseite bleibt aufgeräumt ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  const main = $("main");
+
+  /* Der Kern der Entrümpelung, als Regel und nicht als Beispiel:
+     die Startseite darf nur wenige Blöcke haben. Die Rückmeldung der
+     Zielgruppe war „zu überladen“, und ohne Grenze wächst so eine
+     Seite von selbst wieder zu. */
+  const bloecke = main.querySelectorAll(":scope > .group, :scope > .card, :scope > .ctaRow");
+  ok("Die Startseite hat höchstens vier Blöcke", bloecke.length <= 4, bloecke.length);
+
+  ok("Die Liste ist da", !!main.querySelector(".items"));
+  ok("Der Einkaufen-Knopf ist da",
+    [...main.querySelectorAll("button")].some((b) => b.textContent === "Einkaufen"));
+  ok("Und das Hinzufügen", !!main.querySelector(".addRow"));
+
+  /* Was umgezogen ist, ist NICHT verschwunden. */
+  ok("Die Einstellungen stehen nicht mehr auf der Startseite",
+    !/Vorausschau|Personen/.test(main.textContent));
+  App.goto("mehr");
+  ok("Sondern unter Mehr", /Vorausschau/.test($("main").textContent) && /Personen/.test($("main").textContent));
+  ok("Und das Budget auch", /Budget/.test($("main").textContent));
+  App.goto("bestand");
+  ok("Der Vorrat steht im Bestand", !!$("main").querySelector(".hero"));
+  App.goto("liste");
+
+  /* Die Hinweise: eine Zeile statt fünf Gruppen. */
+  const hinweise = T.collectHints(App.ctx);
+  ok("Es gibt Hinweise zu zeigen", hinweise.length > 0, hinweise.length);
+  ok("Sie stehen als EINE Zeile auf der Seite",
+    !/Fehlt dir das|Nicht in Saison/.test(main.textContent));
+  const hRow = [...main.querySelectorAll(".row")]
+    .find((r) => /Hinweis|kühlen/i.test(r.textContent));
+  ok("Und die Zeile ist da", !!hRow);
+  click(hRow);
+  ok("Sie öffnet das Sammelblatt", /Hinweise/.test($("sheetTitle").textContent));
+  const blatt = $("sheetOpts").textContent;
+  ok("Darin steht alles wieder", hinweise.every((h) => blatt.includes(h.title.slice(0, 12))),
+    hinweise.map((h) => h.title).join(" | "));
+  ok("Mit ihren Handlungen", $("sheetOpts").querySelectorAll(".pillBtn").length > 0);
+  App.closeSheet();
+
+  /* Höchstens ein Zeichen je Zeile. */
+  const zeilen = [...main.querySelectorAll(".item .nm")];
+  ok("Keine Zeile trägt mehr als ein Zeichen",
+    zeilen.every((z) => z.querySelectorAll(".pill").length <= 1),
+    zeilen.map((z) => z.querySelectorAll(".pill").length).join(","));
+  ok("Preisabweichungen stehen nicht mehr auf der Liste",
+    !main.querySelector(".item .pill.warn, .item .pill.cheap"));
+  ok("Aber weiter im Detail-Blatt", (() => {
+    const mitPreis = [...App.ctx.prices.entries()].find(([, v]) => v.verdict !== "üblich");
+    if (!mitPreis) return true;
+    T.productSheet(mitPreis[0], App.ctx);
+    const t = $("sheetOpts").textContent;
+    App.closeSheet();
+    return /üblich/.test(t);
+  })());
+
+  /* Der Vorschlag zur halben Menge erklärt sich selbst. */
+  const halb = main.querySelector(".halfRow");
+  if (halb) {
+    ok("Die halbe Menge nennt ihren Grund", /Hält|übrig/.test(halb.textContent), halb.textContent);
+    ok("Und ist antippbar", halb.tagName === "BUTTON");
+  }
+}
+
 console.log("\n--- Einen Bon korrigieren ---");
 {
   D.reset();
@@ -1406,8 +1486,17 @@ console.log("\n--- Selbst etwas hinzufügen ---");
   ok("Die Unterzeile beschreibt die Liste, nicht die Datenlage",
     /Position/.test($("largeTitle").querySelector(".sub").textContent),
     $("largeTitle").querySelector(".sub").textContent);
-  ok("Die Überschrift sagt, worum es geht",
-    /Deine nächste Einkaufsliste/.test($("main").textContent));
+  // Die Karte trägt keine eigene Überschrift mehr — die Seite heißt
+  // schon „Einkaufsliste“, und dieselbe Aussage zweimal kostet eine
+  // Zeile und sagt nichts. Die Erklärung sitzt jetzt an der Summe.
+  ok("Die Liste erklärt sich an der Summe", (() => {
+    const info = [...$("main").querySelectorAll(".totals .infoBtn")];
+    if (!info.length) return false;
+    click(info[0]);
+    const t = $("sheetOpts").textContent;
+    App.closeSheet();
+    return /Rhythmen/.test(t);
+  })());
 
   const addRow = $("main").querySelector(".addRow");
   ok("Es gibt einen Hinzufügen-Knopf", !!addRow);

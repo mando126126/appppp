@@ -1002,6 +1002,31 @@ button.row.action,label.row.action{cursor:pointer}
 .rowOpen{flex:0 0 auto;padding:8px 2px 8px 8px;display:flex;align-items:center;background:none}
 .rowOpen:active{opacity:.5}
 
+/* Zwischenüberschrift in einem Blatt — trennt die gesammelten
+   Hinweise nach Art, ohne dass jede Art eine eigene Karte braucht. */
+/* Der Vorschlag zur halben Menge. Kein Knopf, der aussieht wie ein
+   Knopf — ein Satz, den man antippen kann. Er steht eingerückt unter
+   seiner Zeile und gehört sichtbar dazu. */
+.halfRow{
+  display:flex;align-items:center;gap:9px;width:100%;margin:2px 0 4px 37px;
+  padding:8px 12px 8px 9px;border-radius:99px;background:var(--amber-soft);
+  color:var(--amber-ink);font-size:0.82rem;font-weight:550;text-align:left;
+  width:calc(100% - 37px);
+}
+.halfRow .hMark{
+  flex:0 0 auto;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  background:var(--amber-ink);color:var(--surface);font-size:0.72rem;font-weight:700;
+}
+.halfRow:active{transform:scale(.985)}
+.halfRow.on{background:var(--accent-soft);color:var(--accent-ink)}
+.halfRow.on .hMark{background:var(--accent-ink)}
+
+.sheetGroupTitle{
+  font-size:0.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-2);margin:16px 0 6px;
+}
+.sheetGroupTitle:first-child{margin-top:4px}
+
 .plainBtn{text-align:left;padding:0;background:none;display:block}
 .plainBtn:active{opacity:.55}
 .card:empty{display:none}

@@ -153,6 +153,11 @@ const PILL_INFO = {
     "festgehalten. Für die Produktzuordnung wird sie weggeworfen — sonst wären „Marken-Butter“ und " +
     "„Butter“ für die App zwei verschiedene Dinge."],
 
+  hinweise: ["Hinweise",
+    "Alles, was die App zu sagen hat außer der Liste selbst: Kühlkette, vergessene Produkte, was sich " +
+    "einzufrieren lohnt, Saison und Lagerhinweise.\n\nDiese Hinweise standen früher einzeln auf der " +
+    "Startseite. Sie sind nicht weniger geworden — sie stehen nur nicht mehr im Weg."],
+
   gesichert: ["Sicherung",
     "Zeigt, ob die Daten außerhalb dieses Browsers liegen.\n\nEine Sicherungsdatei ist das Einzige, " +
     "was „Browserdaten löschen“, ein neues Gerät oder einen kaputten Speicher überlebt. Die App hat " +
@@ -532,6 +537,38 @@ function productSheet(productId, ctx) {
 /* ================================================================
    1. Liste
    ================================================================ */
+/* ================================================================
+   1. Liste — die Startseite
+   ================================================================
+   RÜCKMELDUNG AUS DER ZIELGRUPPE, und sie war eindeutig: zu voll.
+
+   Die Seite hatte bis zu zehn Blöcke — Vorratsanzeige, Sicherheit,
+   die Liste, zwei Knöpfe, vergessene Produkte, Einfrieren, Saison,
+   Lagerhinweis und vier Einstellungen. Jeder für sich war begründet.
+   Zusammen beantworteten sie zehn Fragen, obwohl beim Öffnen genau
+   eine im Kopf ist:
+
+       WAS MUSS ICH EINKAUFEN?
+
+   Alles andere ist entweder eine Antwort auf eine Frage, die man
+   später stellt, oder eine Einstellung. Beides gehört nicht auf die
+   erste Seite.
+
+   WAS GEBLIEBEN IST: die Liste, ein Knopf zum Loslaufen, ein Weg
+   etwas zu ergänzen. Mehr nicht.
+
+   WAS UMGEZOGEN IST — nichts wurde gelöscht, alles ist einen Tipp
+   entfernt:
+     · Vorrat, Reichweite            -> Bestand
+     · Budget, Personen, Vorausschau,
+       Urlaub                        -> Mehr
+     · Sicherheit, Vergessenes,
+       Einfrieren, Saison, Lagern    -> eine Zeile „Hinweise“
+
+   WAS RUHIGER GEWORDEN IST: höchstens EIN Zeichen je Zeile statt
+   drei. Die Erklärzeile über der Liste ist ins (i) gewandert. Und
+   die Überschrift sagt, was hier ist, statt es zu erklären.
+   ================================================================ */
 function viewListe(ctx, app) {
   const c = frag();
   const S = Data.get();
@@ -553,33 +590,26 @@ function viewListe(ctx, app) {
   // Karte, die jeden Tag da ist, ist kein Anlass mehr.
   if (ctx.review.due) c.append(reviewCard(ctx, app));
 
-  if (ctx.range.days !== null) c.append(rangeHero(ctx, app));
-
-  /* --- Sicherheit: eine Zeile --- */
-  if (ctx.safety) {
-    const g = uiGroup("Sicherheit", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source);
-    g.body.append(uiRow(ctx.safety.short, ctx.safety.coldestZone,
-      el("span", "flag f-miss", "kühlen"), {
-        onClick: () => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
-      }));
-    c.append(g);
-  }
+  const hinweise = collectHints(ctx);
+  const dringend = hinweise.some((h) => h.urgent);
+  if (dringend) c.append(hintsRow(ctx, app, hinweise));
 
   /* --- Die Liste --- */
   const on = ctx.items.filter((i) => i.on);
   const sumOn = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
 
-  // „Fällig“ war die Sprache des Algorithmus, nicht die des Nutzers.
-  // Was hier steht, ist eine Einkaufsliste — und das darf sie sagen.
-  const list = uiGroup("Deine nächste Einkaufsliste",
+  /* Ohne Überschrift: die Seite heißt schon „Einkaufsliste“, und
+     eine Karte, die darunter noch einmal „Deine Einkaufsliste“ sagt,
+     kostet eine Zeile und sagt nichts. Die Erklärung sitzt unten an
+     der Summe, wo man ohnehin hinschaut, wenn man wissen will, wie
+     das zustande kommt. */
+  const listInfo =
     "Die App füllt die Liste aus deinen Rhythmen vor: Lebensmittel nach dem gelernten Kaufabstand " +
     "zuzüglich der eingestellten Vorausschau, Haushaltsprodukte nach ihrer Verbrauchsrate.\n\n" +
-    "Sie gehört trotzdem dir. Haken wegnehmen, halbe Menge wählen, eigene Positionen ergänzen — " +
-    "alles unten über „Etwas hinzufügen“. Der Rechenweg jeder vorgeschlagenen Zeile steht in ihrem " +
-    "Detail-Blatt, einfach antippen.");
-  list.body.append(el("div", "listLead",
-    `<span>Vorgeschlagen aus deinen Rhythmen${ctx.pattern && ctx.pattern.dayName
-      ? " · nächster Einkauf " + esc(ctx.pattern.dayName) : ""}</span>`));
+    "Sie gehört trotzdem dir. Haken wegnehmen, halbe Menge wählen, eigene Positionen ergänzen. " +
+    "Der Rechenweg jeder Zeile steht in ihrem Detail-Blatt — einfach antippen.\n\n" +
+    "Vorrat und Reichweite stehen unter „Bestand“, Budget und Vorausschau unter „Mehr“.";
+  const list = uiGroup();
 
   if (ctx.budgetResult.removed.length) {
     list.body.append(uiRow(`${ctx.budgetResult.removed.length} wegen Budget gestrichen`,
@@ -594,9 +624,9 @@ function viewListe(ctx, app) {
   }
 
   // Drei Sektionen: was die App vorschlägt (Lebensmittel, Haushalt)
-  // und was du selbst ergänzt hast. Die Trennung ist keine Formsache —
-  // sie beantwortet die Frage „woher kommt das hier eigentlich?“, ohne
-  // dass man eine Zeile antippen muss.
+  // und was du selbst ergänzt hast. Die Trennung beantwortet die
+  // Frage „woher kommt das hier eigentlich?“, ohne dass man eine
+  // Zeile antippen muss.
   const auto = ctx.items.filter((i) => i.basis !== "manuell");
   const eigene = ctx.items.filter((i) => i.basis === "manuell");
   const food = auto.filter((i) => !isNonFood(i.productId));
@@ -617,7 +647,7 @@ function viewListe(ctx, app) {
   list.body.append(ul);
 
   // Der wichtigste Knopf dieser Seite: ohne ihn ist die App ein
-  // Automat, den man nur zusehen kann.
+  // Automat, den man nur ansehen kann.
   const add = el("button", "row action addRow");
   add.innerHTML = '<span class="plusMark">+</span>' +
     '<div class="rowMain"><div class="rowTitle">Etwas hinzufügen</div>' +
@@ -627,12 +657,19 @@ function viewListe(ctx, app) {
 
   const full = ctx.items.reduce((a, i) => a + i.price, 0);
   const tot = el("div", "totals");
-  tot.innerHTML =
-    `<div><div class="l">${on.length} Positionen</div><div class="big">${eur(sumOn)}</div></div>` +
-    `<div class="saved">${full > sumOn ? "− " + eur(full - sumOn) : ""}</div>`;
+  const links = el("div");
+  const label = el("div", "l");
+  label.append(document.createTextNode(`${on.length} ${on.length === 1 ? "Position" : "Positionen"}`));
+  const info = el("button", "infoBtn", "i");
+  info.setAttribute("aria-label", "Erklärung: wie diese Liste entsteht");
+  info.addEventListener("click", () => App.notice("Wie diese Liste entsteht", listInfo));
+  label.append(info);
+  links.append(label, el("div", "big", eur(sumOn)));
+  tot.append(links, el("div", "saved", full > sumOn ? "− " + eur(full - sumOn) : ""));
   list.body.append(tot);
   c.append(list);
 
+  /* --- Losgehen --- */
   const actions = el("div", "ctaRow");
   const go = el("button", "cta", "Einkaufen");
   go.disabled = !on.length;
@@ -643,103 +680,140 @@ function viewListe(ctx, app) {
   actions.append(go, share);
   c.append(actions);
 
-  /* --- Vergessen --- */
-  if (ctx.forgotten.length) {
-    const g = uiGroup("Fehlt dir das?",
-      "Produkte, die deutlich über ihrem gelernten Rhythmus liegen und nicht auf der Liste stehen.");
-    ctx.forgotten.slice(0, 4).forEach((f) => {
-      const r = el("div", "row");
-      r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(f.name)}</div><div class="rowSub">${f.daysSince} statt ${f.rhythmDays} Tage</div>`));
-      const acts = el("div", "rowActions");
-      const add = el("button", "pillBtn on", "Dazu");
-      add.addEventListener("click", () => { app.addToList(f.productId); app.toast(f.name + " dazu"); });
-      const no = el("button", "pillBtn", "Nein");
-      no.setAttribute("aria-label", `${f.name} nicht mehr vorschlagen`);
-      no.addEventListener("click", () => app.dismiss("forgotten", f.productId));
-      acts.append(add, no);
-      r.append(acts);
-      g.body.append(r);
+  if (hinweise.length && !dringend) c.append(hintsRow(ctx, app, hinweise));
+
+  return c;
+}
+
+/**
+ * Alles Ratgeberische in EINER Zeile.
+ *
+ * Fünf Gruppen sind zu einer Zeile geworden. Sie erscheint nur, wenn
+ * es etwas zu sagen gibt, und sie sagt, wie viel — damit man
+ * entscheiden kann, ob es sich gerade lohnt.
+ *
+ * Ist etwas Dringendes dabei (Kühlkette), steht sie ÜBER der Liste
+ * und nennt die Sache beim Namen. Sonst darunter. Eine Warnung, die
+ * man erst erscrollen muss, ist keine — dieselbe Regel wie bei der
+ * Sicherung unter „Mehr“.
+ */
+function hintsRow(ctx, app, hinweise) {
+  const g = uiGroup();
+  const dringend = hinweise.find((h) => h.urgent);
+  g.body.append(uiRow(
+    dringend ? dringend.title : `${hinweise.length} ${hinweise.length === 1 ? "Hinweis" : "Hinweise"}`,
+    dringend
+      ? (hinweise.length > 1 ? `und ${hinweise.length - 1} ${hinweise.length === 2 ? "weiterer" : "weitere"}` : dringend.sub)
+      : hinweise.slice(0, 3).map((h) => h.title).join(" · "),
+    flag(dringend ? "kuehlen" : "hinweise", dringend ? "f-miss" : "", String(hinweise.length)),
+    { onClick: () => hintsSheet(ctx, app) }));
+  return g;
+}
+
+/**
+ * Alles einsammeln, was die App zu sagen hat — außer der Liste.
+ *
+ * Jeder Eintrag trägt seine eigene Handlung mit. Das ist der
+ * Unterschied zwischen einem Sammelblatt und einer Abstellkammer:
+ * was hier landet, bleibt bedienbar.
+ */
+function collectHints(ctx) {
+  const out = [];
+
+  if (ctx.safety) {
+    out.push({
+      key: "safety", urgent: true,
+      group: "Sicherheit",
+      title: ctx.safety.short,
+      sub: ctx.safety.coldestZone,
+      badge: "kühlen",
+      onOpen: (app) => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
     });
-    c.append(g);
   }
 
-  /* --- Einfrieren --- */
-  if (ctx.freeze.length) {
-    const g = uiGroup("Einfrieren", "Erscheint nur, wenn die gekaufte Menge länger reicht als die Haltbarkeit.");
-    ctx.freeze.slice(0, 3).forEach((f) => {
-      const r = el("div", "row");
-      r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(f.name)}: ${f.share === 0.5 ? "die Hälfte" : "ein Teil"}</div>` +
-        `<div class="rowSub">rettet ${eur(f.valueAtRisk)}</div>`));
-      const done = el("button", "pillBtn", "Eingefroren");
-      done.addEventListener("click", () => {
+  ctx.forgotten.slice(0, 4).forEach((f) => out.push({
+    key: "forgotten:" + f.productId,
+    title: f.name,
+    sub: `zuletzt vor ${f.daysSince} Tagen, sonst alle ${f.rhythmDays}`,
+    group: "Fehlt dir das?",
+    actions: [
+      { label: "Dazu", primary: true, run: (app) => { app.addToList(f.productId); app.toast(f.name + " dazu"); } },
+      { label: "Nein", run: (app) => { app.dismiss("forgotten", f.productId); app.toast("Nicht mehr gefragt"); } }
+    ]
+  }));
+
+  ctx.freeze.slice(0, 3).forEach((f) => out.push({
+    key: "freeze:" + f.productId,
+    title: `${f.name}: ${f.share === 0.5 ? "die Hälfte" : "ein Teil"} einfrieren`,
+    sub: `rettet ${eur(f.valueAtRisk)}`,
+    group: "Einfrieren",
+    actions: [
+      { label: "Eingefroren", primary: true, run: (app) => {
         app.dismiss("freeze", f.productId);
         app.rescue(f.productId, `${f.name} eingefroren`, f.valueAtRisk);
-      });
-      r.append(done);
-      g.body.append(r);
-    });
-    c.append(g);
-  }
+      } }
+    ]
+  }));
 
-  /* --- Saison --- */
-  if (ctx.season.length) {
-    const g = uiGroup("Nicht in Saison", "Saisonkalender des BZfE. Produkte ohne Eintrag bekommen keinen Hinweis.");
-    ctx.season.forEach((s) => g.body.append(uiRow(s.name,
-      "Saison: " + s.peakMonths.map((m) => MONTH_NAMES[m - 1]).join(", "), null, { value: "Import" })));
-    c.append(g);
-  }
+  /* Kein Verb im Titel: aus „Äpfel“ und „ist Importware“ wird
+     „Äpfel ist Importware“, und Produktnamen sind mal Einzahl, mal
+     Mehrzahl. Der Doppelpunkt umgeht die Grammatik, statt sie zu
+     raten. */
+  ctx.season.forEach((s) => out.push({
+    key: "season:" + s.productId,
+    title: s.name,
+    sub: "Importware · Saison: " + s.peakMonths.map((m) => MONTH_NAMES[m - 1]).join(", "),
+    group: "Saison"
+  }));
 
-  /* --- Lagerhinweis --- */
   if (ctx.ethylene) {
-    const g = uiGroup("Lagern");
-    g.body.append(uiRow("Getrennt lagern", "Ethylen lässt die zweite Gruppe schneller verderben", null, {
-      onClick: () => app.notice("Lagern", ctx.ethylene.message + "\n\nQuelle: " + ctx.ethylene.source)
-    }));
-    c.append(g);
-  }
-
-  /* --- Einstellungen --- */
-  const set = uiGroup("Diese Woche");
-  const rest = S.settings.budget - sumOn;
-  set.body.append(uiRow("Budget",
-    S.settings.budget ? (rest >= 0 ? `${eur(rest)} Luft` : `${eur(-rest)} drüber`) : null,
-    stepper(S.settings.budget, (v) => (v ? eur(v) : "aus"),
-      (v) => app.set((s) => { s.settings.budget = v; }), { min: 0, max: 400, step: 5 })));
-  set.body.append(uiRow("Personen", null,
-    stepper(S.settings.household, String,
-      (v) => app.set((s) => { s.settings.household = v; }), { min: 1, max: 8, step: 1 })));
-  set.body.append(uiRow("Vorausschau",
-    ctx.pattern && ctx.pattern.dayName ? `nächster Einkauf ${ctx.pattern.dayName}` : null,
-    stepper(S.settings.lookaheadDays, (v) => (v ? `${v} Tage` : "aus"),
-      (v) => app.set((s) => { s.settings.lookaheadDays = v; }), { min: 0, max: 7, step: 1 })));
-
-  const v = S.settings.vacation;
-  set.body.append(uiRow("Urlaub", v.active && v.from ? `${deDate(v.from)}–${deDate(v.to)}` : null,
-    toggle(v.active, (onOff) => app.set((s) => {
-      s.settings.vacation.active = onOff;
-      if (onOff && !s.settings.vacation.from) {
-        s.settings.vacation.from = Data.plusDays(Data.today(), 2);
-        s.settings.vacation.to = Data.plusDays(Data.today(), 16);
-      }
-    }), "Urlaubsmodus")));
-
-  if (v.active) {
-    const f = el("div", "dateRow");
-    [["from", "Abreise"], ["to", "Rückkehr"]].forEach(([key, label]) => {
-      const w = el("label", "field", `<span class="lbl">${label}</span>`);
-      const i = el("input");
-      i.type = "date";
-      i.value = v[key] || "";
-      i.addEventListener("change", () => app.set((s) => { s.settings.vacation[key] = i.value; }));
-      w.append(i);
-      f.append(w);
+    out.push({
+      key: "ethylene",
+      title: "Getrennt lagern",
+      sub: "Ethylen lässt die zweite Gruppe schneller verderben",
+      group: "Lagern",
+      onOpen: (app) => app.notice("Lagern", ctx.ethylene.message + "\n\nQuelle: " + ctx.ethylene.source)
     });
-    set.body.append(f);
   }
-  c.append(set);
-  return c;
+
+  return out;
+}
+
+/** Das Sammelblatt. Gruppiert, mit den Handlungen von vorher. */
+function hintsSheet(ctx, app) {
+  const body = el("div");
+  const hinweise = collectHints(ctx);
+
+  let letzteGruppe = null;
+  hinweise.forEach((h) => {
+    if (h.group && h.group !== letzteGruppe) {
+      body.append(el("div", "sheetGroupTitle", esc(h.group)));
+      letzteGruppe = h.group;
+    }
+    const r = el("div", "row");
+    const haupt = h.onOpen ? el("button", "rowMain plainBtn") : el("div", "rowMain");
+    haupt.innerHTML = `<div class="rowTitle">${esc(h.title)}</div><div class="rowSub">${esc(h.sub || "")}</div>`;
+    if (h.onOpen) haupt.addEventListener("click", () => h.onOpen(app));
+    r.append(haupt);
+
+    if (h.badge) r.append(flag("kuehlen", "f-miss", h.badge));
+    if (h.actions) {
+      const acts = el("div", "rowActions");
+      h.actions.forEach((a) => {
+        const b = el("button", "pillBtn" + (a.primary ? " on" : ""), esc(a.label));
+        b.addEventListener("click", () => { a.run(app); app.closeSheet(); });
+        acts.append(b);
+      });
+      r.append(acts);
+    }
+    body.append(r);
+  });
+
+  body.append(el("p", "srcnote",
+    "Diese Hinweise standen früher alle auf der Startseite. Sie sind nicht weniger geworden — " +
+    "sie stehen nur nicht mehr im Weg."));
+
+  app.sheet("Hinweise", `${hinweise.length} ${hinweise.length === 1 ? "Sache" : "Sachen"}`, body);
 }
 
 /**
@@ -1318,21 +1392,42 @@ function listItem(it, ctx, app) {
   main.setAttribute("tabindex", "0");
   main.setAttribute("aria-label", `Details zu ${it.name}`);
   const nm = el("div", "nm", esc(it.name));
-  if (manuell) nm.append(pill("own", "own", "von dir"));
-  if (!manuell && it.dueIn < 0) nm.append(pill("ueberfaellig", "warn", `${-it.dueIn} T überfällig`));
-  if (it.riskFlag) nm.append(pill("risiko", "risk", pct(it.wasteRate)));
-  if (p.safetyCritical) nm.append(pill("vd", "safety", "VD"));
-  const pm = ctx.prices.get(it.productId);
-  if (pm && pm.verdict !== "üblich") {
-    const guenstig = pm.verdict === "günstig";
-    nm.append(pill(guenstig ? "guenstig" : "teuer", guenstig ? "cheap" : "warn",
-      sign(pm.changePercent) + " %"));
+
+  /* HÖCHSTENS EIN ZEICHEN JE ZEILE.
+     Vorher konnten fünf nebeneinander stehen — „von dir“, „3 T
+     überfällig“, „38 %“, „VD“, „+8 %“, „doppelt?“ —, und eine Zeile
+     mit fünf bunten Marken liest niemand mehr als Zeile. Die
+     Zielgruppe nannte das „überladen“, und sie hatte recht.
+     Sortiert nach dem, was eine Entscheidung ändert: ein möglicher
+     Doppelkauf zuerst (den will man wissen, BEVOR man losgeht), dann
+     die eigene Antwort, dann Sicherheit, dann der Preis. Alles
+     Übrige steht unverändert im Detail-Blatt der Zeile. */
+  /* HÖCHSTENS EIN ZEICHEN, und nur wenn es eine HANDLUNG auslöst.
+     Vorher konnten fünf nebeneinander stehen. Die Zielgruppe nannte
+     das „überladen“, und der Grund ist nicht die Menge allein: „+8,4 %“
+     ändert nichts an der Entscheidung, die Milch zu kaufen. Es ist
+     eine Beobachtung, keine Aufforderung — und Beobachtungen gehören
+     ins Detail-Blatt, das ein Tippen entfernt ist.
+
+     Was bleibt, verlangt eine Entscheidung, BEVOR man losgeht:
+       doppelt?  — vielleicht gar nicht kaufen
+       hab noch  — die eigene Antwort, damit sie nicht vergessen wird
+       von dir   — nicht die App hat das vorgeschlagen, du warst es
+       VD        — direkt kühlen, nicht erst nach dem Kaffee
+     Preisabweichung, Verderb-Risiko und „3 T überfällig“ stehen
+     unverändert im Detail-Blatt. Überfällig ist ohnehin der GRUND,
+     warum die Zeile hier steht — sie erklärt sich damit selbst. */
+  const zeichen = [];
+  if (ctx.duplicates.some((d) => d.productId === it.productId)) {
+    zeichen.push(["doppelt", "dup", "doppelt?"]);
   }
-  if (ctx.duplicates.some((d) => d.productId === it.productId)) nm.append(pill("doppelt", "dup", "doppelt?"));
   if (!it.on && it.reason) {
     const rr = REASONS.find((x) => x.key === it.reason);
-    if (rr) nm.append(pill("zustand", "state", rr.label));
+    if (rr) zeichen.push(["zustand", "state", rr.label]);
   }
+  if (manuell) zeichen.push(["own", "own", "von dir"]);
+  if (p.safetyCritical) zeichen.push(["vd", "safety", "VD"]);
+  if (zeichen.length) nm.append(pill(...zeichen[0]));
   main.append(nm);
   main.addEventListener("keydown", (ev) => {
     if (ev.target !== main) return;          // eine Marke hat ihre eigene Taste
@@ -1350,10 +1445,25 @@ function listItem(it, ctx, app) {
   top.append(cb, main, el("div", "price", it.price > 0 ? eur(it.halved ? it.price / 2 : it.price) : "—"));
   li.append(top);
 
+  /* Der Vorschlag zur halben Menge.
+     Vorher stand hier ein grauer Knopf „Halbe Menge“ ohne jeden
+     Zusammenhang — die einzige Zeile der Liste, die doppelt so hoch
+     war, und niemand wusste, warum sie es war. Jetzt sagt sie den
+     Grund und ist selbst die Antwort darauf: ein Satz, den man
+     antippt. Das ist dieselbe Handlung, nur verständlich. */
   if (it.on && it.riskFlag) {
-    const acts = el("div", "inlineActions");
-    const h = el("button", "pillBtn" + (it.halved ? " on" : ""), it.halved ? "✓ halbe Menge" : "Halbe Menge");
+    const p2 = byId(it.productId) || {};
+    // Kurz halten: auf 390 Pixeln bricht jeder längere Satz um, und
+    // eine zweizeilige Zeile in einer Liste sieht wieder nach Ballast
+    // aus — genau dem, was hier abgebaut werden sollte.
+    const grund = p2.shelfLifeDays && p2.shelfLifeDays <= 7
+      ? `Hält ${p2.shelfLifeDays} ${p2.shelfLifeDays === 1 ? "Tag" : "Tage"}`
+      : "Bleibt oft übrig";
+    const h = el("button", "halfRow" + (it.halved ? " on" : ""));
     h.setAttribute("aria-pressed", it.halved ? "true" : "false");
+    h.innerHTML = it.halved
+      ? `<span class="hMark">✓</span><span>Halbe Menge · spart ${esc(eur(it.price / 2))}</span>`
+      : `<span class="hMark">½</span><span>${esc(grund)} — halbe Menge?</span>`;
     h.addEventListener("click", () => {
       const now = !it.halved;
       app.choose(it.choiceKey, { halved: now });
@@ -1362,8 +1472,7 @@ function listItem(it, ctx, app) {
       // gerettet werden.
       if (now) app.rescue(it.productId, `${it.name}: halbe Menge`, it.price / 2);
     });
-    acts.append(h);
-    li.append(acts);
+    li.append(h);
   }
 
   // Die vier Antworten korrigieren einen Rhythmus. Eine selbst
@@ -2394,6 +2503,55 @@ function viewMehr(ctx, app) {
      Der Zustand kommt aus backupGuard, die Handgriffe aus
      ui/backup.js. */
   if (!ctx.backup.urgent) c.append(backupGroup(ctx, app));
+
+  /* --- Einstellungen für die Liste ---
+     Standen bis hierher unten auf der Startseite. Sie sind
+     Einstellungen: man fasst sie einmal an und danach monatelang
+     nicht mehr — auf der Seite, die man täglich öffnet, waren sie
+     vier Blöcke Ballast. */
+  const wl = uiGroup("Deine Liste",
+    "Diese vier Werte steuern, was auf der Einkaufsliste landet.\n\n" +
+    "Das Budget streicht die teuersten entbehrlichen Positionen — Brot, Milch und Eier bleiben immer drauf. " +
+    "Die Personenzahl skaliert die Mengen. Die Vorausschau nimmt mit, was in den nächsten Tagen fällig wird, " +
+    "damit man nicht zweimal geht. Und der Urlaubsmodus stellt zurück, was bis zur Rückkehr verderben würde.");
+  const restBudget = S.settings.budget - ctx.items.filter((i) => i.on)
+    .reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+  wl.body.append(uiRow("Budget",
+    S.settings.budget ? (restBudget >= 0 ? `${eur(restBudget)} Luft` : `${eur(-restBudget)} drüber`) : null,
+    stepper(S.settings.budget, (v) => (v ? eur(v) : "aus"),
+      (v) => app.set((s) => { s.settings.budget = v; }), { min: 0, max: 400, step: 5 })));
+  wl.body.append(uiRow("Personen", null,
+    stepper(S.settings.household, String,
+      (v) => app.set((s) => { s.settings.household = v; }), { min: 1, max: 8, step: 1 })));
+  wl.body.append(uiRow("Vorausschau",
+    ctx.pattern && ctx.pattern.dayName ? `nächster Einkauf ${ctx.pattern.dayName}` : null,
+    stepper(S.settings.lookaheadDays, (v) => (v ? `${v} Tage` : "aus"),
+      (v) => app.set((s) => { s.settings.lookaheadDays = v; }), { min: 0, max: 7, step: 1 })));
+
+  const urlaub = S.settings.vacation;
+  wl.body.append(uiRow("Urlaub",
+    urlaub.active && urlaub.from ? `${deDate(urlaub.from)}–${deDate(urlaub.to)}` : null,
+    toggle(urlaub.active, (onOff) => app.set((s) => {
+      s.settings.vacation.active = onOff;
+      if (onOff && !s.settings.vacation.from) {
+        s.settings.vacation.from = Data.plusDays(Data.today(), 2);
+        s.settings.vacation.to = Data.plusDays(Data.today(), 16);
+      }
+    }), "Urlaubsmodus")));
+  if (urlaub.active) {
+    const f = el("div", "dateRow");
+    [["from", "Abreise"], ["to", "Rückkehr"]].forEach(([key, label]) => {
+      const w = el("label", "field", `<span class="lbl">${label}</span>`);
+      const i = el("input");
+      i.type = "date";
+      i.value = urlaub[key] || "";
+      i.addEventListener("change", () => app.set((s) => { s.settings.vacation[key] = i.value; }));
+      w.append(i);
+      f.append(w);
+    });
+    wl.body.append(f);
+  }
+  c.append(wl);
 
   /* --- Daten --- */
   const dat = uiGroup("Daten",
