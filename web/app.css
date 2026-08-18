@@ -24,10 +24,69 @@
      4. EINE TIEFENSTUFE. Genau ein Schatten, überall derselbe. Karten
         liegen auf dem Grund, nicht Karten auf Karten auf Karten.
 
+     5. EINE EIGENE SCHRIFT. Manrope, mitgeliefert statt geladen.
+        Die Systemschrift war die vernünftige Wahl und zugleich der
+        Grund, warum die App auf jedem Gerät wie das Betriebssystem
+        aussah und auf keinem wie sie selbst.
+
    Weiche Kanten, Bewegung mit ein wenig Nachschwingen, Ziffern in
    Tabellenbreite (damit Beträge untereinander stehen, ohne dass man
-   sie liest) — aber in der Systemschrift, nicht in Schreibmaschine.
+   sie liest) — aber in der Textschrift, nicht in Schreibmaschine.
    ================================================================ */
+
+/* ---------------- Schrift ----------------
+   MANROPE, und zwar aus dem eigenen Verzeichnis.
+
+   Warum überhaupt eine eigene: die Systemschrift ist auf jedem Gerät
+   eine andere. Dieselbe Zeile stand auf dem iPhone in SF Pro, auf
+   Android in Roboto und auf dem Rechner in Segoe — mit
+   unterschiedlicher Laufweite, Zahlenbreite und x-Höhe. Alles, was
+   hier an Hierarchie eingestellt ist, galt damit immer nur für ein
+   Gerät. Manrope ist auf allen dasselbe.
+
+   Warum ausgerechnet Manrope: halb-grotesk, offene Punzen, sehr
+   ruhige Ziffern — und eine hohe x-Höhe, die kleine Beschriftungen
+   auf einem Handy lesbar hält. Sie wirkt freundlich, ohne rund und
+   verspielt zu sein. Das trifft genau das, was diese App sein will.
+
+   Warum ausgeliefert und nicht von Google Fonts geladen: eine
+   eingebundene Schrift ist eine Anfrage an einen Dritten, bei jedem
+   Start, mit IP und Browserkennung. Diese App verspricht, dass die
+   Daten auf dem Gerät bleiben. 40 KB im eigenen Verzeichnis kosten
+   weniger als eine Ausnahme von diesem Satz — und die App
+   funktioniert damit auch ohne Netz unverändert.
+
+   `font-display: swap`: bis die Datei da ist, steht der Text in der
+   Systemschrift. Lieber ein kurzer Sprung als eine leere Seite.
+
+   Nicht jedes Zeichen steckt drin — „→", „✓" und „↻" fehlen dem
+   Schnitt. Der Browser holt sie sich Zeichen für Zeichen aus der
+   Systemschrift; das sind Symbole, keine Wörter, und es fällt nicht
+   auf. Ein eigener Schnitt nur dafür wäre teurer als der Gewinn. */
+@font-face{
+  font-family:"Manrope";
+  font-style:normal;
+  font-weight:200 800;          /* variabel — ein Datei für alle Schnitte */
+  font-display:swap;
+  src:url("fonts/manrope-latin.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,
+                U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,
+                U+2212,U+2215,U+FEFF,U+FFFD;
+}
+/* Der zweite Bereich wird nur geladen, wenn wirklich ein Zeichen
+   daraus vorkommt — für Deutsch also nie. Er liegt dabei, damit ein
+   polnischer oder tschechischer Produktname nicht plötzlich in einer
+   anderen Schrift steht. */
+@font-face{
+  font-family:"Manrope";
+  font-style:normal;
+  font-weight:200 800;
+  font-display:swap;
+  src:url("fonts/manrope-latin-ext.woff2") format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,
+                U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,
+                U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
 
 :root{
   color-scheme: light dark;
@@ -205,12 +264,25 @@ html,body{margin:0;padding:0;min-height:100%}
 html{font-size:calc(16.5px * var(--text-scale))}
 body{
   background:var(--paper);color:var(--ink);
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,system-ui,sans-serif;
-  font-size:1rem;line-height:1.45;letter-spacing:-.01em;
+  font-family:"Manrope",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  /* Zwei Korrekturen gegenüber der Systemschrift, beide gemessen und
+     nicht geschätzt:
+
+     LAUFWEITE auf 0 statt -.01em. Alle Werte im Stil waren auf SF Pro
+     eingestellt, die von Haus aus weiter läuft; unverändert
+     übernommen klebten die Buchstaben aneinander. Sämtliche negativen
+     Werte im Stil sind entsprechend halbiert.
+
+     WORTABSTAND leicht positiv. Manropes Leerzeichen ist schmaler als
+     das der Systemschriften, und Laufweite wirkt auch darauf — in
+     „2 Sachen tauschen“ stand die Zahl fast am Wort. Hier wird nur
+     der Abstand ZWISCHEN Wörtern zurückgegeben, nicht der zwischen
+     Buchstaben. */
+  font-size:1rem;line-height:1.45;letter-spacing:0;word-spacing:.055em;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   overscroll-behavior-y:none;
 }
-h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.025em}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.0125em}
 p{margin:0}
 button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit;letter-spacing:inherit}
 input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inherit}
@@ -238,7 +310,7 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 .appbar.scrolled{border-bottom-color:var(--hairline-strong)}
 .barRow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:38px}
 .barTitle{
-  font-size:1.03rem;font-weight:650;letter-spacing:-.02em;
+  font-size:1.03rem;font-weight:650;letter-spacing:-.01em;
   opacity:0;transform:translateY(6px);
   transition:opacity .18s var(--ease),transform .18s var(--ease);
 }
@@ -257,10 +329,10 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 .barBtn.filled:active{transform:scale(.94)}
 
 .largeTitle{padding:2px var(--pad) 0}
-.largeTitle h1{font-size:1.94rem;line-height:1.14;letter-spacing:-.032em}
+.largeTitle h1{font-size:1.94rem;line-height:1.14;letter-spacing:-.016em}
 .largeTitle .sub{
   font-size:0.85rem;color:var(--ink-2);margin-top:5px;padding-bottom:2px;
-  display:flex;align-items:center;gap:8px;flex-wrap:wrap;letter-spacing:-.005em;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;letter-spacing:-.0025em;
 }
 
 main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px);width:100%}
@@ -275,7 +347,7 @@ main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px
 }
 .nav button{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  height:var(--nav-h);font-size:min(0.6rem,12px);font-weight:600;letter-spacing:-.005em;
+  height:var(--nav-h);font-size:min(0.6rem,12px);font-weight:600;letter-spacing:-.0025em;
   color:var(--ink-3);transition:color .16s linear;
 }
 .nav button svg{
@@ -296,7 +368,7 @@ main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px
 .groupTitle{
   display:flex;align-items:center;gap:7px;
   font-size:0.82rem;font-weight:600;color:var(--ink-2);
-  padding:0 4px 8px;letter-spacing:-.005em;
+  padding:0 4px 8px;letter-spacing:-.0025em;
 }
 .groupBody{
   background:var(--surface);border-radius:var(--r-lg);overflow:hidden;
@@ -315,7 +387,7 @@ main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px
 button.row,label.row{transition:background .14s linear}
 button.row:active,label.row:active{background:var(--fill)}
 .row .rowMain{flex:1;min-width:0}
-.row .rowTitle{font-size:1rem;letter-spacing:-.015em}
+.row .rowTitle{font-size:1rem;letter-spacing:-.0075em}
 .row .rowSub{font-size:0.8rem;color:var(--ink-2);margin-top:1px;line-height:1.35}
 .row .rowValue{font-size:1rem;color:var(--ink-2);flex:0 0 auto;text-align:right}
 .row .rowValue small{display:block;font-size:0.7rem;color:var(--ink-3);text-align:right}
@@ -368,12 +440,12 @@ button.row:active,label.row:active{background:var(--fill)}
 }
 .hero:active{transform:scale(.985)}
 .hero .txt{min-width:0;padding-right:78px}
-.hero .txt b{display:block;font-size:1.09rem;font-weight:650;letter-spacing:-.022em}
+.hero .txt b{display:block;font-size:1.09rem;font-weight:650;letter-spacing:-.011em}
 .hero .txt small{display:block;font-size:0.82rem;color:var(--ink-2);margin-top:3px;line-height:1.4}
 .heroRing{display:block;width:100%;margin-top:15px;position:relative}
 .heroRing svg{width:100%;height:12px;display:block}
 .heroRing .val{position:absolute;right:0;top:-58px;display:flex;align-items:baseline;gap:4px}
-.heroRing .n{font-size:2.06rem;font-weight:750;letter-spacing:-.045em;line-height:1;font-variant-numeric:tabular-nums}
+.heroRing .n{font-size:2.06rem;font-weight:750;letter-spacing:-.0225em;line-height:1;font-variant-numeric:tabular-nums}
 .heroRing .u{font-size:0.79rem;font-weight:600;color:var(--ink-2)}
 .hero .chev{display:none}
 
@@ -388,7 +460,7 @@ button.row:active,label.row:active{background:var(--fill)}
   border-radius:var(--r-lg);padding:14px 15px 15px;box-shadow:var(--lift);
 }
 .tile .l{font-size:0.76rem;color:var(--ink-2);font-weight:500}
-.tile .v{font-size:1.55rem;font-weight:750;margin-top:5px;letter-spacing:-.04em;line-height:1.05}
+.tile .v{font-size:1.55rem;font-weight:750;margin-top:5px;letter-spacing:-.02em;line-height:1.05}
 .tile .v.good{color:var(--accent)}
 .tile .v.warn{color:var(--red)}
 .tile .t{font-size:0.7rem;color:var(--ink-3);margin-top:4px}
@@ -446,7 +518,7 @@ button.row:active,label.row:active{background:var(--fill)}
 .cta{
   display:block;width:100%;margin-top:14px;padding:14px;border-radius:var(--r-md);
   background:var(--accent-strong);color:var(--on-accent);font-weight:650;font-size:1rem;min-height:50px;
-  letter-spacing:-.015em;box-shadow:var(--lift);
+  letter-spacing:-.0075em;box-shadow:var(--lift);
   transition:transform .18s var(--spring),opacity .14s linear;
 }
 .cta:active{transform:scale(.975)}
@@ -490,7 +562,7 @@ button.row:active,label.row:active{background:var(--fill)}
    die haben ihre eigene Rückmeldung und ihr eigenes Ziel. */
 .item .main:active{opacity:.55}
 .item .main .pill:active{opacity:1}
-.item .nm{font-size:1rem;font-weight:520;display:flex;flex-wrap:wrap;align-items:center;gap:6px;letter-spacing:-.018em}
+.item .nm{font-size:1rem;font-weight:520;display:flex;flex-wrap:wrap;align-items:center;gap:6px;letter-spacing:-.009em}
 .item .price{font-size:1rem;text-align:right;flex:0 0 auto}
 .item .price small{display:block;font-size:0.7rem;color:var(--ink-3);font-weight:400}
 .item .calc{font-size:0.8rem;color:var(--ink-2);margin-top:4px;padding-left:37px;line-height:1.4}
@@ -578,7 +650,7 @@ button.row:active,label.row:active{background:var(--fill)}
   padding:15px 16px;background:var(--surface);position:relative;
 }
 .totals::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.totals .big{font-size:1.7rem;font-weight:750;line-height:1;letter-spacing:-.042em}
+.totals .big{font-size:1.7rem;font-weight:750;line-height:1;letter-spacing:-.021em}
 .totals .l{font-size:0.79rem;color:var(--ink-2);margin-bottom:5px}
 .totals .saved{font-size:0.85rem;color:var(--accent);font-weight:600;text-align:right}
 .totals.bare{background:none;padding:14px 0 0}
@@ -586,7 +658,7 @@ button.row:active,label.row:active{background:var(--fill)}
 
 .sectionRow{
   padding:10px 16px 6px;font-size:0.73rem;font-weight:650;
-  color:var(--ink-2);background:var(--surface);position:relative;letter-spacing:-.005em;
+  color:var(--ink-2);background:var(--surface);position:relative;letter-spacing:-.0025em;
 }
 
 /* ---------------- Tabellen und Listen ---------------- */
@@ -617,13 +689,13 @@ tbody tr:last-child td{border-bottom:none}
 
 .save{display:flex;align-items:center;gap:13px;padding:13px 16px;position:relative;background:var(--surface)}
 .save + .save::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.save .amt{font-size:1rem;font-weight:750;color:var(--accent);flex:0 0 66px;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.save .amt{font-size:1rem;font-weight:750;color:var(--accent);flex:0 0 66px;letter-spacing:-.015em;font-variant-numeric:tabular-nums}
 .save .txt{flex:1;min-width:0}
 .save .txt b{display:block;font-size:0.94rem;font-weight:550}
 .save .txt small{display:block;font-size:0.76rem;color:var(--ink-2);line-height:1.4;margin-top:2px}
 .strip{display:flex;justify-content:space-between;padding:15px 16px;position:relative;background:var(--surface)}
 .strip::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.strip .big{font-size:1.4rem;font-weight:750;letter-spacing:-.04em}
+.strip .big{font-size:1.4rem;font-weight:750;letter-spacing:-.02em}
 .strip .l{font-size:0.76rem;color:var(--ink-2);margin-top:3px}
 
 /* ---------------- Erfassen ---------------- */
@@ -684,7 +756,7 @@ button.row.action,label.row.action{cursor:pointer}
 }
 .sItem.done{opacity:.44}
 .sItem.done .tick{background:var(--accent);border-color:var(--accent)}
-.sItem .sn{flex:1;font-size:1rem;font-weight:520;letter-spacing:-.018em}
+.sItem .sn{flex:1;font-size:1rem;font-weight:520;letter-spacing:-.009em}
 .sItem .sn small{display:block;font-size:0.76rem;font-weight:400;color:var(--ink-2);margin-top:1px}
 .sItem .sp{font-size:0.97rem;color:var(--ink-2)}
 
@@ -710,7 +782,7 @@ button.row.action,label.row.action{cursor:pointer}
   padding:12px var(--pad) calc(var(--safe-bottom) + 12px);
 }
 .storeFoot .stat{display:block;margin-bottom:2px}
-.storeFoot .sum{font-size:1.33rem;font-weight:750;letter-spacing:-.04em}
+.storeFoot .sum{font-size:1.33rem;font-weight:750;letter-spacing:-.02em}
 .storeFoot .cta{margin:0;width:auto;padding:13px 22px;flex:0 0 auto}
 
 /* ---------------- Blatt ---------------- */
@@ -729,7 +801,7 @@ button.row.action,label.row.action{cursor:pointer}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes rise{from{transform:translateY(100%)}to{transform:none}}
 .grabber{width:38px;height:5px;border-radius:99px;background:var(--fill-2);margin:0 auto 16px}
-.sheetTitle{font-size:1.21rem;font-weight:700;letter-spacing:-.025em}
+.sheetTitle{font-size:1.21rem;font-weight:700;letter-spacing:-.0125em}
 .sheetSub{font-size:0.9rem;color:var(--ink-2);margin:6px 0 16px;line-height:1.42}
 .sheetPara{font-size:0.9rem;line-height:1.5;color:var(--ink);margin:0 0 12px}
 .sheetPara:last-child{margin-bottom:0}
@@ -789,12 +861,12 @@ button.row.action,label.row.action{cursor:pointer}
 .rvClose:active{transform:scale(.85)}
 .rvBody{display:block;width:100%;text-align:left;padding:6px 16px 16px;transition:opacity .14s linear}
 .rvBody:active{opacity:.65}
-.rvHead2{font-size:1.21rem;font-weight:700;letter-spacing:-.028em;line-height:1.26}
+.rvHead2{font-size:1.21rem;font-weight:700;letter-spacing:-.014em;line-height:1.26}
 .rvStrip{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .rvItem{
   flex:1 1 88px;min-width:88px;background:var(--surface);border-radius:var(--r-md);padding:10px 12px;
 }
-.rvItem .v{font-size:1.09rem;font-weight:750;letter-spacing:-.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvItem .v{font-size:1.09rem;font-weight:750;letter-spacing:-.015em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvItem .l{font-size:0.7rem;color:var(--ink-2);margin-top:2px;line-height:1.3;font-weight:500}
 .rvStreak{font-size:0.8rem;color:var(--ink-2);margin-top:12px}
 
@@ -822,12 +894,12 @@ button.row.action,label.row.action{cursor:pointer}
    ================================================================ */
 .welcome{
   font-size:1.06rem;line-height:1.5;color:var(--ink);
-  padding:22px 4px 4px;letter-spacing:-.015em;
+  padding:22px 4px 4px;letter-spacing:-.0075em;
 }
 
 .pulse{background:var(--surface);padding:15px 14px 13px}
 .pulseHead{
-  font-size:1.02rem;font-weight:600;letter-spacing:-.02em;
+  font-size:1.02rem;font-weight:600;letter-spacing:-.01em;
   line-height:1.35;padding:0 3px 14px;color:var(--ink);
 }
 .pulseDays{display:flex;gap:5px;align-items:flex-end}
@@ -856,7 +928,7 @@ button.row.action,label.row.action{cursor:pointer}
   font-size:0.7rem;color:var(--ink-2);height:0.95rem;line-height:0.95rem;
   font-variant-numeric:tabular-nums;font-weight:600;
 }
-.pName{font-size:0.72rem;color:var(--ink-2);letter-spacing:-.01em;white-space:nowrap}
+.pName{font-size:0.72rem;color:var(--ink-2);letter-spacing:-.005em;white-space:nowrap}
 .pDay.today .pNum{color:var(--accent-ink)}
 .pDay.today .pName{color:var(--accent-ink);font-weight:650}
 /* Heute ist eine getönte Fläche, keine Linie. Eine grüne Linie unter
@@ -888,7 +960,7 @@ button.row.action,label.row.action{cursor:pointer}
 }
 .bigAction:active{background:var(--fill)}
 .baMain{flex:1;min-width:0}
-.baTitle{font-size:1.12rem;font-weight:640;letter-spacing:-.025em}
+.baTitle{font-size:1.12rem;font-weight:640;letter-spacing:-.0125em}
 .baSub{font-size:0.92rem;color:var(--accent-ink);margin-top:3px;font-weight:560}
 .baPreview{
   font-size:0.79rem;color:var(--ink-2);margin-top:5px;
@@ -932,8 +1004,8 @@ button.row.action,label.row.action{cursor:pointer}
 .badge.m-getauscht .bBar i{background:var(--blue)}
 .badge.m-erfasst   .bBar i{background:var(--violet)}
 .badge.m-wochen    .bBar i{background:var(--pink)}
-.badge .bLbl{grid-column:2;grid-row:1;font-size:0.94rem;font-weight:600;letter-spacing:-.015em}
-.badge .bVal{grid-column:3;grid-row:1;text-align:right;font-size:1.03rem;font-weight:750;letter-spacing:-.03em}
+.badge .bLbl{grid-column:2;grid-row:1;font-size:0.94rem;font-weight:600;letter-spacing:-.0075em}
+.badge .bVal{grid-column:3;grid-row:1;text-align:right;font-size:1.03rem;font-weight:750;letter-spacing:-.015em}
 .badge .bBar{grid-column:2;grid-row:2;height:7px;border-radius:99px;background:var(--fill-2);overflow:hidden}
 .badge .bBar i{display:block;height:100%;border-radius:99px;background:var(--ink-3);transition:width .6s var(--ease)}
 .badge .bNext{grid-column:3;grid-row:2;text-align:right;font-size:0.7rem;color:var(--ink-3);white-space:nowrap}
@@ -1013,7 +1085,7 @@ button.row.action,label.row.action{cursor:pointer}
    zappelt — proportionale Ziffern sind verschieden breit, und eine
    Zahl, die bei jedem Bild ihre Breite ändert, wirkt kaputt. */
 .partyNum{
-  font-size:2.9rem;font-weight:800;letter-spacing:-.04em;line-height:1.05;
+  font-size:2.9rem;font-weight:800;letter-spacing:-.02em;line-height:1.05;
   font-variant-numeric:tabular-nums;color:var(--ink);margin-top:6px;
 }
 .partyNum.land{animation:landPunch .34s var(--spring)}
@@ -1142,7 +1214,7 @@ button.row.action,label.row.action{cursor:pointer}
   }
   .nav::before{
     content:"Einkaufs-Anker";display:block;font-size:1.03rem;font-weight:750;
-    letter-spacing:-.026em;padding:6px 12px 20px;color:var(--ink);
+    letter-spacing:-.013em;padding:6px 12px 20px;color:var(--ink);
   }
   .nav button{
     flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:12px;

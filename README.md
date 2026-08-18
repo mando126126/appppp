@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1310 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1322 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -951,15 +951,51 @@ beliebig — der Unterschied liegt in vier Dingen, die Mühe machen:
 | **Gezeichnete Marken** | Fünf Strichzeichnungen in getönten Kacheln, jede in ihrer Farbe: Keimling, Preisschild, Kreispfeil, Beleg, Strichliste. Keine Emoji, keine Glyphen aus dem Zeichensatz. |
 | **Echte Hierarchie** | Große, freundliche Zahlen gegen ruhige Beschriftungen. Nicht alles gleich groß, nichts versal gesperrt. |
 | **Eine Tiefenstufe** | Genau ein Schatten, überall derselbe. Karten liegen auf dem Grund — nicht Karten auf Karten auf Karten. |
+| **Eine eigene Schrift** | Manrope, mitgeliefert statt geladen. Halb-grotesk, offene Punzen, sehr ruhige Ziffern, hohe x-Höhe — freundlich, ohne verspielt zu sein. |
 
 Dazu Bewegung mit ein wenig Nachschwingen (`cubic-bezier(.34,1.56,.64,1)`):
 Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
 
+#### Die Schrift liegt bei, sie wird nicht geladen
+
+Bis hierher lief die App in der Systemschrift, und das war die
+vernünftige Wahl mit einem Haken: die Systemschrift ist auf jedem
+Gerät eine andere. Dieselbe Zeile stand auf dem iPhone in SF Pro, auf
+Android in Roboto, auf dem Rechner in Segoe — mit unterschiedlicher
+Laufweite, Zahlenbreite und x-Höhe. Alles, was an Hierarchie
+eingestellt war, galt damit immer nur für ein Gerät. Und die App sah
+überall aus wie das Betriebssystem und nirgends wie sie selbst.
+
+Jetzt **Manrope**, und zwar aus `web/fonts/`. Zwei variable Schnitte
+(200–800) nach Zeichenbereich getrennt, zusammen 40 KB; `latin`
+reicht für Deutsch, `latin-ext` holt der Browser nur, wenn wirklich
+ein Zeichen daraus vorkommt. Die Lizenz (OFL 1.1) liegt daneben, weil
+sie das verlangt.
+
+**Warum nicht die zwei Zeilen von Google Fonts.** Weil sie bei jedem
+Start eine Anfrage an einen Dritten wären — mit IP und Browserkennung,
+und ohne Netz gar nicht. Diese App verspricht, dass die Daten auf dem
+Gerät bleiben; eine Ausnahme davon kostet mehr als 40 KB. Ein Test
+hält fest, dass im Stil keine fremde Adresse steht.
+
+**Was das an Nacharbeit hieß**, und das ist der Teil, den man leicht
+vergisst: sämtliche Laufweiten im Stil waren auf SF Pro eingestellt,
+die von Haus aus weiter läuft. Unverändert übernommen klebten die
+Buchstaben aneinander — 29 negative Werte sind halbiert. Dazu ein
+leicht positiver **Wortabstand**: Manropes Leerzeichen ist schmaler,
+und Laufweite wirkt auch darauf; in „2 Sachen tauschen" stand die Zahl
+fast am Wort.
+
+Drei Zeichen fehlen dem Schnitt — `→`, `✓`, `↻`. Der Browser holt sie
+sich Zeichen für Zeichen aus der Systemschrift. Das sind Symbole,
+keine Wörter, und ein eigener Schnitt nur dafür wäre teurer als der
+Gewinn.
+
 Ziffern stehen in Tabellenbreite, damit Beträge untereinander
 vergleichbar sind, ohne dass man sie liest — aber in der
-Systemschrift, nicht in Schreibmaschine. Der Vorrat wird als große Zahl
+Textschrift, nicht in Schreibmaschine. Der Vorrat wird als große Zahl
 mit weichem Balken gezeigt statt als Fortschrittsring (der steckt in
 jeder zweiten App) und statt als Messskala (die war das Formular). Der
 Wochenrückblick ist die einzige farbige Karte der App — er ist
@@ -1046,11 +1082,11 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1310
+npm test          # alle 1322
 npm run test:algo # 884 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
-npm run test:ui   # 390 Oberflächentests in jsdom
+npm run test:ui   # 402 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

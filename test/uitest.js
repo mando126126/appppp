@@ -1683,7 +1683,44 @@ setTimeout(() => {
   T.Backup.adapter = null;
   T.Backup.handle = null;
 
-  console.log("\n--- Keine unbeaufsichtigten Fehler ---");
+  console.log("\n--- Die Schrift liegt bei ---");
+{
+  /* Eine falsch geschriebene Adresse in @font-face erzeugt keinen
+     Fehler: der Browser nimmt still die Systemschrift, und die App
+     sieht wieder aus wie vorher. Genau deshalb hängt das hier an
+     Dateien und Pfaden, nicht am Augenschein. */
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+
+  ok("Manrope steht in der Schriftliste",
+    /font-family:"Manrope"/.test(css) && /body\{[\s\S]*?"Manrope"/.test(css));
+  ok("Mit einer Systemschrift dahinter", /"Manrope",\s*-apple-system/.test(css));
+  ok("Und mit swap statt leerer Seite", (css.match(/font-display:swap/g) || []).length >= 2);
+
+  const quellen = [...css.matchAll(/url\("(fonts\/[^"]+)"\)/g)].map((m) => m[1]);
+  ok("Der Stil verweist auf zwei Dateien", quellen.length === 2, quellen.join(", "));
+  quellen.forEach((q) => ok(`${q} liegt auch wirklich da`, fs.existsSync(path.join(WEB, q))));
+
+  ok("Die Lizenz liegt dabei", fs.existsSync(path.join(WEB, "fonts", "OFL.txt")));
+
+  /* Nichts wird von außen geholt. Das ist keine Geschmacksfrage: eine
+     eingebundene Schrift wäre eine Anfrage an einen Dritten bei jedem
+     Start — mit IP und Browserkennung, und ohne Netz gar nicht. */
+  ok("Keine fremde Adresse im Stil", !/https?:\/\//.test(css.replace(/\/\*[\s\S]*?\*\//g, "")));
+
+  const idx = fs.readFileSync(path.join(WEB, "index.html"), "utf8");
+  ok("Die Schrift wird vorgezogen", /rel="preload"[^>]*fonts\/manrope-latin\.woff2/.test(idx));
+  ok("Und zwar mit crossorigin", /rel="preload"[^>]*crossorigin/.test(idx));
+
+  const sw = fs.readFileSync(path.join(WEB, "sw.js"), "utf8");
+  ok("Der Offline-Vorrat enthält sie", /fonts\/manrope-latin\.woff2/.test(sw));
+
+  /* Der Wortabstand ist eine Korrektur für genau diese Schrift und
+     stand vorher nicht da — er darf nicht beim nächsten Aufräumen
+     verschwinden. */
+  ok("Der Wortabstand ist korrigiert", /word-spacing:\.0\d+em/.test(css));
+}
+
+console.log("\n--- Keine unbeaufsichtigten Fehler ---");
   ok("Konsole blieb fehlerfrei", errors.length === 0, errors.slice(0, 3).join(" | "));
 
   console.log("\n" + "=".repeat(60));

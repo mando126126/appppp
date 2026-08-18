@@ -33,7 +33,18 @@ function inline() {
   let html = fs.readFileSync(path.join(WEB, "index.html"), "utf8");
 
   // Stil
-  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+  let css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+
+  /* Die Schrift muss mit hinein, sonst zeigt die Vorschau eine App,
+     die es nicht gibt: eine einzelne Datei hat kein fonts/ neben
+     sich, der Browser fände nichts und fiele auf die Systemschrift
+     zurück — und genau die abzulösen war der Punkt. 25 KB werden
+     base64-kodiert zu 33 KB; das ist zu verkraften. */
+  ["manrope-latin.woff2", "manrope-latin-ext.woff2"].forEach((f) => {
+    const b64 = fs.readFileSync(path.join(WEB, "fonts", f)).toString("base64");
+    css = css.split(`url("fonts/${f}")`).join(`url("data:font/woff2;base64,${b64}")`);
+  });
+
   html = html.replace(
     /<link rel="stylesheet" href="app\.css">/,
     `<style>\n${css}\n</style>`
@@ -60,6 +71,9 @@ function inline() {
   // Manifest und Service Worker fallen weg: beide brauchen echte
   // Dateien unter einer echten Adresse.
   html = html.replace(/<link rel="manifest"[^>]*>/, "");
+  // Die Vorzieh-Zeile für die Schrift ebenso — die Datei steckt hier
+  // im Stil, und ein Vorziehen ins Leere wäre ein 404 in der Konsole.
+  html = html.replace(/<link rel="preload"[^>]*>/, "");
 
   /* Und die Bilderfassung sagt, warum sie hier fehlt. Ohne diese
      Zeile stünden die Knöpfe da, und ein Tippen liefe in einen

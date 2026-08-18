@@ -11,7 +11,14 @@ const FILES = [
   "./", "./index.html", "./app.css",
   "./bundle.js", "./backup.js", "./data.js", "./ocr.js", "./views.js", "./app.js",
   "./manifest.webmanifest",
-  "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"
+  "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png",
+  /* Die Schrift gehört in den Vorrat, nicht in den Nachschlag. Ohne
+     sie hier stünde die App beim ersten Start ohne Netz in der
+     Systemschrift und beim zweiten in Manrope — derselbe Bildschirm,
+     zweimal anders. 25 KB sind das nicht wert.
+     latin-ext bleibt draußen: der Browser holt ihn nur, wenn ein
+     Zeichen daraus vorkommt, und dann ist er auch online. */
+  "./fonts/manrope-latin.woff2"
 ];
 
 self.addEventListener("install", (e) => {

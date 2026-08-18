@@ -25,6 +25,11 @@ const TYPES = {
   ".webmanifest": "application/manifest+json; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
+  // Ohne den richtigen Typ lädt der Browser die Schrift zwar, wirft
+  // sie aber wieder weg („Failed to decode downloaded font") — und
+  // die Seite steht kommentarlos in der Systemschrift.
+  ".woff2": "font/woff2",
+  ".txt": "text/plain; charset=utf-8",
   // WebAssembly braucht seinen eigenen Typ, sonst lehnt der Browser
   // das schnelle Übersetzen im Datenstrom ab („Incorrect response
   // MIME type") und fällt auf den langsamen Weg über einen Puffer

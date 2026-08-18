@@ -16,6 +16,12 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
 
+<!-- Die Schrift vorziehen. Ohne diese Zeile findet der Browser sie erst,
+     nachdem er app.css gelesen hat — der Text steht dann kurz in der
+     Systemschrift und springt danach um. `crossorigin` ist auch bei
+     eigener Herkunft Pflicht: Schriften werden anonym geholt, und ohne
+     das Attribut lädt der Browser die Datei ein zweites Mal. -->
+<link rel="preload" href="fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
