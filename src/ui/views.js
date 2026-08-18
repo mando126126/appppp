@@ -31,22 +31,42 @@ const deDate = (d) => {
   return `${dd}.${m}.${y}`;
 };
 
-/* Die vier Antworten sind bewusst so gewählt, dass zwei davon den
-   Rhythmus korrigieren und zwei ihn ausdrücklich in Ruhe lassen:
+/* DREI ANTWORTEN, ZWEI FRAGEN.
+   ----------------------------------------------------------------
+   Es waren vier unter einer Frage, und zwei davon passten dort nicht:
 
-     „Hab noch“        Vorschlag kam zu früh  -> Rhythmus verlängern
-     „War schon alle“  Vorschlag kam zu spät  -> Rhythmus verkürzen
-     „Verbraucht“      sagt nichts über den Takt
-     „Diese Woche nicht“ bewusste Pause
+   „VERBRAUCHT" ist ersatzlos weg. Sie bewirkte im ganzen Programm
+   exakt dasselbe wie „Diese Woche nicht" — `on: false`, kein Signal
+   an den Rhythmus, dieselbe Protokollzeile. Zwei Knöpfe, ein Effekt,
+   und keine Möglichkeit zu wissen, welchen man nehmen soll. Dazu
+   stand sie inhaltlich verkehrt herum: aufgebraucht ist ein Grund,
+   etwas zu KAUFEN, nicht es wegzulassen. (In wasteInference2 steht
+   eine `reconcileWithUserInput`, die „verbraucht" als „ich habe es
+   gegessen, nicht weggeworfen" auswerten würde — sie wird nirgends
+   aufgerufen. Das wäre ein echter Zweck, aber im Bestand, nicht auf
+   der Einkaufsliste.)
 
-   Ohne die zweite Antwort könnte der Nutzer nur in eine Richtung
-   korrigieren, und die App bliebe systematisch zu spät dran. */
+   „WAR SCHON ALLE" bleibt, steht aber nicht mehr unter „Brauchst du
+   das diese Woche?". Sie ist die einzige Antwort dort, die die
+   Position DRAUF lässt — man tippt sie an, das Blatt schließt sich,
+   und scheinbar passiert nichts. Sie beantwortet auch eine andere
+   Frage: nicht „brauchst du das?", sondern „war ich rechtzeitig?".
+
+   Ihr Platz ist jetzt der Moment, in dem sie wahr wird — beim
+   Hinzufügen eines Produkts, das noch gar nicht fällig war. Siehe
+   `askLate`. Denn sie ist zugleich die WICHTIGSTE: „Hab noch"
+   verlängert den gelernten Abstand, und nur diese hier verkürzt ihn.
+   Ohne sie könnte der Nutzer nur in eine Richtung korrigieren, und
+   die App bliebe systematisch zu spät dran.                        */
 const REASONS = [
   { key: "have", label: "Hab noch" },
   { key: "empty", label: "War schon alle" },
-  { key: "consumed", label: "Verbraucht" },
   { key: "skip", label: "Diese Woche nicht" }
 ];
+
+/* Was im Blatt einer Position zur Wahl steht: die Wochenfrage, und
+   die beantworten genau diese beiden. */
+const WEEK_REASONS = ["have", "skip"];
 
 /* ---------- Gezeichnete Marken ----------
    Fünf Strichzeichnungen für die Meilensteine. Vorher standen dort
@@ -1609,6 +1629,83 @@ function brandSheet(c, app) {
    freien Zeilen fließen ausdrücklich NICHT in die Rhythmen ein — aus
    „Blumen für Oma“ darf die App keinen Kaufabstand lernen.
    ================================================================ */
+/**
+ * „War die App zu spät?“ — gefragt in dem Moment, in dem es wahr ist.
+ * ================================================================
+ * DAS PROBLEM, DAS DAS LÖST.
+ *
+ * Von den Rückmeldungen hatte genau eine keinen natürlichen Moment.
+ * „Hab noch“ hat einen: du gehst die Liste durch, siehst Milch,
+ * weißt dass noch welche da ist, nimmst sie runter — der Moment IST
+ * die Handlung. „War schon alle“ dagegen wird Tage vorher wahr, vor
+ * dem leeren Kühlschrank. Bis jemand die Liste aufmacht, ist der
+ * Ärger vorbei, und niemand öffnet ein Detail-Blatt, um zu melden,
+ * dass eine App zu spät war.
+ *
+ * Damit konnte die App gut lernen, dass sie zu FRÜH ist, und
+ * praktisch gar nicht, dass sie zu SPÄT ist. Eine Schieflage in
+ * genau die unangenehmere Richtung.
+ *
+ * Der Moment, in dem es wahr wird, ist dieser: jemand setzt ein
+ * Produkt selbst auf die Liste, das die App noch gar nicht
+ * vorgeschlagen hätte. Dann war sie zu spät, und zwar jetzt gerade.
+ *
+ * WARUM GEFRAGT UND NICHT GESCHLOSSEN. Aus „hat es selbst
+ * hinzugefügt“ automatisch „App war zu spät“ abzuleiten, wäre ein
+ * stilles Signal, das neben den Kaufdaten in dieselbe Korrektur
+ * liefe — die Doppelzählung, die dieses Projekt schon dreimal Geld
+ * gekostet hat. Es gibt genug andere Gründe, etwas früher zu kaufen:
+ * Gäste, ein Rezept, ein Angebot. Deshalb eine Frage mit einer
+ * Antwort, die man auch weglassen kann.
+ *
+ * @returns {boolean} ob gefragt wurde — der Aufrufer unterdrückt
+ *                    dann seine eigene Bestätigung.
+ * ================================================================
+ */
+function askLate(productId, ctx, app) {
+  // Haushaltsprodukte rechnen über eine Verbrauchsrate, nicht über
+  // einen Kaufabstand — für sie gibt es nichts zu korrigieren.
+  if (isNonFood(productId)) return false;
+
+  const r = ctx.rhythms.get(productId);
+  if (!r || !r.rhythmDays || !r.lastPurchaseDate || r.confidence < 0.4) return false;
+
+  const dueIn = r.rhythmDays - daysBetween(r.lastPurchaseDate, ctx.ref);
+  /* Erst ab zwei Tagen fragen. Wer einen Tag vor der Fälligkeit
+     einkauft, hat nicht die App korrigiert, sondern eingekauft. */
+  if (!(dueIn >= 2)) return false;
+
+  const p = byId(productId);
+  const body = frag();
+  const g = uiGroup(`Die App hätte ${p.name} erst in ${dueIn} Tagen vorgeschlagen.`,
+    "Ein Ja verkürzt den gelernten Kaufabstand — es ist die einzige Rückmeldung, die das tut.\n\n" +
+    "Deshalb wird gefragt statt geschlossen: dass du etwas früher kaufst, kann auch an Gästen, einem " +
+    "Rezept oder einem Angebot liegen. Nur du weißt, ob es wirklich schon alle war.\n\n" +
+    "Auch ein Ja wirkt nicht sofort: erst ab drei Rückmeldungen zu einem Produkt passt die App den " +
+    "Rhythmus an, und höchstens um 40 %.");
+
+  const ja = el("button", "row");
+  ja.append(el("div", "rowMain",
+    '<div class="rowTitle">Ja, war schon alle</div>' +
+    '<div class="rowSub">der Abstand wird kürzer</div>'));
+  ja.addEventListener("click", () => {
+    Data.recordFeedback(productId, "empty", dueIn);
+    App.closeSheet();
+    app.toast("Notiert — der Takt wird angepasst", { icon: "↻" });
+  });
+
+  const nein = el("button", "row");
+  nein.append(el("div", "rowMain",
+    '<div class="rowTitle">Nein, nur diesmal</div>' +
+    '<div class="rowSub">der Rhythmus bleibt, wie er ist</div>'));
+  nein.addEventListener("click", () => App.closeSheet());
+
+  g.body.append(ja, nein);
+  body.append(g);
+  app.sheet("Kam das zu spät?", p.name, body);
+  return true;
+}
+
 function addSheet(ctx, app) {
   const body = el("div");
 
@@ -1627,7 +1724,12 @@ function addSheet(ctx, app) {
     const entry = Data.addManual({ ...opts, week: ctx.weekKey });
     if (!entry) return;
     app.closeSheet();
-    app.toast(`${entry.name} auf der Liste`, { icon: "+" });
+    /* Die Bestätigung nur, wenn nichts nachgefragt wird. Sonst legt
+       sich der Hinweis über das Blatt und verdeckt die Antwort, um
+       die gerade gebeten wird — das Blatt IST dann die Bestätigung. */
+    if (!(opts.productId && askLate(opts.productId, ctx, app))) {
+      app.toast(`${entry.name} auf der Liste`, { icon: "+" });
+    }
   };
 
   function render() {
@@ -1751,10 +1853,10 @@ function listItem(it, ctx, app) {
   if (ctx.duplicates.some((d) => d.productId === it.productId)) {
     zeichen.push(["doppelt", "dup", "doppelt?"]);
   }
-  if (!it.on && it.reason) {
-    const rr = REASONS.find((x) => x.key === it.reason);
-    if (rr) zeichen.push(["zustand", "state", rr.label]);
-  }
+  /* Die Marke „Deine Antwort" stand hier für abgewählte Positionen.
+     Seit abgewählte Positionen die Liste verlassen und sich unten in
+     „Nicht diese Woche" sammeln, kann sie nie mehr erscheinen — sie
+     wäre ab jetzt toter Code, der bei jeder Zeile mitgeprüft wird. */
   if (manuell) zeichen.push(["own", "own", "von dir"]);
   /* Ausgeschrieben, nicht abgekürzt.
      „VD“ stand hier zwei Buchstaben lang und erklärte sich nur dem,
@@ -1835,13 +1937,14 @@ function listItem(it, ctx, app) {
  */
 function weekChoice(it, ctx, app, onDone) {
   const g = uiGroup("Brauchst du das diese Woche?",
-    "Die ersten beiden Antworten korrigieren den gelernten Kaufabstand — sie sagen der App, dass ihr " +
-    "Vorschlag zu früh oder zu spät kam. Die anderen beiden sagen nichts über den Takt und ändern nur " +
-    "diese eine Woche.\n\n" +
+    "„Hab noch“ sagt der App, dass ihr Vorschlag zu früh kam — der gelernte Kaufabstand wird länger. " +
+    "„Diese Woche nicht“ ist eine bewusste Pause und lässt den Rhythmus in Ruhe.\n\n" +
     "Nichts davon wird sofort verrechnet: erst ab drei Rückmeldungen zu einem Produkt passt die App " +
-    "den Rhythmus an, und höchstens um 40 %. Eine einzelne Antwort kippt nichts um.");
+    "den Rhythmus an, und höchstens um 40 %. Eine einzelne Antwort kippt nichts um.\n\n" +
+    "Die Gegenrichtung — „war schon alle, du warst zu spät“ — wird nicht hier gefragt, sondern in dem " +
+    "Moment, in dem sie wahr ist: wenn du ein Produkt selbst hinzufügst, das noch gar nicht fällig war.");
 
-  REASONS.forEach((rr) => {
+  WEEK_REASONS.map((k) => REASONS.find((r) => r.key === k)).forEach((rr) => {
     const gewaehlt = it.reason === rr.key;
     const r = el("button", "row" + (gewaehlt ? " chosen" : ""));
     r.setAttribute("aria-pressed", gewaehlt ? "true" : "false");
@@ -1871,8 +1974,7 @@ function weekChoice(it, ctx, app, onDone) {
 /** Was jede Antwort bewirkt — in einem Halbsatz, nicht in einem Absatz. */
 const REASON_EFFECT = {
   have: "der Vorschlag kam zu früh — der Abstand wird länger",
-  empty: "kam zu spät — der Abstand wird kürzer, die Position bleibt drauf",
-  consumed: "aufgebraucht, der Takt stimmt — nur diese Woche nicht",
+  empty: "kam zu spät — der Abstand wird kürzer",
   skip: "eine bewusste Pause, ohne Wirkung auf den Rhythmus"
 };
 

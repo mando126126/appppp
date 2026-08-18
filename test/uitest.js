@@ -93,7 +93,7 @@ try {
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
-    " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS };"
+    " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -150,7 +150,7 @@ console.log("\n--- Alle Bereiche durchklicken ---");
 
 console.log("\n--- Liste bedienen ---");
 App.goto("liste");
-/* Der Kreis heißt „im Wagen", nicht mehr „auf der Liste". Diese
+/* Der Kreis heißt „im Wagen“, nicht mehr „auf der Liste“. Diese
    Prüfungen beschrieben bis hierher das alte Modell — sie sind mit
    umgezogen, nicht gestrichen. */
 const boxes = $("main").querySelectorAll("input.box");
@@ -184,6 +184,80 @@ if (boxes.length) {
   b2.dispatchEvent(new window.Event("change", { bubbles: true }));
   ok("Herausnehmen geht auch", D.get().storeChecked.length === 0);
   ok("Ohne Wagen keine Leiste", !$("main").querySelector(".cartBar"));
+}
+
+console.log("\n--- Kam das zu spät? ---");
+{
+  /* Die eine Rückmeldung ohne natürlichen Moment. „Hab noch“ hat
+     einen — man nimmt die Position runter. „War schon alle“ wird
+     Tage vorher wahr, vor dem leeren Kühlschrank; niemand öffnet
+     dafür ein Blatt. Ihr Moment ist dieser: jemand setzt selbst
+     etwas auf die Liste, das die App noch gar nicht vorgeschlagen
+     hätte. */
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  const ctx = App.ctx;
+
+  // Ein Produkt mit gelerntem Rhythmus, das noch NICHT fällig ist.
+  let spaet = null, frueh = null;
+  for (const [pid, r] of ctx.rhythms) {
+    if (!r.rhythmDays || !r.lastPurchaseDate || r.confidence < 0.4) continue;
+    if (T.byId(pid) && T.byId(pid).isFood === false) continue;
+    const dueIn = r.rhythmDays - T.daysBetween(r.lastPurchaseDate, ctx.ref);
+    if (dueIn >= 2 && !spaet) spaet = pid;
+    if (dueIn < 2 && !frueh) frueh = pid;
+  }
+  ok("Es gibt ein noch nicht fälliges Produkt", !!spaet, spaet);
+
+  if (spaet) {
+    const vorher = D.get().feedbackLog.length;
+    T.addSheet(ctx, App);
+    // Suchfeld füllen und den Katalogtreffer nehmen
+    const feld = $("sheetOpts").querySelector("input");
+    feld.value = T.byId(spaet).name;
+    feld.dispatchEvent(new window.Event("input", { bubbles: true }));
+    const treffer = $("sheetOpts").querySelector(".results li button");
+    ok("Der Katalog findet es", !!treffer, feld.value);
+    click(treffer);
+
+    ok("Danach wird gefragt", /zu spät/i.test($("sheetTitle").textContent), $("sheetTitle").textContent);
+    ok("Und die Frage nennt den Abstand",
+      /erst in \d+ Tagen/.test($("sheetOpts").textContent), $("sheetOpts").textContent.slice(0, 70));
+
+    /* Gefragt, nicht geschlossen: ohne Antwort darf sich nichts
+       ändern. Ein stilles „hat es hinzugefügt, also war ich zu spät“
+       liefe neben den Kaufdaten in dieselbe Korrektur. */
+    ok("Ohne Antwort ändert sich nichts", D.get().feedbackLog.length === vorher,
+      `${vorher} -> ${D.get().feedbackLog.length}`);
+
+    const ja = [...$("sheetOpts").querySelectorAll(".row")].find((r) => /Ja, war schon alle/.test(r.textContent));
+    ok("Es gibt ein Ja", !!ja);
+    click(ja);
+    ok("Das Ja wird protokolliert", D.get().feedbackLog.length === vorher + 1,
+      `${vorher} -> ${D.get().feedbackLog.length}`);
+    const letzte = D.get().feedbackLog[D.get().feedbackLog.length - 1];
+    ok("Und zwar als „zu spät“", letzte.reason === "empty", letzte.reason);
+    ok("Mit dem Abstand als Bezug", letzte.dueIn >= 2, letzte.dueIn);
+    ok("Das Blatt schließt sich", $("sheet").hidden === true);
+  }
+
+  // Ein Produkt, das ohnehin fast fällig ist, wird nicht gefragt.
+  if (frueh) {
+    const vorher2 = D.get().feedbackLog.length;
+    T.addSheet(App.ctx, App);
+    const feld = $("sheetOpts").querySelector("input");
+    feld.value = T.byId(frueh).name;
+    feld.dispatchEvent(new window.Event("input", { bubbles: true }));
+    const treffer = $("sheetOpts").querySelector(".results li button");
+    if (treffer) {
+      click(treffer);
+      ok("Bei fast fälligen Produkten wird nicht gefragt",
+        !/zu spät/i.test($("sheetTitle").textContent), $("sheetTitle").textContent);
+      ok("Und nichts protokolliert", D.get().feedbackLog.length === vorher2);
+      App.closeSheet();
+    }
+  }
 }
 
 console.log("\n--- Ein Wagen, zwei Sichten ---");
@@ -239,10 +313,17 @@ console.log("\n--- Die vier Antworten ---");
   ok("Das Blatt fragt nach der Woche", /Brauchst du das diese Woche/.test(blatt.textContent),
     blatt.textContent.slice(0, 60));
   const antworten = [...blatt.querySelectorAll(".row .rowTitle")].map((r) => r.textContent);
-  ["Hab noch", "War schon alle", "Verbraucht", "Diese Woche nicht"].forEach((a) =>
-    ok(`„${a}" steht darin`, antworten.includes(a), antworten.join(" | ")));
-  ok("Jede Antwort sagt, was sie bewirkt",
-    /Abstand wird länger/.test(blatt.textContent) && /Abstand wird kürzer/.test(blatt.textContent));
+  /* Zwei Antworten, nicht vier — und beide beantworten wirklich die
+     Frage darüber. „Verbraucht“ ist gestrichen (wirkungsgleich mit
+     „Diese Woche nicht“), „War schon alle“ ist umgezogen an den
+     Moment, in dem sie wahr wird. */
+  ["Hab noch", "Diese Woche nicht"].forEach((a) =>
+    ok(`„${a}“ steht darin`, antworten.includes(a), antworten.join(" | ")));
+  ok("„Verbraucht“ ist weg", !antworten.includes("Verbraucht"), antworten.join(" | "));
+  ok("Und „War schon alle“ steht nicht unter dieser Frage",
+    !antworten.includes("War schon alle"), antworten.join(" | "));
+  ok("Beide Antworten sagen, was sie bewirken",
+    /Abstand wird länger/.test(blatt.textContent) && /bewusste Pause/.test(blatt.textContent));
 
   const wahl = [...blatt.querySelectorAll(".row")].find((r) => /Diese Woche nicht/.test(r.textContent));
   click(wahl);
@@ -250,7 +331,7 @@ console.log("\n--- Die vier Antworten ---");
   ok("Und wird gespeichert", Object.keys(D.get().listChoices).length > 0);
 
   /* Abgewähltes steht nicht mehr zwischen den anderen Zeilen — seit
-     der Kreis „im Wagen" heißt, wäre ein hohler Kreis dort nicht mehr
+     der Kreis „im Wagen“ heißt, wäre ein hohler Kreis dort nicht mehr
      von einer anstehenden Position zu unterscheiden. */
   const sammel = [...$("main").querySelectorAll(".row")]
     .find((r) => /Nicht diese Woche/.test(r.textContent));
@@ -824,7 +905,7 @@ App.goto("liste");
   ok("Und die Liste rendert weiter", errors.length === b4 && $("main").children.length > 0);
 }
 {
-  // Die Gegenrichtung: „War schon alle" verkürzt und wählt NICHT ab
+  // Die Gegenrichtung: „War schon alle“ verkürzt und wählt NICHT ab
   D.reset();
   D.loadDemo("full");
   App.goto("liste");
@@ -873,11 +954,11 @@ App.goto("liste");
   if (zeile) {
     click(zeile);
     const opts = [...$("sheetOpts").querySelectorAll(".row .rowTitle")].map((r) => r.textContent);
-    ok("Das Blatt bietet vier Antworten",
-      ["Hab noch", "War schon alle", "Verbraucht", "Diese Woche nicht"].every((a) => opts.includes(a)),
+    ok("Das Blatt beantwortet die Wochenfrage",
+      ["Hab noch", "Diese Woche nicht"].every((a) => opts.includes(a)),
       opts.join(" / "));
     App.closeSheet();
-  } else ok("Das Blatt bietet vier Antworten", false, "keine Position");
+  } else ok("Das Blatt beantwortet die Wochenfrage", false, "keine Position");
 }
 {
   // Saison und Strukturbruch hängen mit am Ergebnis
@@ -1586,7 +1667,7 @@ console.log("\n--- Marken erklären sich ---");
   App.closeSheet();
 
   // Der Schlüssel entscheidet über den Text, nicht die Farbe: dieselbe
-  // gelbe Marke steht mal für „überfällig", mal für „teurer als sonst".
+  // gelbe Marke steht mal für „überfällig“, mal für „teurer als sonst“.
   ok("Überfällig und teuer erklären Verschiedenes",
     T.PILL_INFO.ueberfaellig[1] !== T.PILL_INFO.teuer[1]);
   ok("Jede Erklärung hat Überschrift und Text",
@@ -1606,7 +1687,7 @@ console.log("\n--- Marken erklären sich ---");
   ok("Unbekannter Schlüssel bleibt eine sichtbare, stumme Marke",
     stumm.textContent === "test" && !stumm.getAttribute("role"));
 
-  // Im Bestand dasselbe: „3 T" und „haltbar" sind ohne Erklärung
+  // Im Bestand dasselbe: „3 T“ und „haltbar“ sind ohne Erklärung
   // nicht zu entschlüsseln.
   App.goto("bestand");
   const bm = [...$("main").querySelectorAll(".flag[role=button]")];
@@ -1800,7 +1881,7 @@ setTimeout(() => {
      abgewählten Zeile lag auf der ganzen Zeile — samt der vier
      Antworten, die genau dann erscheinen, WEIL etwas zu tun ist.
      Kontrast der Beschriftung: 1,74:1. Das sah aus wie
-     „deaktiviert". Die Regel dagegen ist eine Zeile CSS und darf
+     „deaktiviert“. Die Regel dagegen ist eine Zeile CSS und darf
      nicht zurückrutschen. */
   ok("Gedimmt wird nur die Zeile, nicht die Antworten",
     /\.item\.off \.top\{opacity/.test(css) && !/\.item\.off\{opacity/.test(css),

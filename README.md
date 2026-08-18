@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1379 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1391 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -959,6 +959,67 @@ Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
 
+#### Vier Antworten waren drei zu viele — und eine am falschen Ort
+
+Nachgesehen, nicht geraten: von den vier Rückmeldungen hielt eine der
+Prüfung nicht stand, und eine stand am falschen Platz.
+
+**„Verbraucht" ist ersatzlos gestrichen.** Sie bewirkte im ganzen
+Programm exakt dasselbe wie „Diese Woche nicht" — `on: false`, kein
+Signal an den Rhythmus (`signalFor` gibt für beide `null` zurück),
+dieselbe Protokollzeile. Zwei Knöpfe, ein Effekt, und keine
+Möglichkeit für den Nutzer zu wissen, welchen er nehmen soll. Dazu
+stand sie **inhaltlich verkehrt herum**: aufgebraucht ist ein Grund,
+etwas zu *kaufen*, nicht es von der Liste zu nehmen.
+
+Es gibt einen Rest der ursprünglichen Absicht: `wasteInference2.js`
+enthält eine `reconcileWithUserInput`, die „verbraucht" als „ich habe
+es gegessen, nicht weggeworfen" auswertet und den Verderb-Verdacht
+zurücknimmt. **Sie wird nirgends aufgerufen** — sie stand seit jeher
+tot im Modul. Das wäre ein echter Zweck für die Antwort, aber im
+Bestand, nicht auf der Einkaufsliste.
+
+**„War schon alle" ist umgezogen**, und dahinter steckt die
+interessantere Beobachtung. Von allen Rückmeldungen hatte genau diese
+**keinen natürlichen Moment**:
+
+| | wann es wahr wird | wann man es sagen konnte |
+|---|---|---|
+| **Hab noch** | beim Durchgehen der Liste | genau dann — die Handlung *ist* der Moment |
+| **War schon alle** | Tage vorher, vor dem leeren Kühlschrank | wenn man ein Detail-Blatt öffnet, was niemand tut |
+
+Damit konnte die App gut lernen, dass sie **zu früh** ist, und
+praktisch gar nicht, dass sie **zu spät** ist — eine Schieflage in
+genau die unangenehmere Richtung. Sie war nicht fatal, weil sich beide
+Richtungen ohnehin über die Kaufdaten korrigieren: wer früher kauft,
+verkürzt den gemessenen Abstand, und der Median sieht das. Die
+Rückmeldung ist der **schnellere** Weg, nicht der einzige. Aber
+langsamer als nötig war sie.
+
+Der Moment, in dem „zu spät" wahr wird, ist ein anderer: **wenn jemand
+selbst ein Produkt auf die Liste setzt, das die App noch gar nicht
+vorgeschlagen hätte.** Dann war sie zu spät, und zwar jetzt gerade.
+Genau dort wird jetzt gefragt — einmal, mit zwei Antworten:
+
+> **Kam das zu spät?**
+> Die App hätte Schokolade erst in 7 Tagen vorgeschlagen.
+> · Ja, war schon alle — *der Abstand wird kürzer*
+> · Nein, nur diesmal — *der Rhythmus bleibt, wie er ist*
+
+**Gefragt, nicht geschlossen** — und das ist keine Höflichkeit. Aus
+„hat es selbst hinzugefügt" automatisch „App war zu spät" abzuleiten,
+wäre ein stilles Signal, das neben den Kaufdaten in dieselbe Korrektur
+liefe: die Doppelzählung, die in diesem Projekt schon dreimal teuer
+war. Es gibt genug andere Gründe, früher zu kaufen — Gäste, ein
+Rezept, ein Angebot. Ein Test hält deshalb ausdrücklich fest, dass
+sich **ohne Antwort nichts ändert**. Gefragt wird außerdem erst ab
+zwei Tagen Abstand: wer einen Tag vor der Fälligkeit einkauft, hat
+nicht die App korrigiert, sondern eingekauft.
+
+Übrig bleibt im Detail-Blatt eine Frage, die ihre Antworten wirklich
+hat: *Brauchst du das diese Woche?* → **Hab noch** · **Diese Woche
+nicht**.
+
 #### Ein Haken, eine Bedeutung
 
 Es gab zwei Kreise, die gleich aussahen und Verschiedenes meinten:
@@ -1233,11 +1294,11 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1379
+npm test          # alle 1391
 npm run test:algo # 884 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
-npm run test:ui   # 452 Oberflächentests in jsdom
+npm run test:ui   # 464 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
