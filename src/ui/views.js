@@ -168,6 +168,11 @@ const PILL_INFO = {
     "kein Konto, mit dem sich das wiederherstellen ließe. Eine Datei herunterzuladen dauert einen " +
     "Wimpernschlag und ist der Unterschied zwischen einem Ärgernis und drei verlorenen Jahren."],
 
+  tauschen: ["Zum Tauschen fällig",
+    "Manche Haushaltsprodukte werden nach Zeit gewechselt, nicht nach Verbrauch — Zahnbürste, " +
+    "Spülschwamm, Rasierklinge.\n\nDie Frist kommt aus dem Intervall des Produkts und läuft ab dem " +
+    "letzten Wechsel. „Getauscht“ setzt den Zähler zurück, auch wenn nichts gekauft wurde."],
+
   eigenmarke: ["Eigenmarke",
     "Die Handelsmarke des Händlers — ja!, Gut&Günstig, K-Classic, Milbona und so weiter.\n\n" +
     "Die App empfiehlt nichts davon. Sie zeigt nur, was der Unterschied bei dir ausmachen würde."]
@@ -535,10 +540,276 @@ function productSheet(productId, ctx) {
 }
 
 /* ================================================================
-   1. Liste
+   1. Start — die Übersicht
+   ================================================================
+   Die Einkaufsliste war die Startseite, und das war falsch. Eine
+   Liste ist ein Werkzeug für einen bestimmten Moment — kurz vor dem
+   Einkauf. Wer die App an einem Dienstagabend öffnet, hält keine
+   Liste in der Hand, sondern hat eine Frage:
+
+       WAS KOMMT AUF MICH ZU?
+
+   Diese Seite beantwortet sie in dieser Reihenfolge:
+
+     1. Die Woche      — sieben Tage, jede Sache ein Feld.
+                         Steigt die Säule, steht mehr an.
+     2. Die Liste      — ein Feld, ein Preis, ein Knopf.
+     3. Jetzt zu tun   — nur, was heute eine Handlung braucht.
+     4. Dein Lauf      — die Wochenreihe, sonst nichts.
+
+   WAS SIE AUSDRÜCKLICH NICHT IST: vier gleich große Kacheln mit
+   Zahlen darin. Kacheln sehen nach Übersicht aus und sind keine —
+   sie zeigen alles gleich groß und beantworten damit nichts. Hier
+   ist genau eine Sache groß, und das ist die Woche.
+
+   Alles hier ist ANSICHT auf Vorhandenes. Keine Zahl entsteht auf
+   dieser Seite, keine wird hier ein zweites Mal gezählt.
    ================================================================ */
+function viewStart(ctx, app) {
+  const c = frag();
+
+  /* --- Kaltstart: erst einmal Daten --- */
+  if (!ctx.history.length) {
+    const w = card();
+    w.append(el("p", "welcome",
+      "Einkaufs-Anker lernt aus deinen Kassenbons, was wann bei dir ausgeht — " +
+      "und sagt es dir, bevor es fehlt."));
+    const b = el("button", "cta", "Ersten Bon erfassen");
+    b.addEventListener("click", () => app.goto("erfassen"));
+    w.append(b);
+    const demo = el("button", "cta light", "Erst mal ansehen");
+    demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Beispieldaten geladen"); });
+    w.append(demo);
+    c.append(w);
+    return c;
+  }
+
+  c.append(pulseCard(ctx, app));
+  c.append(listCard(ctx, app));
+
+  const todo = todoCard(ctx, app);
+  if (todo) c.append(todo);
+
+  if (ctx.stage.stage >= 2) c.append(runCard(ctx, app));
+  return c;
+}
+
+/* Farbe je Ereignisart. Dieselben drei Farben wie überall sonst:
+   Korall heißt dringend, Bernstein heißt geschätzt oder fällig,
+   Grün heißt Einkauf. Eine eigene Palette für die Startseite hätte
+   die Bedeutungen auseinandergerissen. */
+const PULSE_KIND = {
+  verderb: ["k-red", "verdirbt"],
+  tausch: ["k-amber", "tauschen"],
+  einkauf: ["k-green", "einkaufen"]
+};
+
+/**
+ * Die Woche als sieben Säulen.
+ *
+ * Jedes Feld ist EIN Ereignis — keine normierte Höhe, kein
+ * Maßstab, der sich mit den Daten verschiebt. Damit ist Dienstag
+ * genau dann höher als Mittwoch, wenn dienstags mehr ansteht, und
+ * zwar auch im Vergleich zur Woche davor. Ein Balken, der sich
+ * selbst normiert, sieht immer gleich aus, egal wie viel los ist.
+ *
+ * Über fünf Feldern wird abgeschnitten und die Zahl dazugeschrieben:
+ * eine Säule, die alles zeigt, wäre bei zwölf Positionen einen
+ * halben Bildschirm hoch.
+ */
+function pulseCard(ctx, app) {
+  const p = ctx.pulse;
+  const g = uiGroup("Deine Woche",
+    "Sieben Tage ab heute. Jedes Feld ist eine Sache, die an diesem Tag ansteht: etwas verdirbt, " +
+    "etwas ist zu tauschen, etwas gehört eingekauft.\n\n" +
+    "Woher die Tage kommen: Verderbliches aus der Bestandsschätzung, Einkäufe aus deinem gelernten " +
+    "Kaufabstand, Austausch aus dem Intervall des Produkts. Überfälliges steht auf heute — " +
+    "nicht, weil es heute passiert, sondern weil es liegen geblieben ist.\n\n" +
+    "Was ausgeht, steht nur einmal da: als Einkauf. Eine Sache wird hier nie zweimal gezählt.");
+
+  const box = el("div", "pulse");
+  box.append(el("div", "pulseHead", esc(p.headline)));
+
+  const strip = el("div", "pulseDays");
+  const hoch = Math.min(5, Math.max(1, ...p.days.map((d) => d.count)));
+
+  p.days.forEach((d) => {
+    const b = el("button", "pDay" +
+      (d.isToday ? " today" : "") +
+      (d.isShoppingDay ? " shop" : "") +
+      (d.count ? "" : " quiet"));
+    b.setAttribute("aria-label",
+      `${d.name}, ${d.count === 0 ? "nichts" : d.count === 1 ? "eine Sache" : d.count + " Sachen"}` +
+      (d.isShoppingDay ? ", dein Einkaufstag" : ""));
+
+    // Die Zahl steht ÜBER der Säule, nicht darunter: darunter steht
+    // der Wochentag, und zwei Angaben an derselben Kante lesen sich
+    // als eine. Sie steht immer da, wo etwas ansteht — sonst müsste
+    // man Felder zählen, und ab dem sechsten ginge das nicht mehr.
+    b.append(el("div", "pNum", d.count ? String(d.count) : ""));
+
+    const col = el("div", "pCol");
+    col.style.setProperty("--rows", String(hoch));
+    if (!d.count) col.append(el("i", "pFlat"));
+    d.events.slice(0, 5).forEach((e) => col.append(el("i", "pSeg " + PULSE_KIND[e.kind][0])));
+    b.append(col);
+
+    b.append(el("div", "pName", esc(d.isToday ? "heute" : d.short)));
+    b.append(el("div", "pShop", d.isShoppingDay ? "<i></i>" : ""));
+    b.addEventListener("click", () => daySheet(d, ctx, app));
+    strip.append(b);
+  });
+  box.append(strip);
+
+  // Die Legende steht nur da, wenn die Farben auch vorkommen.
+  const arten = new Set();
+  p.days.forEach((d) => d.events.forEach((e) => arten.add(e.kind)));
+  if (arten.size) {
+    const leg = el("div", "pLegend");
+    ["verderb", "tausch", "einkauf"].filter((k) => arten.has(k)).forEach((k) => {
+      leg.append(el("span", null, `<i class="${PULSE_KIND[k][0]}"></i>${PULSE_KIND[k][1]}`));
+    });
+    if (p.shoppingSlot !== null) leg.append(el("span", "legShop", "<i></i>Einkaufstag"));
+    box.append(leg);
+  }
+
+  g.body.append(box);
+  return g;
+}
+
+/** Was an einem Tag ansteht — mit Weg zu jedem einzelnen Produkt. */
+function daySheet(day, ctx, app) {
+  const body = frag();
+  if (!day.count) {
+    body.append(el("p", "empty", "An diesem Tag steht nichts an."));
+  } else {
+    ["verderb", "tausch", "einkauf"].forEach((kind) => {
+      const rows = day.events.filter((e) => e.kind === kind);
+      if (!rows.length) return;
+      const g = uiGroup(PULSE_KIND[kind][1].replace(/^./, (m) => m.toUpperCase()));
+      rows.forEach((e) => g.body.append(uiRow(e.name,
+        // Die Bemerkung nur, wenn sie etwas hinzufügt. Unter der
+        // Überschrift „Einkaufen“ noch einmal „einkaufen“ zu
+        // schreiben, füllt eine Zeile und sagt nichts; bei
+        // Verderblichem steht dort dagegen, woher das Datum kommt.
+        kind === "verderb" ? e.note : null, null,
+        e.productId && byId(e.productId)
+          ? { onClick: () => productSheet(e.productId, ctx) }
+          : {})));
+      body.append(g);
+    });
+  }
+  const sub = deDate(day.date) + (day.isShoppingDay ? " · dein Einkaufstag" : "");
+  app.sheet(day.isToday ? "Heute" : day.name, sub, body);
+}
+
+/**
+ * Die Liste als ein einziges Feld.
+ *
+ * Nicht die Liste selbst — die hat ihre eigene Seite. Hier steht,
+ * was darauf steht und was es kostet, und ein Knopf führt hin. Die
+ * ersten Namen stehen mit dabei: ohne sie ist „13 Positionen" eine
+ * Zahl, mit ihnen ist es die eigene Liste.
+ */
+function listCard(ctx, app) {
+  const on = ctx.items.filter((i) => i.on);
+  const sum = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+
+  const g = uiGroup();
+  const b = el("button", "bigAction");
+  const main = el("div", "baMain");
+  main.append(el("div", "baTitle", "Einkaufsliste"));
+  main.append(el("div", "baSub", esc(on.length
+    ? `${on.length} ${on.length === 1 ? "Position" : "Positionen"} · ${eur(sum)}`
+    : ctx.stage.stage <= 1 ? "wird noch gelernt" : "noch nichts drauf")));
+  if (on.length) {
+    const namen = on.slice(0, 3).map((i) => i.name).join(", ");
+    const rest = on.length - 3;
+    main.append(el("div", "baPreview", esc(rest > 0 ? `${namen} und ${rest} weitere` : namen)));
+  }
+  b.append(main);
+  b.append(el("div", "baGo", "→"));
+  b.addEventListener("click", () => app.goto("liste"));
+  g.body.append(b);
+  return g;
+}
+
+/**
+ * Jetzt zu tun.
+ *
+ * Die Regel für diese Gruppe: hier steht nur, was HEUTE eine
+ * Handlung braucht. Kein Hinweis, keine Zahl, kein Fortschritt —
+ * dafür sind die anderen Seiten da. Ist nichts zu tun, fehlt die
+ * Gruppe ganz. Eine Sammelstelle, die auch leer dasteht, macht aus
+ * „nichts zu tun" eine Nachricht statt eines Zustands.
+ */
+function todoCard(ctx, app) {
+  const rows = [];
+
+  if (ctx.safety) {
+    rows.push(["Kühlkette", ctx.safety.short, flag("kuehlen", "f-miss", "!"),
+      () => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)]);
+  }
+
+  if (ctx.backup.urgent) {
+    rows.push(["Daten sichern", ctx.backup.title || "nur in diesem Browser",
+      flag("gefaehrdet", "f-miss", "!"), () => app.goto("mehr")]);
+  }
+
+  const faellig = ctx.swapsDue.filter((x) => x.due);
+  if (faellig.length) {
+    rows.push([faellig.length === 1 ? `${faellig[0].name} tauschen` : `${faellig.length} Sachen tauschen`,
+      faellig.length === 1 ? "nach Zeit fällig" : faellig.slice(0, 3).map((x) => x.name).join(", "),
+      flag("tauschen", "f-gold", String(faellig.length)), () => app.goto("faellig")]);
+  }
+
+  if (ctx.review.due) {
+    rows.push(["Wochenrückblick", ctx.review.short || "fertig", null, () => reviewSheet(ctx, app)]);
+  }
+
+  // Alles Übrige läuft weiter über das Sammelblatt der Liste — es ist
+  // dasselbe Blatt, nicht eine zweite Fassung davon.
+  const hinweise = collectHints(ctx).filter((h) => !h.urgent);
+  if (hinweise.length) {
+    rows.push([`${hinweise.length} ${hinweise.length === 1 ? "Hinweis" : "Hinweise"}`,
+      hinweise.slice(0, 3).map((h) => h.title).join(" · "),
+      flag("hinweise", "", String(hinweise.length)), () => hintsSheet(ctx, app)]);
+  }
+
+  if (!rows.length) return null;
+
+  const g = uiGroup("Jetzt zu tun");
+  rows.slice(0, 5).forEach(([title, sub, control, onClick]) =>
+    g.body.append(uiRow(title, sub, control, { onClick })));
+  return g;
+}
+
+/**
+ * Dein Lauf — eine Zeile, kein Kachelfeld.
+ *
+ * Die Wochenreihe steht hier, weil sie das Einzige ist, was diese
+ * Seite über Vergangenes sagen muss: bleibst du dabei? Alles andere
+ * — Ausgaben, Ersparnis, Verlust, Rhythmen — steht unter „Zahlen",
+ * und dorthin führt diese Zeile.
+ */
+function runCard(ctx, app) {
+  const g = uiGroup("Dein Lauf");
+  const b = el("button", "runRow");
+  b.append(streakStrip(ctx));
+  b.append(el("div", "chev"));
+  b.addEventListener("click", () => app.goto("zahlen"));
+  g.body.append(b);
+  if (ctx.badges.nextUp) {
+    g.body.append(uiRow("Als Nächstes", ctx.badges.nextUp.nextTitle, null, {
+      value: `${Math.round(ctx.badges.nextUp.progress * 100)} %`,
+      onClick: () => app.goto("zahlen")
+    }));
+  }
+  return g;
+}
+
 /* ================================================================
-   1. Liste — die Startseite
+   2. Liste
    ================================================================
    RÜCKMELDUNG AUS DER ZIELGRUPPE, und sie war eindeutig: zu voll.
 
@@ -1596,7 +1867,7 @@ function swapRow(x, ctx, app) {
 }
 
 /* ================================================================
-   2. Bestand
+   3. Bestand
    ================================================================ */
 function viewBestand(ctx, app) {
   const c = frag();
@@ -1683,6 +1954,20 @@ function viewBestand(ctx, app) {
       r.addEventListener("click", () => productSheet(sup.productId, ctx));
       g.body.append(r);
     });
+
+    /* Der Weg zu „Fällig“.
+     *
+     * Seit die Seite keinen eigenen Reiter mehr hat, führt die
+     * Startseite nur dorthin, wenn wirklich etwas zu tauschen ist.
+     * Ohne diese Zeile wäre sie an ruhigen Tagen nur noch über die
+     * Adresse erreichbar — und „Demnächst“, „Geht aus“ und
+     * „Günstig bevorraten“ wären damit verschwunden statt umgezogen. */
+    if (ctx.swapsDue.length || ctx.stockUp.length) {
+      const offen = ctx.swapsDue.filter((x) => x.due).length;
+      g.body.append(uiRow("Austausch und Nachschub",
+        offen ? `${offen} ${offen === 1 ? "Sache ist" : "Sachen sind"} fällig` : "nichts fällig",
+        null, { onClick: () => app.goto("faellig") }));
+    }
     c.append(g);
   }
 
@@ -1743,7 +2028,7 @@ function viewBestand(ctx, app) {
 }
 
 /* ================================================================
-   3. Erfassen
+   4. Erfassen
    ================================================================ */
 function viewErfassen(ctx, app) {
   const c = frag();
@@ -2104,7 +2389,7 @@ function renderManual(box, cap, app) {
 }
 
 /* ================================================================
-   4. Zahlen
+   5. Zahlen
    ================================================================ */
 function viewZahlen(ctx, app) {
   const c = frag();
@@ -2346,7 +2631,7 @@ function chartCard(ctx) {
 }
 
 /* ================================================================
-   5. Mehr
+   6. Mehr
    ================================================================ */
 function viewMehr(ctx, app) {
   const c = frag();

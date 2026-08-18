@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 874 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1310 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -414,6 +414,67 @@ Startseite, höchstens ein Zeichen je Zeile, keine Preisabweichung auf
 der Liste — und der Nachweis, dass jeder umgezogene Inhalt an seinem
 neuen Ort wirklich ankommt. Ohne Grenze wächst so eine Seite von
 selbst wieder zu.
+
+### Die Startseite ist nicht mehr die Liste
+
+Die aufgeräumte Liste war besser als die überladene — und trotzdem die
+falsche Startseite. Eine Liste ist ein Werkzeug für **einen** Moment:
+kurz vor dem Einkauf. Wer die App an einem Dienstagabend öffnet, hält
+keine Liste in der Hand, sondern hat eine andere Frage:
+
+> **Was kommt auf mich zu?**
+
+Der erste Reiter heißt jetzt **Start** und beantwortet genau die, in
+dieser Reihenfolge:
+
+1. **Deine Woche** — sieben Tage ab heute, jedes Feld ein Ereignis
+2. **Einkaufsliste** — ein Feld, ein Preis, ein Knopf
+3. **Jetzt zu tun** — nur, was heute eine Handlung braucht
+4. **Dein Lauf** — die Wochenreihe, sonst nichts
+
+**Der Wochenstreifen ist der Kern**, und er ist bewusst kein
+Diagramm. Ein Feld ist **eine Sache**, seine Höhe ist **fest**. Das
+klingt nach einem Detail und ist der ganze Unterschied: ein Balken,
+der sich auf sein eigenes Maximum normiert, sieht bei einer Sache
+genauso dramatisch aus wie bei zwölf. Hier bleibt eine ruhige Woche
+flach — und zwar auch im Vergleich zur Woche davor.
+
+Drei Quellen laufen zusammen, die vorher auf drei Seiten verteilt
+waren: die Bestandsschätzung sagt, wann etwas **verdirbt**, der
+gelernte Kaufabstand, wann etwas **fällig** ist, das Austauschintervall,
+wann die Zahnbürste dran ist. Der gelernte Einkaufstag ist markiert.
+Jeder Tag ist antippbar und nennt die Sachen beim Namen.
+
+Genau diese Zusammenführung war in diesem Projekt zweimal die
+Fehlerquelle — **ein Ereignis, das über zwei Kanäle in dieselbe Summe
+läuft.** Deshalb steht die Rechnung in `src/algo/weekPulse.js` und
+nicht in der Oberfläche, und deshalb prüft `test/pulse.js` nicht das
+Beispiel, sondern die Regeln:
+
+- Haushaltsprodukte, deren Reichweite endet, stehen **nur** als
+  Einkauf da — `supplies` wird gar nicht erst eingelesen
+- ein Produkt, das an einem Tag verdirbt **und** fällig wäre, zählt
+  einmal; es gewinnt das Verderben
+- über die Woche verteilt darf dasselbe Produkt zweimal vorkommen —
+  Dienstag aufgebraucht und Freitag wieder fällig sind zwei
+  verschiedene Tatsachen
+- Überfälliges fällt auf **heute**, nicht aus der Woche
+
+3000 zufällige Wochen prüfen die Invarianten, die daraus folgen: nie
+mehr Ereignisse als Quellen, nie zwei Einträge für ein Produkt an
+einem Tag, nie ein Satz mit `undefined` darin.
+
+**Was das an Navigation gekostet hat:** „Fällig" war ein siebter
+Reiter, und sieben passen unten nicht nebeneinander. Die Seite ist
+nicht verschwunden — sie hat ihre Adresse (`#faellig`) behalten und
+hängt jetzt an zwei Stellen: an „2 Sachen tauschen" auf der
+Startseite, wenn etwas fällig ist, und dauerhaft an „Austausch und
+Nachschub" im Bestand. Solange sie in der Leiste stand, war die
+Übersicht der siebte Platz, den es nicht gab.
+
+Und der Kopf grüßt, statt sich zu benennen. „Übersicht" über einer
+Übersicht sagt nichts — man sieht ja, worauf man ist. Nachts steht
+dort bewusst kein „Guten Morgen".
 
 ### Einen Bon korrigieren, statt ihn wegzuwerfen
 
@@ -952,8 +1013,9 @@ gehört `npm run build` in denselben Commit.
 
 | Bereich | Was drin steckt |
 |---|---|
+| **Start** | Wochenstreifen (sieben Tage, jedes Feld ein Ereignis), die Liste als ein Feld, „Jetzt zu tun“, die Wochenreihe |
 | **Liste** | Wochenrückblick (ab Sonntagabend), eigene Positionen ergänzen, Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
-| **Fällig** | Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
+| **Fällig** | kein eigener Reiter mehr — erreichbar über „Start“ und „Bestand“: Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
 | **Bestand** | geschätzter Vorrat, Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
 | **Zahlen** | Streak und Rückblick, Meilensteine, eigener Einkaufsrhythmus, Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
@@ -984,9 +1046,11 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 874
-npm run test:algo # 597 Modultests (Regression, Stress, Funktionen, Haushalt, Lernen, Rückblick)
-npm run test:ui   # 241 Oberflächentests in jsdom
+npm test          # alle 1310
+npm run test:algo # 884 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+                  #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
+                  #   Kontrast, Lernen, Rückblick) plus die Simulation
+npm run test:ui   # 390 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

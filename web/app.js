@@ -5,15 +5,15 @@
 
 const NAV = [
   {
-    id: "liste", label: "Liste", title: "Einkaufsliste", view: viewListe,
-    icon: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6.2l1.3 1.3 2.4-2.6"/><path d="M3.5 12.2l1.3 1.3 2.4-2.6"/><path d="M3.5 18.2l1.3 1.3 2.4-2.6"/>'
+    // Die Startseite ist nicht mehr die Liste. Begründung steht bei
+    // viewStart: eine Liste ist ein Werkzeug für den Moment vor dem
+    // Einkauf, keine Antwort auf „was kommt auf mich zu?“.
+    id: "start", label: "Start", title: "Übersicht", view: viewStart,
+    icon: '<path d="M4 11.2L12 4.5l8 6.7"/><path d="M6.2 12.6V19a1 1 0 001 1h9.6a1 1 0 001-1v-6.4"/><path d="M10 20v-4.6h4V20"/>'
   },
   {
-    // Austausch-Produkte sind HANDLUNGEN, keine Käufe — und der
-    // wahrscheinlichste tägliche Öffnungsgrund der App. Deshalb ein
-    // eigener Platz in der Leiste statt einer Sektion weiter unten.
-    id: "faellig", label: "Fällig", title: "Fällig", view: viewFaellig,
-    icon: '<circle cx="12" cy="12.5" r="8"/><path d="M12 8.5v4.2l2.8 1.7"/><path d="M9 3h6"/>'
+    id: "liste", label: "Liste", title: "Einkaufsliste", view: viewListe,
+    icon: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="M3.5 6.2l1.3 1.3 2.4-2.6"/><path d="M3.5 12.2l1.3 1.3 2.4-2.6"/><path d="M3.5 18.2l1.3 1.3 2.4-2.6"/>'
   },
   {
     id: "bestand", label: "Bestand", title: "Bestand", view: viewBestand,
@@ -33,6 +33,27 @@ const NAV = [
   }
 ];
 
+/* Ansichten ohne eigenen Platz in der Leiste.
+ *
+ * „Fällig“ war ein siebter Reiter, und sieben passen unten nicht
+ * nebeneinander. Verschwunden ist die Seite deshalb nicht: sie hängt
+ * jetzt an der Zeile „tauschen“ auf der Startseite und behält ihre
+ * eigene Adresse (#faellig) — Lesezeichen und der Zurück-Knopf
+ * funktionieren weiter. `parent` sagt, welcher Reiter währenddessen
+ * als aktiv gilt; ohne das stünde die Leiste auf keinem Eintrag und
+ * die App fühlte sich verloren an. */
+const SUBVIEWS = [
+  {
+    id: "faellig", label: "Fällig", title: "Fällig", view: viewFaellig, parent: "start",
+    icon: '<circle cx="12" cy="12.5" r="8"/><path d="M12 8.5v4.2l2.8 1.7"/><path d="M9 3h6"/>'
+  }
+];
+
+const VIEWS = [...NAV, ...SUBVIEWS];
+
+/** Der Eintrag zu einer Adresse — Reiter oder Unteransicht. */
+const viewFor = (id) => VIEWS.find((v) => v.id === id) || NAV[0];
+
 /**
  * Zusatzzeile für die Buchungsbestätigung: was diesmal unter dem
  * eigenen üblichen Preis lag. Nur wenn es etwas zu sagen gibt —
@@ -44,7 +65,7 @@ function bookedDetail(res) {
 }
 
 const App = {
-  tab: "liste",
+  tab: "start",
   ctx: null,
   storeOpen: false,
   capture: { tab: "scan", text: "", parsed: null, basket: [], query: "", date: null, store: "" },
@@ -580,16 +601,40 @@ const App = {
     );
   },
 
+  /**
+   * Gruß nach Tageszeit.
+   *
+   * Vier Abschnitte, keine Uhrzeit auf die Minute — „Guten Abend“ um
+   * 17:59 und „Guten Tag“ um 18:01 wäre eine Genauigkeit, die
+   * niemand will. Nachts steht bewusst kein „Guten Morgen“: wer um
+   * halb zwei einkaufen plant, soll nicht angelogen werden.
+   */
+  greeting(hour) {
+    const h = hour === undefined ? new Date().getHours() : hour;
+    if (h < 5) return "Noch wach";
+    if (h < 11) return "Guten Morgen";
+    if (h < 18) return "Guten Tag";
+    return "Guten Abend";
+  },
+
   /* ---------- Kopfbereich ---------- */
   renderBar() {
     const ctx = App.ctx;
     const S = Data.get();
-    const entry = NAV.find((n) => n.id === App.tab) || NAV[0];
+    const entry = viewFor(App.tab);
 
     const bar = document.getElementById("appbar");
     bar.innerHTML = "";
     const rowEl = el("barRow" === "" ? "div" : "div", "barRow");
-    rowEl.append(el("div", "barTitle", esc(entry.title)));
+    /* Die Übersicht grüßt, statt sich zu benennen.
+     *
+     * „Übersicht“ als Überschrift über einer Übersicht sagt nichts —
+     * man sieht ja, worauf man ist. Die Tageszeit dagegen macht aus
+     * der Seite einen Ort, an dem jemand ankommt. Für die Zielgruppe
+     * dieser App war genau das der Unterschied zwischen „Werkzeug“
+     * und „meine App“. */
+    const titel = App.tab === "start" ? App.greeting() : entry.title;
+    rowEl.append(el("div", "barTitle", esc(titel)));
 
     const actions = el("div", "barActions");
     if (App.tab === "liste" && ctx.items.some((i) => i.on)) {
@@ -608,7 +653,7 @@ const App = {
     // Großer Titel im Inhalt — fällt beim Scrollen in die Leiste zusammen.
     const large = document.getElementById("largeTitle");
     large.innerHTML = "";
-    large.append(el("h1", null, esc(entry.title)));
+    large.append(el("h1", null, esc(titel)));
     const sub = el("div", "sub");
     // Auf der Liste beschreibt die Unterzeile die LISTE, nicht die
     // Datenlage. „57 Bons · 29 Produkte“ beantwortet eine Frage, die
@@ -617,6 +662,10 @@ const App = {
     let subText;
     if (!ctx.history.length) {
       subText = "noch keine Daten — leg mit einem Einkauf los";
+    } else if (App.tab === "start") {
+      // Auf der Übersicht: das Datum. Es ist die einzige Angabe, die
+      // dem Wochenstreifen darunter etwas hinzufügt.
+      subText = `${ctx.weekday}, ${deDate(ctx.ref)}`;
     } else if (App.tab === "liste" && ctx.stage.stage >= 2) {
       const on = ctx.items.filter((i) => i.on);
       const sum = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
@@ -641,10 +690,12 @@ const App = {
   renderNav() {
     const nav = document.getElementById("nav");
     nav.innerHTML = "";
+    // Eine Unteransicht lässt den Reiter aktiv, zu dem sie gehört.
+    const aktiv = viewFor(App.tab).parent || App.tab;
     NAV.forEach((n) => {
       const b = el("button", null,
         `<svg viewBox="0 0 24 24" aria-hidden="true">${n.icon}</svg><span>${n.label}</span>`);
-      if (App.tab === n.id) b.setAttribute("aria-current", "page");
+      if (aktiv === n.id) b.setAttribute("aria-current", "page");
       b.addEventListener("click", () => App.goto(n.id));
       nav.append(b);
     });
@@ -682,7 +733,7 @@ const App = {
 
     const main = document.getElementById("main");
     main.innerHTML = "";
-    const entry = NAV.find((n) => n.id === App.tab) || NAV[0];
+    const entry = viewFor(App.tab);
     main.append(entry.view(App.ctx, App));
 
     App.onScroll();
@@ -783,11 +834,11 @@ function boot() {
   Data.load();
 
   const hash = location.hash.replace("#", "");
-  if (NAV.some((n) => n.id === hash)) App.tab = hash;
+  if (VIEWS.some((n) => n.id === hash)) App.tab = hash;
 
   window.addEventListener("hashchange", () => {
     const h = location.hash.replace("#", "");
-    if (NAV.some((n) => n.id === h) && h !== App.tab) { App.tab = h; App.render(); }
+    if (VIEWS.some((n) => n.id === h) && h !== App.tab) { App.tab = h; App.render(); }
   });
 
   window.addEventListener("scroll", App.onScroll, { passive: true });

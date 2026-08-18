@@ -808,6 +808,102 @@ button.row.action,label.row.action{cursor:pointer}
 .sDot.on.now{box-shadow:0 0 0 3.5px var(--accent-soft)}
 .streak .sTxt{font-size:0.82rem;color:var(--ink-2);flex:1;min-width:0}
 
+/* ================================================================
+   Startseite
+   ================================================================
+   Der Wochenstreifen ist das einzige große Element der App. Er darf
+   das sein, weil er das Einzige ist, was drei Quellen zu einer
+   Aussage zusammenfasst.
+
+   Ein Feld = ein Ereignis. Die Höhe eines Feldes ist FEST (10 px),
+   nicht auf das Maximum normiert: nur so bleibt eine ruhige Woche
+   auch flach. Ein Balkendiagramm, das sich selbst skaliert, sieht
+   bei einer Sache genauso dramatisch aus wie bei zwölf.
+   ================================================================ */
+.welcome{
+  font-size:1.06rem;line-height:1.5;color:var(--ink);
+  padding:22px 4px 4px;letter-spacing:-.015em;
+}
+
+.pulse{background:var(--surface);padding:15px 14px 13px}
+.pulseHead{
+  font-size:1.02rem;font-weight:600;letter-spacing:-.02em;
+  line-height:1.35;padding:0 3px 14px;color:var(--ink);
+}
+.pulseDays{display:flex;gap:5px;align-items:flex-end}
+.pDay{
+  flex:1 1 0;min-width:0;background:none;border:none;padding:7px 0 5px;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  border-radius:12px;transition:background .14s linear;
+}
+.pDay:active{background:var(--fill)}
+/* Der Boden liegt für alle Tage gleich, damit die Säulen vergleichbar
+   sind — deshalb feste Höhe statt „so hoch wie nötig“. */
+.pCol{
+  height:calc(var(--rows) * 13px + 6px);
+  min-height:19px;width:100%;max-width:34px;
+  display:flex;flex-direction:column-reverse;justify-content:flex-start;
+  gap:3px;
+}
+.pSeg{display:block;height:10px;border-radius:4px;background:var(--fill-2)}
+.pSeg.k-red{background:var(--red)}
+.pSeg.k-amber{background:var(--amber)}
+.pSeg.k-green{background:var(--accent)}
+/* Ein ruhiger Tag ist nicht leer, er ist ruhig — ein Strich sagt das
+   besser als nichts, das wie ein Fehler aussieht. */
+.pFlat{display:block;height:3px;border-radius:3px;background:var(--fill-2)}
+.pNum{
+  font-size:0.7rem;color:var(--ink-2);height:0.95rem;line-height:0.95rem;
+  font-variant-numeric:tabular-nums;font-weight:600;
+}
+.pName{font-size:0.72rem;color:var(--ink-2);letter-spacing:-.01em;white-space:nowrap}
+.pDay.today .pNum{color:var(--accent-ink)}
+.pDay.today .pName{color:var(--accent-ink);font-weight:650}
+/* Heute ist eine getönte Fläche, keine Linie. Eine grüne Linie unter
+   der Säule sah aus wie ein weiteres Feld — dieselbe Farbe, dieselbe
+   Form, direkt darunter. Die Fläche umfasst dagegen die ganze Spalte
+   und kann mit nichts verwechselt werden. */
+.pDay.today{background:var(--accent-soft)}
+.pDay.today:active{background:var(--accent-soft)}
+/* Der gelernte Einkaufstag: ein Punkt unter dem Namen. Ein Ring UM
+   den Namen kollidierte mit der Hervorhebung für heute — und wenn
+   beides auf denselben Tag fällt, sah man nur noch eines. */
+.pShop{height:8px;display:flex;align-items:center;justify-content:center}
+.pShop i{width:4px;height:4px;border-radius:99px;background:var(--ink-3);display:block}
+.pDay.quiet{opacity:.72}
+.pLegend{display:flex;flex-wrap:wrap;gap:9px 11px;padding:15px 3px 0}
+.pLegend span{display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--ink-2)}
+.pLegend i{width:9px;height:9px;border-radius:3px;display:block;background:var(--fill-2)}
+.pLegend i.k-red{background:var(--red)}
+.pLegend i.k-amber{background:var(--amber)}
+.pLegend i.k-green{background:var(--accent)}
+.pLegend .legShop i{width:4px;height:4px;border-radius:99px;background:var(--ink-3);margin:0 2.5px}
+
+/* Die Liste als ein Feld: eine Zeile, die aussieht, als könne man
+   sie drücken — weil man genau das tun soll. */
+.bigAction{
+  display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  padding:17px 16px;background:var(--surface);
+  transition:background .14s linear;
+}
+.bigAction:active{background:var(--fill)}
+.baMain{flex:1;min-width:0}
+.baTitle{font-size:1.12rem;font-weight:640;letter-spacing:-.025em}
+.baSub{font-size:0.92rem;color:var(--accent-ink);margin-top:3px;font-weight:560}
+.baPreview{
+  font-size:0.79rem;color:var(--ink-2);margin-top:5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.baGo{
+  flex:0 0 auto;width:34px;height:34px;border-radius:99px;
+  background:var(--accent-soft);color:var(--accent-ink);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.05rem;line-height:1;
+}
+
+.runRow{display:flex;align-items:center;width:100%;background:var(--surface);padding-right:16px}
+.runRow .streak{flex:1;min-width:0}
+
 /* Meilensteine: je eine Farbe, gezeichnete Marke im getönten Kreis. */
 .badgeRow{display:block;background:var(--surface);padding:0}
 .badge{

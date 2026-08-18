@@ -1305,6 +1305,12 @@ function compute() {
   const badges = milestoneState({ ...s.lifetime, wochen: streak.weeks });
   const freshBadges = newMilestones(badges, s.badgesSeen);
 
+  /* Die kommenden sieben Tage. Bewusst NACH allem anderen, denn der
+     Streifen erfindet nichts — er ordnet nur, was oben schon
+     gerechnet wurde, nach Tagen. `supplies` bleibt draußen: was
+     ausgeht, steht bereits in `items`. */
+  const pulse = weekPulse({ items, inventory, swapsDue, pattern }, ref);
+
   return {
     ref, weekKey: wk, weekday: weekdayOf(ref),
     history, rhythms, stage, chronic, anomalies, wasteStats, inventory,
@@ -1315,7 +1321,7 @@ function compute() {
     opened, pattern, season, seasonNow,
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog, absences,
-    actions: s.actions, review, streak, streakWeeks, badges, freshBadges,
+    actions: s.actions, review, streak, streakWeeks, badges, freshBadges, pulse,
     brands, brandHeadline, backup, recovery: lastRecovery,
     store, aisleList,
     ethylene: checkEthyleneConflicts(known.filter((i) => i.on)),

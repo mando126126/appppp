@@ -83,7 +83,8 @@ const MODULES = [
   "activityLog.js",
   "streakTracker.js",
   "weeklyReview.js",
-  "milestones.js"
+  "milestones.js",
+  "weekPulse.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt

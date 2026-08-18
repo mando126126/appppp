@@ -93,7 +93,7 @@ try {
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
-    " collectHints, hintsSheet };"
+    " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -142,7 +142,7 @@ ok("Wochenschnitt ist plausibel", ctx.totals.spendPerWeek > 5 && ctx.totals.spen
 ok("Demo-Historie liegt in der Vergangenheit", ctx.totals.firstDate < D.today());
 
 console.log("\n--- Alle Bereiche durchklicken ---");
-["liste", "faellig", "bestand", "erfassen", "zahlen", "mehr"].forEach((tab) => {
+["start", "liste", "faellig", "bestand", "erfassen", "zahlen", "mehr"].forEach((tab) => {
   const before = errors.length;
   App.goto(tab);
   ok(`Bereich "${tab}" rendert`, errors.length === before && $("main").children.length > 0, errors[before]);
@@ -1041,6 +1041,84 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
     click($("sheetCancel"));
     return /keine echte Push|KEINE echte Push/i.test(t);
   })());
+}
+
+console.log("\n--- Die Übersicht ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  const b4 = errors.length;
+  App.goto("start");
+  const main = $("main");
+  ok("Die Übersicht rendert", errors.length === b4 && main.children.length > 0, errors[b4]);
+
+  /* Dieselbe Grenze wie für die Liste, und aus demselben Grund. Die
+     Übersicht darf reicher aussehen, aber nicht wieder zuwachsen. */
+  const bloecke = main.querySelectorAll(":scope > .group, :scope > .card");
+  ok("Die Übersicht hat höchstens vier Blöcke", bloecke.length <= 4, bloecke.length);
+
+  ok("Die Liste ist NICHT der erste Reiter", T.NAV[0].id === "start", T.NAV[0].id);
+  ok("Und die Woche steht ganz oben", !!main.querySelector(".pulse"));
+
+  /* Der Wochenstreifen: sieben Tage, heute zuerst. */
+  const tage = main.querySelectorAll(".pDay");
+  ok("Sieben Tage", tage.length === 7, tage.length);
+  ok("Heute ist markiert", main.querySelectorAll(".pDay.today").length === 1);
+  ok("Und steht vorn", tage[0].classList.contains("today"));
+  ok("Der Streifen sagt einen Satz", /\S/.test(main.querySelector(".pulseHead").textContent));
+
+  /* Die Felder sind Ereignisse, keine erfundene Höhe: so viele
+     Felder wie der Streifen Ereignisse hat (bis zur Kappung bei 5). */
+  const felder = main.querySelectorAll(".pSeg").length;
+  const erwartet = App.ctx.pulse.days.reduce((a, d) => a + Math.min(5, d.count), 0);
+  ok("Ein Feld je Ereignis", felder === erwartet, `${felder} statt ${erwartet}`);
+
+  /* Ein Tag lässt sich öffnen und zeigt, was dahintersteckt. */
+  const voll = [...tage].find((t) => t.querySelectorAll(".pSeg").length > 0);
+  ok("Es gibt einen Tag mit Inhalt", !!voll);
+  if (voll) {
+    click(voll);
+    ok("Der Tag öffnet ein Blatt", !!$("sheetTitle").textContent);
+    ok("Und nennt die Sachen beim Namen", $("sheetOpts").querySelectorAll(".row").length > 0);
+    App.closeSheet();
+  }
+  const leer = [...tage].find((t) => t.querySelectorAll(".pSeg").length === 0);
+  if (leer) {
+    click(leer);
+    ok("Ein ruhiger Tag sagt das auch", /nichts an/.test($("sheetOpts").textContent));
+    App.closeSheet();
+  }
+
+  /* Die Liste bleibt einen Tipp entfernt. */
+  const gross = main.querySelector(".bigAction");
+  ok("Die Liste steht als eigenes Feld da", !!gross);
+  ok("Mit Positionen und Preis", /\d+ Position|noch nichts/.test(gross.textContent), gross.textContent.trim());
+  click(gross);
+  ok("Und führt zur Liste", App.tab === "liste", App.tab);
+
+  /* „Fällig“ hat keinen Reiter mehr, aber seine Adresse behalten. */
+  App.goto("start");
+  ok("Die Leiste hat sechs Reiter", $("nav").children.length === 6, $("nav").children.length);
+  ok("„Fällig“ ist keiner davon",
+    ![...$("nav").querySelectorAll("span")].some((x) => x.textContent === "Fällig"));
+  App.goto("faellig");
+  ok("Aber die Seite gibt es noch", $("main").children.length > 0);
+  ok("Und die Leiste zeigt Start als aktiv",
+    $("nav").children[0].getAttribute("aria-current") === "page");
+
+  /* Und sie ist auch dann erreichbar, wenn gerade nichts fällig ist:
+     über den Bestand. Sonst wären „Demnächst“ und „Günstig
+     bevorraten“ verschwunden statt umgezogen. */
+  App.goto("bestand");
+  const weg = [...$("main").querySelectorAll(".row")]
+    .find((r) => /Austausch und Nachschub/.test(r.textContent));
+  ok("Der Bestand führt ebenfalls dorthin", !!weg);
+  if (weg) { click(weg); ok("Und zwar wirklich", App.tab === "faellig", App.tab); }
+
+  /* Der Gruß richtet sich nach der Tageszeit — und lügt nachts nicht. */
+  ok("Morgens wird gegrüßt", App.greeting(8) === "Guten Morgen", App.greeting(8));
+  ok("Abends auch", App.greeting(20) === "Guten Abend", App.greeting(20));
+  ok("Nachts nicht mit „Morgen“", !/Morgen/.test(App.greeting(2)), App.greeting(2));
 }
 
 console.log("\n--- Die Startseite bleibt aufgeräumt ---");
