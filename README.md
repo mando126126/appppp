@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1337 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1352 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -959,6 +959,61 @@ Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
 
+#### Drei Stellen, an denen die Bedienung log
+
+Beim Durchklicken als Erstnutzerin — nicht aus dem Gedächtnis,
+sondern an Bildschirmabzügen — fielen drei Sachen auf, die alle
+dieselbe Form haben: **die App konnte etwas, sagte es aber nicht.**
+
+**1. Die vier Antworten sahen aus wie deaktiviert.** Wer eine Position
+abwählt, bekommt „Hab noch / War schon alle / Verbraucht / Diese Woche
+nicht" — den einzigen Kanal, über den die App ihre Rhythmen
+korrigiert. Das Dimmen der abgewählten Zeile (`opacity:.42`) lag aber
+auf der **ganzen** Zeile, also auch auf diesen Knöpfen. Nachgerechnet:
+der Kontrast der Beschriftung fiel damit von 4,92:1 auf **1,74:1**.
+Nicht nur unter jeder Lesbarkeitsgrenze — es sieht schlicht aus wie
+„ausgegraut, nicht anklickbar". Der Rückkanal war optisch
+abgeschaltet.
+
+Beim Nachrechnen zeigte sich, dass es nicht bei einer Fundstelle
+blieb: der Artikel im Wagen (`.44` → 2,84:1) und der ruhige Tag im
+Wochenstreifen (`.72` → 3,08:1) hatten dasselbe Problem. Erste beide
+stehen jetzt auf `.62` — die niedrigste Deckkraft, die im hellen Modus
+noch 4,5:1 erreicht. Beim Wochenstreifen ist die Antwort eine andere:
+dort wird jetzt die **Säule** gedimmt und nicht der Wochentag. Den
+Inhalt zu dimmen, den man gar nicht meint, wäre die falsche Lösung für
+ein echtes Problem gewesen.
+
+**2. Nichts sagte, dass eine Position antippbar ist.** Der Name öffnet
+seit jeher das Detail-Blatt mit Rhythmus, Preisverlauf und
+Datenqualität — ohne Winkel, ohne Hinweis, während überall sonst in
+der App genau dieser Winkel eine aufklappbare Zeile markiert. Dasselbe
+im Wochenstreifen: sieben Säulen sahen aus wie eine Grafik, und auf
+eine Grafik tippt niemand. Die Positionen haben jetzt ihren Winkel,
+die Tage eine eigene Fläche — dieselbe, die in dieser App seit jeher
+„das kannst du drücken" heißt.
+
+**3. „VD" war ein Kürzel.** Zwei Buchstaben auf der Hähnchenbrust, die
+sich nur dem erklären, der sie antippt — und antippen tut man nur, was
+man versteht. Die Marke, die vor der einzigen **rechtlich harten**
+Frist der App warnt, steht jetzt ausgeschrieben da: **Verbrauchsdatum**.
+Sie ist damit die längste Marke der Liste und bricht auf eine zweite
+Zeile um. Das ist der Preis, und er ist richtig herum bezahlt.
+
+**Was daraus für die Tests folgt.** Die Kontrastprüfung hatte all das
+nicht gefunden, und der Grund ist lehrreich: sie prüfte **Farbpaare**.
+Ein Zustand mit `opacity` ist aber kein Farbpaar — dort steht dieselbe
+Farbe wie überall, und trotzdem kommt hinten etwas anderes heraus,
+weil Vordergrund und Hintergrund gemeinsam gegen den Grund verrechnet
+werden. Gefunden hat es kein Test, sondern ein Blick auf einen
+Bildschirmabzug. `test/contrast.js` hat jetzt einen Abschnitt F, der
+jeden **dauerhaften** gedimmten Zustand in beiden Modi ausrechnet
+(`:active`, Animationen und `:disabled` bleiben draußen — die ersten
+dauern Millisekunden, das letzte muss nach der Norm nicht
+kontrastieren), die Deckkraft im Stil gegen die geprüfte abgleicht,
+und die **Bauart** des Fehlers verbietet: keine Deckkraft auf einer
+ganzen Listenzeile.
+
 #### Flächen sind eckig, Punkte bleiben Punkte
 
 Die App war durchgehend abgerundet — 20 px auf Karten, 13 px auf
@@ -1119,11 +1174,11 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1337
+npm test          # alle 1352
 npm run test:algo # 884 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
-npm run test:ui   # 417 Oberflächentests in jsdom
+npm run test:ui   # 425 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

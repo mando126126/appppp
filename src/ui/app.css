@@ -569,7 +569,15 @@ button.row:active,label.row:active{background:var(--fill)}
 .items{list-style:none;margin:0;padding:0}
 .item{padding:12px 16px;position:relative;background:var(--surface)}
 .item + .item::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.item.off{opacity:.42}
+/* ABGEWÄHLT HEISST ABGEWÄHLT — NICHT ABGESCHALTET.
+   Das Dimmen lag auf der ganzen Zeile und damit auch auf den vier
+   Antworten, die ja gerade erscheinen, WEIL jetzt etwas zu tun ist.
+   Nachgerechnet: der Kontrast der Knopfbeschriftung fiel dadurch von
+   4,92:1 auf 1,74:1. Das ist nicht nur unter jeder Lesbarkeitsgrenze,
+   es sieht aus wie „deaktiviert" — und damit war der Rückkanal, über
+   den die App ihre Rhythmen korrigiert, optisch ausgeschaltet.
+   Gedimmt wird jetzt nur noch die Zeile selbst. */
+.item.off .top{opacity:.62}
 .item .top{display:flex;align-items:flex-start;gap:13px}
 
 /* Gefüllter Kreis, kein Haken darin — die Füllung allein sagt genug. */
@@ -588,6 +596,14 @@ button.row:active,label.row:active{background:var(--fill)}
 .item .main .pill:active{opacity:1}
 .item .nm{font-size:1rem;font-weight:520;display:flex;flex-wrap:wrap;align-items:center;gap:6px;letter-spacing:-.009em}
 .item .price{font-size:1rem;text-align:right;flex:0 0 auto}
+/* Der Winkel sitzt auf der Höhe der ersten Zeile, nicht mittig: eine
+   Position mit Marke ist zweizeilig, und ein mitwanderndes Zeichen
+   sähe aus, als gehöre es zur Marke statt zur Zeile. */
+.item .top > .chev{
+  width:8px;height:8px;flex:0 0 auto;margin-top:7px;
+  border-right:2px solid var(--ink-3);border-top:2px solid var(--ink-3);
+  transform:rotate(45deg);
+}
 .item .price small{display:block;font-size:0.7rem;color:var(--ink-3);font-weight:400}
 .item .calc{font-size:0.8rem;color:var(--ink-2);margin-top:4px;padding-left:37px;line-height:1.4}
 .item .why{padding-left:37px}
@@ -778,7 +794,11 @@ button.row.action,label.row.action{cursor:pointer}
   width:25px;height:25px;flex:0 0 auto;border:2px solid var(--ink-3);border-radius:99px;position:relative;
   transition:background .18s var(--ease),border-color .18s var(--ease);
 }
-.sItem.done{opacity:.44}
+/* Wie bei der abgewählten Position: .44 hieß 2,84:1 auf dem Namen
+   des Artikels, den man gerade in den Wagen gelegt hat — und den man
+   noch lesen können muss, um zu prüfen, ob es der richtige war. Das
+   Häkchen daneben trägt die Aussage ohnehin. */
+.sItem.done{opacity:.62}
 .sItem.done .tick{background:var(--accent);border-color:var(--accent)}
 .sItem .sn{flex:1;font-size:1rem;font-weight:520;letter-spacing:-.009em}
 .sItem .sn small{display:block;font-size:0.76rem;font-weight:400;color:var(--ink-2);margin-top:1px}
@@ -927,8 +947,12 @@ button.row.action,label.row.action{cursor:pointer}
   line-height:1.35;padding:0 3px 14px;color:var(--ink);
 }
 .pulseDays{display:flex;gap:5px;align-items:flex-end}
+/* Eine leichte Fläche unter jedem Tag. Ohne sie standen dort sieben
+   Säulen, die aussahen wie eine Grafik — und niemand tippt auf eine
+   Grafik. Mit ihr sind es sieben Schaltflächen, und der Inhalt jedes
+   Tages ist auffindbar statt zufällig entdeckbar. */
 .pDay{
-  flex:1 1 0;min-width:0;background:none;border:none;padding:7px 0 5px;
+  flex:1 1 0;min-width:0;background:var(--fill);border:none;padding:7px 0 5px;
   display:flex;flex-direction:column;align-items:center;gap:5px;
   transition:background .14s linear;
 }
@@ -966,7 +990,12 @@ button.row.action,label.row.action{cursor:pointer}
    beides auf denselben Tag fällt, sah man nur noch eines. */
 .pShop{height:8px;display:flex;align-items:center;justify-content:center}
 .pShop i{width:4px;height:4px;border-radius:99px;background:var(--ink-3);display:block}
-.pDay.quiet{opacity:.72}
+/* Gedimmt wird die SÄULE, nicht der Wochentag. Auf dem Namen ergab
+   .72 einen Kontrast von 3,08:1 — und „Do“ muss auch an einem ruhigen
+   Tag lesbar sein, sonst fehlt der Bezugspunkt für die Tage daneben.
+   Derselbe Fehler wie bei der abgewählten Position: ein Dimmen, das
+   über den Inhalt hinweggeht, den es gar nicht meint. */
+.pDay.quiet .pCol{opacity:.72}
 .pLegend{display:flex;flex-wrap:wrap;gap:9px 11px;padding:15px 3px 0}
 .pLegend span{display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--ink-2)}
 .pLegend i{width:9px;height:9px;display:block;background:var(--fill-2)}

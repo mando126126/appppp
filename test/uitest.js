@@ -1683,7 +1683,48 @@ setTimeout(() => {
   T.Backup.adapter = null;
   T.Backup.handle = null;
 
-  console.log("\n--- Kanten: Flächen eckig, Punkte rund ---");
+  console.log("\n--- Bedienbarkeit: sichtbar und anfassbar ---");
+{
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+
+  /* Der Fund, der diesen Abschnitt ausgelöst hat: das Dimmen einer
+     abgewählten Zeile lag auf der ganzen Zeile — samt der vier
+     Antworten, die genau dann erscheinen, WEIL etwas zu tun ist.
+     Kontrast der Beschriftung: 1,74:1. Das sah aus wie
+     „deaktiviert". Die Regel dagegen ist eine Zeile CSS und darf
+     nicht zurückrutschen. */
+  ok("Gedimmt wird nur die Zeile, nicht die Antworten",
+    /\.item\.off \.top\{opacity/.test(css) && !/\.item\.off\{opacity/.test(css),
+    (css.match(/\.item\.off[^{]*\{opacity:[^;}]+/) || ["—"])[0]);
+
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+
+  /* Antippbares muss aussehen wie antippbar. Beide Stellen hier
+     öffneten seit jeher ein Blatt und sagten es mit nichts. */
+  const zeilen = [...$("main").querySelectorAll(".items .item")];
+  ok("Es gibt Positionen", zeilen.length > 0, zeilen.length);
+  ok("Jede Position trägt einen Winkel",
+    zeilen.every((z) => !!z.querySelector(".top > .chev")),
+    zeilen.filter((z) => !z.querySelector(".top > .chev")).length + " ohne");
+
+  App.goto("start");
+  const tage = [...$("main").querySelectorAll(".pDay")];
+  ok("Die Tage der Woche sind Schaltflächen",
+    tage.length === 7 && tage.every((t) => t.tagName === "BUTTON"), tage.length);
+  ok("Und sie tragen eine eigene Fläche",
+    /\.pDay\{[^}]*background:var\(--fill\)/.test(css));
+
+  /* Kein Kürzel auf der einzigen rechtlich harten Marke. */
+  App.goto("liste");
+  const marken = [...$("main").querySelectorAll(".items .pill.safety")].map((p) => p.textContent);
+  ok("Es gibt eine Verbrauchsdatum-Marke", marken.length > 0, marken.length);
+  ok("Sie ist ausgeschrieben", marken.every((m) => /Verbrauchsdatum/.test(m)), marken.join(" | "));
+  ok("Und nicht mehr abgekürzt", !marken.some((m) => m.trim() === "VD"), marken.join(" | "));
+}
+
+console.log("\n--- Kanten: Flächen eckig, Punkte rund ---");
 {
   /* Die Regel steht als Kommentar in app.css und wäre damit eine
      Absichtserklärung. Hier wird sie geprüft — sonst schleicht sich

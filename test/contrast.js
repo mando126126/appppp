@@ -239,6 +239,99 @@ t("Das Verbrauchsdatum-Zeichen ist auf Rot lesbar", () => {
 });
 
 // ================================================================
+section("F: Gedimmte Zustände");
+
+/* DIE LÜCKE, DIE DIESER ABSCHNITT SCHLIESST.
+ *
+ * Die Abschnitte A bis D prüfen Farbpaare. Ein Zustand mit `opacity`
+ * ist aber kein Farbpaar — dort steht dieselbe Farbe wie überall,
+ * und trotzdem kommt hinten etwas anderes heraus, weil Vordergrund
+ * UND Hintergrund gemeinsam gegen den Grund verrechnet werden.
+ *
+ * Genau daran ist die Prüfung vorbeigelaufen: `.item.off` dimmte auf
+ * .42, und die Beschriftung der vier Antwortknöpfe landete bei
+ * 1,74:1 — unter dem Wert, bei dem etwas noch als „vorhanden“
+ * durchgeht. Gefunden hat es kein Test, sondern ein Blick auf einen
+ * Bildschirmabzug.
+ *
+ * Deshalb hier: jeder dauerhafte gedimmte Zustand mit seiner
+ * Deckkraft, ausgerechnet in beiden Modi. Vorübergehende Zustände
+ * (`:active`, Animationen) stehen bewusst nicht drin — sie dauern
+ * Millisekunden. `:disabled` ebenso wenig: was nicht bedienbar ist,
+ * muss nach der Norm auch nicht kontrastieren. */
+const GEDIMMT = [
+  // [Name, Deckkraft, Schrifttoken, Flächentoken]
+  ["Abgewählte Position", 0.62, "ink", "surface"],
+  ["Artikel im Wagen", 0.62, "ink", "surface"]
+  /* Der ruhige Tag im Wochenstreifen steht bewusst NICHT hier: dort
+     wird die Säule gedimmt und nicht der Wochentag. „Do“ bei .72
+     ergäbe 3,08:1 — und damit müsste die Deckkraft auf .91 steigen,
+     was kein Dimmen mehr wäre. Den Inhalt zu dimmen, den man gar
+     nicht meint, ist die falsche Lösung für ein echtes Problem. */
+];
+
+function dimContrast(werte, deckkraft, textToken, flaecheToken) {
+  const text = werte[textToken], flaeche = werte[flaecheToken];
+  if (!text || !flaeche) return null;
+  // Erst die Farbe auf ihre Fläche, dann beides gemeinsam gedimmt —
+  // in dieser Reihenfolge rechnet der Browser auch.
+  const voll = over(text, flaeche.rgb);
+  const gedimmtText = over({ rgb: voll, alpha: deckkraft }, flaeche.rgb);
+  return contrast(gedimmtText, flaeche.rgb);
+}
+
+[["hell", HELL], ["dunkel", DUNKEL]].forEach(([bereich, werte]) => {
+  GEDIMMT.forEach(([name, deckkraft, textToken, flaecheToken]) => {
+    t(`${name} bleibt lesbar (${bereich})`, () => {
+      const k = dimContrast(werte, deckkraft, textToken, flaecheToken);
+      if (k === null) return `Token fehlt: ${textToken}`;
+      return k >= MIN_TEXT ? true : `${k.toFixed(2)}:1 bei ${deckkraft} — nötig sind ${MIN_TEXT}:1`;
+    });
+  });
+});
+
+t("Die Deckkraft im Stil stimmt mit der geprüften überein", () => {
+  /* Ohne diese Prüfung wäre die Liste oben eine Behauptung: jemand
+     setzt .item.off auf .4 zurück, die Rechnung hier bleibt bei .62
+     und meldet weiter „lesbar“. */
+  const paare = [
+    [/\.item\.off \.top\{opacity:\.(\d+)\}/, 62, "Abgewählte Position"],
+    [/\.sItem\.done\{opacity:\.(\d+)\}/, 62, "Artikel im Wagen"],
+    [/\.pDay\.quiet \.pCol\{opacity:\.(\d+)\}/, 72, "Ruhiger Tag"]
+  ];
+  for (const [re, soll, name] of paare) {
+    const m = CSS.match(re);
+    if (!m) return `${name}: Regel nicht gefunden`;
+    if (Number(m[1]) !== soll) return `${name}: ${m[1]} im Stil, ${soll} geprüft`;
+  }
+  return true;
+});
+
+t("Der Wochentag wird nicht mitgedimmt", () => {
+  // Die Regel muss auf .pCol zielen. Steht sie auf .pDay.quiet
+  // selbst, erwischt sie Zahl und Wochentag mit.
+  if (/\.pDay\.quiet\{[^}]*opacity/.test(CSS)) return "Deckkraft liegt auf der ganzen Spalte";
+  return /\.pDay\.quiet \.pCol\{opacity/.test(CSS) ? true : "Regel nicht gefunden";
+});
+
+t("Kein Dimmen legt sich über eine ganze Listenzeile", () => {
+  /* Die Bauart des Fehlers, nicht seine eine Fundstelle: eine
+     Deckkraft auf dem äußeren Element erwischt alles darin — auch
+     Knöpfe, die gerade DESHALB da sind, weil etwas zu tun ist. Wer
+     dimmen will, dimmt den Teil, den er meint. */
+  const schlecht = [];
+  const re = /(\.[a-zA-Z][\w.-]*)\{[^}]*opacity:\.(\d\d?)[;}]/g;
+  let m;
+  while ((m = re.exec(CSS)) !== null) {
+    const [, selektor, wert] = m;
+    if (Number(wert) >= 60) continue;                 // hell genug
+    if (/:active|:disabled|:hover|input|track|glow|confetti/.test(selektor)) continue;
+    if (/\.(item|sItem|row|pDay|badge|save|opt)$/.test(selektor)) schlecht.push(`${selektor} auf .${wert}`);
+  }
+  return schlecht.length === 0 ? true : schlecht.join(", ");
+});
+
+// ================================================================
 section("E: Die Regel selbst");
 
 t("Für jede Palettenfarbe gibt es eine Schriftvariante", () => {

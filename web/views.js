@@ -1697,7 +1697,13 @@ function listItem(it, ctx, app) {
     if (rr) zeichen.push(["zustand", "state", rr.label]);
   }
   if (manuell) zeichen.push(["own", "own", "von dir"]);
-  if (p.safetyCritical) zeichen.push(["vd", "safety", "VD"]);
+  /* Ausgeschrieben, nicht abgekürzt.
+     „VD“ stand hier zwei Buchstaben lang und erklärte sich nur dem,
+     der es antippt — und antippen tut man nur, was man versteht. Die
+     Marke, die vor der einzigen rechtlich harten Frist der App warnt,
+     darf kein Rätsel sein. Sie ist damit die längste Marke der Liste;
+     das ist der Preis und er ist richtig herum bezahlt. */
+  if (p.safetyCritical) zeichen.push(["vd", "safety", "Verbrauchsdatum"]);
   if (zeichen.length) nm.append(pill(...zeichen[0]));
   main.append(nm);
   main.addEventListener("keydown", (ev) => {
@@ -1714,6 +1720,13 @@ function listItem(it, ctx, app) {
 
   // Ohne Preis keine Preisspalte — „0,00 €“ wäre eine Behauptung.
   top.append(cb, main, el("div", "price", it.price > 0 ? eur(it.halved ? it.price / 2 : it.price) : "—"));
+  /* Der Winkel am Ende. Der Name öffnet seit jeher das Detail-Blatt,
+     aber nichts sagte das: überall sonst in der App markiert genau
+     dieser Winkel eine Zeile, die sich öffnen lässt — nur auf der
+     Liste fehlte er. Damit war das Blatt mit Rhythmus, Preisverlauf
+     und Datenqualität für jeden unsichtbar, der nicht zufällig
+     draufgetippt hat. */
+  top.append(el("div", "chev"));
   li.append(top);
 
   /* Der Vorschlag zur halben Menge.
