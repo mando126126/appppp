@@ -3065,20 +3065,63 @@ function inferWaste(history, rhythms) {
  * Doppelzählung die zweite Ungenauigkeit.
  * ================================================================
  *
+ * DIE AUSNAHME: WAS DER NUTZER SELBST SAGT.
+ * ================================================================
+ * Alles hier ist Schätzung — abgeleitet aus Kaufabstand und
+ * Haltbarkeit, nie beobachtet. Wenn jemand sagt „den Salat vom 3.8.
+ * habe ich aufgegessen“, ist das keine weitere Schätzung, sondern
+ * eine Tatsache, und sie schlägt jede Ableitung.
+ *
+ * ZWEI SIGNALE, ZWEI KORREKTUREN — weil sie Verschiedenes behaupten.
+ *
+ *   `opts.eaten`      Kaufdaten, zu denen der Nutzer gesagt hat:
+ *                     aufgebraucht. Passt zum AUSREISSER, denn der
+ *                     behauptet ein konkretes Ereignis an einem
+ *                     konkreten Datum („die Packung vom 3.8. ist
+ *                     weggekommen“). Dem widerspricht man einzeln.
+ *
+ *   `opts.noChronic`  Der laufende Anteil ist keine Aussage über
+ *                     einen Kauf, sondern über das PRODUKT: „dein
+ *                     Rhythmus ist länger als die Haltbarkeit, also
+ *                     geht bei jedem Zyklus etwas verloren.“ Dem
+ *                     widerspricht man einmal, nicht dreißigmal.
+ *
+ * Die Trennung ist nicht nur Bequemlichkeit. Beim ersten Anlauf
+ * bekam JEDER Kauf eine eigene Zeile mit demselben Anteil — zwölf
+ * identische Zeilen „etwa 14 % von 2,49 €“, und wer sagen wollte
+ * „bei mir verdirbt kein Brot“, hätte dreißigmal tippen müssen. Eine
+ * Korrektur, die so mühsam ist, benutzt niemand, und die Schätzung
+ * bliebe unwidersprochen stehen.
+ *
+ * WAS DIE KORREKTUR AUSDRÜCKLICH NICHT TUT: sie zählt keine
+ * Rettung. Eine Schätzung zurückzunehmen ist kein Erfolg, den man
+ * feiern könnte — es wird nichts gerettet, es war nur nie verloren.
+ * Wer das als Rettung buchte, hätte einen Eurobetrag erfunden und
+ * ihn zusätzlich in die Meilensteine gezählt: EIN Ereignis über ZWEI
+ * Kanäle, die Fehlerklasse dieses Projekts.
+ * ================================================================
+ *
  * @param {string} productId
  * @param {Array} purchases Käufe dieses Produkts
  * @param {object|null} chronic Ergebnis aus inferChronicWaste
  * @param {Array} anomalies Ausreißer dieses Produkts
- * @returns {{purchased, wasted, wastedEuros, wasteRate, spent, chronic}}
+ * @param {object} [opts] `eaten`: Kaufdaten, die der Nutzer als
+ *                        aufgebraucht bestätigt hat
+ * @returns {{purchased, wasted, wastedEuros, wasteRate, spent, chronic, corrected, details}}
  */
-function wasteSummary(productId, purchases, chronic, anomalies) {
+function wasteSummary(productId, purchases, chronic, anomalies, opts = {}) {
   const rows = Array.isArray(purchases) ? purchases : [];
   const anomalyDates = new Set((anomalies || []).map((a) => a.date));
-  const grundanteil = chronic ? Math.max(0, Math.min(1, chronic.wastedFraction)) : 0;
+  const eaten = opts.eaten instanceof Set ? opts.eaten : new Set(opts.eaten || []);
+  const grundanteil = chronic && !opts.noChronic
+    ? Math.max(0, Math.min(1, chronic.wastedFraction))
+    : 0;
 
   let wasted = 0;
   let wastedEuros = 0;
   let spent = 0;
+  let corrected = 0;
+  const details = [];
 
   rows.forEach((kauf, i) => {
     const menge = Math.max(1, Number(kauf.quantity) || 1);
@@ -3092,14 +3135,41 @@ function wasteSummary(productId, purchases, chronic, anomalies) {
     const naechster = rows[i + 1];
     const istAusreisser = !!(naechster && anomalyDates.has(naechster.date));
 
-    const anteil = Math.max(grundanteil, istAusreisser ? 1 : 0);
+    const geschaetzt = Math.max(grundanteil, istAusreisser ? 1 : 0);
+    /* Die Aussage des Nutzers gilt, nicht die Schätzung. */
+    const bestaetigt = eaten.has(kauf.date);
+    const anteil = bestaetigt ? 0 : geschaetzt;
+    if (bestaetigt && geschaetzt > 0) corrected++;
+
     wasted += anteil;
     wastedEuros += preis * anteil;
+
+    /* In die Aufstellung kommen nur EINZELNE Ereignisse: Ausreißer
+       und was der Nutzer dazu gesagt hat. Der laufende Anteil steht
+       nicht drin — er gilt für alle Käufe gleich und wäre eine Reihe
+       identischer Zeilen ohne eigene Aussage. */
+    if (istAusreisser || bestaetigt) {
+      details.push({
+        date: kauf.date,
+        euros: Math.round(preis * 100) / 100,
+        share: Math.round(geschaetzt * 100) / 100,
+        anomaly: istAusreisser,
+        eaten: bestaetigt
+      });
+    }
   });
 
   const purchased = rows.length;
   return {
     purchased,
+    // Wie viele Käufe der Nutzer aus der Schätzung herausgenommen hat.
+    corrected,
+    // Der laufende Anteil, den der Nutzer abgestellt hat — für die
+    // Oberfläche, damit sie den Schalter richtig herum zeigt.
+    chronicOff: !!opts.noChronic,
+    chronicShare: chronic ? Math.max(0, Math.min(1, chronic.wastedFraction)) : 0,
+    // Absteigend: der jüngste Verdacht zuerst.
+    details: details.sort((a, b) => (a.date < b.date ? 1 : -1)),
     // Auf eine Stelle gerundet: „2,4 von 20“ ist ehrlicher als eine
     // ganze Zahl, die eine Genauigkeit vorspiegelt, die es nicht gibt.
     wasted: Math.round(wasted * 10) / 10,
@@ -3114,17 +3184,13 @@ function wasteSummary(productId, purchases, chronic, anomalies) {
   };
 }
 
-/**
- * Explizite Nutzerangabe schlägt jede Schätzung.
- * "consumed" oder "have" heißt: nichts weggeworfen.
- */
-function reconcileWithUserInput(events, userInput) {
-  if (!userInput) return events;
-  if (userInput.userReason === "consumed" || userInput.userReason === "have") {
-    return events.filter((e) => !(e.productId === userInput.productId && e.date === userInput.date));
-  }
-  return events;
-}
+/* HIER STAND `reconcileWithUserInput`.
+   Sie filterte Ausreißer-Ereignisse heraus, wenn der Nutzer
+   „verbraucht“ oder „hab noch“ gesagt hatte — und wurde nie
+   aufgerufen. Die Absicht war richtig und ist jetzt in
+   `wasteSummary` eingebaut, dort aber wirksam: als Anteil 0 für den
+   betroffenen Kauf, der BEIDE Kanäle abschaltet. Ein gefilterter
+   Ausreißer allein hätte den chronischen Anteil stehen lassen. */
 
 /* ===== storageAdvisor.js ===== */
 /**

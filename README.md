@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1391 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1421 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -959,6 +959,68 @@ Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
 
+#### Der Schätzung widersprechen können
+
+Der **Verlust** ist die einzige große Zahl dieser App, die nie
+beobachtet wurde. Sie wird abgeleitet: Kaufabstand länger als
+Haltbarkeit heißt „ein Teil geht verloren“, eine ungewöhnlich lange
+Lücke heißt „das davor ist weggekommen“. Beides sind gute Gründe für
+einen **Verdacht** und schlechte Gründe für eine Behauptung.
+
+Bisher konnte niemand widersprechen. Die App sagte „10,04 € über 30
+Käufe“, und wer wusste, dass er den Salat damals aufgegessen hatte,
+konnte nichts tun als die Zahl zu ignorieren — und mit ihr alles, was
+daran hängt: das Risiko-Zeichen auf der Liste, die Schwelle der
+Sparvorschläge, die Kilogramm unter *Wirkung*.
+
+**Zwei Behauptungen, zwei Korrekturen.** Das ist der Kern, und der
+erste Anlauf hatte es falsch: dort bekam **jeder** Kauf eine eigene
+Zeile mit demselben Anteil — zwölf identische „etwa 14 % von 2,49 €“.
+Wer sagen wollte „bei mir verdirbt kein Brot“, hätte dreißigmal tippen
+müssen. Eine Korrektur, die so mühsam ist, benutzt niemand.
+
+| Signal | Was es behauptet | Wie man widerspricht |
+|---|---|---|
+| **Laufender Anteil** | etwas über das **Produkt**: dein Rhythmus ist länger als die Haltbarkeit, also geht bei jedem Zyklus ein Teil verloren | **ein** Schalter — „Bei mir nicht“ |
+| **Ausreißer** | etwas über einen **Tag**: nach diesem Kauf verging so viel Zeit, dass die Packung kaum aufgebraucht worden sein kann | je Fall eine Zeile mit Datum und Betrag — „Doch gegessen“ |
+
+Beides ist jederzeit rückgängig zu machen. Eine Korrektur, die man
+nicht zurücknehmen kann, wäre schlimmer als die Schätzung, die sie
+korrigiert.
+
+**Was dabei ausdrücklich nicht passiert: es wird nichts
+gutgeschrieben.** Kein Eurobetrag, keine Rettung, kein Meilenstein.
+Eine Schätzung zurückzunehmen ist kein Erfolg — es war nur nie ein
+Verlust. Wer daraus eine Rettung machte, hätte einen Betrag erfunden
+und ihn zusätzlich in die Meilensteine gezählt: **ein Ereignis über
+zwei Kanäle**, die Fehlerklasse dieses Projekts. Ein Test hält fest,
+dass `lifetime.gerettet` sich dabei nicht bewegt.
+
+**Nebenbei zwei Zahlen zusammengeführt, die auseinandergelaufen
+waren.** Die Kilogramm unter *Wirkung* liefen über `chronic × Käufe`
+— also über einen der beiden Kanäle allein. Damit zählten sie
+Ausreißer **gar nicht** mit: ein Produkt ohne laufenden Anteil wog
+null Gramm, auch wenn eine ganze Packung weggeworfen wurde. Und eine
+Nutzerkorrektur wäre bei den Euro angekommen und bei den Kilogramm
+nicht. Jetzt rechnen beide aus derselben Zahl.
+
+**Und eine Leiche entfernt.** In `wasteInference2.js` stand eine
+`reconcileWithUserInput`, die „verbraucht“ als „gegessen, nicht
+weggeworfen“ auswertete — und **nie aufgerufen wurde**. Die Absicht
+war richtig, die Bauart nicht: sie filterte nur Ausreißer-Ereignisse
+und hätte den laufenden Anteil stehen lassen. Der sagt „bei jedem
+Zyklus geht etwas verloren“ — auch bei dem, von dem der Nutzer gerade
+gesagt hat, dass nichts verloren ging. Die Zahl wäre kaum gesunken,
+und niemand hätte verstanden, warum. Die Korrektur sitzt jetzt eine
+Ebene tiefer, in `wasteSummary`, wo sie beide Kanäle erreicht.
+
+Abgesichert ist das mit **elf** neuen Prüfungen in `test/waste.js`,
+und zwar nicht daran, dass die Zahl sinkt (das wäre leicht), sondern
+daran, dass sie um **genau** das sinkt, was der korrigierte Kauf
+beigetragen hat — plus 2000 Zufallskorrekturen gegen die Invarianten:
+nie mehr Verlust als vorher, nie negative Beträge, Ausgaben und
+Kaufzahl unverändert.
+
 #### Vier Antworten waren drei zu viele — und eine am falschen Ort
 
 Nachgesehen, nicht geraten: von den vier Rückmeldungen hielt eine der
@@ -1294,11 +1356,11 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1391
-npm run test:algo # 884 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1421
+npm run test:algo # 899 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
-npm run test:ui   # 464 Oberflächentests in jsdom
+npm run test:ui   # 479 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

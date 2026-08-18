@@ -120,6 +120,14 @@ function emptyState() {
     // soll nicht jede Woche gefragt werden.
     brandOff: [],
     storeChecked: [],     // im Ladenmodus abgehakt
+    /* Käufe, von denen der Nutzer gesagt hat: aufgegessen, nichts
+       weggeworfen. Sie nehmen die Verschwendungsschätzung für genau
+       diesen Kauf zurück — siehe wasteSummary. Format: "produkt|datum". */
+    eaten: [],
+    /* Produkte, bei denen der Nutzer dem LAUFENDEN Verlustanteil
+       widersprochen hat („bei mir verdirbt kein Brot“). Das ist eine
+       Aussage über das Produkt, nicht über einen einzelnen Kauf. */
+    noChronic: [],
     depositReturned: [],  // zurückgegebene Pfandgebinde
     // Wann zuletzt gesichert wurde und wie. Ohne diese drei Felder
     // kann die App nicht sagen, ob eine Sicherung fehlt — und eine
@@ -957,7 +965,9 @@ function compute() {
       pid,
       kaeufe,
       chronic.find((x) => x.productId === pid) || null,
-      anomalies.filter((x) => x.productId === pid)
+      anomalies.filter((x) => x.productId === pid),
+      // Was der Nutzer selbst bestätigt hat, schlägt die Schätzung.
+      { eaten: eatenDates(s.eaten, pid), noChronic: (s.noChronic || []).includes(pid) }
     ));
   }
 
@@ -1326,12 +1336,22 @@ function compute() {
     store, aisleList,
     ethylene: checkEthyleneConflicts(known.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
+    /* Kilogramm aus DERSELBEN Zahl wie die Euro.
+     *
+     * Vorher lief das über `chronic` mal Käufe — also über einen der
+     * beiden Kanäle allein. Damit zählte die Kilogramm-Angabe
+     * Ausreißer gar nicht mit (ein Produkt ohne chronischen Anteil
+     * wog null Gramm, auch wenn eine ganze Packung weggeworfen
+     * wurde), und eine Nutzerkorrektur wäre bei den Euro angekommen
+     * und bei den Kilogramm nicht. Zwei Zahlen für dieselbe Sache,
+     * die auseinanderlaufen — dieselbe Fehlerklasse wie die
+     * Doppelzählung, nur andersherum.
+     *
+     * Jetzt: Anteil 1 mal der bereits verrechneten Stückzahl. */
     impact: wasteInKilograms(
-      chronic.map((c) => ({
-        productId: c.productId,
-        wastedFraction: c.wastedFraction,
-        cycles: (wasteStats.get(c.productId) || {}).purchased || 1
-      }))
+      [...wasteStats.entries()]
+        .filter(([, st]) => st.wasted > 0)
+        .map(([pid, st]) => ({ productId: pid, wastedFraction: 1, cycles: st.wasted }))
     ),
     totals: {
       spend,
@@ -1371,6 +1391,70 @@ function setUseBy(productId, date) {
     else delete st.useBy[productId];
   });
   return true;
+}
+
+/* ---------- Aufgegessen statt weggeworfen ---------- */
+/** Schlüssel eines einzelnen Kaufs. Produkt und Datum, sonst nichts —
+    zwei Käufe desselben Produkts am selben Tag sind für diese Frage
+    derselbe Kauf. */
+const eatenKey = (productId, date) => `${productId}|${date}`;
+
+/** Die bestätigten Kaufdaten eines Produkts, als Menge. */
+function eatenDates(list, productId) {
+  const out = new Set();
+  (list || []).forEach((k) => {
+    const [pid, date] = String(k).split("|");
+    if (pid === productId && date) out.add(date);
+  });
+  return out;
+}
+
+/**
+ * „Das habe ich aufgegessen“ — für einen einzelnen Kauf.
+ *
+ * Nimmt die Verschwendungsschätzung für genau diesen Kauf zurück.
+ * Umschaltbar, weil eine Korrektur, die man nicht zurücknehmen kann,
+ * schlimmer ist als die Schätzung, die sie korrigiert.
+ *
+ * ES WIRD NICHTS GUTGESCHRIEBEN. Kein Eurobetrag, keine Rettung,
+ * kein Meilenstein. Eine Schätzung zurückzunehmen ist kein Erfolg —
+ * es war nur nie ein Verlust. Wer daraus eine Rettung machte, hätte
+ * einen Betrag erfunden und ihn ein zweites Mal gezählt.
+ *
+ * @returns {boolean} ob der Kauf jetzt als aufgegessen gilt
+ */
+function toggleEaten(productId, date) {
+  if (!productId || !date) return false;
+  const key = eatenKey(productId, date);
+  let jetztAn = false;
+  update((s) => {
+    const list = s.eaten || (s.eaten = []);
+    const i = list.indexOf(key);
+    if (i >= 0) list.splice(i, 1);
+    else { list.push(key); jetztAn = true; }
+  });
+  return jetztAn;
+}
+
+/**
+ * Dem laufenden Verlustanteil eines Produkts widersprechen.
+ *
+ * Eine Aussage über das Produkt, nicht über einen einzelnen Kauf —
+ * deshalb ein Schalter und keine dreißig. Auch hier wird nichts
+ * gutgeschrieben.
+ *
+ * @returns {boolean} ob der Anteil jetzt abgestellt ist
+ */
+function toggleNoChronic(productId) {
+  if (!productId) return false;
+  let jetztAus = false;
+  update((s) => {
+    const list = s.noChronic || (s.noChronic = []);
+    const i = list.indexOf(productId);
+    if (i >= 0) list.splice(i, 1);
+    else { list.push(productId); jetztAus = true; }
+  });
+  return jetztAus;
 }
 
 /**
@@ -1445,6 +1529,7 @@ const Data = {
   STORE_KEY, SHADOW_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
   addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
+  toggleEaten, toggleNoChronic,
   toggleBrandOff, setUseBy, noteBackup, recoveryNotice,
   addManual, removeManual,
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,

@@ -371,6 +371,96 @@ function supplyValue(sup) {
 /* ================================================================
    Detail-Blatt: alles, was sonst als Fließtext auf der Liste stünde
    ================================================================ */
+/**
+ * „Doch aufgegessen“ — die Schätzung widersprechbar machen.
+ * ================================================================
+ * Der Verlust dieser App ist die einzige große Zahl, die NIE
+ * beobachtet wurde. Sie wird abgeleitet: Kaufabstand länger als
+ * Haltbarkeit heißt „ein Teil geht verloren“, eine ungewöhnlich
+ * lange Lücke heißt „das davor ist weggekommen“. Beides sind gute
+ * Gründe für einen Verdacht und schlechte Gründe für eine
+ * Behauptung.
+ *
+ * Bisher konnte der Nutzer dem nicht widersprechen. Die App sagte
+ * „10,04 € über 30 Käufe“, und wer wusste, dass er den Salat damals
+ * aufgegessen hatte, konnte nichts tun als die Zahl zu ignorieren —
+ * und mit ihr alles, was daran hängt.
+ *
+ * Hier stehen deshalb die einzelnen Verdachtsfälle mit Datum und
+ * Betrag, jeder einzeln zurücknehmbar und jeder einzeln wieder
+ * einschaltbar. Eine Korrektur, die man nicht rückgängig machen
+ * kann, wäre schlimmer als die Schätzung, die sie korrigiert.
+ *
+ * WAS DABEI NICHT PASSIERT: nichts wird gutgeschrieben. Kein
+ * Eurobetrag, keine Rettung, kein Meilenstein. Eine Schätzung
+ * zurückzunehmen ist kein Erfolg — es war nur nie ein Verlust.
+ * ================================================================
+ */
+function wasteSheetGroup(productId, st, ctx) {
+  const g = uiGroup("Was die App für verdorben hält",
+    "Keine dieser Zeilen ist beobachtet — alle sind aus Kaufabstand und Haltbarkeit abgeleitet.\n\n" +
+    "Es sind zwei verschiedene Behauptungen, und du kannst beiden getrennt widersprechen. Der " +
+    "LAUFENDE ANTEIL sagt etwas über das Produkt: dein Kaufabstand ist länger als die Haltbarkeit, " +
+    "also geht bei jedem Zyklus ein Teil verloren. Ein AUSREISSER sagt etwas über einen bestimmten " +
+    "Tag: nach diesem Kauf verging so viel Zeit, dass die Packung kaum aufgebraucht worden sein kann.\n\n" +
+    "Es wird nichts gutgeschrieben: eine Schätzung zurückzunehmen ist kein Erfolg, es war nur nie ein " +
+    "Verlust. Rückgängig geht beides jederzeit.");
+
+  /* Der laufende Anteil: EIN Schalter, nicht einer je Kauf. */
+  if (st.chronicShare > 0) {
+    const r = el("div", "row");
+    r.append(el("div", "rowMain",
+      `<div class="rowTitle">Laufender Anteil</div>` +
+      `<div class="rowSub">${esc(st.chronicOff
+        ? "abgestellt — zählt nicht mehr mit"
+        : `etwa ${pct(st.chronicShare)} bei jedem Kauf`)}</div>`));
+    const b = el("button", "pillBtn" + (st.chronicOff ? " on" : ""),
+      st.chronicOff ? "✓ abgestellt" : "Bei mir nicht");
+    b.setAttribute("aria-pressed", st.chronicOff ? "true" : "false");
+    b.addEventListener("click", () => {
+      const aus = Data.toggleNoChronic(productId);
+      App.toast(aus ? "Zählt nicht mehr als Verlust" : "Wieder als Schätzung geführt", { icon: "·" });
+      App.closeSheet();
+    });
+    r.append(b);
+    g.body.append(r);
+  }
+
+  /* Die einzelnen Ausreißer: je einer eine eigene Zeile, weil jeder
+     ein eigenes Ereignis behauptet. */
+  st.details.slice(0, 12).forEach((d) => {
+    const r = el("div", "row");
+    r.append(el("div", "rowMain",
+      `<div class="rowTitle">${esc(deDate(d.date))}</div>` +
+      `<div class="rowSub">${esc(d.eaten
+        ? "von dir als aufgebraucht bestätigt"
+        : `ganze Packung — ${eur(d.euros)}`)}</div>`));
+    const b = el("button", "pillBtn" + (d.eaten ? " on" : ""), d.eaten ? "✓ gegessen" : "Doch gegessen");
+    b.setAttribute("aria-pressed", d.eaten ? "true" : "false");
+    b.setAttribute("aria-label",
+      `Kauf vom ${deDate(d.date)}: ${d.eaten ? "Bestätigung zurücknehmen" : "als aufgebraucht bestätigen"}`);
+    b.addEventListener("click", () => {
+      const jetzt = Data.toggleEaten(productId, d.date);
+      // Kein `rescue`: hier wird nichts gerettet, nur eine Schätzung
+      // zurückgenommen. Der Hinweis sagt genau das.
+      App.toast(jetzt ? "Zählt nicht mehr als Verlust" : "Wieder als Verdacht geführt", { icon: "·" });
+      App.closeSheet();
+    });
+    r.append(b);
+    g.body.append(r);
+  });
+
+  if (st.details.length > 12) {
+    g.body.append(el("p", "srcnote", `${st.details.length - 12} ältere Fälle nicht gezeigt.`));
+  }
+  if (st.corrected) {
+    g.body.append(el("p", "srcnote",
+      `${st.corrected} ${st.corrected === 1 ? "Kauf zählt" : "Käufe zählen"} nicht mehr mit — ` +
+      "deine Angabe, nicht die Schätzung."));
+  }
+  return g;
+}
+
 function productSheet(productId, ctx) {
   const p = byId(productId);
   if (!p) return;
@@ -484,6 +574,11 @@ function productSheet(productId, ctx) {
     }[nf.requiresDevice]);
   }
   body.append(facts);
+
+  /* Die Schätzung widersprechbar machen. */
+  if (st && (st.chronicShare > 0 || (st.details && st.details.length))) {
+    body.append(wasteSheetGroup(productId, st, ctx));
+  }
 
   if (nf && nf.paoMonths) {
     body.append(el("div", "note gold",
@@ -2821,10 +2916,18 @@ function viewZahlen(ctx, app) {
 
   /* --- Wirkung --- */
   const cmp = compareToReference(ctx.impact.kg, Data.get().settings.household);
-  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note);
+  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note +
+    "\n\nJede dieser Zahlen ist abgeleitet, keine ist gewogen. Ein Tippen auf ein Produkt zeigt die " +
+    "einzelnen Verdachtsfälle — und lässt dich widersprechen, wo du es besser weißt.");
   ig.body.append(uiRow("Geschätzter Verlust", null, null, { value: de(ctx.impact.kg) + " kg" }));
-  ctx.impact.byProduct.slice(0, 5).forEach((x) =>
-    ig.body.append(uiRow(x.name, null, null, { value: de(x.kg) + " kg" })));
+  ctx.impact.byProduct.slice(0, 5).forEach((x) => {
+    // Antippbar: von der Gesamtzahl zu den Fällen, aus denen sie besteht.
+    const pid = (FOOD_DATABASE.find((f) => f.name === x.name) || {}).id;
+    ig.body.append(uiRow(x.name, null, null, {
+      value: de(x.kg) + " kg",
+      onClick: pid ? () => productSheet(pid, ctx) : undefined
+    }));
+  });
   c.append(ig);
 
   return c;

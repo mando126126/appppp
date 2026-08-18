@@ -186,6 +186,84 @@ if (boxes.length) {
   ok("Ohne Wagen keine Leiste", !$("main").querySelector(".cartBar"));
 }
 
+console.log("\n--- Doch aufgegessen ---");
+{
+  /* Der Verlust ist die einzige große Zahl der App, die nie
+     beobachtet wurde. Bis hierher konnte ihr niemand widersprechen. */
+  D.reset();
+  D.loadDemo("full");
+  const ctx = App.ctx;
+
+  // Ein Produkt, dem die App etwas vorwirft.
+  let pid = null;
+  for (const [k, st] of ctx.wasteStats) {
+    if (st.wastedEuros > 0 && st.details && st.details.length) { pid = k; break; }
+  }
+  ok("Es gibt einen Verdachtsfall", !!pid, pid);
+
+  if (pid) {
+    const vorher = App.ctx.wasteStats.get(pid);
+    const kgVorher = App.ctx.impact.kg;
+    // Die Beispieldaten bringen schon Rettungen mit — verglichen wird
+    // deshalb gegen den Stand davor, nicht gegen null.
+    const geretteVorher = D.get().lifetime.gerettet;
+    const euroVorher = D.get().lifetime.euros || 0;
+    productSheetFor(pid);
+    const blatt = $("sheetOpts");
+    ok("Das Blatt legt die Fälle offen",
+      /Was die App für verdorben hält/.test(blatt.textContent));
+    ok("Mit Datum und Betrag", /\d\d\.\d\d\.\d{4}/.test(blatt.textContent));
+
+    /* Zwei Behauptungen, zwei Schalter — der laufende Anteil gilt
+       fürs Produkt, ein Ausreißer für einen Tag. */
+    const knopf = [...blatt.querySelectorAll(".pillBtn")]
+      .find((b) => /Doch gegessen|Bei mir nicht/.test(b.textContent));
+    ok("Und einem Weg zu widersprechen", !!knopf);
+    ok("Der laufende Anteil hat genau EINEN Schalter",
+      [...blatt.querySelectorAll(".pillBtn")].filter((b) => /Bei mir nicht|abgestellt/.test(b.textContent)).length <= 1,
+      [...blatt.querySelectorAll(".pillBtn")].map((b) => b.textContent).join(" | "));
+    click(knopf);
+
+    const nachher = App.ctx.wasteStats.get(pid);
+    ok("Der Verlust sinkt", nachher.wastedEuros < vorher.wastedEuros,
+      `${vorher.wastedEuros} -> ${nachher.wastedEuros}`);
+    ok("Und die Kaufzahl bleibt", nachher.purchased === vorher.purchased);
+    ok("Die Quote bleibt in ihren Grenzen",
+      nachher.wasteRate >= 0 && nachher.wasteRate <= 1, nachher.wasteRate);
+    ok("Die Korrektur ist vermerkt", nachher.corrected === 1 || nachher.chronicOff === true,
+      `${nachher.corrected} / ${nachher.chronicOff}`);
+
+    /* Die Kilogramm hängen an derselben Zahl wie die Euro. Vorher
+       liefen sie über einen eigenen Kanal und wären hier stehen
+       geblieben — zwei Zahlen für dieselbe Sache. */
+    ok("Die Kilogramm gehen mit", App.ctx.impact.kg <= kgVorher,
+      `${kgVorher} -> ${App.ctx.impact.kg}`);
+
+    /* Der entscheidende Punkt: es wird NICHTS gutgeschrieben. Eine
+       Schätzung zurückzunehmen ist kein Erfolg. */
+    ok("Nichts wird als Rettung gebucht",
+      D.get().lifetime.gerettet === geretteVorher,
+      `${geretteVorher} -> ${D.get().lifetime.gerettet}`);
+    ok("Und kein Betrag gutgeschrieben",
+      (D.get().lifetime.euros || 0) === euroVorher,
+      `${euroVorher} -> ${D.get().lifetime.euros}`);
+
+    // Umkehrbar
+    productSheetFor(pid);
+    const zurueck = [...$("sheetOpts").querySelectorAll(".pillBtn")].find((b) => b.classList.contains("on"));
+    ok("Die Bestätigung lässt sich zurücknehmen", !!zurueck);
+    if (zurueck) {
+      click(zurueck);
+      const wieder = App.ctx.wasteStats.get(pid);
+      ok("Und dann steht die alte Zahl wieder da",
+        Math.abs(wieder.wastedEuros - vorher.wastedEuros) < 0.011,
+        `${vorher.wastedEuros} -> ${wieder.wastedEuros}`);
+      ok("Ohne offene Korrektur", wieder.corrected === 0 && !wieder.chronicOff,
+        `${wieder.corrected} / ${wieder.chronicOff}`);
+    }
+  }
+}
+
 console.log("\n--- Kam das zu spät? ---");
 {
   /* Die eine Rückmeldung ohne natürlichen Moment. „Hab noch“ hat

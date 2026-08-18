@@ -211,6 +211,208 @@ t("5000 zufällige Haushalte verletzen keine Invariante", () => {
   return true;
 });
 
+/* ================================================================
+   D) Die Nutzerkorrektur — „das habe ich aufgegessen"
+   ================================================================
+   Sie greift an genau der Stelle, an der schon zweimal doppelt
+   gezählt wurde. Geprüft wird deshalb nicht, dass die Zahl sinkt
+   (das wäre leicht), sondern dass sie um GENAU das sinkt, was der
+   korrigierte Kauf beigetragen hat — und dass nichts anderes sich
+   mitverändert.
+   ================================================================ */
+section("D) Die Nutzerkorrektur");
+
+/** Ein Produkt mit sicherem chronischem Anteil: Rhythmus > Haltbarkeit. */
+function chronischeReihe() {
+  const kaeufe = serie("salat_kopf", 10, 14, 1.29);          // hält 5 Tage
+  const rhythms = new Map([["salat_kopf", computeRhythm(kaeufe)]]);
+  const { chronic, anomalies } = inferWaste(kaeufe, rhythms);
+  return {
+    kaeufe,
+    chronic: chronic.find((c) => c.productId === "salat_kopf") || null,
+    anomalies: anomalies.filter((a) => a.productId === "salat_kopf")
+  };
+}
+
+t("Ohne Korrektur ändert sich nichts", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const a = wasteSummary("salat_kopf", kaeufe, chronic, anomalies);
+  const b = wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { eaten: [] });
+  return a.wasted === b.wasted && a.wastedEuros === b.wastedEuros
+    ? true : `${a.wasted} ≠ ${b.wasted}`;
+});
+
+t("Ein bestätigter Kauf zählt nicht mehr mit", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const ohne = wasteSummary("salat_kopf", kaeufe, chronic, anomalies);
+  const mit = wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { eaten: [kaeufe[0].date] });
+  return mit.wasted < ohne.wasted ? true : `${ohne.wasted} -> ${mit.wasted}`;
+});
+
+t("Und zwar um genau seinen Anteil", () => {
+  /* Der bestätigte Kauf trug den laufenden Anteil bei — mehr nicht,
+     denn ein Ausreißer ist er nicht. Genau der muss verschwinden. */
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const ohne = wasteSummary("salat_kopf", kaeufe, chronic, anomalies);
+  const mit = wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { eaten: [kaeufe[0].date] });
+  const diff = ohne.wasted - mit.wasted;
+  return Math.abs(diff - ohne.chronicShare) < 0.051
+    ? true : `Differenz ${diff.toFixed(2)}, Anteil ${ohne.chronicShare}`;
+});
+
+t("Der laufende Anteil lässt sich für das Produkt abstellen", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const ohne = wasteSummary("salat_kopf", kaeufe, chronic, anomalies);
+  const aus = wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { noChronic: true });
+  if (!(ohne.chronicShare > 0)) return "die Reihe hat gar keinen laufenden Anteil";
+  return aus.wasted === 0 && aus.chronicOff === true
+    ? true : `${ohne.wasted} -> ${aus.wasted}`;
+});
+
+t("Abgestellt heißt abgestellt, nicht halbiert", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const aus = wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { noChronic: true });
+  return aus.wastedEuros === 0 && aus.wasteRate === 0 ? true : `${aus.wastedEuros} / ${aus.wasteRate}`;
+});
+
+t("Ein Ausreißer überlebt das Abstellen des laufenden Anteils", () => {
+  /* Beide Signale getrennt: wer sagt „bei mir verdirbt kein Brot“,
+     hat damit nicht gesagt, dass die Packung vom 3.8. gegessen wurde.
+     Ein Schalter, der beides abräumt, wäre wieder EIN Ereignis über
+     ZWEI Kanäle — nur in die andere Richtung. */
+  const kaeufe = serie("salat_kopf", 8, 4, 1.29);
+  kaeufe[6].date = "2026-07-20";                 // eine echte Lücke
+  const rhythms = new Map([["salat_kopf", computeRhythm(kaeufe)]]);
+  const { chronic, anomalies } = inferWaste(kaeufe, rhythms);
+  const c = chronic.find((x) => x.productId === "salat_kopf") || null;
+  const an = anomalies.filter((x) => x.productId === "salat_kopf");
+  if (!an.length) return true;                   // Aufbau erzeugte keinen Ausreißer
+  const aus = wasteSummary("salat_kopf", kaeufe, c, an, { noChronic: true });
+  return aus.wasted > 0 && aus.details.some((d) => d.anomaly)
+    ? true : "der Ausreißer ist mit verschwunden";
+});
+
+t("Beides zusammen ergibt null", () => {
+  const kaeufe = serie("salat_kopf", 8, 4, 1.29);
+  kaeufe[6].date = "2026-07-20";
+  const rhythms = new Map([["salat_kopf", computeRhythm(kaeufe)]]);
+  const { chronic, anomalies } = inferWaste(kaeufe, rhythms);
+  const c = chronic.find((x) => x.productId === "salat_kopf") || null;
+  const an = anomalies.filter((x) => x.productId === "salat_kopf");
+  const aus = wasteSummary("salat_kopf", kaeufe, c, an, {
+    noChronic: true,
+    eaten: kaeufe.map((k) => k.date)
+  });
+  return aus.wasted === 0 && aus.wastedEuros === 0 ? true : `${aus.wasted}`;
+});
+
+t("Alle bestätigt heißt kein Verlust", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const mit = wasteSummary("salat_kopf", kaeufe, chronic, anomalies,
+    { eaten: kaeufe.map((k) => k.date) });
+  return mit.wasted === 0 && mit.wastedEuros === 0 ? true : `${mit.wasted} / ${mit.wastedEuros}`;
+});
+
+t("Die Korrektur schaltet BEIDE Schätzungen ab", () => {
+  /* Der Punkt, an dem die alte, ungenutzte Fassung falsch gewesen
+     wäre: sie filterte nur Ausreißer-Ereignisse. Der chronische
+     Anteil wäre stehen geblieben — und die Zahl kaum gesunken. */
+  const kaeufe = serie("salat_kopf", 8, 14, 1.29);
+  // Eine echte Lücke einbauen: der vorletzte Abstand wird sehr lang.
+  kaeufe[6].date = "2026-06-01";
+  const rhythms = new Map([["salat_kopf", computeRhythm(kaeufe)]]);
+  const { chronic, anomalies } = inferWaste(kaeufe, rhythms);
+  const c = chronic.find((x) => x.productId === "salat_kopf") || null;
+  const an = anomalies.filter((x) => x.productId === "salat_kopf");
+  if (!c || !an.length) return true;   // Aufbau erzeugte keinen Doppelfall
+
+  // Der Kauf VOR dem Ausreißer ist der als total verloren geführte.
+  const i = kaeufe.findIndex((k) => k.date === an[0].date);
+  const betroffen = kaeufe[i - 1];
+  if (!betroffen) return true;
+
+  const mit = wasteSummary("salat_kopf", kaeufe, c, an, { eaten: [betroffen.date] });
+  const zeile = mit.details.find((d) => d.date === betroffen.date);
+  return zeile && zeile.eaten && mit.details.filter((d) => d.eaten).length === 1
+    ? true : "der bestätigte Kauf trägt weiter bei";
+});
+
+t("Bestätigen und zurücknehmen führt zum Ausgangspunkt", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const a = wasteSummary("salat_kopf", kaeufe, chronic, anomalies);
+  wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { eaten: [kaeufe[2].date] });
+  const c = wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { eaten: [] });
+  return a.wasted === c.wasted && a.wastedEuros === c.wastedEuros ? true : "nicht umkehrbar";
+});
+
+t("Die Quote bleibt in ihren Grenzen", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  for (let n = 0; n <= kaeufe.length; n++) {
+    const st = wasteSummary("salat_kopf", kaeufe, chronic, anomalies,
+      { eaten: kaeufe.slice(0, n).map((k) => k.date) });
+    if (st.wasteRate < 0 || st.wasteRate > 1) return `Quote ${st.wasteRate} bei ${n}`;
+    if (st.wasted < 0 || st.wasted > st.purchased) return `verdorben ${st.wasted} von ${st.purchased}`;
+    if (st.wastedEuros < 0 || st.wastedEuros > st.spent + 0.01) return `Euro ${st.wastedEuros} von ${st.spent}`;
+    if (st.corrected > st.purchased) return `korrigiert ${st.corrected}`;
+  }
+  return true;
+});
+
+t("Ein unbekanntes Datum ändert nichts", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const a = wasteSummary("salat_kopf", kaeufe, chronic, anomalies);
+  const b = wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { eaten: ["1999-01-01"] });
+  return a.wasted === b.wasted && b.corrected === 0 ? true : "erfundenes Datum wirkt";
+});
+
+t("Die Aufstellung nennt nur einzelne Ereignisse", () => {
+  /* Der laufende Anteil gehört NICHT hinein: er gilt für alle Käufe
+     gleich. Beim ersten Anlauf stand er als eigene Zeile bei jedem
+     Kauf — zwölf identische „etwa 14 % von 2,49 €“, und wer ihm
+     widersprechen wollte, hätte dreißigmal tippen müssen. */
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const st = wasteSummary("salat_kopf", kaeufe, chronic, anomalies, { eaten: [kaeufe[0].date] });
+  const alleBekannt = st.details.every((d) => kaeufe.some((k) => k.date === d.date));
+  const nurEreignisse = st.details.every((d) => d.anomaly || d.eaten);
+  return alleBekannt && nurEreignisse
+    ? true : `${st.details.length} Zeilen, davon ${st.details.filter((d) => !d.anomaly && !d.eaten).length} ohne Ereignis`;
+});
+
+t("Reihenfolge: der jüngste Verdacht steht oben", () => {
+  const { kaeufe, chronic, anomalies } = chronischeReihe();
+  const st = wasteSummary("salat_kopf", kaeufe, chronic, anomalies);
+  for (let i = 1; i < st.details.length; i++) {
+    if (st.details[i - 1].date < st.details[i].date) return "falsch sortiert";
+  }
+  return true;
+});
+
+t("2000 Zufallskorrekturen halten alle Invarianten", () => {
+  let seed = 20260818;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  for (let i = 0; i < 2000; i++) {
+    const anzahl = 3 + Math.floor(rnd() * 12);
+    const kaeufe = serie("salat_kopf", anzahl, 3 + Math.floor(rnd() * 25), 0.5 + rnd() * 4);
+    const rhythms = new Map([["salat_kopf", computeRhythm(kaeufe)]]);
+    const { chronic, anomalies } = inferWaste(kaeufe, rhythms);
+    const c = chronic.find((x) => x.productId === "salat_kopf") || null;
+    const an = anomalies.filter((x) => x.productId === "salat_kopf");
+    const eaten = kaeufe.filter(() => rnd() < 0.4).map((k) => k.date);
+
+    const ohne = wasteSummary("salat_kopf", kaeufe, c, an);
+    const mit = wasteSummary("salat_kopf", kaeufe, c, an, { eaten });
+
+    if (mit.wasted > ohne.wasted + 1e-9) return "Korrektur erhöht den Verlust";
+    if (mit.wastedEuros > ohne.wastedEuros + 0.011) return "Korrektur erhöht die Euro";
+    if (mit.wasted < 0 || mit.wasted > mit.purchased) return `verdorben ${mit.wasted}`;
+    if (mit.wasteRate < 0 || mit.wasteRate > 1) return `Quote ${mit.wasteRate}`;
+    if (mit.spent !== ohne.spent) return "die Ausgaben haben sich verändert";
+    if (mit.purchased !== ohne.purchased) return "die Kaufzahl hat sich verändert";
+    if (mit.details.some((d) => d.eaten && d.share > 0 && !eaten.includes(d.date))) return "fremde Zeile bestätigt";
+  }
+  return true;
+});
+
 t("Trockenware und Tiefkühl bleiben ausgenommen", () => {
   // Reis verdirbt nicht, egal wie selten er gekauft wird.
   const kaeufe = serie("reis", 12, 200, 2.19);
