@@ -422,7 +422,16 @@ const App = {
     // Ein Blatt, das nur informiert, wird nicht "abgebrochen".
     document.getElementById("sheetCancel").textContent = "Fertig";
     sheet.hidden = false;
-    document.getElementById("sheetCancel").focus();
+
+    /* Oben anfangen, und den Fokus setzen, ohne dorthin zu springen.
+       Vorher tat `focus()` beides: es setzte den Fokus auf „Fertig“
+       ganz unten UND scrollte dorthin. Ein langes Blatt öffnete sich
+       damit in seiner Mitte — beim Detail-Blatt einer Position hieß
+       das, dass die Wochenentscheidung ganz oben unsichtbar blieb,
+       obwohl sie der Grund ist, aus dem man das Blatt öffnet. */
+    const body = sheet.querySelector(".sheetBody");
+    if (body) body.scrollTop = 0;
+    document.getElementById("sheetCancel").focus({ preventScroll: true });
   },
 
   /** Nur zur Kenntnis: Text in Absätzen. */
@@ -480,7 +489,93 @@ const App = {
     App.sheet("Einkaufsliste", null, pre);
   },
 
-  /* ---------- Ladenmodus ---------- */
+  /* ---------- Der Wagen ----------
+   * EIN HAKEN, EINE BEDEUTUNG.
+   *
+   * Vorher gab es zwei Kreise, die gleich aussahen und Verschiedenes
+   * meinten: der in der Liste hieß „steht diese Woche drauf", der im
+   * Ladenmodus „liegt im Wagen". Gleiche Form, gleiche Geste,
+   * verschiedener Sinn — und der wahrscheinlichste Fehlgriff der
+   * ganzen App: wer im Laden die Liste statt den Ladenmodus benutzt,
+   * hakt seinen Einkauf ab, bucht nichts, und die App lernt aus
+   * diesem Einkauf nie etwas. Still, ohne Fehlermeldung.
+   *
+   * Jetzt heißt der Kreis überall dasselbe. Der Ladenmodus ist kein
+   * eigener Zustand mehr, sondern eine andere SICHT auf denselben
+   * Wagen — nach Gängen sortiert, mit großen Zielen. Was man in der
+   * einen antippt, steht in der anderen.
+   *
+   * Die Wochenentscheidung („brauche ich diese Woche nicht") ist
+   * dadurch aus dem Kreis ausgezogen und hat im Detail-Blatt ein
+   * eigenes, benanntes Zuhause bekommen.
+   */
+
+  /**
+   * Schlüssel ist die `choiceKey`, nicht die Produktkennung.
+   *
+   * Bei Katalogprodukten sind beide gleich — bestehende Wagen bleiben
+   * also gültig. Bei frei eingetippten Zeilen ist die Produktkennung
+   * `null`, und `[null, null].includes(null)` ist für zwei
+   * verschiedene Zeilen dieselbe Antwort: sie hätten sich einen
+   * Haken geteilt.
+   */
+  toggleCart(key) {
+    Data.update((s) => {
+      s.storeChecked = s.storeChecked.includes(key)
+        ? s.storeChecked.filter((x) => x !== key)
+        : [...s.storeChecked, key];
+    });
+  },
+
+  /** Was gerade im Wagen liegt — aus der Liste dieser Woche. */
+  cartItems(ctx) {
+    const gewaehlt = new Set(Data.get().storeChecked);
+    return (ctx || App.ctx).items.filter((i) => i.on && gewaehlt.has(i.choiceKey));
+  },
+
+  /**
+   * Den Wagen als Bon buchen. EIN Weg, zwei Knöpfe.
+   *
+   * Vorher hing dieser Ablauf im Ladenmodus fest. Damit die Liste
+   * denselben Abschluss anbieten kann, ohne ihn nachzubauen — zwei
+   * Fassungen desselben Buchungswegs wären genau die Doppelpflege,
+   * bei der Fassungen auseinanderlaufen — steht er hier.
+   */
+  bookCart() {
+    const inCart = App.cartItems();
+    if (!inCart.length) return;
+    const sum = inCart.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+    App.confirm(
+      "Einkauf buchen?",
+      `${inCart.length} ${inCart.length === 1 ? "Position" : "Positionen"} für ${eur(sum)} kommen in die Historie. ` +
+      "Daraus lernt die App die Rhythmen.",
+      () => {
+        // Nur Katalogprodukte: eine frei eingetippte Zeile hat kein
+        // Produkt und damit auch keine Sicherheitsangabe.
+        const alert = safetyAlert(inCart.filter((i) => i.productId && byId(i.productId)));
+        const res = Data.addReceipt({
+          date: Data.today(),
+          store: App.ctx.store || "Einkauf",
+          items: inCart.map((i) => ({
+            productId: i.productId,
+            quantity: 1,
+            unitPrice: i.halved ? i.price / 2 : i.price
+          }))
+        });
+        if (App.storeOpen) App.closeStore();
+        // Jetzt ist der Haushalt erkennbar aktiv — der Moment, in dem
+        // ein Gesuch um dauerhaften Speicher Aussicht auf Erfolg hat.
+        App.askPersist();
+        // Sicherheitshinweis im richtigen Moment: beim Verlassen des
+        // Ladens, nicht drei Tage später in einer Liste.
+        if (alert) App.notice("Kühlkette", alert.message);
+        else App.toast(`${res.count} Positionen gebucht`, { detail: bookedDetail(res) });
+      },
+      "Buchen"
+    );
+  },
+
+  /* ---------- Ladenmodus: dieselbe Liste, nach Gängen ---------- */
   openStore() {
     App.storeOpen = true;
     App._storeSig = null;          // beim Öffnen frisch aufbauen
@@ -540,13 +635,9 @@ const App = {
             // bevor irgendetwas gerechnet wird.
             b.classList.toggle("done");
             b.setAttribute("aria-pressed", b.classList.contains("done") ? "true" : "false");
-            Data.update((s) => {
-              s.storeChecked = s.storeChecked.includes(i.productId)
-                ? s.storeChecked.filter((x) => x !== i.productId)
-                : [...s.storeChecked, i.productId];
-            });
+            App.toggleCart(i.choiceKey);
           });
-          App._storeNodes.set(i.productId, b);
+          App._storeNodes.set(i.choiceKey, b);
           box.append(b);
         });
         body.append(box);
@@ -558,13 +649,13 @@ const App = {
     // Zustand auffrischen. Beim Neuaufbau geschieht das noch vor dem
     // ersten Bild, also ohne Animation — beim Öffnen soll nichts
     // durchgestrichen werden, was schon durchgestrichen war.
-    App._storeNodes.forEach((node, pid) => {
-      const done = S.storeChecked.includes(pid);
+    App._storeNodes.forEach((node, key) => {
+      const done = S.storeChecked.includes(key);
       node.classList.toggle("done", done);
       node.setAttribute("aria-pressed", done ? "true" : "false");
     });
 
-    const inCart = active.filter((i) => S.storeChecked.includes(i.productId));
+    const inCart = App.cartItems(ctx);
     const sum = inCart.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
     document.getElementById("storeProg").textContent = `${inCart.length} von ${active.length}`;
     document.getElementById("storeSum").textContent = eur(sum);
@@ -574,31 +665,7 @@ const App = {
     const done = document.getElementById("storeDone");
     done.disabled = !inCart.length;
     done.textContent = inCart.length ? `${inCart.length} buchen` : "buchen";
-    done.onclick = () => App.confirm(
-      "Einkauf buchen?",
-      `${inCart.length} Positionen für ${eur(sum)} kommen in die Historie. Daraus lernt die App die Rhythmen.`,
-      () => {
-        const alert = safetyAlert(inCart);
-        const res = Data.addReceipt({
-          date: Data.today(),
-          store: App.ctx.store || "Einkauf",
-          items: inCart.map((i) => ({
-            productId: i.productId,
-            quantity: 1,
-            unitPrice: i.halved ? i.price / 2 : i.price
-          }))
-        });
-        App.closeStore();
-        // Jetzt ist der Haushalt erkennbar aktiv — der Moment, in dem
-        // ein Gesuch um dauerhaften Speicher Aussicht auf Erfolg hat.
-        App.askPersist();
-        // Sicherheitshinweis im richtigen Moment: beim Verlassen des
-        // Ladens, nicht drei Tage später in einer Liste.
-        if (alert) App.notice("Kühlkette", alert.message);
-        else App.toast(`${res.count} Positionen gebucht`, { detail: bookedDetail(res) });
-      },
-      "Buchen"
-    );
+    done.onclick = () => App.bookCart();
   },
 
   /**
@@ -638,7 +705,11 @@ const App = {
 
     const actions = el("div", "barActions");
     if (App.tab === "liste" && ctx.items.some((i) => i.on)) {
-      const b = el("button", "barBtn filled", "Im Laden");
+      /* Hieß „Im Laden" und klang damit nach einem eigenen Zustand,
+         den man betritt und verlässt. Es ist keiner: dieselbe Liste,
+         derselbe Wagen, nur nach Gängen sortiert und mit großen
+         Zielen. Der Name sagt das jetzt. */
+      const b = el("button", "barBtn filled", "Nach Gängen");
       b.addEventListener("click", () => App.openStore());
       actions.append(b);
     }

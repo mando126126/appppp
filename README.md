@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1352 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1379 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -959,6 +959,65 @@ Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
 
+#### Ein Haken, eine Bedeutung
+
+Es gab zwei Kreise, die gleich aussahen und Verschiedenes meinten:
+der in der Liste hieß **„steht diese Woche drauf"**, der im Ladenmodus
+**„liegt im Wagen"**. Gleiche Form, gleiche Geste, verschiedener Sinn.
+
+Daraus folgt der wahrscheinlichste Fehlgriff der ganzen App: **wer im
+Laden die Liste statt den Ladenmodus benutzt, hakt seinen Einkauf ab,
+bucht nichts — und die App lernt aus diesem Einkauf nie etwas.** Ohne
+Fehlermeldung, ohne dass irgendwo etwas rot wird. Die Rhythmen bleiben
+einfach stehen, und niemand erfährt, warum.
+
+Jetzt heißt der Kreis überall dasselbe: **im Wagen.** Der Ladenmodus
+ist kein eigener Zustand mehr, sondern eine andere **Sicht** auf
+denselben Wagen — nach Gängen sortiert, mit großen Zielen. Der Knopf
+heißt deshalb nicht mehr „Im Laden", sondern **„Nach Gängen"**. Was
+man in der einen Ansicht antippt, steht in der anderen; gebucht wird
+aus beiden über denselben Weg (`App.bookCart`), nicht über zwei
+Fassungen, die auseinanderlaufen können.
+
+Eine Wagenleiste unter der Liste zeigt jederzeit, was drin ist, und
+führt zum Buchen — **nur wenn etwas drin liegt.** Eine Leiste, die
+auch leer dasteht, macht aus „nichts im Wagen" eine Nachricht statt
+eines Zustands und stünde die ganze Woche im Weg, obwohl an einem Tag
+eingekauft wird.
+
+**Was dabei umziehen musste.** Die Wochenentscheidung („brauche ich
+das diese Woche nicht") hing am selben Kreis und brauchte ein eigenes
+Zuhause. Sie steht jetzt im Detail-Blatt der Position, **ganz oben**,
+unter einer ausgeschriebenen Frage — und das hat einen zweiten Fehler
+mit aufgedeckt: die vier Antworten erschienen bisher, wenn man den
+Haken wegnahm, also als Antwort auf „warum weg?". Für **„War schon
+alle"** ergibt das keinen Sinn: das heißt ja gerade, dass das Produkt
+gebraucht wird, es korrigiert nur den Takt und bleibt auf der Liste.
+Jetzt steht die Frage da, die wirklich gemeint ist, und jede Antwort
+sagt in einem Halbsatz, was sie bewirkt:
+
+| Antwort | Wirkung |
+|---|---|
+| **Hab noch** | der Vorschlag kam zu früh — der gelernte Abstand wird länger |
+| **War schon alle** | kam zu spät — der Abstand wird kürzer, **die Position bleibt drauf** |
+| **Verbraucht** | aufgebraucht, der Takt stimmt — nur diese Woche nicht |
+| **Diese Woche nicht** | eine bewusste Pause, ohne Wirkung auf den Rhythmus |
+
+Nichts davon wirkt sofort: erst ab **drei** Rückmeldungen zu einem
+Produkt wird der Rhythmus angepasst, und höchstens um **40 %**. Eine
+einzelne Antwort kippt nichts um. Abgewähltes steht nicht mehr grau
+zwischen den anderen Zeilen — seit der Kreis „im Wagen" heißt, wäre
+ein hohler Kreis dort nicht mehr von einer anstehenden Position zu
+unterscheiden. Es sammelt sich in einer Zeile **„Nicht diese Woche"**
+am Ende der Liste, mit dem Weg zurück.
+
+**Nebenbei gefunden:** `App.sheet` rief `focus()` auf dem
+„Fertig"-Knopf ganz unten auf — und `focus()` scrollt. Ein langes
+Blatt öffnete sich damit in seiner Mitte. Beim Detail-Blatt einer
+Position hieß das: die neue Wochenentscheidung ganz oben war
+unsichtbar, obwohl sie der Grund ist, aus dem man das Blatt öffnet.
+Jetzt `preventScroll` plus ein zurückgesetzter Scrollstand.
+
 #### Drei Stellen, an denen die Bedienung log
 
 Beim Durchklicken als Erstnutzerin — nicht aus dem Gedächtnis,
@@ -1142,7 +1201,7 @@ gehört `npm run build` in denselben Commit.
 | Bereich | Was drin steckt |
 |---|---|
 | **Start** | Wochenstreifen (sieben Tage, jedes Feld ein Ereignis), die Liste als ein Feld, „Jetzt zu tun“, die Wochenreihe |
-| **Liste** | Wochenrückblick (ab Sonntagabend), eigene Positionen ergänzen, Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
+| **Liste** | Wochenrückblick (ab Sonntagabend), Wagen mit Buchen-Leiste, eigene Positionen ergänzen, Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
 | **Fällig** | kein eigener Reiter mehr — erreichbar über „Start“ und „Bestand“: Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
 | **Bestand** | geschätzter Vorrat, Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
@@ -1174,11 +1233,11 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1352
+npm test          # alle 1379
 npm run test:algo # 884 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
-npm run test:ui   # 425 Oberflächentests in jsdom
+npm run test:ui   # 452 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

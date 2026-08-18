@@ -150,16 +150,123 @@ console.log("\n--- Alle Bereiche durchklicken ---");
 
 console.log("\n--- Liste bedienen ---");
 App.goto("liste");
+/* Der Kreis heißt „im Wagen", nicht mehr „auf der Liste". Diese
+   Prüfungen beschrieben bis hierher das alte Modell — sie sind mit
+   umgezogen, nicht gestrichen. */
 const boxes = $("main").querySelectorAll("input.box");
-ok("Positionen sind abhakbar", boxes.length > 0, `${boxes.length} Kästchen`);
+ok("Positionen lassen sich in den Wagen legen", boxes.length > 0, `${boxes.length} Kästchen`);
 if (boxes.length) {
   const b4 = errors.length;
-  boxes[0].checked = false;
+  boxes[0].checked = true;
   boxes[0].dispatchEvent(new window.Event("change", { bubbles: true }));
-  ok("Abwählen läuft fehlerfrei", errors.length === b4, errors[b4]);
-  const off = $("main").querySelectorAll(".item.off").length;
-  ok("Abwahl ist sichtbar", off > 0);
-  ok("Abwahl wird gespeichert", Object.keys(D.get().listChoices).length > 0);
+  ok("Einlegen läuft fehlerfrei", errors.length === b4, errors[b4]);
+  ok("Es liegt sichtbar im Wagen", $("main").querySelectorAll(".item.imWagen").length === 1,
+    $("main").querySelectorAll(".item.imWagen").length);
+  ok("Und es ist gespeichert", D.get().storeChecked.length === 1, D.get().storeChecked.join(","));
+
+  /* Der Kern des Umbaus: die Liste und die Gangansicht teilen sich
+     EINEN Wagen. Vorher waren es zwei Zustände, die gleich aussahen —
+     wer im Laden die Liste benutzte, buchte nie etwas. */
+  App.openStore();
+  ok("Die Gangansicht kennt denselben Wagen",
+    /^1 von/.test($("storeProg").textContent), $("storeProg").textContent);
+  App.closeStore();
+
+  // Die Wagenleiste erscheint erst, wenn etwas drin liegt.
+  const bar = $("main").querySelector(".cartBar");
+  ok("Die Wagenleiste ist da", !!bar);
+  ok("Und sagt, was drin ist", bar && /1 von \d+ im Wagen/.test(bar.textContent),
+    bar ? bar.textContent.trim() : "—");
+
+  // Wieder herausnehmen
+  const b2 = $("main").querySelectorAll("input.box")[0];
+  b2.checked = false;
+  b2.dispatchEvent(new window.Event("change", { bubbles: true }));
+  ok("Herausnehmen geht auch", D.get().storeChecked.length === 0);
+  ok("Ohne Wagen keine Leiste", !$("main").querySelector(".cartBar"));
+}
+
+console.log("\n--- Ein Wagen, zwei Sichten ---");
+{
+  /* Der ganze Weg einmal durch: in der Liste einlegen, in der
+     Gangansicht noch eins dazu, aus der Liste buchen. Vorher war das
+     zwei getrennte Zustände — wer im Laden die Liste benutzte, buchte
+     nie etwas, und die App lernte aus dem Einkauf nichts. */
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  const bons = D.get().receipts.length;
+
+  const bx = [...$("main").querySelectorAll(".items input.box")];
+  [0, 1].forEach((i) => {
+    bx[i].checked = true;
+    bx[i].dispatchEvent(new window.Event("change", { bubbles: true }));
+  });
+  ok("Zwei liegen im Wagen", D.get().storeChecked.length === 2, D.get().storeChecked.length);
+
+  App.openStore();
+  ok("Die Gangansicht zählt beide mit", /^2 von/.test($("storeProg").textContent), $("storeProg").textContent);
+  const offen = [...$("storeBody").querySelectorAll(".sItem:not(.done)")];
+  ok("Und zeigt den Rest offen", offen.length > 0, offen.length);
+  click(offen[0]);
+  ok("Dort abgehakt zählt in denselben Wagen", D.get().storeChecked.length === 3, D.get().storeChecked.length);
+  App.closeStore();
+
+  const bar = $("main").querySelector(".cartBar");
+  ok("Die Liste zeigt denselben Stand", bar && /3 von \d+ im Wagen/.test(bar.textContent),
+    bar ? bar.textContent.trim() : "keine Leiste");
+
+  click(bar.querySelector(".cta"));
+  ok("Buchen fragt nach", /buchen/i.test($("sheetTitle").textContent), $("sheetTitle").textContent);
+  click($("sheetOpts").querySelector(".cta"));
+  ok("Der Bon ist geschrieben", D.get().receipts.length === bons + 1,
+    `${bons} -> ${D.get().receipts.length}`);
+  ok("Der Wagen ist leer", D.get().storeChecked.length === 0);
+  ok("Und die Leiste ist weg", !$("main").querySelector(".cartBar"));
+}
+
+console.log("\n--- Die vier Antworten ---");
+{
+  /* Sie standen in der Zeile und erschienen beim Abwählen — eine
+     Frage ohne Überschrift, und dazu falsch aufgehängt: „War schon
+     alle" heißt ja, dass das Produkt gebraucht wird. Jetzt stehen sie
+     im Detail-Blatt unter einer ausgeschriebenen Frage. */
+  App.goto("liste");
+  const zeile = $("main").querySelector(".items .item .main");
+  ok("Eine Position lässt sich öffnen", !!zeile);
+  click(zeile);
+  const blatt = $("sheetOpts");
+  ok("Das Blatt fragt nach der Woche", /Brauchst du das diese Woche/.test(blatt.textContent),
+    blatt.textContent.slice(0, 60));
+  const antworten = [...blatt.querySelectorAll(".row .rowTitle")].map((r) => r.textContent);
+  ["Hab noch", "War schon alle", "Verbraucht", "Diese Woche nicht"].forEach((a) =>
+    ok(`„${a}" steht darin`, antworten.includes(a), antworten.join(" | ")));
+  ok("Jede Antwort sagt, was sie bewirkt",
+    /Abstand wird länger/.test(blatt.textContent) && /Abstand wird kürzer/.test(blatt.textContent));
+
+  const wahl = [...blatt.querySelectorAll(".row")].find((r) => /Diese Woche nicht/.test(r.textContent));
+  click(wahl);
+  ok("Die Antwort schließt das Blatt", $("sheet").hidden === true);
+  ok("Und wird gespeichert", Object.keys(D.get().listChoices).length > 0);
+
+  /* Abgewähltes steht nicht mehr zwischen den anderen Zeilen — seit
+     der Kreis „im Wagen" heißt, wäre ein hohler Kreis dort nicht mehr
+     von einer anstehenden Position zu unterscheiden. */
+  const sammel = [...$("main").querySelectorAll(".row")]
+    .find((r) => /Nicht diese Woche/.test(r.textContent));
+  ok("Abgewähltes sammelt sich in einer Zeile", !!sammel);
+  click(sammel);
+  ok("Die Zeile öffnet die Sammlung", /Nicht diese Woche/.test($("sheetTitle").textContent));
+  const zurueck = [...$("sheetOpts").querySelectorAll(".row")]
+    .find((r) => /Doch drauf/.test(r.textContent));
+  ok("Und bietet den Weg zurück", !!zurueck);
+  if (zurueck) {
+    click(zurueck);
+    ok("Der Weg zurück funktioniert",
+      !$("main").querySelector(".row .rowTitle") ||
+      ![...$("main").querySelectorAll(".row")].some((r) => /Nicht diese Woche/.test(r.textContent)));
+  }
+  App.closeSheet();
 }
 
 const steppers = $("main").querySelectorAll(".stepper button");
@@ -757,18 +864,20 @@ App.goto("liste");
     App.ctx.rhythms.get(pid).feedback.disagreement);
 }
 {
-  // Vier Antwortmöglichkeiten in der Oberfläche
+  // Vier Antwortmöglichkeiten in der Oberfläche — seit dem Umbau im
+  // Detail-Blatt statt in der Zeile.
   D.reset();
   D.loadDemo("full");
   App.goto("liste");
-  const box = $("main").querySelector("input.box");
-  if (box) {
-    box.checked = false;
-    box.dispatchEvent(new window.Event("change", { bubbles: true }));
-    const opts = $("main").querySelectorAll(".opts .opt");
-    ok("Die Liste bietet vier Antworten", opts.length === 4,
-      [...opts].map((o) => o.textContent).join(" / "));
-  } else ok("Die Liste bietet vier Antworten", false, "keine Position");
+  const zeile = $("main").querySelector(".items .item .main");
+  if (zeile) {
+    click(zeile);
+    const opts = [...$("sheetOpts").querySelectorAll(".row .rowTitle")].map((r) => r.textContent);
+    ok("Das Blatt bietet vier Antworten",
+      ["Hab noch", "War schon alle", "Verbraucht", "Diese Woche nicht"].every((a) => opts.includes(a)),
+      opts.join(" / "));
+    App.closeSheet();
+  } else ok("Das Blatt bietet vier Antworten", false, "keine Position");
 }
 {
   // Saison und Strukturbruch hängen mit am Ergebnis
@@ -1136,8 +1245,8 @@ console.log("\n--- Die Startseite bleibt aufgeräumt ---");
   ok("Die Startseite hat höchstens vier Blöcke", bloecke.length <= 4, bloecke.length);
 
   ok("Die Liste ist da", !!main.querySelector(".items"));
-  ok("Der Einkaufen-Knopf ist da",
-    [...main.querySelectorAll("button")].some((b) => b.textContent === "Einkaufen"));
+  ok("Der Weg in die Gangansicht ist da",
+    [...main.querySelectorAll("button")].some((b) => b.textContent === "Nach Gängen"));
   ok("Und das Hinzufügen", !!main.querySelector(".addRow"));
 
   /* Was umgezogen ist, ist NICHT verschwunden. */

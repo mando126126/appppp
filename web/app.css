@@ -552,6 +552,9 @@ button.row:active,label.row:active{background:var(--fill)}
 .ctaRow{display:flex;gap:10px;margin-top:14px}
 .ctaRow .cta{margin-top:0;flex:1}
 .ctaRow .cta.light{flex:0 0 34%}
+/* Sind beide hell, sind beide gleich breit: es gibt dann keinen
+   Hauptknopf mehr in dieser Reihe — der steht in der Wagenleiste. */
+.ctaRow .cta.light:first-child{flex:1}
 
 .pillBtn{
   padding:8px 15px;background:var(--fill);
@@ -578,6 +581,27 @@ button.row:active,label.row:active{background:var(--fill)}
    den die App ihre Rhythmen korrigiert, optisch ausgeschaltet.
    Gedimmt wird jetzt nur noch die Zeile selbst. */
 .item.off .top{opacity:.62}
+/* Im Wagen: durchgestrichen und zurückgenommen — dieselbe Sprache
+   wie in der Gangansicht, weil es dieselbe Sache ist. */
+.imWagen .top{opacity:.62}
+.imWagen .nm{text-decoration:line-through;text-decoration-color:var(--ink-3)}
+
+/* Die Wagenleiste. Klebt am unteren Rand, solange die Liste
+   weiterläuft, und setzt sich am Seitenende an ihren eigenen Platz. */
+.cartBar{
+  position:sticky;bottom:calc(var(--nav-h) + var(--safe-bottom) + 8px);z-index:4;
+  display:flex;align-items:center;gap:12px;margin-top:14px;
+  background:var(--surface);padding:12px 14px;box-shadow:var(--lift);
+  border:1px solid var(--hairline-strong);
+}
+.cartBar .t{flex:1;min-width:0;font-size:0.82rem;color:var(--ink-2)}
+.cartBar .t b{display:block;font-size:1.03rem;font-weight:650;color:var(--ink)}
+.cartBar .cta{margin-top:0;width:auto;flex:0 0 auto;padding:12px 16px;font-size:0.94rem}
+
+/* Die gewählte Antwort im Blatt. */
+.row.chosen{background:var(--accent-soft)}
+.row.chosen .rowTitle{color:var(--accent-ink);font-weight:650}
+.row.chosen .rowValue{color:var(--accent-ink)}
 .item .top{display:flex;align-items:flex-start;gap:13px}
 
 /* Gefüllter Kreis, kein Haken darin — die Füllung allein sagt genug. */
@@ -794,10 +818,10 @@ button.row.action,label.row.action{cursor:pointer}
   width:25px;height:25px;flex:0 0 auto;border:2px solid var(--ink-3);border-radius:99px;position:relative;
   transition:background .18s var(--ease),border-color .18s var(--ease);
 }
-/* Wie bei der abgewählten Position: .44 hieß 2,84:1 auf dem Namen
+/* Wie bei der Position in der Liste: .44 hieß 2,84:1 auf dem Namen
    des Artikels, den man gerade in den Wagen gelegt hat — und den man
-   noch lesen können muss, um zu prüfen, ob es der richtige war. Das
-   Häkchen daneben trägt die Aussage ohnehin. */
+   noch lesen können muss, um zu prüfen, ob es der richtige war. Der
+   gefüllte Kreis und der Strich tragen die Aussage ohnehin. */
 .sItem.done{opacity:.62}
 .sItem.done .tick{background:var(--accent);border-color:var(--accent)}
 .sItem .sn{flex:1;font-size:1rem;font-weight:520;letter-spacing:-.009em}

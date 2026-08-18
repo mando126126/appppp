@@ -364,6 +364,15 @@ function productSheet(productId, ctx) {
   const isOpen = Data.get().opened.some((o) => o.productId === productId);
 
   const body = el("div");
+
+  /* Die Wochenentscheidung steht ganz oben, vor allen Fakten.
+     Sie ist der Grund, aus dem dieses Blatt in der Liste geöffnet
+     wird — Rhythmus, Preisverlauf und Datenqualität sind Nachschlag.
+     Nur wenn das Produkt diese Woche überhaupt ansteht: im Bestand
+     oder im Wochenstreifen wäre die Frage gegenstandslos. */
+  const aufDerListe = (ctx.items || []).find((i) => i.productId === productId && i.basis !== "manuell");
+  if (aufDerListe) body.append(weekChoice(aufDerListe, ctx, App, () => App.closeSheet()));
+
   const facts = el("dl", "facts");
   const fact = (k, v) => {
     if (v === null || v === undefined || v === "") return;
@@ -898,8 +907,13 @@ function viewListe(ctx, app) {
   // und was du selbst ergänzt hast. Die Trennung beantwortet die
   // Frage „woher kommt das hier eigentlich?“, ohne dass man eine
   // Zeile antippen muss.
-  const auto = ctx.items.filter((i) => i.basis !== "manuell");
-  const eigene = ctx.items.filter((i) => i.basis === "manuell");
+  /* Nur was ansteht. Abgewähltes stand vorher grau zwischen den
+     anderen Zeilen und sah aus wie eine Position mit hohlem Kreis —
+     seit der Kreis „im Wagen“ heißt, wäre das nicht mehr zu
+     unterscheiden. Es sammelt sich deshalb unten in einer Zeile. */
+  const auto = ctx.items.filter((i) => i.on && i.basis !== "manuell");
+  const eigene = ctx.items.filter((i) => i.on && i.basis === "manuell");
+  const abgewaehlt = ctx.items.filter((i) => !i.on);
   const food = auto.filter((i) => !isNonFood(i.productId));
   const home = auto.filter((i) => isNonFood(i.productId));
 
@@ -917,6 +931,14 @@ function viewListe(ctx, app) {
   }
   list.body.append(ul);
 
+  if (abgewaehlt.length) {
+    list.body.append(uiRow("Nicht diese Woche",
+      abgewaehlt.slice(0, 3).map((i) => i.name).join(", "), null, {
+        value: String(abgewaehlt.length),
+        onClick: () => weekOffSheet(ctx, app)
+      }));
+  }
+
   // Der wichtigste Knopf dieser Seite: ohne ihn ist die App ein
   // Automat, den man nur ansehen kann.
   const add = el("button", "row action addRow");
@@ -926,7 +948,7 @@ function viewListe(ctx, app) {
   add.addEventListener("click", () => addSheet(ctx, app));
   list.body.append(add);
 
-  const full = ctx.items.reduce((a, i) => a + i.price, 0);
+  const full = ctx.items.filter((i) => i.on).reduce((a, i) => a + i.price, 0);
   const tot = el("div", "totals");
   const links = el("div");
   const label = el("div", "l");
@@ -940,9 +962,36 @@ function viewListe(ctx, app) {
   list.body.append(tot);
   c.append(list);
 
+  /* --- Der Wagen ---
+   * Nur wenn etwas drin liegt. Eine Leiste, die auch leer dasteht,
+   * macht aus „nichts im Wagen“ eine Nachricht statt eines Zustands
+   * — und sie stünde die ganze Woche im Weg, obwohl eingekauft wird
+   * an einem Tag.
+   *
+   * `position: sticky` mit einem Abstand über der Leiste: solange die
+   * Liste weiterläuft, klebt sie am unteren Rand; am Ende der Seite
+   * setzt sie sich an ihren eigenen Platz. Deshalb steht sie VOR den
+   * Knöpfen und nicht dahinter — ein klebendes Element als letztes
+   * Element im Fluss hat nichts, woran es kleben könnte. */
+  const wagen = app.cartItems(ctx);
+  if (wagen.length) {
+    const wSum = wagen.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+    const bar = el("div", "cartBar");
+    bar.append(el("div", "t",
+      `<b>${wagen.length} von ${on.length} im Wagen</b>` +
+      `<span>${esc(eur(wSum))} von ${esc(eur(sumOn))}</span>`));
+    const book = el("button", "cta", "Einkauf buchen");
+    book.addEventListener("click", () => app.bookCart());
+    bar.append(book);
+    c.append(bar);
+  }
+
   /* --- Losgehen --- */
   const actions = el("div", "ctaRow");
-  const go = el("button", "cta", "Einkaufen");
+  /* Kein zweiter Modus, eine andere Sicht: derselbe Wagen, nach
+     Gängen sortiert und mit großen Zielen. Deshalb auch nicht mehr
+     der auffälligste Knopf der Seite — das ist jetzt das Buchen. */
+  const go = el("button", "cta light", "Nach Gängen");
   go.disabled = !on.length;
   go.addEventListener("click", () => app.openStore());
   const share = el("button", "cta light", "Teilen");
@@ -1643,16 +1692,26 @@ function manualSheet(it, app) {
 }
 
 /** Eine Position der Vorschlagsliste. Knapp — Details im Blatt. */
+/**
+ * Eine Position der Liste.
+ *
+ * DER KREIS HEISST „IM WAGEN“, NICHT „AUF DER LISTE“.
+ * Begründung steht bei App.toggleCart. Was hier folgt, ist die
+ * Konsequenz: die Zeile kennt nur noch zwei Zustände — sie steht an,
+ * oder sie liegt im Wagen. „Diese Woche nicht“ nimmt sie aus der
+ * Liste heraus, dann steht sie hier gar nicht mehr.
+ */
 function listItem(it, ctx, app) {
   const p = byId(it.productId) || {};
   const manuell = it.basis === "manuell";
-  const li = el("li", "item" + (it.on ? "" : " off"));
+  const imWagen = Data.get().storeChecked.includes(it.choiceKey);
+  const li = el("li", "item" + (imWagen ? " imWagen" : ""));
 
   const top = el("div", "top");
   const cb = el("input");
-  cb.type = "checkbox"; cb.className = "box"; cb.checked = it.on;
-  cb.setAttribute("aria-label", it.name);
-  cb.addEventListener("change", () => app.choose(it.choiceKey, { on: cb.checked, reason: cb.checked ? null : undefined }));
+  cb.type = "checkbox"; cb.className = "box"; cb.checked = imWagen;
+  cb.setAttribute("aria-label", `${it.name} in den Wagen`);
+  cb.addEventListener("change", () => app.toggleCart(it.choiceKey));
 
   // Kein <button>, sondern ein Element mit Schaltflächen-Rolle: die
   // Marken darin sind selbst antippbar, und eine Schaltfläche in
@@ -1759,19 +1818,84 @@ function listItem(it, ctx, app) {
     li.append(h);
   }
 
-  // Die vier Antworten korrigieren einen Rhythmus. Eine selbst
-  // ergänzte Zeile hat keinen, also gibt es dort auch nichts zu fragen.
-  if (!manuell && !it.on && (it.perishable || it.price > 3)) {
-    const opts = el("div", "opts");
-    REASONS.forEach((rr) => {
-      const b = el("button", "opt", esc(rr.label));
-      b.setAttribute("aria-pressed", it.reason === rr.key ? "true" : "false");
-      b.addEventListener("click", () => app.choose(it.choiceKey, { reason: rr.key }));
-      opts.append(b);
-    });
-    li.append(opts);
-  }
   return li;
+}
+
+/**
+ * Die vier Antworten — jetzt an einem benannten Ort.
+ *
+ * Sie standen in der Zeile und erschienen, sobald man den Haken
+ * wegnahm. Das war eine Frage ohne Überschrift („warum eigentlich?“)
+ * und dazu falsch aufgehängt: „War schon alle“ heißt ja gerade, dass
+ * das Produkt gebraucht wird — es korrigiert nur den Takt und bleibt
+ * auf der Liste. Als Antwort auf „warum weg?“ ergab das keinen Sinn.
+ *
+ * Jetzt steht die Frage ausgeschrieben da, und die Antworten sagen
+ * jeweils, was sie bewirken.
+ */
+function weekChoice(it, ctx, app, onDone) {
+  const g = uiGroup("Brauchst du das diese Woche?",
+    "Die ersten beiden Antworten korrigieren den gelernten Kaufabstand — sie sagen der App, dass ihr " +
+    "Vorschlag zu früh oder zu spät kam. Die anderen beiden sagen nichts über den Takt und ändern nur " +
+    "diese eine Woche.\n\n" +
+    "Nichts davon wird sofort verrechnet: erst ab drei Rückmeldungen zu einem Produkt passt die App " +
+    "den Rhythmus an, und höchstens um 40 %. Eine einzelne Antwort kippt nichts um.");
+
+  REASONS.forEach((rr) => {
+    const gewaehlt = it.reason === rr.key;
+    const r = el("button", "row" + (gewaehlt ? " chosen" : ""));
+    r.setAttribute("aria-pressed", gewaehlt ? "true" : "false");
+    r.append(el("div", "rowMain",
+      `<div class="rowTitle">${esc(rr.label)}</div><div class="rowSub">${esc(REASON_EFFECT[rr.key])}</div>`));
+    if (gewaehlt) r.append(el("div", "rowValue", "✓"));
+    r.addEventListener("click", () => {
+      app.choose(it.choiceKey, { reason: rr.key });
+      if (onDone) onDone();
+    });
+    g.body.append(r);
+  });
+
+  if (!it.on) {
+    const zurueck = el("button", "row");
+    zurueck.append(el("div", "rowMain",
+      '<div class="rowTitle">Doch drauf</div><div class="rowSub">zurück auf die Liste dieser Woche</div>'));
+    zurueck.addEventListener("click", () => {
+      app.choose(it.choiceKey, { on: true, reason: null });
+      if (onDone) onDone();
+    });
+    g.body.append(zurueck);
+  }
+  return g;
+}
+
+/** Was jede Antwort bewirkt — in einem Halbsatz, nicht in einem Absatz. */
+const REASON_EFFECT = {
+  have: "der Vorschlag kam zu früh — der Abstand wird länger",
+  empty: "kam zu spät — der Abstand wird kürzer, die Position bleibt drauf",
+  consumed: "aufgebraucht, der Takt stimmt — nur diese Woche nicht",
+  skip: "eine bewusste Pause, ohne Wirkung auf den Rhythmus"
+};
+
+/** Was diese Woche nicht gebraucht wird — gesammelt statt verstreut. */
+function weekOffSheet(ctx, app) {
+  const off = ctx.items.filter((i) => !i.on);
+  const body = frag();
+  if (!off.length) body.append(el("p", "empty", "Nichts abgewählt."));
+  off.forEach((it) => {
+    const g = uiGroup(it.name, null);
+    const rr = REASONS.find((x) => x.key === it.reason);
+    g.body.append(uiRow(rr ? rr.label : "abgewählt", rr ? REASON_EFFECT[rr.key] : null, null, {}));
+    const zurueck = el("button", "row");
+    zurueck.append(el("div", "rowMain",
+      '<div class="rowTitle">Doch drauf</div><div class="rowSub">zurück auf die Liste dieser Woche</div>'));
+    zurueck.addEventListener("click", () => {
+      app.choose(it.choiceKey, { on: true, reason: null });
+      App.closeSheet();
+    });
+    g.body.append(zurueck);
+    body.append(g);
+  });
+  app.sheet("Nicht diese Woche", `${off.length} ${off.length === 1 ? "Position" : "Positionen"}`, body);
 }
 
 
