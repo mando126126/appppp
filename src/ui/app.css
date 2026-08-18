@@ -158,10 +158,34 @@
   --fill:rgba(21,24,30,.05);
   --fill-2:rgba(21,24,30,.09);
 
-  /* Weich, aber nicht wabbelig */
-  --r-lg:20px;
-  --r-md:13px;
-  --r-sm:9px;
+  /* KANTEN: Flächen sind eckig, Punkte bleiben Punkte.
+     ------------------------------------------------------------
+     Die App war durchgehend abgerundet. Das sah freundlich aus und
+     hatte einen Preis, der erst im Vergleich auffiel: alles wirkte
+     gleich weich, und eine Fläche, die etwas MISST — ein Balken, ein
+     Feld, eine Zeile — sah aus wie Dekoration. Eckig gesetzt liest
+     sich derselbe Balken als Messwert.
+
+     Die Regel, nach der hier entschieden wird, ist keine
+     Geschmacksfrage, sondern eine Frage der Natur des Elements:
+
+       ECKIG  ist alles, was eine FLÄCHE ist — Karten, Gruppen,
+              Zeilen, Knöpfe, Eingabefelder, Blätter, Balken.
+       RUND   bleibt, was ein PUNKT oder ein KREIS ist — Abhak-
+              Kreise, der Pfeilkreis, Streak-Punkte, der Schalter,
+              das (i), die Marken („Beispieldaten“, „!“, „2“).
+
+     Marken bleiben rund, obwohl sie Flächen sind: sie sind
+     Beschriftungen, keine Bedienelemente, und als Rechtecke bekämen
+     sie ein Gewicht, das ihnen nicht zusteht. Ein Knopf dagegen
+     WILL Gewicht — deshalb ist „Im Laden“ eckig geworden und
+     „Beispieldaten“ nicht.
+
+     Die drei Werte stehen auf 0 und nicht die Regeln auf „entfernt“:
+     so ist der Weg zurück ein Zahlenwert und keine Archäologie. */
+  --r-lg:0px;
+  --r-md:0px;
+  --r-sm:0px;
 
   /* Genau eine Tiefenstufe */
   --lift:0 1px 2px rgba(16,24,40,.04), 0 10px 26px -12px rgba(16,24,40,.16);
@@ -286,7 +310,7 @@ h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.0125em}
 p{margin:0}
 button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit;letter-spacing:inherit}
 input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inherit}
-:focus-visible{outline:2.5px solid var(--blue);outline-offset:2px;border-radius:7px}
+:focus-visible{outline:2.5px solid var(--blue);outline-offset:2px}
 .hide{display:none !important}
 
 /* Beträge untereinander sollen sich vergleichen lassen, ohne dass man
@@ -318,7 +342,7 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 .barActions{display:flex;gap:9px;margin-left:auto}
 .barBtn{
   color:var(--accent-ink);font-size:0.94rem;font-weight:600;
-  padding:7px 2px;min-height:38px;white-space:nowrap;border-radius:99px;
+  padding:7px 2px;min-height:38px;white-space:nowrap;
 }
 .barBtn:active{opacity:.45}
 .barBtn.filled{
@@ -394,7 +418,7 @@ button.row:active,label.row:active{background:var(--fill)}
 .row .chev{
   width:8px;height:8px;flex:0 0 auto;
   border-right:2px solid var(--ink-3);border-top:2px solid var(--ink-3);
-  transform:rotate(45deg);border-radius:1px;
+  transform:rotate(45deg);
 }
 .row.stacked{flex-direction:column;align-items:stretch;gap:11px;padding:14px 16px}
 .row.stacked .segmented{width:100%}
@@ -491,7 +515,7 @@ button.row:active,label.row:active{background:var(--fill)}
 
 .segmented{display:flex;background:var(--fill);border-radius:var(--r-sm);padding:3px;gap:3px}
 .segmented button{
-  flex:1;padding:7px 10px;border-radius:7px;font-size:0.82rem;font-weight:600;
+  flex:1;padding:7px 10px;font-size:0.82rem;font-weight:600;
   color:var(--ink-2);transition:background .2s var(--ease),color .2s linear;white-space:nowrap;
 }
 .segmented button[aria-selected="true"]{
@@ -530,7 +554,7 @@ button.row:active,label.row:active{background:var(--fill)}
 .ctaRow .cta.light{flex:0 0 34%}
 
 .pillBtn{
-  padding:8px 15px;border-radius:99px;background:var(--fill);
+  padding:8px 15px;background:var(--fill);
   font-size:0.85rem;font-weight:600;color:var(--ink);min-height:34px;white-space:nowrap;
   transition:transform .18s var(--spring),background .14s linear;
 }
@@ -604,8 +628,8 @@ button.row:active,label.row:active{background:var(--fill)}
 .shotRow .cta{font-size:0.95rem;white-space:nowrap}
 .shot.over{outline:2px dashed var(--accent);outline-offset:6px;border-radius:var(--r-lg)}
 .shotStatus{font-size:0.82rem;color:var(--ink-2);margin-top:10px;min-height:1.1em}
-.shotBar{height:6px;border-radius:99px;background:var(--fill);overflow:hidden;margin-top:6px}
-.shotBar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .2s linear}
+.shotBar{height:6px;background:var(--fill);overflow:hidden;margin-top:6px}
+.shotBar i{display:block;height:100%;background:var(--accent);transition:width .2s linear}
 
 /* Getönte Chips: farbig, rund, ohne Rahmen */
 .pill{
@@ -635,7 +659,7 @@ button.row:active,label.row:active{background:var(--fill)}
 .reasons .q{font-size:0.79rem;color:var(--ink-2);margin-bottom:8px}
 .opts{display:flex;gap:8px;flex-wrap:wrap}
 .opt{
-  flex:1 1 30%;min-width:104px;text-align:center;padding:9px 12px;border-radius:99px;
+  flex:1 1 30%;min-width:104px;text-align:center;padding:9px 12px;
   background:var(--surface-2);border:1.5px solid transparent;
   font-size:0.85rem;font-weight:550;color:var(--ink-2);
   transition:border-color .16s linear,color .16s linear,background .16s linear;
@@ -685,7 +709,7 @@ tbody tr:last-child td{border-bottom:none}
 .chartBox{padding:15px 16px 16px}
 .chart{width:100%;height:auto;display:block}
 .legend{display:flex;gap:18px;font-size:0.76rem;color:var(--ink-2);margin-top:11px;flex-wrap:wrap}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:4px;margin-right:6px;vertical-align:-1px}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
 
 .save{display:flex;align-items:center;gap:13px;padding:13px 16px;position:relative;background:var(--surface)}
 .save + .save::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
@@ -795,7 +819,7 @@ button.row.action,label.row.action{cursor:pointer}
 .sheet[hidden]{display:none}
 .sheetBody{
   width:100%;max-width:540px;background:var(--surface);
-  border-radius:26px 26px 0 0;padding:8px 18px calc(var(--safe-bottom) + 18px);
+  padding:8px 18px calc(var(--safe-bottom) + 18px);
   max-height:88vh;overflow-y:auto;animation:rise .34s var(--ease);
 }
 @keyframes fade{from{opacity:0}to{opacity:1}}
@@ -819,7 +843,7 @@ button.row.action,label.row.action{cursor:pointer}
 .toast{
   position:fixed;left:0;right:0;margin-inline:auto;width:fit-content;
   bottom:calc(var(--nav-h) + var(--safe-bottom) + 18px);z-index:120;
-  background:rgba(21,24,30,.95);color:#fff;padding:12px 20px 12px 14px;border-radius:99px;
+  background:rgba(21,24,30,.95);color:#fff;padding:12px 20px 12px 14px;
   font-size:0.9rem;max-width:92vw;text-align:left;
   box-shadow:0 12px 32px rgba(16,24,40,.30);
   -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
@@ -906,7 +930,7 @@ button.row.action,label.row.action{cursor:pointer}
 .pDay{
   flex:1 1 0;min-width:0;background:none;border:none;padding:7px 0 5px;
   display:flex;flex-direction:column;align-items:center;gap:5px;
-  border-radius:12px;transition:background .14s linear;
+  transition:background .14s linear;
 }
 .pDay:active{background:var(--fill)}
 /* Der Boden liegt für alle Tage gleich, damit die Säulen vergleichbar
@@ -917,13 +941,13 @@ button.row.action,label.row.action{cursor:pointer}
   display:flex;flex-direction:column-reverse;justify-content:flex-start;
   gap:3px;
 }
-.pSeg{display:block;height:10px;border-radius:4px;background:var(--fill-2)}
+.pSeg{display:block;height:10px;background:var(--fill-2)}
 .pSeg.k-red{background:var(--red)}
 .pSeg.k-amber{background:var(--amber)}
 .pSeg.k-green{background:var(--accent)}
 /* Ein ruhiger Tag ist nicht leer, er ist ruhig — ein Strich sagt das
    besser als nichts, das wie ein Fehler aussieht. */
-.pFlat{display:block;height:3px;border-radius:3px;background:var(--fill-2)}
+.pFlat{display:block;height:3px;background:var(--fill-2)}
 .pNum{
   font-size:0.7rem;color:var(--ink-2);height:0.95rem;line-height:0.95rem;
   font-variant-numeric:tabular-nums;font-weight:600;
@@ -945,7 +969,7 @@ button.row.action,label.row.action{cursor:pointer}
 .pDay.quiet{opacity:.72}
 .pLegend{display:flex;flex-wrap:wrap;gap:9px 11px;padding:15px 3px 0}
 .pLegend span{display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--ink-2)}
-.pLegend i{width:9px;height:9px;border-radius:3px;display:block;background:var(--fill-2)}
+.pLegend i{width:9px;height:9px;display:block;background:var(--fill-2)}
 .pLegend i.k-red{background:var(--red)}
 .pLegend i.k-amber{background:var(--amber)}
 .pLegend i.k-green{background:var(--accent)}
@@ -987,7 +1011,7 @@ button.row.action,label.row.action{cursor:pointer}
 .badge + .badge::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
 .badge:active{background:var(--fill)}
 .badge .bIcon{
-  grid-row:1 / span 2;width:38px;height:38px;border-radius:13px;
+  grid-row:1 / span 2;width:38px;height:38px;
   display:flex;align-items:center;justify-content:center;
   background:var(--fill);color:var(--ink-3);
 }
@@ -1006,8 +1030,8 @@ button.row.action,label.row.action{cursor:pointer}
 .badge.m-wochen    .bBar i{background:var(--pink)}
 .badge .bLbl{grid-column:2;grid-row:1;font-size:0.94rem;font-weight:600;letter-spacing:-.0075em}
 .badge .bVal{grid-column:3;grid-row:1;text-align:right;font-size:1.03rem;font-weight:750;letter-spacing:-.015em}
-.badge .bBar{grid-column:2;grid-row:2;height:7px;border-radius:99px;background:var(--fill-2);overflow:hidden}
-.badge .bBar i{display:block;height:100%;border-radius:99px;background:var(--ink-3);transition:width .6s var(--ease)}
+.badge .bBar{grid-column:2;grid-row:2;height:7px;background:var(--fill-2);overflow:hidden}
+.badge .bBar i{display:block;height:100%;background:var(--ink-3);transition:width .6s var(--ease)}
 .badge .bNext{grid-column:3;grid-row:2;text-align:right;font-size:0.7rem;color:var(--ink-3);white-space:nowrap}
 
 /* Glückwunsch */
@@ -1047,7 +1071,7 @@ button.row.action,label.row.action{cursor:pointer}
 
 .partyCard{
   position:relative;z-index:2;width:100%;max-width:340px;text-align:center;
-  background:var(--surface);border-radius:26px;padding:26px 22px 20px;box-shadow:var(--lift);
+  background:var(--surface);padding:26px 22px 20px;box-shadow:var(--lift);
 }
 .party:not(.still) .partyCard{animation:cardIn .5s var(--spring) both}
 @keyframes cardIn{
@@ -1061,7 +1085,7 @@ button.row.action,label.row.action{cursor:pointer}
 }
 
 .partyMark{
-  width:74px;height:74px;margin:12px auto 4px;border-radius:24px;
+  width:74px;height:74px;margin:12px auto 4px;
   display:grid;place-items:center;background:var(--party-soft);color:var(--party-ink);
   position:relative;overflow:hidden;
 }
@@ -1121,7 +1145,7 @@ button.row.action,label.row.action{cursor:pointer}
 .partyBurst{position:absolute;inset:0;z-index:1;pointer-events:none;
   display:grid;place-items:center}
 .partyBurst i{
-  position:absolute;width:9px;height:14px;border-radius:2px;opacity:0;
+  position:absolute;width:9px;height:14px;opacity:0;
   animation:confetti 1.5s cubic-bezier(.2,.7,.35,1) var(--d) both;
 }
 .partyBurst .p0{background:var(--accent)}
@@ -1177,7 +1201,7 @@ button.row.action,label.row.action{cursor:pointer}
    seiner Zeile und gehört sichtbar dazu. */
 .halfRow{
   display:flex;align-items:center;gap:9px;width:100%;margin:2px 0 4px 37px;
-  padding:8px 12px 8px 9px;border-radius:99px;background:var(--amber-soft);
+  padding:8px 12px 8px 9px;background:var(--amber-soft);
   color:var(--amber-ink);font-size:0.82rem;font-weight:550;text-align:left;
   width:calc(100% - 37px);
 }
@@ -1218,7 +1242,7 @@ button.row.action,label.row.action{cursor:pointer}
   }
   .nav button{
     flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:12px;
-    height:44px;padding:0 12px;border-radius:12px;font-size:0.94rem;font-weight:550;
+    height:44px;padding:0 12px;font-size:0.94rem;font-weight:550;
   }
   .nav button svg{width:22px;height:22px}
   .nav button[aria-current="page"]{background:var(--accent-soft)}
@@ -1233,7 +1257,7 @@ button.row.action,label.row.action{cursor:pointer}
   .cards2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
   .cards2 .card + .card{margin-top:0}
   .sheet{align-items:center}
-  .sheetBody{border-radius:22px;max-width:560px;padding-bottom:20px;animation:zoom .26s var(--spring)}
+  .sheetBody{max-width:560px;padding-bottom:20px;animation:zoom .26s var(--spring)}
   @keyframes zoom{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
   .toast{bottom:28px}
   .storeTop{padding:18px 32px 12px}

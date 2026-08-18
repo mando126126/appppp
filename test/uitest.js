@@ -1683,7 +1683,60 @@ setTimeout(() => {
   T.Backup.adapter = null;
   T.Backup.handle = null;
 
-  console.log("\n--- Die Schrift liegt bei ---");
+  console.log("\n--- Kanten: Flächen eckig, Punkte rund ---");
+{
+  /* Die Regel steht als Kommentar in app.css und wäre damit eine
+     Absichtserklärung. Hier wird sie geprüft — sonst schleicht sich
+     beim nächsten neuen Bauteil wieder ein `border-radius:12px` ein,
+     und niemand sieht es, weil zwölf Pixel für sich harmlos aussehen. */
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+
+  const token = (name) => (css.match(new RegExp("--" + name + ":(\\S+?);")) || [])[1];
+  ["r-lg", "r-md", "r-sm"].forEach((t) =>
+    ok(`--${t} ist eckig`, token(t) === "0px", token(t)));
+
+  /* Erlaubt ist genau zweierlei: ein voller Kreis (99px, 50 %) oder
+     gar keine Rundung. Alles dazwischen ist die weiche Ecke, die weg
+     sollte. */
+  const werte = [...css.matchAll(/border-radius:([^;}]+)/g)].map((m) => m[1].trim());
+  const dazwischen = werte.filter((v) => {
+    if (/var\(/.test(v) || /%/.test(v)) return false;
+    return v.split(/\s+/).some((teil) => {
+      const z = parseFloat(teil);
+      return Number.isFinite(z) && z > 0 && z < 40;
+    });
+  });
+  ok("Keine halbrunden Ecken mehr", dazwischen.length === 0, dazwischen.join(" | "));
+
+  /* Und die Gegenprobe: die Kreise sind noch da. Eine Regel, die
+     alles platt macht, wäre genauso falsch — der Abhak-Kreis, der
+     Pfeilkreis und die Streak-Punkte sind Punkte. */
+  const kreise = werte.filter((v) => /99px|50%/.test(v));
+  ok("Die Kreise sind geblieben", kreise.length >= 15, `${kreise.length} runde Regeln`);
+
+  /* Namentlich, damit die Gegenprobe nicht nur zählt: DIESE sind
+     Punkte und DIESE sind Flächen. Gelesen wird der Regelblock aus
+     der gebauten Datei — jsdom rechnet keine Stilkaskade aus, ein
+     getComputedStyle wäre hier immer leer und der Test damit blind. */
+  const block = (sel) => {
+    const i = css.indexOf("\n" + sel + "{");
+    if (i < 0) return null;
+    return css.slice(i + sel.length + 2, css.indexOf("}", i));
+  };
+  const radius = (sel) => {
+    const b = block(sel);
+    if (b === null) return "SELEKTOR FEHLT";
+    return (b.match(/border-radius:([^;}]+)/) || [null, "keine"])[1].trim();
+  };
+
+  [".baGo", ".pill", ".box", ".sDot", ".infoBtn"].forEach((sel) =>
+    ok(`${sel} bleibt rund`, /99px|50%/.test(radius(sel)), radius(sel)));
+
+  [".pSeg", ".cta", ".barBtn", ".pillBtn", ".toast"].forEach((sel) =>
+    ok(`${sel} ist eckig`, radius(sel) === "keine" || /var\(/.test(radius(sel)), radius(sel)));
+}
+
+console.log("\n--- Die Schrift liegt bei ---");
 {
   /* Eine falsch geschriebene Adresse in @font-face erzeugt keinen
      Fehler: der Browser nimmt still die Systemschrift, und die App

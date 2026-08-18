@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1322 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1337 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -951,12 +951,49 @@ beliebig — der Unterschied liegt in vier Dingen, die Mühe machen:
 | **Gezeichnete Marken** | Fünf Strichzeichnungen in getönten Kacheln, jede in ihrer Farbe: Keimling, Preisschild, Kreispfeil, Beleg, Strichliste. Keine Emoji, keine Glyphen aus dem Zeichensatz. |
 | **Echte Hierarchie** | Große, freundliche Zahlen gegen ruhige Beschriftungen. Nicht alles gleich groß, nichts versal gesperrt. |
 | **Eine Tiefenstufe** | Genau ein Schatten, überall derselbe. Karten liegen auf dem Grund — nicht Karten auf Karten auf Karten. |
+| **Eckige Flächen, runde Punkte** | Karten, Zeilen, Knöpfe, Felder und Balken haben scharfe Kanten. Rund bleibt nur, was ein Punkt ist: Abhak-Kreise, der Pfeilkreis, Streak-Punkte, der Schalter, die Marken. |
 | **Eine eigene Schrift** | Manrope, mitgeliefert statt geladen. Halb-grotesk, offene Punzen, sehr ruhige Ziffern, hohe x-Höhe — freundlich, ohne verspielt zu sein. |
 
 Dazu Bewegung mit ein wenig Nachschwingen (`cubic-bezier(.34,1.56,.64,1)`):
 Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
+
+#### Flächen sind eckig, Punkte bleiben Punkte
+
+Die App war durchgehend abgerundet — 20 px auf Karten, 13 px auf
+Knöpfen, 9 px auf Feldern, Kapseln überall. Das sah freundlich aus und
+hatte einen Preis, der erst im direkten Vergleich auffiel: **alles
+wirkte gleich weich.** Eine Fläche, die etwas MISST — ein Balken im
+Wochenstreifen, ein Fortschrittsbalken, eine Zeile mit einem Betrag —
+sah aus wie Dekoration. Derselbe Balken mit scharfer Kante liest sich
+als Messwert.
+
+Entschieden wird nicht nach Geschmack, sondern nach der Natur des
+Elements:
+
+| | |
+|---|---|
+| **Eckig** | alles, was eine **Fläche** ist — Karten, Gruppen, Zeilen, Knöpfe, Eingabefelder, Blätter, Balken, das Glückwunsch-Fenster |
+| **Rund** | alles, was ein **Punkt** oder **Kreis** ist — Abhak-Kreise, der Pfeilkreis zur Liste, Streak-Punkte, der Schalter, das (i), der Griff am Blatt |
+
+Eine Ausnahme, die begründet ist: **Marken bleiben rund**, obwohl sie
+Flächen sind — „Beispieldaten", „!", „2", „Achtung". Sie sind
+Beschriftungen, keine Bedienelemente, und als Rechtecke bekämen sie
+ein Gewicht, das ihnen nicht zusteht. Ein Knopf dagegen WILL Gewicht.
+Genau deshalb ist „Im Laden" eckig geworden und „Beispieldaten" nicht.
+
+Die drei Kantenwerte stehen auf `0px` statt gelöscht zu sein: der Weg
+zurück ist damit ein Zahlenwert und keine Archäologie.
+
+`test/uitest.js` hält die Regel fest, und zwar in beide Richtungen —
+**keine Rundung zwischen 1 und 39 Pixeln** irgendwo im Stil, und die
+namentlich genannten Kreise sind noch da. Ohne die Gegenprobe wäre
+eine Regel, die alles platt macht, genauso bestanden. Gelesen wird
+dabei die gebaute Datei: jsdom rechnet keine Stilkaskade aus, ein
+`getComputedStyle` wäre hier immer leer und der Test damit blind — das
+ist beim Schreiben schiefgegangen und aufgefallen, weil vier Prüfungen
+gleichzeitig grün wurden, die es nicht sein konnten.
 
 #### Die Schrift liegt bei, sie wird nicht geladen
 
@@ -1082,11 +1119,11 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1322
+npm test          # alle 1337
 npm run test:algo # 884 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
-npm run test:ui   # 402 Oberflächentests in jsdom
+npm run test:ui   # 417 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
