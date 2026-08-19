@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1438 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1462 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -959,6 +959,50 @@ Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
 
+#### Zero Waste, und Vorratskäufe als eigene Sache
+
+Die Hinweise hatten keinen Namen. Sie hießen „Hinweise“ und waren
+damit eine Sammelstelle statt einer Funktion — dabei haben sie alle
+denselben Zweck und, wichtiger, denselben **Zeitpunkt**: Kühlkette,
+was zuerst aufgebraucht werden sollte, was sich einzufrieren lohnt,
+vergessene Produkte, Saison, Lagerung. Jeder dieser Hinweise kommt,
+solange sich noch etwas machen lässt. Hinterher wäre es eine Bilanz
+und keine Hilfe. Das heißt jetzt **Zero Waste**.
+
+**Neu darin: Vorratskäufe.** Wer sechs Packungen Nudeln mitnimmt,
+weil sie im Angebot waren, hat etwas anderes getan als jemand, der
+eine Packung kauft — und das geht in beide Richtungen:
+
+- **Gut.** Sechs Packungen Nudeln reichen ein halbes Jahr und halten
+  zwei. Zum halben Preis war das richtig, und die App sagt es.
+- **Nicht gut.** Sechs Vollkornbrote reichen bei diesem Haushalt
+  42 Tage und halten 6. *„Rund 86 % davon wären über der Frist."*
+  Das ist der Fall, den diese App verhindern soll, und der richtige
+  Moment dafür ist der Bon — nicht die Woche, in der es schon
+  verdorben ist.
+
+Erkannt wird ab dem **Dreifachen** der sonst üblichen Menge und
+mindestens drei Einheiten: wer sonst eine kauft und diesmal zwei, hat
+Gäste. Ohne mindestens drei frühere Käufe gibt es kein „üblich“, gegen
+das sich „ungewöhnlich“ messen ließe, und ohne gelernten Verbrauch
+keine Reichweite — dann sagt die App, dass sie es nicht weiß, statt zu
+raten. **Sicherheitskritisches wird nie als guter Vorratskauf
+gelobt**, auch dann nicht, wenn die Rechnung zufällig aufginge:
+Hackfleisch auf Vorrat ist auch zum halben Preis keine gute Idee.
+
+**Zwei Summen, in die hier ausdrücklich nichts hineinläuft**, und
+das ist der Grund, warum das Modul einzeln steht:
+
+| Summe | Warum nicht |
+|---|---|
+| **Ersparnis** | Was der Vorratskauf günstiger war, hat `receiptSavings` beim Buchen bereits als realisiert gezählt. Der Betrag hier ist **derselbe**, nur nach Packungen aufgeschlüsselt. |
+| **Verschwendungsbilanz** | Das Verderb-Risiko eines Stapels ist eine **Vorhersage** über etwas, das noch nicht passiert ist. `wasteSummary` bilanziert Vergangenes. Beides zu addieren hieße, dasselbe Brot einmal als Warnung und einmal als Verlust zu zählen — und wenn es dann doch gegessen wird, stünde es trotzdem drin. |
+
+`hoardDetector.js` liefert deshalb ausschließlich **Beschreibungen**.
+Keine Zahl daraus wird irgendwo aufsummiert, und ein Test rechnet die
+Verschwendungsbilanz vor und nach der Erkennung nach, um es
+festzuhalten. Dazu 3000 Zufallshaushalte gegen die Invarianten.
+
 #### Eine Liste ist eine Liste, auch ohne Vorhersage
 
 Gemessen an einem einzigen erfassten Bon war das der **gesamte**
@@ -1389,8 +1433,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1438
-npm run test:algo # 899 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1462
+npm run test:algo # 923 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
 npm run test:ui   # 496 Oberflächentests in jsdom

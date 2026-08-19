@@ -1321,6 +1321,11 @@ function compute() {
      ausgeht, steht bereits in `items`. */
   const pulse = weekPulse({ items, inventory, swapsDue, pattern }, ref);
 
+  /* Vorratskäufe. Rein beschreibend — weder die Ersparnis noch das
+     Verderb-Risiko wird irgendwo aufsummiert; beides steht schon in
+     `savings` bzw. `wasteStats`. Siehe Kopf von hoardDetector.js. */
+  const hoards = activeHoards(detectHoards(history, rhythms, ref));
+
   return {
     ref, weekKey: wk, weekday: weekdayOf(ref),
     history, rhythms, stage, chronic, anomalies, wasteStats, inventory,
@@ -1331,7 +1336,7 @@ function compute() {
     opened, pattern, season, seasonNow,
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog, absences,
-    actions: s.actions, review, streak, streakWeeks, badges, freshBadges, pulse,
+    actions: s.actions, review, streak, streakWeeks, badges, freshBadges, pulse, hoards,
     brands, brandHeadline, backup, recovery: lastRecovery,
     store, aisleList,
     ethylene: checkEthyleneConflicts(known.filter((i) => i.on)),

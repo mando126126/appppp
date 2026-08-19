@@ -173,6 +173,19 @@ const PILL_INFO = {
     "festgehalten. Für die Produktzuordnung wird sie weggeworfen — sonst wären „Marken-Butter“ und " +
     "„Butter“ für die App zwei verschiedene Dinge."],
 
+  zerowaste: ["Zero Waste",
+    "Alles, was dafür sorgt, dass nichts weggeworfen werden muss: Kühlkette, was zuerst " +
+    "aufgebraucht werden sollte, was sich einzufrieren lohnt, ein Vorratskauf, der nicht aufgeht, " +
+    "vergessene Produkte, Saison und Lagerung.\n\nDer gemeinsame Nenner ist der Zeitpunkt: jeder " +
+    "dieser Hinweise kommt, solange sich noch etwas machen lässt. Hinterher wäre es eine Bilanz " +
+    "und keine Hilfe."],
+
+  hoard: ["Vorratskauf",
+    "Ungewöhnlich viel von einem Produkt auf einmal — mindestens das Dreifache deiner sonstigen " +
+    "Menge.\n\nBei Haltbarem ist das eine gute Sache, besonders zum guten Preis, und die App " +
+    "schlägt das Produkt dann so lange nicht vor, wie der Vorrat reicht. Bei Verderblichem rechnet " +
+    "sie nach, wie viel davon über der Frist läge — das ist eine Vorhersage und keine Bilanz."],
+
   hinweise: ["Hinweise",
     "Alles, was die App zu sagen hat außer der Liste selbst: Kühlkette, vergessene Produkte, was sich " +
     "einzufrieren lohnt, Saison und Lagerhinweise.\n\nDiese Hinweise standen früher einzeln auf der " +
@@ -1181,11 +1194,11 @@ function hintsRow(ctx, app, hinweise) {
   const g = uiGroup();
   const dringend = hinweise.find((h) => h.urgent);
   g.body.append(uiRow(
-    dringend ? dringend.title : `${hinweise.length} ${hinweise.length === 1 ? "Hinweis" : "Hinweise"}`,
+    dringend ? dringend.title : `Zero Waste · ${hinweise.length}`,
     dringend
       ? (hinweise.length > 1 ? `und ${hinweise.length - 1} ${hinweise.length === 2 ? "weiterer" : "weitere"}` : dringend.sub)
       : hinweise.slice(0, 3).map((h) => h.title).join(" · "),
-    flag(dringend ? "kuehlen" : "hinweise", dringend ? "f-miss" : "", String(hinweise.length)),
+    flag(dringend ? "kuehlen" : "zerowaste", dringend ? "f-miss" : "", String(hinweise.length)),
     { onClick: () => hintsSheet(ctx, app) }));
   return g;
 }
@@ -1210,6 +1223,24 @@ function collectHints(ctx) {
       onOpen: (app) => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
     });
   }
+
+  /* Vorratskäufe, die nicht aufgehen. Sie stehen weit oben, weil
+     sie die einzige Sorte Hinweis sind, bei der noch etwas zu retten
+     ist: einfrieren, verschenken, verteilen — solange die Frist
+     nicht abgelaufen ist. Danach ist es nur noch Bilanz. */
+  (ctx.hoards || []).filter((h) => h.kind === "zuviel").slice(0, 3).forEach((h) => out.push({
+    key: "hoard:" + h.productId + ":" + h.date,
+    urgent: h.safetyCritical,
+    group: "Zu viel auf einmal",
+    title: `${h.units}× ${h.name}`,
+    sub: h.safetyCritical
+      ? `Verbrauchsdatum — hält nur ${h.haltbarTage} ${h.haltbarTage === 1 ? "Tag" : "Tage"}`
+      : `reicht ${h.reichweiteTage} Tage, haltbar ${h.haltbarTage}`,
+    onOpen: (app) => app.notice("Zu viel auf einmal", h.message +
+      "\n\nEine Vorhersage, keine Bilanz: was hier steht, ist noch nicht passiert. Einfrieren, " +
+      "verschenken oder verteilen ändert es." +
+      (h.günstiger > 0 ? `\n\nGünstiger war der Kauf trotzdem — um ${eur(h.günstiger)}.` : ""))
+  }));
 
   ctx.forgotten.slice(0, 4).forEach((f) => out.push({
     key: "forgotten:" + f.productId,
@@ -1290,10 +1321,10 @@ function hintsSheet(ctx, app) {
   });
 
   body.append(el("p", "srcnote",
-    "Diese Hinweise standen früher alle auf der Startseite. Sie sind nicht weniger geworden — " +
-    "sie stehen nur nicht mehr im Weg."));
+    "Alles hier hat denselben Zweck: dass nichts weggeworfen werden muss. Jeder Hinweis kommt, " +
+    "solange sich noch etwas machen lässt — nicht hinterher."));
 
-  app.sheet("Hinweise", `${hinweise.length} ${hinweise.length === 1 ? "Sache" : "Sachen"}`, body);
+  app.sheet("Zero Waste", `${hinweise.length} ${hinweise.length === 1 ? "Sache" : "Sachen"}`, body);
 }
 
 /**

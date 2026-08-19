@@ -1487,10 +1487,11 @@ console.log("\n--- Die Startseite bleibt aufgeräumt ---");
   ok("Sie stehen als EINE Zeile auf der Seite",
     !/Fehlt dir das|Nicht in Saison/.test(main.textContent));
   const hRow = [...main.querySelectorAll(".row")]
-    .find((r) => /Hinweis|kühlen/i.test(r.textContent));
+    .find((r) => /Zero Waste|kühlen/i.test(r.textContent));
   ok("Und die Zeile ist da", !!hRow);
   click(hRow);
-  ok("Sie öffnet das Sammelblatt", /Hinweise/.test($("sheetTitle").textContent));
+  ok("Sie öffnet das Sammelblatt", /Zero Waste/.test($("sheetTitle").textContent),
+    $("sheetTitle").textContent);
   const blatt = $("sheetOpts").textContent;
   ok("Darin steht alles wieder", hinweise.every((h) => blatt.includes(h.title.slice(0, 12))),
     hinweise.map((h) => h.title).join(" | "));
@@ -1818,7 +1819,7 @@ console.log("\n--- Marken erklären sich ---");
   // erzeugen — deshalb wird hier geprüft, dass alle benutzten
   // Schlüssel existieren.
   const benutzt = ["own", "ueberfaellig", "risiko", "vd", "teuer", "guenstig", "doppelt",
-    "zustand", "rest", "haltbar", "angebrochen", "marke", "eigenmarke"];
+    "rest", "haltbar", "angebrochen", "marke", "eigenmarke", "zerowaste", "hoard"];
   ok("Alle benutzten Schlüssel sind hinterlegt",
     benutzt.every((k) => T.PILL_INFO[k]), benutzt.filter((k) => !T.PILL_INFO[k]).join(", "));
 

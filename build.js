@@ -84,7 +84,8 @@ const MODULES = [
   "streakTracker.js",
   "weeklyReview.js",
   "milestones.js",
-  "weekPulse.js"
+  "weekPulse.js",
+  "hoardDetector.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt
