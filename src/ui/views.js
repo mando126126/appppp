@@ -17,6 +17,26 @@ const pct = (n) => Math.round((Number(n) || 0) * 100) + " %";
     Zeichenketten — die Schreibweise entscheidet die Oberfläche. */
 const de = (n) => String(n).replace(".", ",");
 const sign = (n) => (n > 0 ? "+" : "") + de(n);
+/**
+ * Tage mit richtiger Einzahl.
+ *
+ * An vier Stellen stand `n === 1 ? "Tag" : "Tage"` ausgeschrieben, an
+ * mindestens sechs anderen nur „Tage“ — und die trafen alle
+ * regelmäßig die Eins: ein gelernter Rhythmus von einem Tag (Brot,
+ * Milch), ein Vorrat, der noch einen Tag reicht, Hackfleisch, das
+ * angebrochen einen Tag hält. „noch 1 Tage“ stand also nicht in
+ * einem Randfall, sondern jeden Tag irgendwo auf dem Bildschirm.
+ *
+ * Eine Beugung, eine Stelle. Ausgeschriebene Bedingungen an zehn
+ * Orten sind kein Zufall, der schiefgeht, sondern einer, der
+ * schiefgehen MUSS: die zehnte schreibt sie irgendwann keiner mehr.
+ */
+const zahlwort = (n, eins, viele) => `${de(n)} ${Number(n) === 1 ? eins : viele}`;
+const tage = (n) => zahlwort(n, "Tag", "Tage");
+/** Dieselbe Zahl im Dativ: „seit einem Tag“, „fällig in 3 Tagen“. */
+const tagen = (n) => zahlwort(n, "Tag", "Tagen");
+/** Ein Rhythmus von einem Tag heißt nicht „alle 1 Tage“. */
+const alleTage = (n) => (Number(n) === 1 ? "täglich" : `alle ${de(n)} Tage`);
 const el = (tag, cls, html) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -108,46 +128,55 @@ const markSvg = (key) =>
    weiter aufgeht — hier geht es um die Frage „was ist das für ein
    Zeichen?“, und die stellt man einmal, nicht bei jedem Produkt neu.
    ================================================================ */
+/* Der Beispielmarkt im Feld „Markt". Zweimal steht dasselbe Feld in
+   der App — beim Bon und beim Erfassen von Hand — und es stand
+   einmal „Lidl" und einmal „REWE" darin. Ein Platzhalter ist ein
+   Beispiel, kein Vorschlag; zwei verschiedene Beispiele für dasselbe
+   Feld lesen sich wie zwei verschiedene Felder. */
+const MARKT_BEISPIEL = "REWE";
+
+/**
+ * Erklärungen zu den antippbaren Marken.
+ *
+ * WANN EINE MARKE HIERHER GEHÖRT — und wann nicht:
+ *
+ * Nicht „Zeile oder Blatt". Die Frage ist, ob der Zusammenhang die
+ * Marke schon erklärt. „3 T" in der Reichweiten-Übersicht steht
+ * unter einer Quellenzeile, die genau sagt, wie die Zahl entsteht;
+ * „aufbrauchen" im Urlaubsplan steht unter der Zusammenfassung, die
+ * es sagt. Beide brauchen nichts. „Verbrauchsdatum" am Rand einer
+ * Listenzeile steht nackt da — es ist ein Wort, das niemand
+ * angefordert hat und neben dem nichts steht.
+ *
+ * Was NICHT hierher gehört, ist ein Text, den es woanders schon
+ * gibt. Sechs Einträge standen hier ohne jede Marke, die sie
+ * geöffnet hätte: „überfällig", „Verderb-Risiko", „teuer",
+ * „günstig", „Deine Antwort", „Vorratskauf". Die ersten vier
+ * erklärten Zahlen, die längst ins Detail-Blatt gewandert sind und
+ * ihren Rechenweg unter *Zahlen* und *Mehr → Rechenweg* führen; die
+ * fünfte beschrieb Antworten, die es nicht mehr gibt; die sechste
+ * war eine zweite, allgemeinere Fassung dessen, was der Hinweis
+ * „Zu viel auf einmal" ohnehin konkret sagt.
+ *
+ * Eine Erklärung darf an genau einer Stelle stehen. Zwei Fassungen
+ * desselben Sachverhalts driften auseinander, und die falsche
+ * bleibt stehen — die fünfte hier sprach noch von „war schon leer",
+ * einer Antwort, die seit Wochen gelöscht ist.
+ */
 const PILL_INFO = {
   own: ["Von dir ergänzt",
     "Diese Zeile hast du selbst auf die Liste gesetzt, die App hat sie nicht vorgeschlagen.\n\n" +
     "Selbst ergänzte Zeilen verändern keinen Rhythmus: aus einem einmaligen Wunsch lernt die App " +
     "keinen Kaufabstand. Sie gelten für eine Woche und verschwinden mit dem nächsten gebuchten Einkauf."],
 
-  ueberfaellig: ["Überfällig",
-    "Der aus deinen Käufen gelernte Abstand ist überschritten — so viele Tage länger als sonst ist es " +
-    "her.\n\nDas ist eine Schätzung aus deiner Historie, keine Ansage. Wenn du das Produkt noch hast, " +
-    "sag es der App: sie rechnet die Antwort in den Rhythmus ein."],
-
-  risiko: ["Verderb-Risiko",
-    "Von diesem Produkt landet bei dir überdurchschnittlich viel im Müll. Der Prozentsatz ist der " +
-    "geschätzte Anteil, der bisher verdorben ist.\n\nGeschätzt heißt: die App sieht, dass wieder " +
-    "gekauft wurde, bevor die Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank geschaut."],
-
   vd: ["Verbrauchsdatum",
     "Dieses Produkt trägt ein Verbrauchsdatum, kein Mindesthaltbarkeitsdatum. Das ist ein " +
     "rechtlicher Unterschied, kein sprachlicher.\n\nNach Ablauf darf es nicht mehr verzehrt werden — " +
     "hier verlängert die App niemals etwas und schlägt auch keine Resteverwertung vor."],
 
-  teuer: ["Über deinem üblichen Preis",
-    "Verglichen wird mit DEINEM üblichen Preis: dem Median dessen, was du für dieses Produkt bisher " +
-    "gezahlt hast.\n\nKein Vergleich zwischen Märkten — dafür hat die App keine Daten, und fremde " +
-    "Preise wären erfunden. Der Median statt des Durchschnitts, damit ein einzelnes Angebot den " +
-    "Bezugswert nicht verschiebt."],
-
-  guenstig: ["Unter deinem üblichen Preis",
-    "Günstiger als der Median deiner bisherigen Käufe dieses Produkts.\n\nNur diese Differenz zählt " +
-    "die App als tatsächlich gesparte Euros — sie ist nachrechenbar, im Gegensatz zu allem " +
-    "Geschätzten."],
-
   doppelt: ["Vielleicht doppelt",
     "Etwas sehr Ähnliches steht schon auf der Liste oder wurde gerade erst gekauft.\n\nDie App " +
     "streicht deshalb nichts — sie fragt nur. Manchmal braucht man wirklich zwei."],
-
-  zustand: ["Deine Antwort",
-    "Deine Rückmeldung zu diesem Vorschlag, für diese Woche festgehalten.\n\nSie bleibt nicht ohne " +
-    "Folgen: „hab ich noch“ verlängert den gelernten Abstand, „war schon leer“ verkürzt ihn. Deshalb " +
-    "lohnt sich das Antippen mehr als das bloße Abwählen."],
 
   rest: ["Resthaltbarkeit",
     "Geschätzte Tage, die dieses Produkt bei richtiger Lagerung noch hat — gerechnet ab dem Kaufdatum " +
@@ -179,12 +208,6 @@ const PILL_INFO = {
     "vergessene Produkte, Saison und Lagerung.\n\nDer gemeinsame Nenner ist der Zeitpunkt: jeder " +
     "dieser Hinweise kommt, solange sich noch etwas machen lässt. Hinterher wäre es eine Bilanz " +
     "und keine Hilfe."],
-
-  hoard: ["Vorratskauf",
-    "Ungewöhnlich viel von einem Produkt auf einmal — mindestens das Dreifache deiner sonstigen " +
-    "Menge.\n\nBei Haltbarem ist das eine gute Sache, besonders zum guten Preis, und die App " +
-    "schlägt das Produkt dann so lange nicht vor, wie der Vorrat reicht. Bei Verderblichem rechnet " +
-    "sie nach, wie viel davon über der Frist läge — das ist eine Vorhersage und keine Bilanz."],
 
   hinweise: ["Hinweise",
     "Alles, was die App zu sagen hat außer der Liste selbst: Kühlkette, vergessene Produkte, was sich " +
@@ -510,12 +533,12 @@ function productSheet(productId, ctx) {
 
   fact("Kategorie", p.category);
   if (!nf) {
-    fact("Rhythmus", r && r.rhythmDays ? `alle ${r.rhythmDays} Tage · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
+    fact("Rhythmus", r && r.rhythmDays ? `${alleTage(r.rhythmDays)} · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
     // Was der rohe Median sagte, bevor Bruch, Saison und Rückmeldungen
     // darauf gewirkt haben. Ohne diese Zeile wäre die Zahl oben eine
     // Behauptung ohne Herkunft.
     if (r && r.baseRhythmDays && r.baseRhythmDays !== r.rhythmDays) {
-      fact("davor gelernt", `alle ${r.baseRhythmDays} Tage`);
+      fact("davor gelernt", alleTage(r.baseRhythmDays));
     }
     if (r && r.feedback && r.feedback.signals) {
       fact("Rückmeldungen", `${r.feedback.signals} · ${r.feedback.applied ? "wirken auf den Rhythmus" : "noch ohne Wirkung"}`);
@@ -527,7 +550,7 @@ function productSheet(productId, ctx) {
   fact("Zuletzt", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
   if (!nf) {
     fact("Haltbarkeit", p.isFood
-      ? `${p.shelfLifeDays} Tage${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
+      ? `${tage(p.shelfLifeDays)}${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
       : null);
   }
   fact("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
@@ -536,11 +559,11 @@ function productSheet(productId, ctx) {
     : `üblich ${eur(p.typicalPrice)}`);
   if (!nf) {
     fact("Bestand", inv
-      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${inv.daysLeft} Tage · Sicherheit ${pct(inv.confidence)}`
+      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${tage(inv.daysLeft)} · Sicherheit ${pct(inv.confidence)}`
       : "nicht schätzbar");
-    fact("Reichweite", range ? `${de(range.days)} Tage · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
+    fact("Reichweite", range ? `${tage(range.days)} · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
     fact("Verlust", st && st.wastedEuros > 0
-      ? `${eur(st.wastedEuros)} über ${st.purchased} Käufe (${pct(st.wasteRate)})`
+      ? `${eur(st.wastedEuros)} über ${zahlwort(st.purchased, "Kauf", "Käufe")} (${pct(st.wasteRate)})`
       : "keiner erkannt");
     fact("Datenqualität", {
       regulatorisch: "rechtlich definiert",
@@ -553,7 +576,7 @@ function productSheet(productId, ctx) {
     if (p.safetyCritical) {
       const f = safetyFacts(productId);
       if (f) {
-        fact("Verbrauchsdatum", `höchstens ${f.maxDays} ${f.maxDays === 1 ? "Tag" : "Tage"} · max. ${de(f.maxTempC)} °C`);
+        fact("Verbrauchsdatum", `höchstens ${tage(f.maxDays)} · max. ${de(f.maxTempC)} °C`);
       }
     }
   }
@@ -569,12 +592,12 @@ function productSheet(productId, ctx) {
     fact("Packung", `${de(nf.package.value)} ${nf.package.unit}`);
     if (rate) fact("Verbrauch", `${de(rate.rate)} ${nf.package.unit}/Tag · ${rate.label}`);
     if (sup && sup.daysOfSupply !== null && sup.confidence !== "UNSICHER") {
-      fact("Reicht noch", `${de(sup.daysOfSupply)} Tage`);
+      fact("Reicht noch", tage(sup.daysOfSupply));
     }
     if (swap) {
-      fact("Austausch", `alle ${swap.intervalDays} Tage · ${swap.source}` +
+      fact("Austausch", `${alleTage(swap.intervalDays)} · ${swap.source}` +
         (swap.hardnessAdjusted ? " · an die Wasserhärte angepasst" : ""));
-      fact("Im Einsatz", `${swap.inUse} Tage`);
+      fact("Im Einsatz", tage(swap.inUse));
     }
     const bp = ctx.basePrices && ctx.basePrices.get(productId);
     if (bp) fact("Grundpreis", bp.message);
@@ -651,7 +674,7 @@ function productSheet(productId, ctx) {
         `Gruppe: ${f.label}.\n\n` +
         `RECHTLICH GEREGELT ist zweierlei:\n${f.legal.join("\n\n")}\n\n` +
         `NICHT geregelt ist die Anzahl der Tage. Dafür gibt es keine amtliche Zahl. ` +
-        `Die App rechnet mit höchstens ${f.maxDays} ${f.maxDays === 1 ? "Tag" : "Tagen"} — das ist die untere Grenze ` +
+        `Die App rechnet mit höchstens ${tagen(f.maxDays)} — das ist die untere Grenze ` +
         `dieser Lagerempfehlung:\n\n${f.guide}\n\n${f.printedWins}`));
       body.append(q);
     }
@@ -694,7 +717,7 @@ function productSheet(productId, ctx) {
     b.addEventListener("click", () => {
       Data.toggleOpened(productId);
       App.closeSheet();
-      App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${p.shelfLifeOpenedDays} Tage`);
+      App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${tage(p.shelfLifeOpenedDays)}`);
     });
     body.append(b);
   }
@@ -1260,8 +1283,8 @@ function collectHints(ctx) {
     group: "Zu viel auf einmal",
     title: `${h.units}× ${h.name}`,
     sub: h.safetyCritical
-      ? `Verbrauchsdatum — hält nur ${h.haltbarTage} ${h.haltbarTage === 1 ? "Tag" : "Tage"}`
-      : `reicht ${h.reichweiteTage} Tage, haltbar ${h.haltbarTage}`,
+      ? `Verbrauchsdatum — hält nur ${tage(h.haltbarTage)}`
+      : `reicht ${tage(h.reichweiteTage)}, haltbar ${h.haltbarTage}`,
     onOpen: (app) => app.notice("Zu viel auf einmal", h.message +
       "\n\nEine Vorhersage, keine Bilanz: was hier steht, ist noch nicht passiert. Einfrieren, " +
       "verschenken oder verteilen ändert es." +
@@ -1271,7 +1294,7 @@ function collectHints(ctx) {
   ctx.forgotten.slice(0, 4).forEach((f) => out.push({
     key: "forgotten:" + f.productId,
     title: f.name,
-    sub: `zuletzt vor ${f.daysSince} Tagen, sonst alle ${f.rhythmDays}`,
+    sub: `zuletzt vor ${tagen(f.daysSince)}, sonst ${alleTage(f.rhythmDays)}`,
     group: "Fehlt dir das?",
     actions: [
       { label: "Dazu", primary: true, run: (app) => { app.addToList(f.productId); app.toast(f.name + " dazu"); } },
@@ -1585,7 +1608,7 @@ function receiptSheet(rec, app) {
 
   const del = el("button", "cta danger", "Ganzen Bon löschen");
   del.addEventListener("click", () => app.confirm("Bon löschen?",
-    `${rec.store}, ${deDate(rec.date)} — ${zeilen.length} Positionen und alles, was daraus gelernt wurde.`,
+    `${rec.store}, ${deDate(rec.date)} — ${zahlwort(zeilen.length, "Position", "Positionen")} und alles, was daraus gelernt wurde.`,
     () => { Data.removeReceipt(rec.id); app.closeSheet(); app.toast("Gelöscht"); }, "Löschen"));
   body.append(del);
 
@@ -1726,7 +1749,7 @@ function backupGroup(ctx, app) {
   const dl = el("button", "row action");
   dl.append(el("div", "rowMain",
     '<div class="rowTitle">Sicherung jetzt herunterladen</div>' +
-    `<div class="rowSub">${S.purchases.length} Käufe, ${S.receipts.length} Bons, alles Gelernte</div>`));
+    `<div class="rowSub">${zahlwort(S.purchases.length, "Kauf", "Käufe")}, ${zahlwort(S.receipts.length, "Bon", "Bons")}, alles Gelernte</div>`));
   dl.addEventListener("click", () => {
     const ok = Backup.download(Data.exportJson(), backupFileName(Data.today()));
     if (ok) Data.noteBackup("datei");
@@ -1782,7 +1805,7 @@ function brandSheet(c, app) {
   };
   const list = el("ul", "plain");
   list.append(zeile("marke", "", "M", c.marke ? brandLabel(c.marke) : "Marke",
-    `${eur(c.markenPreis)} ${einheit} · ${c.markenKaeufe} Käufe`));
+    `${eur(c.markenPreis)} ${einheit} · ${zahlwort(c.markenKaeufe, "Kauf", "Käufe")}`));
   list.append(zeile("eigenmarke", "f-ok", "E", c.eigenmarke ? brandLabel(c.eigenmarke) : "Eigenmarke",
     `${eur(c.eigenPreis)} ${einheit}${c.belegt ? " · " + c.eigenKaeufe + " Käufe" : " · geschätzt"}`));
   body.append(list);
@@ -1874,7 +1897,7 @@ function askLate(productId, ctx, app) {
 
   const p = byId(productId);
   const body = frag();
-  const g = uiGroup(`Die App hätte ${p.name} erst in ${dueIn} Tagen vorgeschlagen.`,
+  const g = uiGroup(`Die App hätte ${p.name} erst in ${tagen(dueIn)} vorgeschlagen.`,
     "Ein Ja verkürzt den gelernten Kaufabstand — es ist die einzige Rückmeldung, die das tut.\n\n" +
     "Deshalb wird gefragt statt geschlossen: dass du etwas früher kaufst, kann auch an Gästen, einem " +
     "Rezept oder einem Angebot liegen. Nur du weißt, ob es wirklich schon alle war.\n\n" +
@@ -2022,15 +2045,6 @@ function listItem(it, ctx, app) {
   main.setAttribute("aria-label", `Details zu ${it.name}`);
   const nm = el("div", "nm", esc(it.name));
 
-  /* HÖCHSTENS EIN ZEICHEN JE ZEILE.
-     Vorher konnten fünf nebeneinander stehen — „von dir“, „3 T
-     überfällig“, „38 %“, „VD“, „+8 %“, „doppelt?“ —, und eine Zeile
-     mit fünf bunten Marken liest niemand mehr als Zeile. Die
-     Zielgruppe nannte das „überladen“, und sie hatte recht.
-     Sortiert nach dem, was eine Entscheidung ändert: ein möglicher
-     Doppelkauf zuerst (den will man wissen, BEVOR man losgeht), dann
-     die eigene Antwort, dann Sicherheit, dann der Preis. Alles
-     Übrige steht unverändert im Detail-Blatt der Zeile. */
   /* HÖCHSTENS EIN ZEICHEN, und nur wenn es eine HANDLUNG auslöst.
      Vorher konnten fünf nebeneinander stehen. Die Zielgruppe nannte
      das „überladen“, und der Grund ist nicht die Menge allein: „+8,4 %“
@@ -2099,7 +2113,7 @@ function listItem(it, ctx, app) {
     // eine zweizeilige Zeile in einer Liste sieht wieder nach Ballast
     // aus — genau dem, was hier abgebaut werden sollte.
     const grund = p2.shelfLifeDays && p2.shelfLifeDays <= 7
-      ? `Hält ${p2.shelfLifeDays} ${p2.shelfLifeDays === 1 ? "Tag" : "Tage"}`
+      ? `Hält ${tage(p2.shelfLifeDays)}`
       : "Bleibt oft übrig";
     const h = el("button", "halfRow" + (it.halved ? " on" : ""));
     h.setAttribute("aria-pressed", it.halved ? "true" : "false");
@@ -2277,7 +2291,7 @@ function supplyText(sup) {
   if (sup.daysOfSupply === null || sup.confidence === "UNSICHER") return "unregelmäßig";
   const d = Math.round(sup.daysOfSupply);
   if (d <= 0) return "vermutlich leer";
-  return d === 1 ? "reicht noch einen Tag" : `reicht noch ${d} Tage`;
+  return d === 1 ? "reicht noch einen Tag" : `reicht noch ${tage(d)}`;
 }
 
 /**
@@ -2291,8 +2305,8 @@ function swapRow(x, ctx, app) {
   main.innerHTML =
     `<div class="rowTitle">${esc(x.name)}</div>` +
     `<div class="rowSub">${esc(x.due
-      ? `seit ${x.inUse} ${x.inUse === 1 ? "Tag" : "Tagen"} im Einsatz`
-      : `fällig in ${x.daysLeft} ${x.daysLeft === 1 ? "Tag" : "Tagen"}`)}</div>`;
+      ? `seit ${tagen(x.inUse)} im Einsatz`
+      : `fällig in ${tagen(x.daysLeft)}`)}</div>`;
   main.addEventListener("click", () => productSheet(x.productId, ctx));
   r.append(main);
 
@@ -2322,7 +2336,7 @@ function viewBestand(ctx, app) {
     ctx.opened.forEach((o) => {
       const r = el("div", "row");
       r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(o.name)}</div><div class="rowSub">seit ${o.openedDays} ${o.openedDays === 1 ? "Tag" : "Tagen"}</div>`));
+        `<div class="rowTitle">${esc(o.name)}</div><div class="rowSub">seit ${tagen(o.openedDays)}</div>`));
       r.append(flag(o.expired ? "angebrochen" : "rest",
         o.expired ? "f-miss" : o.urgent ? "f-gold" : "f-ok",
         o.expired ? "über Frist" : `${o.daysLeft} T`));
@@ -2455,7 +2469,7 @@ function viewBestand(ctx, app) {
     const v = S.settings.vacation;
     const plan = useUpPlan(ctx.inventory, v.from, v.to, ctx.ref);
     const p = uiGroup("Vor der Abreise", plan.summary);
-    plan.mustUse.forEach((x) => p.body.append(uiRow(x.name, `noch ${x.daysLeft} Tage`, el("span", "flag f-gold", "aufbrauchen"))));
+    plan.mustUse.forEach((x) => p.body.append(uiRow(x.name, `noch ${tage(x.daysLeft)}`, el("span", "flag f-gold", "aufbrauchen"))));
     plan.freeze.forEach((x) => p.body.append(uiRow(x.name, eur(x.value), el("span", "flag f-new", "einfrieren"))));
     if (!plan.mustUse.length && !plan.freeze.length) p.body.append(el("p", "empty", "Nichts gefährdet."));
     c.append(p);
@@ -2486,7 +2500,7 @@ function viewErfassen(ctx, app) {
     [...S.receipts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).forEach((rec) => {
       const r = el("div", "row");
       r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(rec.store)}</div><div class="rowSub">${deDate(rec.date)} · ${rec.itemCount} Positionen</div>`));
+        `<div class="rowTitle">${esc(rec.store)}</div><div class="rowSub">${deDate(rec.date)} · ${zahlwort(rec.itemCount, "Position", "Positionen")}</div>`));
       r.append(el("div", "rowValue", eur(rec.total)));
       // Antippen öffnet die Positionen. Bis hierher konnte man einen
       // Bon nur ganz löschen — nach einem Fehltreffer der Erkennung
@@ -2661,7 +2675,7 @@ function renderScan(box, cap, app) {
   di.addEventListener("change", () => { cap.date = di.value; });
   df.append(di);
   const sf = el("label", "field", '<span class="lbl">Markt</span>');
-  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "Lidl";
+  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = MARKT_BEISPIEL;
   si.addEventListener("input", () => { cap.store = si.value; });
   sf.append(si);
   meta.append(df, sf);
@@ -2750,14 +2764,20 @@ function renderScan(box, cap, app) {
   });
   box.append(rows);
 
-  const save = el("button", "cta", `${p.rows.filter((r) => r.productId).length} übernehmen`);
+  /* „N übernehmen“ hieß dieser Knopf, und er tut dasselbe wie der in
+     der Liste und der in den Gängen: einen Einkauf buchen. Die Zahl
+     bleibt, weil sie hier etwas sagt, was nirgends sonst steht —
+     wie viele der erkannten Zeilen tatsächlich gebucht werden. Das
+     Verb ist jetzt überall dasselbe. */
+  const buchbar = p.rows.filter((r) => r.productId).length;
+  const save = el("button", "cta", `${zahlwort(buchbar, "Position", "Positionen")} buchen`);
   save.disabled = !p.rows.some((r) => r.productId);
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
     const res = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
     app.askPersist();
     cap.parsed = null; cap.text = "";
-    app.toast(`${res.count} gebucht`, { detail: bookedDetail(res) });
+    app.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
   });
   box.append(save);
@@ -2821,7 +2841,7 @@ function renderManual(box, cap, app) {
 
   const total = cap.basket.reduce((a, b) => a + b.unitPrice * b.quantity, 0);
   const tot = el("div", "totals bare");
-  tot.innerHTML = `<div><div class="l">${cap.basket.length} Positionen</div><div class="big">${eur(total)}</div></div>`;
+  tot.innerHTML = `<div><div class="l">${zahlwort(cap.basket.length, "Position", "Positionen")}</div><div class="big">${eur(total)}</div></div>`;
   box.append(tot);
 
   const meta = el("div", "row2");
@@ -2830,17 +2850,17 @@ function renderManual(box, cap, app) {
   di.addEventListener("change", () => { cap.date = di.value; });
   df.append(di);
   const sf = el("label", "field", '<span class="lbl">Markt</span>');
-  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "REWE";
+  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = MARKT_BEISPIEL;
   si.addEventListener("input", () => { cap.store = si.value; });
   sf.append(si);
   meta.append(df, sf);
   box.append(meta);
 
-  const save = el("button", "cta", "Buchen");
+  const save = el("button", "cta", "Einkauf buchen");
   save.addEventListener("click", () => {
     const res = Data.addReceipt({ date: di.value, store: si.value.trim() || "Unbekannt", items: cap.basket });
     cap.basket = [];
-    app.toast(`${res.count} gebucht`, { detail: bookedDetail(res) });
+    app.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
   });
   box.append(save);
@@ -2862,7 +2882,7 @@ function viewZahlen(ctx, app) {
   const s = el("div", "scroller");
   s.append(tile("Am Stück", `${ctx.streak.weeks}`,
     ctx.streak.weeks === 1 ? "Woche" : "Wochen", ctx.streak.weeks > 0 ? "good" : null));
-  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), `${t.receipts} Bons`));
+  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), zahlwort(t.receipts, "Bon", "Bons")));
   s.append(tile("zu holen", eur(savingsTotal), "ohne Verzicht", "good"));
   s.append(tile("Verlust", eur(t.wastedPerWeek), `${de(ctx.impact.kg)} kg gesamt`, "warn"));
   s.append(tile("Rhythmen", String([...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length),
@@ -2947,7 +2967,7 @@ function viewZahlen(ctx, app) {
     const suggested = suggestedLookahead(ctx.pattern);
     const cur = Data.get().settings.lookaheadDays;
     if (suggested && suggested !== cur) {
-      g.body.append(uiRow(`Vorausschau auf ${suggested} Tage`, `aktuell ${cur}`, null, {
+      g.body.append(uiRow(`Vorausschau auf ${tage(suggested)}`, `aktuell ${cur}`, null, {
         onClick: () => { app.set((st) => { st.settings.lookaheadDays = suggested; }); app.toast("Übernommen"); }
       }));
     }
@@ -2960,7 +2980,7 @@ function viewZahlen(ctx, app) {
   if (ctx.inflation && ctx.inflation.productsCompared) {
     const inf = ctx.inflation;
     const g = uiGroup("Persönliche Inflation", inf.caveat);
-    g.body.append(uiRow("Dein Warenkorb", `${inf.productsCompared} Produkte verglichen`,
+    g.body.append(uiRow("Dein Warenkorb", `${zahlwort(inf.productsCompared, "Produkt", "Produkte")} verglichen`,
       null, { value: sign(inf.changePercent) + " %" }));
     inf.biggestIncreases.slice(0, 5).forEach((i) => g.body.append(
       uiRow(i.name, `${eur(i.basePrice)} → ${eur(i.currentPrice)}`, null, { value: sign(i.changePercent) + " %" })));
@@ -3025,7 +3045,7 @@ function viewZahlen(ctx, app) {
     g.body.append(uiRow("Haushaltsprodukte", ctx.nonFoodSaved.basis, null,
       { value: eur(ctx.nonFoodSaved.total) }));
     ctx.nonFoodSaved.byProduct.slice(0, 5).forEach((x) =>
-      g.body.append(uiRow(x.name, `${x.purchases} Käufe`, null, { value: eur(x.saved) })));
+      g.body.append(uiRow(x.name, `${zahlwort(x.purchases, "Kauf", "Käufe")}`, null, { value: eur(x.saved) })));
     c.append(g);
   }
 
@@ -3148,8 +3168,12 @@ function viewMehr(ctx, app) {
   /* --- Gangreihenfolge --- */
   const aisles = relevantAisles(ctx.aisleList, ctx.items);
   if (aisles.length > 1) {
-    const g = uiGroup("Ladenweg" + (ctx.store ? ` · ${ctx.store}` : ""),
-      "So läufst du im Ladenmodus durch den Markt. Die Reihenfolge wird je Markt gemerkt.");
+    /* Heißt wie der Knopf, der dorthin führt. „Ladenweg“ als
+       Überschrift und „Nach Gängen“ als Knopf waren zwei Namen für
+       dieselbe Reihenfolge — man sucht die Einstellung dann dort,
+       wo sie nicht steht. */
+    const g = uiGroup("Nach Gängen" + (ctx.store ? ` · ${ctx.store}` : ""),
+      "Die Reihenfolge, in der die Liste beim Einkaufen durchlaufen wird. Sie wird je Markt gemerkt.");
     aisles.forEach((aisle, i) => {
       const r = el("div", "row");
       r.append(el("div", "rowMain", `<div class="rowTitle">${esc(aisle)}</div>`));
@@ -3182,7 +3206,7 @@ function viewMehr(ctx, app) {
     pg.body.append(uiRow("Nichts offen", null, null, { value: "0,00 €" }));
   } else {
     d.byType.forEach((t) => pg.body.append(uiRow(t.label, `${t.count} Gebinde`, null, { value: eur(t.amount) })));
-    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${d.daysOpen} Tagen`, null, {
+    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${tagen(d.daysOpen)}`, null, {
       onClick: () => {
         app.set((s) => {
           s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
@@ -3216,9 +3240,9 @@ function viewMehr(ctx, app) {
       "Vertrauen: Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung.",
       "Bestand: gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit).",
       "Reichweite: kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit.",
-      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2.",
+      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2. Geschätzt heißt: die App sieht, dass wieder gekauft wurde, bevor die Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank geschaut.",
       "Budget: erst Verschwender halbieren, dann Süßes und Alkohol. Grundnahrung nie.",
-      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet.",
+      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet. Der Median statt des Durchschnitts, damit ein einzelnes Angebot den Bezugswert nicht verschiebt. Kein Vergleich zwischen Märkten — dafür fehlen die Daten, und fremde Preise wären erfunden.",
       "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen.",
       "Haushaltsprodukte rechnen anders: sie verderben nicht, also entspricht die gekaufte Menge der verbrauchten. Statt eines Kaufrhythmus gilt eine Verbrauchsrate, skaliert mit der Haushaltsgröße hoch einem Exponenten je Produkt — Zahnpasta linear, Waschmittel degressiv, Allzweckreiniger gar nicht.",
       "Rate: Referenzwert als Prior, Beobachtung über ein 180-Tage-Fenster als Posterior, gewichtet mit min(Käufe, 6) gegen 2. Nach sechs Käufen bestimmt die Beobachtung drei Viertel.",
@@ -3227,14 +3251,14 @@ function viewMehr(ctx, app) {
   }));
 
   const q = databaseQualityReport();
-  m.body.append(uiRow("Datenbasis", `${q.total} Produkte · ${q.anteilGeschaetzt} % geschätzt`, null, {
+  m.body.append(uiRow("Datenbasis", `${zahlwort(q.total, "Produkt", "Produkte")} · ${q.anteilGeschaetzt} % geschätzt`, null, {
     onClick: () => app.notice("Datenbasis, ungeschönt",
-      `${q.total} Produkte, ${q.kategorien} Kategorien, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
+      `${zahlwort(q.total, "Produkt", "Produkte")}, ${zahlwort(q.kategorien, "Kategorie", "Kategorien")}, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
       `rechtlich definiert: ${q.regulatorisch}\n` +
       `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE, BMEL)\n` +
       `Schätzwert: ${q.schaetzwert} — ohne amtliche Quelle, vor Produktivbetrieb prüfen\n\n` +
       `${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen. Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten.\n\n` +
-      `${q.safetyCritical} Produkte tragen ein Verbrauchsdatum. Für sie schlägt die App nie eine Weiterverwendung vor — und ihre Tageszahlen ` +
+      `${zahlwort(q.safetyCritical, "Produkt", "Produkte")} tragen ein Verbrauchsdatum. Für sie schlägt die App nie eine Weiterverwendung vor — und ihre Tageszahlen ` +
       `stehen ausdrücklich NICHT als „rechtlich definiert“ da: geregelt sind die Pflicht zum Verbrauchsdatum (LMIV Art. 24) und die ` +
       `Höchsttemperatur (Tier-LMHV Anlage 5), nicht die Anzahl der Tage. Die Tage sind Lagerempfehlungen, jeweils an der unteren Grenze. ` +
       `Es gilt immer das aufgedruckte Datum.`)
@@ -3276,7 +3300,7 @@ function viewMehr(ctx, app) {
       (v) => app.set((s) => { s.settings.household = v; }), { min: 1, max: 8, step: 1 })));
   wl.body.append(uiRow("Vorausschau",
     ctx.pattern && ctx.pattern.dayName ? `nächster Einkauf ${ctx.pattern.dayName}` : null,
-    stepper(S.settings.lookaheadDays, (v) => (v ? `${v} Tage` : "aus"),
+    stepper(S.settings.lookaheadDays, (v) => (v ? tage(v) : "aus"),
       (v) => app.set((s) => { s.settings.lookaheadDays = v; }), { min: 0, max: 7, step: 1 })));
 
   const urlaub = S.settings.vacation;
@@ -3337,7 +3361,7 @@ function viewMehr(ctx, app) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try { app.toast(`${Data.importJson(String(reader.result))} Käufe eingelesen`); }
+      try { app.toast(`${zahlwort(Data.importJson(String(reader.result)), "Kauf", "Käufe")} eingelesen`); }
       catch (e) { app.toast("Nicht lesbar"); console.error(e); }
     };
     reader.readAsText(file);

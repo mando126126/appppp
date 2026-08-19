@@ -1445,6 +1445,103 @@ Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 
 ---
 
+## Ein Ding, ein Name
+
+Ein Konsistenzdurchgang durch die Oberfläche. Die Brüche, um die es
+hier geht, haben eine Eigenschaft gemeinsam: **sie sind an keiner
+einzelnen Stelle sichtbar.** Man liest „Nach Gängen", tippt darauf,
+und drei Bildschirme später steht „Ladenweg" — niemand verbindet die
+beiden noch. Genau deshalb fällt so etwas beim Durchklicken nicht
+auf und muss maschinell festgehalten werden.
+
+**Eine Ansicht mit vier Namen.** Der Knopf sagte *Nach Gängen*, die
+Überschrift *Im Laden*, die Vorlesehilfe *Ladenmodus*, die
+Einstellung dazu *Ladenweg*. Jetzt heißt sie überall so wie der
+Knopf, der dorthin führt.
+
+**Eine Funktion mit vier Aufschriften.** `bookCart()` hing an einem
+Knopf *Einkauf buchen* und an einem Knopf *buchen* — letzterer war
+der einzige klein geschriebene Knopf der ganzen App. Daneben *Buchen*
+beim Erfassen von Hand und *7 übernehmen* nach dem Bon-Einlesen. Vier
+Aufschriften für „diesen Einkauf in die Historie schreiben". Jetzt
+überall dasselbe Verb; die Zahl bleibt nur dort, wo sie etwas sagt,
+was sonst nirgends steht.
+
+Dazu zwei Meldungen für denselben abgeschlossenen Vorgang
+(„3 gebucht" / „3 Positionen gebucht") und zwei Beispielmärkte in
+zweimal demselben Feld („Lidl" / „REWE").
+
+### Sechs Erklärungen ohne Marke
+
+`PILL_INFO` hält die Texte, die eine angetippte Marke öffnet. Sechs
+Einträge darin wurden von keiner Marke mehr geöffnet: *überfällig*,
+*Verderb-Risiko*, *teuer*, *günstig*, *Deine Antwort*, *Vorratskauf*.
+
+Das ist nicht nur toter Ballast. **Unerreichbare Texte veralten
+unbemerkt** — *Deine Antwort* erklärte noch die Wirkung von „war
+schon leer", einer Antwort, die längst gelöscht ist. Wer ihn
+irgendwann wieder sichtbar gemacht hätte, hätte eine falsche
+Erklärung ausgeliefert.
+
+Vier der sechs erklärten Zahlen, die inzwischen ins Detail-Blatt
+gewandert sind und ihren Rechenweg ohnehin unter *Zahlen* und
+*Mehr → Rechenweg* führen. Zwei Sätze standen allerdings nur dort und
+nirgends sonst — die sind in den Rechenweg umgezogen, statt mit
+gelöscht zu werden:
+
+> Der Median statt des Durchschnitts, damit ein einzelnes Angebot den
+> Bezugswert nicht verschiebt.
+
+> Geschätzt heißt: die App sieht, dass wieder gekauft wurde, bevor die
+> Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank
+> geschaut.
+
+Der Test, der das hätte finden müssen, hat es nicht gefunden: er
+pflegte eine **von Hand geschriebene Liste** der „benutzten"
+Schlüssel und hat damit den Zustand behauptet statt geprüft. Er liest
+jetzt den ausgelieferten Quelltext und meldet jeden Schlüssel, den
+außerhalb der Tabelle niemand mehr verwendet.
+
+### „noch 1 Tage"
+
+Die deutsche Einzahl war an vier Stellen ausgeschrieben und an
+sechzehn nicht. Das ist kein Randfall: ein gelernter Rhythmus von
+einem Tag (Brot, Milch), ein Vorrat, der noch einen Tag reicht,
+Hackfleisch, das angebrochen einen Tag hält, ein einzelnes gebuchtes
+Produkt — **die Eins kommt jeden Tag irgendwo auf dem Bildschirm
+vor.**
+
+Jetzt gibt es einen Helfer und drei Anwendungen davon:
+
+```js
+zahlwort(1, "Position", "Positionen")   // „1 Position“
+tage(1)    // „1 Tag“         tagen(3)  // „3 Tagen“ (Dativ)
+alleTage(1)                             // „täglich“, nicht „alle 1 Tag“
+```
+
+Ausgeschriebene Bedingungen an zwanzig Orten sind kein Zufall, der
+schiefgeht, sondern einer, der schiefgehen **muss** — die zwanzigste
+schreibt sie irgendwann keiner mehr. Gefunden hat die restlichen
+Stellen der Test, nicht ich: er sucht im ausgelieferten Quelltext
+nach einer Zahl, die unmittelbar vor einem Mehrzahlwort steht. Beim
+ersten Lauf meldete er zehn Stellen mehr, als ich von Hand gefunden
+hatte — darunter zwei, die ich in derselben Sitzung selbst
+geschrieben hatte.
+
+### Was dabei bewusst *nicht* vereinheitlicht wurde
+
+Nicht jede Ungleichheit ist ein Fehler. Die Reiterbeschriftung
+(*Liste*) ist kürzer als der Seitentitel (*Einkaufsliste*) — das ist
+eine Regel, kein Bruch. Marken innerhalb eines geöffneten Blattes
+sind nicht antippbar, Marken am Rand einer Listenzeile schon; der
+Unterschied ist nicht „Zeile oder Blatt", sondern ob der Zusammenhang
+die Marke schon erklärt. In der Reichweiten-Übersicht steht die
+Quellenzeile direkt darunter, am Rand einer Listenzeile steht nichts.
+Beide Regeln stehen jetzt im Quelltext, damit die nächste Marke nicht
+wieder danach entschieden wird, ob gerade ein Text zur Hand ist.
+
+---
+
 ## Vier Ketten statt einer: was echte Bons dem Parser beigebracht haben
 
 Der Parser hieß `lidlParser.js` und war an genau einem echten Bon
@@ -1638,12 +1735,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1570
+npm test          # alle 1581
 npm run test:algo # 1036 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 498 Oberflächentests in jsdom
+npm run test:ui   # 509 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

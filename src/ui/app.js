@@ -569,7 +569,7 @@ const App = {
         // Sicherheitshinweis im richtigen Moment: beim Verlassen des
         // Ladens, nicht drei Tage später in einer Liste.
         if (alert) App.notice("Kühlkette", alert.message);
-        else App.toast(`${res.count} Positionen gebucht`, { detail: bookedDetail(res) });
+        else App.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
       },
       "Buchen"
     );
@@ -662,9 +662,14 @@ const App = {
 
     // Abschluss: den Einkauf gleich als Bon buchen. Ohne diesen Schritt
     // bliebe der Kreislauf offen — die Liste würde nie zu Historie.
+    /* Dieselbe Aufschrift wie in der Liste. Es ist derselbe Knopf,
+       derselbe Wagen und dieselbe Funktion (`bookCart`) — er hieß
+       hier nur „3 buchen“ und dort „Einkauf buchen“, und war damit
+       der einzige klein geschriebene Knopf der ganzen App. Die
+       Anzahl steht ohnehin schon zweimal auf dieser Ansicht: oben
+       als „3 von 8“ und links daneben als Betrag. */
     const done = document.getElementById("storeDone");
     done.disabled = !inCart.length;
-    done.textContent = inCart.length ? `${inCart.length} buchen` : "buchen";
     done.onclick = () => App.bookCart();
   },
 
@@ -750,7 +755,7 @@ const App = {
         ? `${wann} · ${on.length} ${on.length === 1 ? "Position" : "Positionen"} · ${eur(sum)}`
         : `${wann} · noch nichts drauf`;
     } else {
-      subText = `${ctx.weekday} · ${ctx.totals.receipts} Bons · ${ctx.rhythms.size} Produkte`;
+      subText = `${ctx.weekday} · ${zahlwort(ctx.totals.receipts, "Bon", "Bons")} · ${zahlwort(ctx.rhythms.size, "Produkt", "Produkte")}`;
     }
     sub.append(document.createTextNode(subText));
     // Erzeugte Historie bleibt dauerhaft als solche gekennzeichnet.

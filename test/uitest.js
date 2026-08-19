@@ -93,7 +93,8 @@ try {
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
-    " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween };"
+    " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
+    " zahlwort, tage, tagen, alleTage };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -558,8 +559,8 @@ if (ta) {
     errors[b4]);
 
   const before = D.get().purchases.length;
-  const saveBtn = [...$("main").querySelectorAll("button.cta")].find((b) => /übernehmen/.test(b.textContent));
-  ok("Übernehmen-Knopf ist vorhanden", !!saveBtn, saveBtn && saveBtn.textContent);
+  const saveBtn = [...$("main").querySelectorAll("button.cta")].find((b) => /buchen$/.test(b.textContent));
+  ok("Buchen-Knopf ist vorhanden", !!saveBtn, saveBtn && saveBtn.textContent);
   if (saveBtn && !saveBtn.disabled) {
     click(saveBtn);
     ok("Bon-Positionen landen in der Historie", D.get().purchases.length > before,
@@ -582,7 +583,7 @@ if (search) {
     click(hits[0]);
     ok("Produkt landet im Korb", App.capture.basket.length === 1);
     const before = D.get().purchases.length;
-    const bookBtn = [...$("main").querySelectorAll("button.cta")].find((b) => b.textContent === "Buchen");
+    const bookBtn = [...$("main").querySelectorAll("button.cta")].find((b) => b.textContent === "Einkauf buchen");
     ok("Buchen-Knopf erscheint", !!bookBtn);
     if (bookBtn) {
       click(bookBtn);
@@ -1816,19 +1817,30 @@ console.log("\n--- Marken erklären sich ---");
   App.closeSheet();
 
   // Der Schlüssel entscheidet über den Text, nicht die Farbe: dieselbe
-  // gelbe Marke steht mal für „überfällig“, mal für „teurer als sonst“.
-  ok("Überfällig und teuer erklären Verschiedenes",
-    T.PILL_INFO.ueberfaellig[1] !== T.PILL_INFO.teuer[1]);
+  // gelbe Marke steht mal für Sicherheit, mal für einen Doppelkauf.
+  ok("Verschiedene Schlüssel erklären Verschiedenes",
+    new Set(Object.values(T.PILL_INFO).map((v) => v[1])).size === Object.keys(T.PILL_INFO).length);
   ok("Jede Erklärung hat Überschrift und Text",
     Object.values(T.PILL_INFO).every((v) => Array.isArray(v) && v[0] && v[1] && v[1].length > 60));
 
-  // Ein vertippter Schlüssel darf nicht still eine stumme Marke
-  // erzeugen — deshalb wird hier geprüft, dass alle benutzten
-  // Schlüssel existieren.
-  const benutzt = ["own", "ueberfaellig", "risiko", "vd", "teuer", "guenstig", "doppelt",
-    "rest", "haltbar", "angebrochen", "marke", "eigenmarke", "zerowaste", "hoard"];
-  ok("Alle benutzten Schlüssel sind hinterlegt",
-    benutzt.every((k) => T.PILL_INFO[k]), benutzt.filter((k) => !T.PILL_INFO[k]).join(", "));
+  /* KEINE ERKLÄRUNG OHNE MARKE.
+     Hier stand vorher eine von Hand gepflegte Liste der „benutzten“
+     Schlüssel — und die war falsch: sechs davon wurden von keiner
+     einzigen Marke mehr geöffnet. Die Liste hat den Zustand nicht
+     geprüft, sondern behauptet.
+
+     Deshalb jetzt gegen den ausgelieferten Quelltext: ein Schlüssel
+     muss darin auch AUSSERHALB der Tabelle vorkommen, sonst ist
+     seine Erklärung unerreichbar. Unerreichbare Texte veralten
+     unbemerkt — einer sprach zuletzt noch von einer Antwort, die es
+     seit Wochen nicht mehr gibt. */
+  const quelle = fs.readFileSync(path.join(WEB, "views.js"), "utf8");
+  const tabelle = quelle.slice(quelle.indexOf("const PILL_INFO"));
+  const nachTabelle = tabelle.slice(tabelle.indexOf("\n};"));
+  const vorTabelle = quelle.slice(0, quelle.indexOf("const PILL_INFO"));
+  const ausserhalb = vorTabelle + nachTabelle;
+  const waisen = Object.keys(T.PILL_INFO).filter((k) => !ausserhalb.includes(`"${k}"`));
+  ok("Keine Erklärung ohne Marke, die sie öffnet", waisen.length === 0, waisen.join(", "));
 
   // Ein unbekannter Schlüssel bleibt sichtbar, aber stumm — eine
   // Marke, die verschwindet, wäre der schlimmere Fehler.
@@ -2151,6 +2163,106 @@ console.log("\n--- Die Schrift liegt bei ---");
      stand vorher nicht da — er darf nicht beim nächsten Aufräumen
      verschwinden. */
   ok("Der Wortabstand ist korrigiert", /word-spacing:\.0\d+em/.test(css));
+}
+
+/* ================================================================
+   Ein Ding, ein Name
+   ================================================================
+   Diese Prüfungen lesen den ausgelieferten Quelltext, nicht den
+   Bildschirm. Der Grund: die Brüche, um die es geht, sind nie an
+   EINER Stelle sichtbar. Man sieht „Nach Gängen“ und tippt darauf;
+   drei Bildschirme später steht „Ladenweg“, und niemand verbindet
+   die beiden mehr. Genau deshalb fällt so etwas beim Durchklicken
+   nicht auf und muss maschinell festgehalten werden.
+
+   Gefunden wurden dabei vier Fälle:
+     • eine Ansicht mit vier Namen (Knopf, Überschrift, Vorlesehilfe,
+       Einstellung)
+     • eine Funktion mit vier Knopfaufschriften, davon eine als
+       einziger klein geschriebener Knopf der App
+     • zwei Meldungen für denselben abgeschlossenen Vorgang
+     • zwei Beispielmärkte in zweimal demselben Feld
+   ================================================================ */
+console.log("\n--- Ein Ding, ein Name ---");
+{
+  const v = fs.readFileSync(path.join(WEB, "views.js"), "utf8");
+  const a = fs.readFileSync(path.join(WEB, "app.js"), "utf8");
+  const idx = fs.readFileSync(path.join(WEB, "index.html"), "utf8");
+  const sichtbar = v + a + idx;
+
+  // Der Name der Gänge-Ansicht steht an vier Stellen: Knopf,
+  // Überschrift, Vorlesehilfe, Einstellung. Alle vier müssen ihn
+  // tragen, und die alten Namen dürfen nirgends mehr auftauchen,
+  // wo der Nutzer sie liest.
+  ok("Die Gänge-Ansicht heißt überall „Nach Gängen“",
+    /<h2>Nach Gängen<\/h2>/.test(idx) && /aria-label="Nach Gängen"/.test(idx),
+    (idx.match(/<h2>[^<]*<\/h2>/) || [])[0]);
+  ["Im Laden", "Ladenmodus", "Ladenweg"].forEach((alt) => {
+    ok(`Kein sichtbares „${alt}“ mehr`, !new RegExp(`"${alt}`).test(sichtbar) && !idx.includes(`>${alt}<`));
+  });
+
+  /* Alle drei Wege, einen Einkauf zu buchen, tragen dasselbe Verb.
+     Es sind dieselbe Absicht und zweimal sogar dieselbe Funktion —
+     `bookCart` hing an einem Knopf „Einkauf buchen“ und an einem
+     Knopf „buchen“. */
+  const knopfaufschriften = [...sichtbar.matchAll(/"cta[^"]*",\s*(?:`|")([^"`]*buchen[^"`]*)(?:`|")/gi)]
+    .map((m) => m[1]);
+  ok("Jeder Buchen-Knopf endet auf demselben Verb",
+    knopfaufschriften.length > 0 && knopfaufschriften.every((t) => /buchen$/.test(t)),
+    knopfaufschriften.join(" | "));
+  ok("Kein klein geschriebener Knopf",
+    !/>buchen</.test(idx) && !/"cta[^"]*",\s*"[a-zäöüß]/.test(sichtbar));
+
+  // Ein abgeschlossener Vorgang meldet sich mit einem Satz, nicht mit
+  // zweien. „3 gebucht“ und „3 Positionen gebucht“ standen für
+  // denselben Vorgang nebeneinander.
+  const meldungen = [...sichtbar.matchAll(/toast\(`\$\{[^}]*\}\s*([^`]*gebucht[^`]*)`/g)].map((m) => m[1].trim());
+  ok("Eine Meldung nach dem Buchen, nicht zwei",
+    meldungen.length > 1 && new Set(meldungen).size === 1, meldungen.join(" | "));
+
+  // Zweimal dasselbe Feld, zweimal derselbe Beispielmarkt.
+  const platzhalter = [...v.matchAll(/si\.placeholder\s*=\s*([A-Z_]+|"[^"]*")/g)].map((m) => m[1]);
+  ok("Ein Beispielmarkt für beide Markt-Felder",
+    platzhalter.length === 2 && new Set(platzhalter).size === 1, platzhalter.join(" | "));
+
+  /* EINE BEUGUNG, EINE STELLE.
+     „noch 1 Tage“, „1 Käufe“, „1 Positionen gebucht“ — an vier
+     Stellen war die Einzahl ausgeschrieben, an zehn nicht. Das ist
+     kein Randfall: ein Rhythmus von einem Tag (Brot, Milch), ein
+     Vorrat, der noch einen Tag reicht, ein einzelnes gebuchtes
+     Produkt — die Eins kommt jeden Tag vor.
+
+     Geprüft wird strukturell, nicht am Bildschirm: eine Zahl darf
+     nicht unmittelbar vor einem Mehrzahlwort stehen. Wer die Eins
+     im Test durchspielen wollte, müsste jede der zehn Stellen
+     einzeln in den passenden Zustand bringen — und würde die elfte
+     wieder übersehen. */
+  const MEHRZAHL = ["Tage", "Tagen", "Käufe", "Positionen", "Produkte", "Bons"];
+  const ungebeugt = [];
+  // Die Helfer selbst dürfen die Mehrzahl schreiben — sie sind ja
+  // die Stelle, an der die Entscheidung fällt.
+  const ohneHelfer = (q) => q.replace(/const (zahlwort|tage|tagen|alleTage) = [^;]*;/g, "");
+  MEHRZAHL.forEach((w) => {
+    const re = new RegExp(String.raw`\$\{[^}]{1,60}\}\s${w}\b`, "g");
+    [ohneHelfer(v), ohneHelfer(a)].forEach((quelle) => {
+      [...quelle.matchAll(re)].forEach((m) => {
+        if (/zahlwort|"Tag"|"Kauf"|"Position"|"Produkt"|"Bon"/.test(m[0])) return;
+        ungebeugt.push(m[0]);
+      });
+    });
+  });
+  ok("Keine Zahl steht ungebeugt vor einem Mehrzahlwort",
+    ungebeugt.length === 0, ungebeugt.slice(0, 4).join(" | "));
+
+  ok("Der Beugungshelfer beugt", T.tage(1) === "1 Tag" && T.tage(2) === "2 Tage" &&
+    T.tagen(1) === "1 Tag" && T.tagen(3) === "3 Tagen" &&
+    T.zahlwort(1, "Kauf", "Käufe") === "1 Kauf",
+    `${T.tage(1)} / ${T.tagen(3)}`);
+
+  // Ein Rhythmus von einem Tag heißt „täglich“, nicht „alle 1 Tage“
+  // und auch nicht „alle 1 Tag“.
+  ok("Ein Tagesrhythmus heißt täglich",
+    T.alleTage(1) === "täglich" && T.alleTage(3) === "alle 3 Tage", T.alleTage(1));
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");
