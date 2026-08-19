@@ -1740,13 +1740,20 @@ console.log("\n--- Einkauf aus einem Bild ---");
   // also wird die Datei direkt eingespeist, so wie es der Hörer täte.
   const vorher = D.get().receipts.length;
   const gelesen = T.readReceiptImage(BILD, { today: "2026-08-12" });
-  ok("Das Bild wird zu Bon-Text", gelesen.kept === 3, gelesen.kept + ": " + gelesen.text);
+  // Vier behaltene Zeilen: die drei Waren und die Summenzeile. Die
+  // Summe ist keine Position, sondern der Schlussstrich — sie hält
+  // den Werbefuß draußen und liefert die Gegenprobe.
+  ok("Das Bild wird zu Bon-Text", gelesen.kept === 4, gelesen.kept + ": " + gelesen.text);
   ok("Datum kommt aus dem Bild", gelesen.date === "2026-08-12", gelesen.date);
   ok("Markt auch", gelesen.store === "Lidl", gelesen.store);
   ok("Die Ziffern sind zurückgedreht", /1,29/.test(gelesen.text) && /0,59/.test(gelesen.text));
 
   const p = D.parseReceiptText(gelesen.text);
   ok("Die Zeilen werden Produkten zugeordnet", p.rows.length === 3, p.rows.length);
+  ok("Die Summenzeile wird keine Position",
+    p.rows.every((r) => !/summe/i.test(r.raw)), p.rows.map((r) => r.raw).join(" | "));
+  ok("Die Gegenprobe gegen die aufgedruckte Summe geht auf",
+    p.printedTotal === 3.77 && p.totalOk === true, `${p.printedTotal} / ${p.totalOk}`);
   ok("Und die sicheren sind wirklich sicher",
     p.rows.filter((r) => r.productId).length === 3,
     p.rows.map((r) => r.raw + "->" + r.productId).join(" | "));

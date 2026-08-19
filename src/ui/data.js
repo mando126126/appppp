@@ -1482,13 +1482,13 @@ function toggleBrandOff(productId) {
 /* ---------- Bon-Text auswerten ---------- */
 /**
  * Text eines Kassenbons in Vorschlagszeilen übersetzen.
- * Der Parser ist an einem echten Lidl-Bon kalibriert; andere Märkte
- * folgen demselben Aufbau (Name, Preis, optional Menge). Was nicht
- * sicher zugeordnet werden kann, landet in `open` — die Oberfläche
- * fragt nach, statt still etwas Falsches zu buchen.
+ * Der Parser ist an echten Bons von Lidl, REWE, Netto und EDEKA
+ * kalibriert. Was nicht sicher zugeordnet werden kann, landet in
+ * `open` — die Oberfläche fragt nach, statt still etwas Falsches
+ * zu buchen.
  */
 function parseReceiptText(text) {
-  const parsed = parseLidlReceipt(text);
+  const parsed = parseReceipt(text);
   const rows = parsed.items.map((it) => {
     const learned = state.aliases[normalizeRaw(it.raw)];
     const m = learned
@@ -1512,6 +1512,11 @@ function parseReceiptText(text) {
     deposits: parsed.deposits,
     sum: parsed.sum,
     discountTotal: parsed.discountTotal,
+    // Die Gegenprobe gegen die aufgedruckte Summe. `null` heißt
+    // „der Bon nennt keine" — das ist kein Fehler, nur keine Probe.
+    printedTotal: parsed.printedTotal,
+    totalDiff: parsed.totalDiff,
+    totalOk: parsed.totalOk,
     warnings: parsed.warnings,
     sure: rows.filter((r) => !r.needsConfirmation).length,
     open: rows.filter((r) => r.needsConfirmation).length

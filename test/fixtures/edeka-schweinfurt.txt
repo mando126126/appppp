@@ -1,0 +1,54 @@
+/**
+ * fixtures/edeka-schweinfurt.txt
+ *
+ * ECHTER BON, aus einem Foto abgetippt (E-center Schweinfurt).
+ * Klassisches EDEKA-Format: Name links, Betrag rechts, sonst
+ * nichts. Der einfachste der vier Bons — und trotzdem der
+ * lehrreichste.
+ *
+ * WARUM DIESER BON IM TEST STEHT:
+ *
+ * Er hat ZWEIMAL „BAUCHSPECK 1,19". Beim Erkennen aus dem Foto
+ * wurde daraus eine Zeile — die zweite ging verloren. Die App hat
+ * das nicht gemerkt: sieben Positionen sahen genauso richtig aus
+ * wie acht.
+ *
+ * Der Bon nennt seine Summe selbst: 14,84. Die sieben erkannten
+ * Zeilen ergeben 13,65. Diese Differenz ist der einzige Hinweis,
+ * den es auf eine verlorene Zeile überhaupt geben kann — und
+ * deshalb rechnet der Parser jetzt gegen.
+ *
+ * Der Bon ist von 2007. Das Format hat sich seitdem nicht
+ * geändert, das Datum wird vom Datums-Fund bewusst verworfen:
+ * ein zwanzig Jahre alter Einkauf ist kein Einkauf von heute.
+ */
+             E-center
+              EDEKA
+
+            SCHWEINFURT
+        OSKAR-VON-MILLER-STR.6
+
+    RADIESCHEN                 0,59
+    KAESEAUFSCH.               1,39
+    BAUCHSPECK                 1,19
+    BAUCHSPECK                 1,19
+    DORNFELDER                 0,99
+    CLEMENTINEN                2,49
+    L&M BLUE                   3,50
+    L&M BLUE                   3,50
+ SUMME          EUR           14,84 *
+    BAR                       50,00
+    RÜCKGELD    EUR           35,16
+
+ 08.12.07 16:27 37589    48   4 8500
+
+ ENTHALTENE MEHRWERTSTEUER
+ MWST                         NETTO
+    7,00 %       0,45           6,40
+   19,00 %       1,28           6,71
+ SUMME MWST      1,73          13,11
+
+ EDEKA HANDELSGESELLSCHAFT
+ NORDBAYERN-SACHSEN-THÜRINGEN MBH
+ STEUERNUMMER: 257/115/30471
+        Q U I T T U N G

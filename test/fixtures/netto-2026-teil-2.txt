@@ -1,0 +1,41 @@
+/**
+ * fixtures/netto-2026-teil-2.txt
+ *
+ * Zweiter Ausschnitt desselben Netto-Bons. Auch hier ohne die
+ * aufgedruckte Summe — sie gilt für alle 54 Positionen.
+ *
+ * DAS BESONDERE AN DIESEM ENDE: ZURÜCKGEGEBENES LEERGUT.
+ * „Einwegleergut 19% -6,00" ist Geld, das der Kunde ZURÜCK
+ * bekommt. Es ist kein Rabatt auf die Zeile darüber (Himbeeren
+ * kosten weiter 1,99) und erst recht kein Produkt. Wer es als
+ * Rabatt verbucht, verschenkt der Himbeere sechs Euro; wer es
+ * ganz wegwirft, bekommt die Endsumme nie hin.
+ *
+ * Es gehört zum Pfand — nur mit umgekehrtem Vorzeichen.
+ */
+      5 x        1,09
+Layenb.HP Skyr sort. 200g          5,45  B
+TheRealStrawbKiw0,33L DS           0,59  A
+EW-Pfand 0,25 EUR                  0,25* A
+Lieb.Kond.Dinkelmehl 1kg           1,79  B
+GL Kochcreme sort. 250ml           0,89  B
+      2 x        1,00
+ZottProteinPuddingCho200g          2,00  B
+GLGouda leichtHF3ger.250g VLOG     1,79  B
+Rabatt                            -0,36
+G.GoldfischliOriginal100G          1,00  B
+GL Proteinjogh.sort.200g           0,79  B
+25% Rabatt                        -0,20
+BioGM H.W.MangHDrink230ml          0,79  B
+GL Proteinjogh.sort.200g           0,79  B
+25% Rabatt                        -0,20
+Minipflaumen Tomaten 1kg           3,33  B
+Rabatt 5%                         -0,17
+Bio Mini-Romanasalat WWF           1,59  B
+Champignon braun 400g VKE          2,19  B
+Himbeeren 125g                     1,99  B
+Mehrwegleergut 19%                -0,08  A
+Einwegleergut 19%                 -6,00  A
+Einwegleergut 7%                  -1,25  B
+Einwegleergut 19%                 -1,50  A
+Einwegleergut 7%                  -0,25  B

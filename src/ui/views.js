@@ -2688,6 +2688,28 @@ function renderScan(box, cap, app) {
     p.open ? "unsichere werden gefragt, nicht geraten" : null,
     el("span", "flag " + (p.open ? "f-gold" : "f-ok"), p.open ? p.open + " offen" : "fertig")));
 
+  /* Die Gegenprobe gegen die aufgedruckte Summe.
+     Sie steht bewusst GANZ OBEN und nicht in der Warnliste weiter
+     unten: sie ist die einzige Aussage hier, die der Bon selbst
+     belegen kann. Alles andere ist Vermutung der Erkennung, das
+     hier ist Arithmetik.
+
+     Und sie korrigiert nichts. „Es fehlen 1,19 €" ist ein Hinweis,
+     wo nachzusehen ist — welche Zeile fehlt, sieht nur der Mensch,
+     der den Bon in der Hand hält. */
+  if (p.printedTotal !== null && p.printedTotal !== undefined) {
+    const stimmt = p.totalOk;
+    const fehlt = p.totalDiff > 0;
+    box.append(uiRow(
+      stimmt ? `Summe stimmt: ${eur(p.printedTotal)}` : `Summe weicht ab: ${eur(Math.abs(p.totalDiff))}`,
+      stimmt
+        ? "Preise, Mengen, Rabatte und Pfand gehen zusammen auf"
+        : (fehlt
+          ? `Der Bon nennt ${eur(p.printedTotal)}, erkannt wurden ${eur(p.sum)} — es fehlt vermutlich eine Zeile`
+          : `Der Bon nennt ${eur(p.printedTotal)}, erkannt wurden ${eur(p.sum)} — eine Zeile ist vermutlich doppelt`),
+      el("span", "flag " + (stimmt ? "f-ok" : "f-gold"), stimmt ? "geprüft" : "prüfen")));
+  }
+
   if (p.warnings.length) {
     box.append(uiRow(`${p.warnings.length} Rechenprobe(n) auffällig`, null, null,
       { onClick: () => app.notice("Rechenprobe", p.warnings.join("\n\n")) }));

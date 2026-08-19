@@ -1,0 +1,62 @@
+/**
+ * fixtures/netto-2026-teil-1.txt
+ *
+ * ECHTER BON, aus dem Netto-App-Screenshot abgetippt — erster von
+ * drei Ausschnitten. Der Bon hat 54 Positionen und passt in keinen
+ * Screenshot; die aufgedruckte Summe gilt für alle 54 und steht
+ * deshalb NICHT in dieser Datei. Der Test prüft hier den Aufbau,
+ * nicht die Endsumme.
+ *
+ * WAS NETTO ANDERS MACHT ALS LIDL *UND* REWE:
+ *
+ * 1. DIE MENGE STEHT ÜBER DER POSITION, NICHT DARUNTER.
+ *    „16 x 0,89" und erst in der Zeile darunter „Booster
+ *    Juneberry 0,33L DS 14,24". Bei REWE ist es genau andersherum.
+ *    Deshalb entscheidet der Parser nicht nach Kette, sondern
+ *    rechnet: 16 × 0,89 = 14,24 — die Zeile, zu der es aufgeht,
+ *    ist die richtige.
+ *
+ * 2. RABATTE HABEN VIER SCHREIBWEISEN.
+ *    „Rabatt", „Rabatt 5%", „25% Rabatt", „GRATIS". Nur die erste
+ *    beginnt mit dem Wort — bei den anderen steht es in der Mitte
+ *    oder gar nicht da.
+ *
+ * 3. PFAND HEISST HIER „EW-Pfand" ODER „Leergut".
+ *    Und „Leergut 0,25 EUR EW 4,00" ist berechnetes Pfand für 16
+ *    neue Flaschen, kein zurückgegebenes.
+ */
+    60489 Frankf.a.M.
+   WWW.NETTO-ONLINE.DE
+                                    EUR
+      16 x       0,89
+Booster Juneberry 0,33L DS        14,24  A
+      16 x       0,25
+Leergut 0,25 EUR EW                4,00* A
+Rabatt                            -6,24
+BioBio Mandeldr. ungesüsst 1L      1,35  A
+GRATIS                            -1,35
+FF Linsenchipssort.90g             1,99  B
+      2 x        1,79
+Maultaschen sort. ab 300g          3,58  B
+AS Sandwich Vollkorn 750g          1,19  B
+M.I Grana Padano St. 200g          3,99  B
+Rabatt                            -0,80
+HOLY En.StarterSetsort.ST          5,55  A
+SchofruladeHimbVollm.130g          3,00  B
+VL Eier FH 10ST                    2,99  B
+Rabatt 5%                         -0,15
+Albh.Dunkelnud.sort.500g           1,29  B
+Schw.Ex.Z.Pf.Ma.Konf.280g          2,99  B
+Rabatt 5%                         -0,15
+AS Chicken Nuggets 500g            3,99  B
+Rabatt 5%                         -0,20
+      3 x        1,09
+Layenb.HP Skyr sort. 200g          3,27  B
+OeLemonade Orange 0,33L DS         1,00  A
+EW-Pfand 0,25 EUR                  0,25* A
+RouOfenkaesGyrosStyle180g          2,49  B
+Rabatt                            -0,50
+GL HP Drink sort. 330ml            1,19  B
+EW-Pfand 0,25 EUR 7% WG31          0,25* B
+Active O2 Cherry 1x0,75L FL        1,19  A
+EW-Pfand 0,25 EUR                  0,25* A

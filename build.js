@@ -57,7 +57,7 @@ const MODULES = [
   "receiptArchive.js",
   "expiryWarning.js",
   "savingsEngine.js",
-  "lidlParser.js",
+  "receiptParser.js",
   "stockRange.js",
   "freezeAdvisor.js",
   "priceMemory.js",

@@ -745,12 +745,12 @@ wird erst beim ersten Bild; wer nur tippt, zahlt die Megabyte nie.
 `receiptOcr.js`, und dort sitzen die Fehler, die still Schaden
 anrichten:
 
-- **Spalten werden zu Leerzeichen.** `lidlParser` erkennt eine
+- **Spalten werden zu Leerzeichen.** `receiptParser` erkennt eine
   Position an mindestens zwei Leerzeichen zwischen Name und Preis —
   auf dem Bon ist das eine Spalte. Die Erkennung macht daraus mal
   zwei, mal eins. Jede Zeile wird deshalb wieder ausgerichtet, statt
-  eine zweite Bon-Grammatik zu schreiben: die eine, die an einem
-  echten Bon kalibriert ist, bleibt die einzige.
+  eine zweite Bon-Grammatik zu schreiben: die eine, die an echten
+  Bons kalibriert ist, bleibt die einzige.
 - **Ziffern werden zu Buchstaben.** Auf Thermopapier ist die Null ein
   O, die Eins ein l. Im Namen ist das harmlos — der Produktabgleich
   verträgt Tippfehler. Im Preis verschwindet die Zeile. Deshalb wird
@@ -1445,6 +1445,137 @@ Zwei weitere Ergänzungen auf Oberflächenebene, beide sichtbar und einstellbar:
 
 ---
 
+## Vier Ketten statt einer: was echte Bons dem Parser beigebracht haben
+
+Der Parser hieß `lidlParser.js` und war an genau einem echten Bon
+kalibriert. Für alle anderen Ketten stand im Kommentar, sie „folgen
+demselben Aufbau". Das war eine Vermutung, und sie war falsch.
+
+Geprüft wurde mit echten Fotos und Screenshots: einem EDEKA-Bon aus
+Schweinfurt, zwei REWE-Bons aus Frankfurt, einem 54-zeiligen
+Netto-Bon, dazu weiter der Lidl-Bon von 2026. Alle sieben liegen
+abgetippt in `test/fixtures/` und laufen bei jedem `npm test` mit.
+
+**Die eine Annahme, die nicht getragen hat**, war die, auf der die
+ganze Zeilenerkennung stand: *eingerückte Zeilen gehören zur Position
+darüber*. Das stimmt bei Lidl. Sonst nirgends.
+
+```
+Lidl:   High Protein Kaffee   1,15 x 2   2,30     Menge in der Zeile
+REWE:   HAEHNCHEN PAELLA                 5,58     Menge DARUNTER
+            2 Stk x   2,79
+Netto:      16 x      0,89                         Menge DARÜBER
+        Booster Juneberry 0,33L DS      14,24
+EDEKA:  RADIESCHEN                       0,59     gar keine Mengenzeile
+```
+
+Dieselbe nackte Mengenzeile steht bei REWE hinter und bei Netto vor
+ihrer Position. Welche gemeint ist, verrät kein Layout — aber die
+Rechnung: 2 × 2,79 = 5,58 und 16 × 0,89 = 14,24. **Die Zeile, zu der
+es aufgeht, ist die richtige.** Geht es zu keiner auf, wird die
+Mengenzeile verworfen. Damit kommt der Parser ohne Wissen über
+Händler aus, und ein Bon, auf dem beide Formen vorkommen, wird
+trotzdem richtig gelesen — ein Test prüft genau das.
+
+Vorher fiel die REWE-Form nicht nur durch, sie wurde zu einer
+**erfundenen Position namens „2 Stk x" für 2,79 €**.
+
+**Rabatte haben fünf Schreibweisen.** Auf einem einzigen Netto-Bon
+stehen „Rabatt", „Rabatt 5%", „25% Rabatt", „0.20€ Rabatt" und
+„GRATIS". Nur die erste beginnt mit dem Wort; die letzte nennt es gar
+nicht. Erkannt wird jetzt am Wort *irgendwo in der Zeile* plus einem
+Minus am Zeilenende — beides zusammen, keins allein.
+
+Zugeschlagen wird der Rabatt der letzten **Ware**, nicht der letzten
+Zeile. Pfand ist in Deutschland ein gesetzlich fester Betrag und wird
+nie rabattiert; auf dem Netto-Bon steht zwischen einem Getränk und
+seinem Rabatt die Pfandzeile, und wer dort anhängt, macht aus 25 Cent
+Pfand minus sechs Euro.
+
+**Leergut geht in beide Richtungen.** „EW-Pfand 0,25" ist gezahltes
+Pfand, „Einwegleergut 19% −6,00" sind sechs Euro zurück. Negative
+Beträge flogen vorher pauschal raus — richtig für Stornos und
+Lesefehler, falsch für die Flaschenrückgabe. Ohne sie geht auf keinem
+Bon mit Leergut die Summe auf. Als Rabatt verbucht hätte sie den
+Himbeeren 125 g einen Preis von minus vier Euro gegeben.
+
+### Die Gegenprobe: der Bon prüft sich selbst
+
+Fast jeder Bon nennt seine Summe. Der Parser hat an dieser Zeile
+abgebrochen, **ohne sie zu lesen** — und damit die einzige Kontrolle
+weggeworfen, die es überhaupt gibt.
+
+Auf dem EDEKA-Foto steht „BAUCHSPECK 1,19" zweimal. Die
+Texterkennung hat die zweite Zeile als `BAUCHSPECK   9` gelesen, der
+Betrag war damit keiner mehr, die Zeile fiel weg. Sieben Positionen
+sahen genauso richtig aus wie acht. Nur die aufgedruckte 14,84 gegen
+die erkannten 13,65 zeigt, dass etwas fehlt:
+
+> **Summe weicht ab: 1,19 €** — Der Bon nennt 14,84 €, erkannt wurden
+> 13,65 € — es fehlt vermutlich eine Zeile.
+
+Die Probe steht ganz oben im Ergebnis, nicht unten in der Warnliste:
+sie ist die einzige Aussage dort, die der Bon selbst belegen kann,
+alles andere ist Vermutung der Erkennung. Und **sie korrigiert
+nichts**. Welche Zeile fehlt, sieht nur der Mensch, der den Bon in
+der Hand hält.
+
+Auf den drei vollständigen Bons geht sie auf den Cent auf. Das macht
+diese Prüfung zur schärfsten im Projekt: wenn 27,10 herauskommt und
+27,10 aufgedruckt ist, stimmen Preise, Mengen, Rabatte und Pfand
+*alle* — ein Fehler in irgendeinem davon würde die Summe verschieben.
+Der Test kann nicht dadurch grün werden, dass ich meine Erwartung an
+das Ergebnis anpasse.
+
+### Was die Summenzeile nebenbei mitrepariert hat
+
+Sie ist auch der Schlussstrich. Hinter ihr steht kein Einkauf mehr —
+nur Zahlung, Steuertabelle und Werbung. Weil sie vorher als Rauschen
+verworfen wurde, las der Parser den ganzen Fuß als Waren:
+
+- „Aktuelles Bonus-Guthaben: 2,49 EUR" → Position für 2,49 €
+- „Mit diesem Einkauf hast du 0,09 EUR" → Position für 0,09 €
+- „Rückge1.d 15,26" (verstümmeltes „Rückgeld") → Position für 15,26 €
+
+Am EDEKA-Ausschnitt sank die Zahl der Positionen dadurch von vier auf
+zwei — und beide verbliebenen sind echt. Zwei kleinere Riegel kamen
+dazu, für den Fall, dass die Texterkennung ausgerechnet die
+Summenzeile verliert: eine Liste von Treuewörtern („Bonus-Guthaben",
+„gesammelt", „DeutschlandCard"), und die Beobachtung, dass ein
+Kassenname **nie sechs Wörter** hat. Der längste auf allen vier echten
+Bons hat fünf („Active O2 Cherry 1x0,75L FL"); wer sechs Wörter in die
+erlaubten 48 Zeichen bekommt, schreibt keine Abkürzung mehr, sondern
+Prosa.
+
+### Zwei Fehler, die der Zufallstest und das Foto gefunden haben
+
+**„7,00 % 0,45" war eine Position.** Der Zufallstest wirft echte Bons
+verstümmelt gegen den Parser. Wenn dabei die Summenzeile verlorengeht,
+liest er in die Steuertabelle hinein — und ein Name ganz ohne
+Buchstaben war ihm recht. Die Ausrichtung filterte solche Zeilen
+längst; der Parser bekommt aber auch von Hand eingefügten Text, und
+dort fehlte der Riegel.
+
+**„dm" steckt in „Handmixer".** Die Marktsuche verglich ohne
+Wortgrenzen — „Real" in „Realschulweg", „Penny" in „Pennystrasse".
+Derselbe Fehler saß schon einmal in `priceShare.chainOf` und war dort
+behoben; hier stand er noch. Gefunden wurde er beim Blick auf den
+Rohtext des EDEKA-Fotos, aus einem anderen Grund: dort steht im Kopf
+nur das Logo, das die Erkennung als `Ecenter` liest, und „EDEKA" fällt
+erst zwanzig Zeilen später in der Firmierung. Der Kopf hat weiter
+Vorrang — aber wenn dort nichts steht, wird jetzt der Rest gelesen
+statt aufgegeben.
+
+### Was weiterhin offen ist
+
+Kaufland, Aldi und Penny sind ungeprüft. Die Bilderkennung selbst
+bleibt der schwächste Punkt der Kette: sie hat auf einem gut
+belichteten Foto eine von acht Zeilen verloren. Neu ist nur, dass die
+App das jetzt **merkt und sagt**, statt sieben Positionen für
+vollständig zu halten.
+
+---
+
 ## Aufbau
 
 ```
@@ -1507,13 +1638,22 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1500
-npm run test:algo # 961 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
-                  #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
-                  #   Kontrast, Lernen, Rückblick) plus die Simulation
-npm run test:ui   # 496 Oberflächentests in jsdom
+npm test          # alle 1570
+npm run test:algo # 1036 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+                  #   Texterkennung, echte Bons, Sicherheit, Sicherung, Verschwendung,
+                  #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
+                  #   plus die Simulation
+npm run test:ui   # 498 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
+
+`test/bons.js` prüft gegen **echte Bons**, nicht gegen erfundene:
+sieben abgetippte Dateien von vier Ketten in `test/fixtures/`. Drei
+davon nennen ihre eigene Endsumme — damit ist jede Behauptung des
+Parsers gegen den Bon selbst prüfbar statt gegen meine Erwartung. Er
+hat zwei Fehler gefunden, die kein Zeilentest gestellt hätte: eine
+Steuertabellenzeile, die zur Position wurde, und eine Marktsuche ohne
+Wortgrenzen.
 
 `test/longterm.js` ist der aufwendigste: drei Jahre Haushalt durch die
 **gebaute** App, mit gestellter Uhr und im Vergleich gegen zwei
@@ -1547,13 +1687,13 @@ erledigt:
    „Zu gut für die Tonne! Lebensmittel A–Z" des BMEL wäre der
    naheliegende Ausgangspunkt. Der Bericht dazu steht ungeschönt in der
    App unter *Mehr → Rechenweg*.
-2. **Der Bon-Parser ist an einem einzigen echten Bon kalibriert** (Lidl,
-   22.07.2026). REWE, EDEKA und Kaufland folgen demselben Aufbau, sind
-   aber nicht geprüft. Das betrifft die Haushaltsprodukt-Erweiterung
-   besonders: sie baut vollständig auf dem Parser auf, und die
-   Mengenangabe im Artikelnamen („20WL", „75ML") ist dort die
-   entscheidende Zahl. Ohne sie greift der Katalogwert — gekennzeichnet
-   als Referenz, aber eben nicht gemessen.
+2. ~~**Der Bon-Parser ist an einem einzigen echten Bon kalibriert.**~~
+   *Erledigt* — der Parser ist jetzt an sieben echten Bons von vier
+   Ketten geprüft (Lidl, REWE ×2, Netto ×3, EDEKA), siehe unten. Offen
+   bleibt: Kaufland, Aldi und Penny sind weiter ungeprüft, und die
+   Mengenangabe im Artikelnamen („20WL", „75ML") wird nach wie vor nur
+   aus dem Namen gelesen — fehlt sie, greift der Katalogwert,
+   gekennzeichnet als Referenz, aber eben nicht gemessen.
 3. **Die Verbrauchsraten in `nonFoodCatalog.js` sind Schätzungen.**
    Systematische Abweichung in eine Richtung heißt: Referenztabelle
    korrigieren, nicht das Modell.
@@ -1606,6 +1746,8 @@ Aus den Vorlagen-Archiven blieben draußen:
   `levenshtein.js` — v1-Vorgänger der Module, die jetzt im Bündel
   stecken. Alle 20 Dateien in `src/algo/` sind im Bündel; tote Fracht
   gibt es dort keine.
-- `receiptParser.js` — der unkalibrierte Bon-Parser, ersetzt durch
-  `lidlParser.js`.
+- Der ursprüngliche, an keiner echten Datei geprüfte Bon-Parser. Er
+  wich erst `lidlParser.js` (an einem echten Lidl-Bon kalibriert) und
+  dann dem heutigen `receiptParser.js`, der an sieben echten Bons von
+  vier Ketten geprüft ist.
 - `demo*.js` — die Vorführskripte aus dem Node-Paket.

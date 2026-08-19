@@ -12,7 +12,7 @@
  *   A) Ziffern zurückdrehen, ohne Namen zu zerstören
  *   B) Zeilen ausrichten, damit der echte Bon-Parser sie liest
  *   C) Rauschen aussortieren: Adresse, Summe, Kartenbeleg
- *   D) Zusammenspiel mit lidlParser — die eine Bon-Grammatik
+ *   D) Zusammenspiel mit receiptParser — die eine Bon-Grammatik
  *   E) Robustheit: alles, was kein Bon ist
  *
  * Die Eingaben sind absichtlich hässlich. Ein sauberer Text wäre
@@ -24,7 +24,7 @@ const {
   readReceiptImage, ocrToReceiptText, alignLine, cleanLine, repairDigits,
   isNoise, ocrDate, ocrStore, ocrQuality, MAX_ITEM_EUROS
 } = require("../src/algo/receiptOcr");
-const { parseLidlReceipt } = require("../src/algo/lidlParser");
+const { parseReceipt } = require("../src/algo/receiptParser");
 const { matchProduct } = require("../src/algo/productMatcher2");
 
 let pass = 0, fail = 0;
@@ -134,7 +134,7 @@ t("Ein Betragswort ohne echte Ziffer bleibt in Ruhe", () => {
 section("B: Zeilen ausrichten");
 
 t("Aus einem Leerzeichen werden zwei", () => {
-  // Genau daran erkennt lidlParser eine Position. Die Texterkennung
+  // Genau daran erkennt receiptParser eine Position. Die Texterkennung
   // macht aus der Spalte mal ein Leerzeichen, mal sieben.
   const a = alignLine("Vollmilch 3,5% 1,29 A");
   return /Vollmilch 3,5% {2,}1,29/.test(a) ? true : JSON.stringify(a);
@@ -147,7 +147,7 @@ t("Das Steuerkennzeichen fliegt raus", () => {
 
 t("Menge inline bleibt erhalten", () => {
   const a = alignLine("High Protein Kaffee 1,15 x 2 2,30 A");
-  const p = parseLidlReceipt(a);
+  const p = parseReceipt(a);
   return p.items[0] && p.items[0].quantity === 2 && p.items[0].unitPrice === 1.15
     ? true : JSON.stringify(p.items[0]);
 });
@@ -165,7 +165,7 @@ t("Die Rabattzeile auch", () => {
 t("Ein Betrag mitten in der Zeile ist nicht der Preis", () => {
   // „2,50 EUR/kg Aufschlag 1,20" — gezählt wird der letzte Betrag.
   const a = alignLine("Rinderhack 2,50 x 2 5,00");
-  const p = parseLidlReceipt(a);
+  const p = parseReceipt(a);
   return p.items[0] && p.items[0].unitPrice === 2.5 ? true : JSON.stringify(p.items[0]);
 });
 
@@ -173,7 +173,6 @@ t("Ein Betrag mitten in der Zeile ist nicht der Preis", () => {
 section("C: Rauschen aussortieren");
 
 const RAUSCHEN = [
-  "SUMME EUR 12,46",
   "Geg. Kartenzahlung 12,46",
   "MwSt A 7% 0,72",
   "UST-ID DE 123 456 789",
@@ -194,6 +193,37 @@ RAUSCHEN.forEach((z) => {
 
 t("Eine Zeile ohne Buchstaben ist keine Position", () => {
   return alignLine("123 456 1,29") === null ? true : alignLine("123 456 1,29");
+});
+
+/* Die Summenzeile ist der eine Sonderfall: sie darf NICHT
+   verschwinden. Sie ist Rauschen im Sinne von „kein Einkauf", aber
+   sie ist der Schlussstrich — und ohne sie liest der Parser den
+   ganzen Werbefuß als Waren. Sie muss also durchkommen UND darf
+   trotzdem nie eine Position werden. */
+t("Die Summenzeile überlebt die Ausrichtung", () => {
+  const a = alignLine("SUMME EUR 12,46");
+  return /^SUMME\s+12,46$/.test(a || "") ? true : `wurde zu „${a}“`;
+});
+
+t("Die Summenzeile wird trotzdem nie eine Position", () => {
+  const p = parseReceipt(alignLine("Vollmilch  1,29") + "\n" + alignLine("SUMME EUR 12,46"));
+  return p.items.length === 1 && p.items[0].raw === "Vollmilch"
+    ? true : JSON.stringify(p.items.map((i) => i.raw));
+});
+
+t("Die Summenzeile liefert die Gegenprobe", () => {
+  const p = parseReceipt(alignLine("Vollmilch  1,29") + "\n" + alignLine("SUMME EUR 12,46"));
+  return p.printedTotal === 12.46 && p.totalOk === false
+    ? true : `${p.printedTotal} / ${p.totalOk}`;
+});
+
+t("Die Zwischensumme ist NICHT die Endsumme", () => {
+  return alignLine("Zwischensumme 8,65") === null ? true : alignLine("Zwischensumme 8,65");
+});
+
+t("Die Steuertabelle nennt keine Endsumme", () => {
+  const a = alignLine("SUMME MWST      1,73        13,11");
+  return a === null ? true : `wurde zu „${a}“`;
 });
 
 t("Ein absurder Betrag ist kein Lebensmittel", () => {
@@ -217,7 +247,7 @@ section("D: Zusammenspiel mit dem echten Bon-Parser");
 
 t("Der Foto-Bon ergibt die richtigen Positionen", () => {
   const r = readReceiptImage(FOTO_BON, { today: "2026-08-12" });
-  const p = parseLidlReceipt(r.text);
+  const p = parseReceipt(r.text);
   const namen = p.items.map((i) => i.raw);
   const erwartet = ["Vollmilch", "Naturjoghurt", "Bananen", "Hackfleisch", "Kaffee", "Spuelmittel"];
   const fehlt = erwartet.filter((e) => !namen.some((n) => n.includes(e)));
@@ -226,13 +256,13 @@ t("Der Foto-Bon ergibt die richtigen Positionen", () => {
 
 t("Und keine erfundenen dazu", () => {
   const r = readReceiptImage(FOTO_BON, { today: "2026-08-12" });
-  const p = parseLidlReceipt(r.text);
+  const p = parseReceipt(r.text);
   return p.items.length === 6 ? true : `${p.items.length} Positionen: ${p.items.map((i) => i.raw).join(" | ")}`;
 });
 
 t("Die verwechselten Ziffern sind zurückgedreht", () => {
   const r = readReceiptImage(FOTO_BON, { today: "2026-08-12" });
-  const p = parseLidlReceipt(r.text);
+  const p = parseReceipt(r.text);
   const milch = p.items.find((i) => /Vollmilch/.test(i.raw));
   const jog = p.items.find((i) => /Naturjoghurt/.test(i.raw));
   if (!milch || milch.unitPrice !== 1.29) return `Milch: ${milch && milch.unitPrice}`;
@@ -242,34 +272,34 @@ t("Die verwechselten Ziffern sind zurückgedreht", () => {
 
 t("Der Rabatt landet bei der richtigen Position", () => {
   const r = readReceiptImage(FOTO_BON, { today: "2026-08-12" });
-  const p = parseLidlReceipt(r.text);
+  const p = parseReceipt(r.text);
   const jog = p.items.find((i) => /Naturjoghurt/.test(i.raw));
   return jog && Math.abs(jog.paid - 0.51) < 0.001 ? true : `bezahlt ${jog && jog.paid}`;
 });
 
 t("Das Gewicht aus der Folgezeile kommt an", () => {
   const r = readReceiptImage(FOTO_BON, { today: "2026-08-12" });
-  const p = parseLidlReceipt(r.text);
+  const p = parseReceipt(r.text);
   const hack = p.items.find((i) => /Hackfleisch/.test(i.raw));
   return hack && hack.weightG === 432 ? true : `weightG=${hack && hack.weightG}`;
 });
 
 t("Das Pfand bleibt eine eigene Position", () => {
   const r = readReceiptImage(FOTO_BON, { today: "2026-08-12" });
-  const p = parseLidlReceipt(r.text);
+  const p = parseReceipt(r.text);
   return p.deposits.length === 1 ? true : `${p.deposits.length} Pfandzeilen`;
 });
 
 t("Die erkannten Namen finden ihre Produkte", () => {
   const r = readReceiptImage(FOTO_BON, { today: "2026-08-12" });
-  const p = parseLidlReceipt(r.text);
+  const p = parseReceipt(r.text);
   const ohne = p.items.filter((i) => !matchProduct(i.raw).productId);
   return ohne.length === 0 ? true : `ohne Zuordnung: ${ohne.map((i) => i.raw).join(", ")}`;
 });
 
 t("Der App-Bon funktioniert genauso", () => {
   const r = readReceiptImage(APP_BON, { today: "2026-08-12" });
-  const p = parseLidlReceipt(r.text);
+  const p = parseReceipt(r.text);
   return p.items.length === 5 ? true : `${p.items.length}: ${p.items.map((i) => i.raw).join(" | ")}`;
 });
 
@@ -342,7 +372,7 @@ t("2000 zufällige Zeilen erzeugen nichts Unmögliches", () => {
     for (let j = 0; j < n; j++) zeile += teile[Math.floor(rnd() * teile.length)] + " ";
     const a = alignLine(zeile);
     if (a === null) continue;
-    const p = parseLidlReceipt(a);
+    const p = parseReceipt(a);
     for (const it of p.items) {
       if (!Number.isFinite(it.unitPrice) || it.unitPrice <= 0) return `Preis ${it.unitPrice} aus „${zeile}“`;
       if (it.unitPrice > MAX_ITEM_EUROS) return `Preis ${it.unitPrice} aus „${zeile}“`;

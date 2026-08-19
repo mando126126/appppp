@@ -9,9 +9,9 @@
  * DREI DINGE GEHEN BEI EINEM FOTO SCHIEF:
  *
  * 1. SPALTEN WERDEN ZU LEERZEICHEN.
- *    `lidlParser` erkennt eine Position daran, dass zwischen Name
- *    und Preis MINDESTENS ZWEI Leerzeichen stehen — auf einem Bon
- *    ist das eine Spalte, kein Zufall. Die Texterkennung macht
+ *    `receiptParser` erkennt eine Position daran, dass zwischen
+ *    Name und Preis MINDESTENS ZWEI Leerzeichen stehen — auf einem
+ *    Bon ist das eine Spalte, kein Zufall. Die Texterkennung macht
  *    daraus mal zwei, mal eins, mal sieben. Ohne Ausrichtung fällt
  *    jede zweite Zeile durch.
  *
@@ -28,6 +28,15 @@
  *    Werbespruch, der Kartenbeleg. Alles hat Zahlen, nichts davon
  *    ist ein Produkt.
  *
+ *    Der schlimmste Fall ist der Treue-Block am Fuß. „Aktuelles
+ *    Bonus-Guthaben: 2,49 EUR" sieht aus wie eine Position und
+ *    wurde auch als eine gebucht. Dagegen hilft kein Wörterbuch,
+ *    sondern eine Struktur: hinter der Summenzeile steht kein
+ *    Einkauf mehr. Deshalb wird die Summenzeile jetzt ausdrücklich
+ *    DURCHGELASSEN statt als Rauschen verworfen — sie ist der
+ *    Schlussstrich, und ohne sie liest der Parser den ganzen Fuß
+ *    als Waren.
+ *
  * GRUNDSATZ: LIEBER EINE ZEILE ZU WENIG.
  * Eine übersehene Position merkt der Nutzer sofort — sie fehlt in
  * der Liste, die er vor sich sieht, und er tippt sie nach. Eine
@@ -37,8 +46,8 @@
  * gegen die Zeile.
  *
  * Das Ergebnis ist bewusst wieder TEXT im Format, das
- * `lidlParser` ohnehin liest. Keine zweite Bon-Grammatik: die eine,
- * die an einem echten Bon kalibriert ist, bleibt die einzige.
+ * `receiptParser` ohnehin liest. Keine zweite Bon-Grammatik: die
+ * eine, die an echten Bons kalibriert ist, bleibt die einzige.
  * ================================================================
  */
 
@@ -63,7 +72,24 @@ const NOISE_PREFIX = [
 /* Zeilen mit diesen Wörtern SIND Positionen, auch wenn sie oben
    verdächtig aussehen — „Pfand" beginnt mit P, aber der Parser
    braucht die Zeile. */
-const KEEP_PREFIX = ["pfand", "leergut", "preisvorteil", "rabatt", "lidl plus"];
+const KEEP_PREFIX = [
+  "pfand", "leergut", "mehrwegleergut", "einwegleergut", "ew-pfand", "mw-pfand",
+  "preisvorteil", "rabatt", "lidl plus", "gratis"
+];
+
+/* Der Treue- und Werbeblock am Fuß. Diese Wörter stehen NIE in
+   einem Produktnamen und mitten in der Zeile, nicht am Anfang —
+   deshalb eine eigene Liste, die überall sucht.
+
+   Sie ist der zweite Riegel, nicht der erste: normalerweise
+   schneidet die Summenzeile den ganzen Fuß ohnehin ab. Erst wenn
+   die Texterkennung genau diese eine Zeile verliert, wird die
+   Liste gebraucht. */
+const NOISE_CONTAINS = [
+  "bonus-guthaben", "bonusguthaben", "bonus-vorteile", "bonus-coupon", "bonuspunkte",
+  "guthaben", "gesammelt", "deutschlandcard", "payback", "treuepunkte",
+  "rabattberechtigt", "punkte erhalten", "app aktivieren", "gutschein-code"
+];
 
 /* Ab wann eine Zahl kein Preis mehr ist. Über 300 € steht auf einem
    Lebensmittelbon höchstens die Kartennummer oder das Jahr. */
@@ -86,6 +112,17 @@ const STORE_NAMES = [
   "Müller", "Globus", "Famila", "Combi", "Marktkauf", "Hit", "Nahkauf",
   "Trinkgut", "Getränkeland", "Bio Company", "Basic", "Metro", "Selgros"
 ];
+
+/* Schreibweisen, unter denen dieselbe Kette auf dem Bon steht.
+   Der E-center-Bon trägt im Kopf nur das Logo — „EDEKA" fällt erst
+   zwanzig Zeilen weiter unten in der Firmierung. Wer nur nach
+   „Edeka" sucht, findet auf einem EDEKA-Bon keinen Markt. */
+const STORE_ALIASES = {
+  "ecenter": "Edeka", "e center": "Edeka", "e neukauf": "Edeka",
+  "aldi sued": "Aldi Süd", "aldi nord": "Aldi Nord",
+  "netto marken discount": "Netto", "netto online": "Netto",
+  "penny markt": "Penny", "rewe city": "Rewe", "rewe center": "Rewe"
+};
 
 /**
  * Ziffernverwechslungen zurückdrehen — NUR in einem Betragswort.
@@ -138,14 +175,40 @@ function cleanLine(line) {
     // Betrag und schiebt sich sonst zwischen Preis und Zeilenende.
     // Damit scheitert die Mengenerkennung, und aus „1,15 x 2  2,30"
     // wird eine Position zum Gesamtpreis mit Menge 1.
-    .replace(/(\d[.,]\d{2})\s+[A-Z12]\s*$/, "$1")
+    //
+    // Der Stern für „nicht rabattfähig" steht mal davor, mal
+    // dahinter: REWE druckt „0,25 A *", Netto „4,00* A". Beide
+    // Stellungen müssen weg, sonst bleibt ein Zeichen zwischen
+    // Betrag und Zeilenende stehen und die Zeile fällt durch.
+    .replace(/(\d[.,]\d{2})\s*\*?\s*[A-Z12]?\s*\*?\s*$/, "$1")
     .replace(/[«»“”„"‚'`´]/g, "")
     .replace(/[¥€$]/g, " ")
     .replace(/\s*€\s*/g, " ")
+    // Auch ausgeschrieben: REWE druckt „PFAND 0,25 EURO".
+    .replace(/\bEUROS?\b/gi, " ")
     .replace(/\bEUR\b/gi, " ")
     .replace(/[^\wÄÖÜäöüß0-9,.\-+*%/&()\s]/g, " ")
     .replace(/[ \t]+/g, " ")
     .trimEnd();
+}
+
+/**
+ * Ist dieser Name ein Satz statt eines Produkts?
+ *
+ * Kassennamen sind abgekürzt bis zur Unkenntlichkeit — der längste
+ * auf allen vier echten Bons hat fünf Wörter („Active O2 Cherry
+ * 1x0,75L FL"), die allermeisten haben zwei oder drei. Wer sechs
+ * Wörter in die 48 Zeichen bekommt, die ein Name hier haben darf,
+ * schreibt keine Abkürzungen mehr, sondern Prosa: „Mit diesem
+ * Einkauf hast du 0,09 EUR". Das ist der Werbefuß, und der ist
+ * kein Einkauf.
+ *
+ * Geprüft wird erst am fertigen Namen, nicht am Zeilenrest: sonst
+ * zählt bei „High Protein Kaffee 1,15 x 2 2,30" die Mengenangabe
+ * als drei Wörter mit, und eine echte Position fällt durch.
+ */
+function istProsa(name) {
+  return String(name).trim().split(/\s+/).length >= 6;
 }
 
 /** Ist das eine Kopf-, Fuß- oder Zahlungszeile? */
@@ -154,6 +217,7 @@ function isNoise(line) {
   if (!l) return true;
   if (KEEP_PREFIX.some((k) => l.startsWith(k))) return false;
   if (NOISE_PREFIX.some((n) => l.startsWith(n))) return true;
+  if (NOISE_CONTAINS.some((n) => l.includes(n))) return true;
   // Datum, Uhrzeit, lange Nummernfolgen: nie ein Produkt.
   if (/^\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4}/.test(l)) return true;
   if (/^\d{1,2}:\d{2}/.test(l)) return true;
@@ -165,8 +229,8 @@ function isNoise(line) {
 }
 
 /**
- * Eine Zeile in die Spaltenform bringen, die `lidlParser` erwartet:
- * Name, mindestens zwei Leerzeichen, Betrag.
+ * Eine Zeile in die Spaltenform bringen, die `receiptParser`
+ * erwartet: Name, mindestens zwei Leerzeichen, Betrag.
  *
  * @returns {null|string} null = keine Position
  */
@@ -180,10 +244,35 @@ function alignLine(line) {
   const gewicht = clean.match(/^\s*(\d+[.,]\d+)\s*(kg|g)\s*[xX*]\s*(\d+[.,]\d{2})/);
   if (gewicht) return `   ${gewicht[1]} ${gewicht[2]} x ${gewicht[3]} EUR/${gewicht[2]}`;
 
-  // Rabatt- und Pfandzeilen: eingerückt, damit der Parser sie der
-  // Position darüber zuschlägt.
-  const rabatt = clean.match(/^\s*(Preisvorteil|Lidl Plus Rabatt|Rabatt|Coupon)\s+(-?\d+[.,]\d{2})/i);
-  if (rabatt) return `   ${rabatt[1]} -${rabatt[2].replace("-", "")}`;
+  /* Nackte Mengenzeile: „2 Stk x 2,79" (REWE, steht UNTER der
+     Position) oder „16 x 0,89" (Netto, steht DARÜBER). Vorher fiel
+     die REWE-Form durch und wurde zu einer erfundenen Position
+     namens „2 Stk x" — die Netto-Form flog raus, weil „16 x" keine
+     zwei Buchstaben hat. Beides ist jetzt dieselbe Zeilenart; wohin
+     sie gehört, rechnet der Parser aus. */
+  const menge = clean.match(/^\s*(\d{1,3})\s*(?:Stk|St|Stck|Stück)?\.?\s*[xX*]\s*(\d+[.,]\d{2})\s*$/i);
+  if (menge) return `   ${menge[1]} x ${menge[2].replace(".", ",")}`;
+
+  /* Die Summenzeile — ausdrücklich behalten, nicht verwerfen.
+     Sie ist für den Parser der Schlussstrich (alles danach ist
+     Zahlung, Steuer und Werbung) UND die einzige Gegenprobe, die
+     ein Bon von sich aus anbietet. Die Steuertabelle nennt ihre
+     Zwischensummen auch „SUMME MwSt" — die ist keine. */
+  if (/^\s*(SUMME|Summe|GESAMT|Gesamtbetrag|Gesamtsumme|zu zahlen)\b/i.test(clean) &&
+      !/\b(MwSt|MWST|USt|UST|Steuer)\b/i.test(clean)) {
+    const betraege = [...clean.matchAll(RE_AMOUNT)];
+    RE_AMOUNT.lastIndex = 0;
+    if (betraege.length) return `SUMME  ${betraege[betraege.length - 1][1].replace(".", ",")}`;
+    return null;
+  }
+
+  /* Rabattzeile. Das Rabattwort steht nicht immer vorn: Netto
+     schreibt „25% Rabatt" und „0.20€ Rabatt". Anker sind deshalb
+     das Wort IRGENDWO und das Minus am Zeilenende. */
+  const rabatt = clean.match(/^\s*(\S.*?)\s+(-\d+[.,]\d{2})\s*$/);
+  if (rabatt && /(Preisvorteil|Lidl\s*Plus\s*Rabatt|Sofortrabatt|Treuerabatt|Rabatt|Nachlass|Coupon|Gutschein|GRATIS|Gratis)/i.test(rabatt[1])) {
+    return `   ${rabatt[1].trim()}  ${rabatt[2].replace(".", ",")}`;
+  }
 
   if (isNoise(clean)) return null;
 
@@ -195,16 +284,22 @@ function alignLine(line) {
   const wert = Math.abs(roh);
   if (!Number.isFinite(wert) || wert === 0 || wert > MAX_ITEM_EUROS) return null;
 
-  /* Ein negativer Betrag ist ein Abzug, kein Produktpreis. Die
-     Abzugszeilen sind oben schon abgefangen (sie tragen ihr Wort und
-     werden eingerückt weitergereicht); was hier noch negativ ankommt,
-     ist Leergut, eine Stornierung oder ein Lesefehler. Eine Position
-     mit negativem Preis würde in der Historie einen Kaufpreis unter
-     null erzeugen — der Zufallstest hat genau das gefunden. */
-  if (roh < 0) return null;
-
   // Kein „x" in dieser Klasse: aus „Müsli Mix" würde sonst „Müsli Mi".
   const name = clean.slice(0, letzter.index).replace(/[\s.\-*]+$/, "").trim();
+
+  /* Ein negativer Betrag ist ein Abzug, kein Produktpreis. Die
+     Rabattzeilen sind oben schon abgefangen; was hier noch negativ
+     ankommt, ist entweder zurückgegebenes Leergut oder eine
+     Stornierung, ein Lesefehler.
+
+     ZURÜCKGEGEBENES LEERGUT MUSS DURCH. „Einwegleergut 19% -6,00"
+     sind sechs Euro, die der Kunde wiederbekommt. Wer die Zeile
+     wegwirft, bekommt die Endsumme nie hin und hält am Ende jeden
+     Bon mit Flaschenrückgabe für falsch gelesen. Alles andere
+     Negative fliegt weiter raus: eine Position mit negativem Preis
+     würde in der Historie einen Kaufpreis unter null erzeugen —
+     der Zufallstest hat genau das gefunden. */
+  if (roh < 0 && !/^\s*(?:einweg|mehrweg|ew|mw)?[-\s]?(?:pfand|leergut)/i.test(name)) return null;
   if (name.length < MIN_NAME_LENGTH) return null;
   if (name.length > MAX_NAME_LENGTH) return null;
   // Ein Name, der nur aus Ziffern besteht, ist eine Nummer.
@@ -218,11 +313,13 @@ function alignLine(line) {
     const menge = clean.match(/(\d+[.,]\d{2})\s*[xX*]\s*(\d+)\s+(-?\d+[.,]\d{2})\s*$/);
     if (menge) {
       const kopf = clean.slice(0, clean.indexOf(menge[0])).replace(/[\s.\-]+$/, "").trim();
-      if (kopf.length >= MIN_NAME_LENGTH) {
+      if (kopf.length >= MIN_NAME_LENGTH && !istProsa(kopf)) {
         return `${kopf}  ${menge[1].replace(".", ",")} x ${menge[2]}  ${menge[3].replace(".", ",")}`;
       }
     }
   }
+
+  if (istProsa(name)) return null;
 
   return `${name}  ${preis}`;
 }
@@ -266,15 +363,48 @@ function ocrDate(raw, today) {
   return iso;
 }
 
-/** Markt aus dem Kopf des Bons. */
+/**
+ * Markt aus dem Bon.
+ *
+ * ZWEI DINGE, DIE HIER SCHON SCHIEFGEGANGEN SIND:
+ *
+ * 1. GESUCHT WURDE OHNE WORTGRENZEN.
+ *    „dm" steht in der Liste — und in „Handmixer", „Sandmehl",
+ *    „Feldmais". „Real" steckt in „Realschulweg". Ein Teilstring
+ *    ist kein Markt; gesucht wird jetzt nach ganzen Wörtern.
+ *    (Derselbe Fehler saß in priceShare.chainOf und ist dort
+ *    schon behoben — hier stand er noch.)
+ *
+ * 2. GESUCHT WURDE NUR IM KOPF.
+ *    Auf dem E-center-Bon steht oben nur das Logo; „EDEKA" fällt
+ *    erst in Zeile 21 in der Firmierung. Der Kopf hat weiter
+ *    Vorrang — dort steht der Markt, wenn er irgendwo steht —
+ *    aber wenn er dort fehlt, wird der Rest gelesen, statt
+ *    aufzugeben.
+ */
 function ocrStore(raw) {
-  const kopf = String(raw || "").split(/\r?\n/).slice(0, 12).join(" ").toLowerCase();
-  // Längste Treffer zuerst, damit „Aldi Süd" vor „Aldi" gewinnt.
-  const sortiert = [...STORE_NAMES].sort((a, b) => b.length - a.length);
-  for (const s of sortiert) {
-    if (kopf.includes(s.toLowerCase())) return s;
-  }
-  return null;
+  const text = String(raw || "");
+  const kopf = text.split(/\r?\n/).slice(0, 12).join(" ");
+
+  const suche = (heuhaufen) => {
+    // Alles, was kein Buchstabe und keine Ziffer ist, wird zur
+    // Wortgrenze — „E-center", „E center" und „Ecenter." sind
+    // danach dasselbe.
+    const h = " " + heuhaufen.toLowerCase().replace(/[^a-zäöüß0-9]+/g, " ").trim() + " ";
+    const treffer = (schreibweise) => h.includes(" " + schreibweise + " ");
+
+    for (const [alias, kette] of Object.entries(STORE_ALIASES)) {
+      if (treffer(alias)) return kette;
+    }
+    // Längste Treffer zuerst, damit „Aldi Süd" vor „Aldi" gewinnt.
+    const sortiert = [...STORE_NAMES].sort((a, b) => b.length - a.length);
+    for (const s of sortiert) {
+      if (treffer(s.toLowerCase().replace(/[^a-zäöüß0-9]+/g, " ").trim())) return s;
+    }
+    return null;
+  };
+
+  return suche(kopf) || suche(text);
 }
 
 /**
@@ -320,5 +450,7 @@ function readReceiptImage(rawText, opts = {}) {
 module.exports = {
   readReceiptImage, ocrToReceiptText, alignLine, cleanLine, repairDigits,
   isNoise, ocrDate, ocrStore, ocrQuality,
-  STORE_NAMES, NOISE_PREFIX, MAX_ITEM_EUROS, MIN_ITEM_LINES, LOW_QUALITY_RATIO
+  istProsa,
+  STORE_NAMES, STORE_ALIASES, NOISE_PREFIX, NOISE_CONTAINS, KEEP_PREFIX,
+  MAX_ITEM_EUROS, MIN_ITEM_LINES, LOW_QUALITY_RATIO
 };
