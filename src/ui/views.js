@@ -588,6 +588,32 @@ function productSheet(productId, ctx) {
   }
   body.append(facts);
 
+  /* Was bei einem guten Preis sinnvoll wäre.
+     Herkunft heute: die eigene Preishistorie. Dieselbe Rechnung
+     nimmt später einen Schwarm-Index entgegen — offerAdvisor.js
+     interessiert nicht, woher das „üblich" kommt, nur dass die
+     Herkunft mitgeführt und angezeigt wird. */
+  if (pm && pm.lowest && pm.usual && r && r.perUnitDays) {
+    const rat = offerAdvice(productId, {
+      preis: pm.lowest, üblich: pm.usual, perUnitDays: r.perUnitDays, herkunft: "eigen"
+    });
+    if (rat) {
+      const g = uiGroup("Wenn es wieder so günstig ist",
+        "Die Höchstmenge ist keine Meinung, sondern eine Rechnung: Haltbarkeit geteilt durch deinen " +
+        "Verbrauch je Einheit. Ein Angebotsprospekt kann sagen, dass etwas billig ist — dass DU davon " +
+        "genau so viel verbrauchst, bevor es schlecht wird, kann nur diese App sagen.\n\n" +
+        "Nichts davon wird gutgeschrieben: das ist eine Vorschau auf einen Kauf, der noch nicht " +
+        "stattgefunden hat. Gezählt wird erst, was tatsächlich auf einem Bon steht.");
+      g.body.append(uiRow(
+        rat.kind === "vorrat" ? `${rat.einheiten}× wären sinnvoll` : "Für Vorrat zu kurz haltbar",
+        rat.message, null,
+        rat.kind === "vorrat" ? { value: "ca. " + eur(rat.ersparnis) } : {}));
+      g.body.append(el("p", "srcnote",
+        `Bester Preis bisher: ${eur(pm.lowest)}, üblich ${eur(pm.usual)}. ` + sourceNote(rat)));
+      body.append(g);
+    }
+  }
+
   /* Die Schätzung widersprechbar machen. */
   if (st && (st.chronicShare > 0 || (st.details && st.details.length))) {
     body.append(wasteSheetGroup(productId, st, ctx));

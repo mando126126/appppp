@@ -347,7 +347,7 @@ t("3000 erfundene Wochen halten alle Invarianten", () => {
     if (p.total !== p.days.reduce((a, d) => a + d.count, 0)) return "Summe stimmt nicht";
     if (p.total > items.length + inventory.length + swapsDue.length) return "mehr Ereignisse als Quellen";
     if (typeof p.headline !== "string" || !p.headline.length) return "kein Satz";
-    if (/undefined|NaN|null/.test(p.headline)) return `kaputter Satz: ${p.headline}`;
+    if (/\bundefined\b|\bNaN\b|\bnull\b/.test(p.headline)) return `kaputter Satz: ${p.headline}`;
     for (const d of p.days) {
       const ids = d.events.map((e) => e.productId).filter(Boolean);
       if (new Set(ids).size !== ids.length) return `Doppelung am ${d.date}`;

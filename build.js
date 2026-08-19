@@ -85,7 +85,9 @@ const MODULES = [
   "weeklyReview.js",
   "milestones.js",
   "weekPulse.js",
-  "hoardDetector.js"
+  "hoardDetector.js",
+  "priceShare.js",
+  "offerAdvisor.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt

@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1462 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1500 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -959,6 +959,80 @@ Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
 
+#### Schwarm-Preisindex: der Entwurf steht, der Server nicht
+
+Die Idee: aus den Bons vieler Haushalte entsteht automatisch eine
+reale Preisdatenbank, und jeder bekommt die Mitteilung „bei vielen war
+das gerade besonders günstig". Der vollständige Entwurf steht in
+[`docs/schwarm.md`](docs/schwarm.md) — hier nur, was daran die
+Entscheidung ist.
+
+**Was dagegen steht.** Diese App verspricht an drei Stellen
+ausdrücklich: kein Server, kein Konto, keine Übertragung. Das ist
+keine Beschreibung, sondern die Bauart — 4,4 MB Texterkennung auf dem
+Gerät statt einer Cloud-API, die Schrift mitgeliefert statt geladen,
+ein Test, der eine fremde Adresse im Stylesheet verbietet. Und ein
+Kassenbon verrät mehr als Preise: Babynahrung heißt Schwangerschaft,
+Halal heißt Religion, Diabetiker-Produkte heißen Gesundheit —
+besondere Kategorien nach Art. 9 DSGVO, auf ganz gewöhnlichen Bons.
+
+**Der Entwurf löst das über die Einheit**, die übertragen wird: keine
+Kaufhandlung, sondern eine **Preissichtung** über einen Händler.
+
+```json
+{ "v": 1, "produkt": "butter", "kette": "lidl",
+  "kw": "2026-W34", "cent": 149, "packung": 250 }
+```
+
+Keine Menge (Haushaltsgröße), kein Datum sondern die Kalenderwoche,
+keine Filiale sondern die Kette, **kein Warenkorb** (zwölf Positionen
+identifizieren einen Haushalt zuverlässiger als ein Name) und keine
+Kennung — auch keine „pseudonyme": ein stabiler Schlüssel über Wochen
+*ist* eine Kennung. Übrig bleibt eine Aussage über einen Händler statt
+über einen Menschen.
+
+Dazu zwei Regeln, die `priceShare.js` erzwingt: **nur bekannte
+Ketten** (ein seltener Ladenname ist selbst ein Merkmal) und **nichts
+unter fünf unabhängigen Sichtungen** — das schützt gegen Rückschlüsse
+auf den Einzelnen *und* gegen eine falsch erkannte Bonzeile.
+
+> Beim Testen kam heraus, dass „Müller" in der Kettenliste stand und
+> „Hofladen Müller" damit durchging. Einer der häufigsten deutschen
+> Nachnamen. Die Kette ist wieder raus — eine Kette weniger im Index
+> ist der billigere Fehler.
+
+**Was die App dabei kann und ein Prospekt nicht** (`offerAdvisor.js`):
+
+```
+Höchstmenge = Haltbarkeit ÷ dein Verbrauch je Einheit
+```
+
+Ein Angebotsportal weiß, dass Butter billig ist. Dass *du* 250 g in
+zwölf Tagen verbrauchst und die vierte Packung im Müll landet, weiß
+nur diese App. Sicherheitskritisches nie, ohne gelernten Verbrauch
+kein Rat, höchstens acht Einheiten, unter 15 % Nachlass gar nichts —
+und nichts davon wird gutgeschrieben, denn es ist eine Vorschau auf
+einen Kauf, der noch nicht stattgefunden hat.
+
+**Gebaut ist Stufe 0**: dieselbe Rechnung mit der eigenen
+Preishistorie als Quelle. Sie steht im Detail-Blatt jedes Produkts,
+funktioniert offline und braucht keine Einwilligung. Der
+`offerAdvisor` interessiert sich nicht dafür, woher das „üblich"
+kommt — nur dafür, dass die Herkunft mitgeführt und angezeigt wird.
+
+**Empfohlen als Nächstes ist Stufe 1**: drei Haushalte, die sich
+kennen, tauschen eine Datei mit Sichtungen aus. Dieselbe
+Datenstruktur, dieselbe `buildPriceIndex`-Rechnung, k auf die
+Gruppengröße gesetzt. Kein Server, kein Rechtsapparat, kein
+Vertrauensverlust — und für die tatsächliche Zielgruppe ist genau das
+der Schwarm.
+
+**Stufe 2, der öffentliche Index**, ist nicht gebaut. Er braucht eine
+Entscheidung, die nicht mir gehört: dass die drei Sätze geändert
+werden dürfen. Dazu einen Verantwortlichen mit Anschrift und eine
+Hosting-Umgebung. Was an Recht, Missbrauchsschutz und Betrieb
+dranhängt, steht vollständig im Entwurf.
+
 #### Zero Waste, und Vorratskäufe als eigene Sache
 
 Die Hinweise hatten keinen Namen. Sie hießen „Hinweise“ und waren
@@ -1433,8 +1507,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1462
-npm run test:algo # 923 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1500
+npm run test:algo # 961 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
 npm run test:ui   # 496 Oberflächentests in jsdom

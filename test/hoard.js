@@ -196,7 +196,7 @@ t("Jeder Fund trägt einen Satz ohne Platzhalter", () => {
     ...funde(mitHortung(reihe("joghurt_natur"))),
     ...funde(mitHortung(reihe("reis")))
   ];
-  const kaputt = f.filter((h) => !h.message || /undefined|NaN|null/.test(h.message));
+  const kaputt = f.filter((h) => !h.message || /\bundefined\b|\bNaN\b|\bnull\b/.test(h.message));
   return kaputt.length === 0 ? true : kaputt.map((h) => h.message).join(" | ");
 });
 
@@ -280,7 +280,7 @@ t("3000 Zufallshaushalte halten alle Invarianten", () => {
       if (h.reichweiteTage !== null && h.reichweiteTage < 0) return `Reichweite ${h.reichweiteTage}`;
       if (!["vorrat", "zuviel"].includes(h.kind)) return `Art ${h.kind}`;
       if (h.safetyCritical && h.kind !== "zuviel") return "Sicherheitskritisches gelobt";
-      if (/undefined|NaN|null/.test(h.message)) return `Satz: ${h.message}`;
+      if (/\bundefined\b|\bNaN\b|\bnull\b/.test(h.message)) return `Satz: ${h.message}`;
       if (!rows.some((r) => r.date === h.date)) return "Fund ohne Kauf";
       const p = byId(h.productId);
       if (!p) return "Fund ohne Produkt";
