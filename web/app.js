@@ -737,7 +737,12 @@ const App = {
       // Auf der Übersicht: das Datum. Es ist die einzige Angabe, die
       // dem Wochenstreifen darunter etwas hinzufügt.
       subText = `${ctx.weekday}, ${deDate(ctx.ref)}`;
-    } else if (App.tab === "liste" && ctx.stage.stage >= 2) {
+    } else if (App.tab === "liste") {
+      /* Auch in den frühen Wochen: die Unterzeile beschreibt die
+         LISTE. Sie war an Stufe 2 gebunden und fiel davor auf
+         „57 Bons · 29 Produkte“ zurück — eine Auskunft über die
+         Datenlage auf einer Seite, auf der man wissen will, was
+         drauf steht und was es kostet. */
       const on = ctx.items.filter((i) => i.on);
       const sum = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
       const wann = ctx.pattern && ctx.pattern.dayName ? `für ${ctx.pattern.dayName}` : `ab ${ctx.weekday}`;

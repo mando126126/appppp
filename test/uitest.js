@@ -186,6 +186,69 @@ if (boxes.length) {
   ok("Ohne Wagen keine Leiste", !$("main").querySelector(".cartBar"));
 }
 
+console.log("\n--- Eine Liste ist eine Liste, auch ohne Vorhersage ---");
+{
+  /* Hier stand ein `return`: bis zwei Bons je Produkt vorlagen —
+     vier bis acht Wochen —, zeigte die Seite einen Satz und einen
+     Knopf. Und weil das Erfassen mit `goto("liste")` endet, war das
+     der erste Bildschirm nach der ersten echten Handlung. */
+  D.reset();
+  App.goto("liste");
+  const leer = $("main");
+
+  ok("Ohne jede Historie ist die Liste bedienbar", !!leer.querySelector(".addRow"));
+  ok("Und sagt, was sie ist", /normale Einkaufsliste/.test(leer.textContent));
+  ok("Ohne Positionen keine Summe", !leer.querySelector(".totals"));
+  ok("Die Beispieldaten bleiben erreichbar",
+    [...leer.querySelectorAll("button")].some((b) => /Beispieldaten/.test(b.textContent)));
+
+  /* Ein einziger Bon: Stufe 1, keine Vorschläge — und trotzdem eine
+     Einkaufsliste, die man selbst füllt. */
+  D.addReceipt({
+    date: D.today(), store: "Lidl",
+    items: [
+      { productId: "haehnchenbrust", quantity: 1, unitPrice: 6.99 },
+      { productId: "milch_vollmilch", quantity: 1, unitPrice: 1.29 }
+    ]
+  });
+  App.closeParty();
+  App.goto("liste");
+  ok("Nach einem Bon ist es Stufe 1", App.ctx.stage.stage === 1, App.ctx.stage.stage);
+  ok("Ohne Vorschläge", App.ctx.items.length === 0, App.ctx.items.length);
+
+  const main = $("main");
+  ok("Hinzufügen geht trotzdem", !!main.querySelector(".addRow"));
+  ok("Und die Seite sagt, warum noch nichts vorgeschlagen wird",
+    /Vorschläge kommen noch/.test(main.textContent));
+
+  D.addManual({ productId: "bananen", week: App.ctx.weekKey });
+  D.addManual({ name: "Blumen für Oma", week: App.ctx.weekKey });
+  App.render();
+  const m2 = $("main");
+  ok("Selbst ergänzte Positionen stehen auf der Liste",
+    m2.querySelectorAll(".items .item").length === 2,
+    m2.querySelectorAll(".items .item").length);
+  ok("Mit Preis aus dem Katalog", /1,79/.test(m2.textContent));
+  ok("Und ohne erfundenen Preis für die freie Zeile", /Blumen für Oma/.test(m2.textContent));
+  ok("Jetzt gibt es auch eine Summe", !!m2.querySelector(".totals"));
+
+  /* Der ganze Weg muss offenstehen, nicht nur die Anzeige. */
+  const kasten = m2.querySelectorAll(".items input.box");
+  ok("Einlegen geht", kasten.length === 2, kasten.length);
+  kasten[0].checked = true;
+  kasten[0].dispatchEvent(new window.Event("change", { bubbles: true }));
+  ok("Der Wagen füllt sich", D.get().storeChecked.length === 1);
+  ok("Die Wagenleiste erscheint", !!$("main").querySelector(".cartBar"));
+  App.openStore();
+  ok("Die Gangansicht funktioniert auch hier",
+    /von 2/.test($("storeProg").textContent), $("storeProg").textContent);
+  App.closeStore();
+
+  /* Und die Kopfzeile beschreibt die Liste, nicht die Datenlage. */
+  ok("Die Unterzeile spricht von der Liste",
+    /Position/.test($("largeTitle").textContent), $("largeTitle").textContent.trim());
+}
+
 console.log("\n--- Doch aufgegessen ---");
 {
   /* Der Verlust ist die einzige große Zahl der App, die nie

@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1421 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1438 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -959,6 +959,39 @@ Knöpfe federn beim Druck, das Häkchen springt auf, das Glückwunsch-
 Abzeichen dreht sich hinein. Bei „Bewegung reduzieren" entfällt alles
 davon, ohne dass Inhalt verloren geht.
 
+#### Eine Liste ist eine Liste, auch ohne Vorhersage
+
+Gemessen an einem einzigen erfassten Bon war das der **gesamte**
+Inhalt der Einkaufsliste:
+
+> Zwei Bons je Produkt, dann kommen die Vorschläge.
+
+Ein Satz und ein Knopf, vier bis acht Wochen lang — so lange braucht
+die App, bis sie jedes Produkt zweimal gesehen hat. Und weil das
+Erfassen am Ende `goto("liste")` aufruft, war genau das der **erste
+Bildschirm nach der ersten echten Handlung** eines neuen Nutzers. Er
+sagte: kann ich noch nicht.
+
+Dabei war alles fertig gebaut. Die Suche über 846 Produkte, das freie
+Eintippen, der Wagen, die Gangansicht, das Teilen — nur gesperrt, weil
+noch keine *Vorhersage* möglich war. Als könnte man eine Einkaufsliste
+nur schreiben, wenn ein Algorithmus mithilft.
+
+Der Ausstieg ist weg. Von der ersten Minute an ist die Seite eine
+Einkaufsliste, die man selbst füllt: Katalogprodukt mit Preis, freie
+Zeile ohne, Wagen, Gangansicht, Teilen. Was die App dazulernt, kommt
+oben drauf, sobald es so weit ist — und bis dahin steht am Ende der
+Liste eine ruhige Zeile, die sagt, woran es liegt („1 Bon erfasst — ab
+dem zweiten je Produkt lernt die App den Rhythmus"). Die Auskunft war
+richtig; sie war nur kein Grund, das Werkzeug wegzunehmen.
+
+Zwei Kleinigkeiten aus derselben Richtung: die Summe erscheint erst,
+wenn es etwas zu summieren gibt — „0 Positionen · 0,00 €" unter einer
+leeren Liste ist ein Formular, das sich selbst ausfüllt. Und die
+Unterzeile im Kopf beschreibt jetzt auch in den frühen Wochen die
+**Liste** statt der Datenlage; sie war an Stufe 2 gebunden und fiel
+davor auf „1 Bon · 2 Produkte" zurück.
+
 #### Der Schätzung widersprechen können
 
 Der **Verlust** ist die einzige große Zahl dieser App, die nie
@@ -1356,11 +1389,11 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1421
+npm test          # alle 1438
 npm run test:algo # 899 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, Sicherheit, Sicherung, Verschwendung, Wochenstreifen,
                   #   Kontrast, Lernen, Rückblick) plus die Simulation
-npm run test:ui   # 479 Oberflächentests in jsdom
+npm run test:ui   # 496 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

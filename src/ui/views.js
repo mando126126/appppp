@@ -968,18 +968,28 @@ function viewListe(ctx, app) {
   const c = frag();
   const S = Data.get();
 
-  if (ctx.stage.stage <= 1) {
-    const e = emptyView(
-      ctx.history.length ? "Zwei Bons je Produkt, dann kommen die Vorschläge." : "Noch keine Daten.",
-      "Einkauf erfassen", () => app.goto("erfassen"));
-    if (!ctx.history.length) {
-      const demo = el("button", "cta light", "Beispieldaten laden");
-      demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Geladen"); });
-      e.append(demo);
-    }
-    c.append(e);
-    return c;
-  }
+  /* KEIN AUSSTIEG MEHR FÜR DIE FRÜHEN WOCHEN.
+     ----------------------------------------------------------------
+     Hier stand ein `return`: bis die App zwei Bons je Produkt gesehen
+     hatte, zeigte diese Seite einen Satz und einen Knopf. Vier bis
+     acht Wochen lang. Gemessen an einem einzigen erfassten Bon war
+     das der gesamte Inhalt:
+
+         „Zwei Bons je Produkt, dann kommen die Vorschläge."
+
+     Und weil das Erfassen am Ende `goto("liste")` aufruft, war das
+     der erste Bildschirm nach der ersten echten Handlung eines neuen
+     Nutzers. Er sagte: kann ich noch nicht.
+
+     Dabei war alles da. Die Suche über 846 Produkte, das freie
+     Eintippen, der Ladenmodus, das Teilen, der Wagen — nur gesperrt,
+     weil noch keine VORHERSAGE möglich war. Als könnte man eine
+     Einkaufsliste nur schreiben, wenn ein Algorithmus mithilft.
+
+     Jetzt ist die Seite von der ersten Minute an eine Einkaufsliste,
+     die man selbst füllt. Was die App dazulernt, kommt oben drauf,
+     wenn es so weit ist — und bis dahin sagt eine Zeile am Ende,
+     woran es liegt. */
 
   // Der Rückblick steht obenan, aber nur wenn er fällig ist. Eine
   // Karte, die jeden Tag da ist, ist kein Anlass mehr.
@@ -1034,7 +1044,9 @@ function viewListe(ctx, app) {
 
   const ul = el("ul", "items");
   if (!ctx.items.length) {
-    ul.append(el("li", "item", '<p class="empty">Nichts fällig — die Liste ist leer.</p>'));
+    ul.append(el("li", "item", `<p class="empty">${esc(ctx.stage.stage >= 2
+      ? "Nichts fällig — die Liste ist leer."
+      : "Noch nichts drauf. Tippe unten auf „Etwas hinzufügen“.")}</p>`));
   }
   if (home.length && food.length) ul.append(el("li", "sectionRow", "Lebensmittel"));
   food.forEach((it) => ul.append(listItem(it, ctx, app)));
@@ -1063,6 +1075,29 @@ function viewListe(ctx, app) {
   add.addEventListener("click", () => addSheet(ctx, app));
   list.body.append(add);
 
+  /* Warum hier (noch) nichts vorgeschlagen wird. Eine Zeile am Ende,
+     nicht ein Satz anstelle der Seite: die Auskunft ist richtig, aber
+     sie ist kein Grund, das Werkzeug wegzunehmen. */
+  if (ctx.stage.stage <= 1) {
+    list.body.append(uiRow(
+      ctx.history.length ? "Vorschläge kommen noch" : "Noch keine Einkäufe erfasst",
+      ctx.history.length
+        ? `${ctx.totals.receipts} ${ctx.totals.receipts === 1 ? "Bon" : "Bons"} erfasst — ab dem zweiten je Produkt lernt die App den Rhythmus`
+        : "Bis dahin ist das hier deine normale Einkaufsliste",
+      null, { onClick: () => app.goto("erfassen") }));
+  }
+
+  /* Die Summe erst, wenn es etwas zu summieren gibt. „0 Positionen ·
+     0,00 €“ unter einer leeren Liste ist keine Auskunft, sondern ein
+     Formular, das sich selbst ausfüllt. */
+  if (ctx.items.length) list.body.append(listTotals(ctx, on, sumOn, listInfo));
+  c.append(list);
+
+  return finishListe(c, ctx, app, on, sumOn, hinweise, dringend);
+}
+
+/** Die Summenzeile am Fuß der Liste. */
+function listTotals(ctx, on, sumOn, listInfo) {
   const full = ctx.items.filter((i) => i.on).reduce((a, i) => a + i.price, 0);
   const tot = el("div", "totals");
   const links = el("div");
@@ -1074,9 +1109,11 @@ function viewListe(ctx, app) {
   label.append(info);
   links.append(label, el("div", "big", eur(sumOn)));
   tot.append(links, el("div", "saved", full > sumOn ? "− " + eur(full - sumOn) : ""));
-  list.body.append(tot);
-  c.append(list);
+  return tot;
+}
 
+/** Wagen, Knöpfe und Hinweise unter der Liste. */
+function finishListe(c, ctx, app, on, sumOn, hinweise, dringend) {
   /* --- Der Wagen ---
    * Nur wenn etwas drin liegt. Eine Leiste, die auch leer dasteht,
    * macht aus „nichts im Wagen“ eine Nachricht statt eines Zustands
@@ -1114,6 +1151,14 @@ function viewListe(ctx, app) {
   share.addEventListener("click", () => app.shareList());
   actions.append(go, share);
   c.append(actions);
+
+  /* Ohne jede Historie bleibt der Weg zu den Beispieldaten stehen —
+     er war vorher Teil des Leerzustands, den es nicht mehr gibt. */
+  if (!ctx.history.length) {
+    const demo = el("button", "cta light", "Beispieldaten ansehen");
+    demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Geladen"); });
+    c.append(demo);
+  }
 
   if (hinweise.length && !dringend) c.append(hintsRow(ctx, app, hinweise));
 
