@@ -9867,6 +9867,30 @@ function activeHoards(hoards) {
  *    doppelt: gegen Rückschlüsse auf den Einzelnen und gegen einen
  *    falsch erkannten Bon, der sonst den Index verschöbe.
  *
+ * DIE OFFENE STELLE, UND SIE IST NICHT KLEIN:
+ *
+ * `buildPriceIndex` zählt SICHTUNGEN, nicht HAUSHALTE. Solange jeder
+ * ehrlich einmal meldet, ist das dasselbe. Wer aber dieselbe Sichtung
+ * fünfmal schickt, erfüllt die k-Schwelle im Alleingang — und dann
+ * schützt sie niemanden mehr und glättet auch nichts.
+ *
+ * Ohne Kennung lässt sich das nicht auflösen: „ein Haushalt, eine
+ * Meldung" zu prüfen setzt voraus, Haushalte unterscheiden zu können,
+ * und genau das soll es hier nicht geben. Drei Auswege, alle mit
+ * Preis:
+ *
+ *   a) Ratenbegrenzung je IP. Schwach, aber billig.
+ *   b) Ein wöchentlich wechselndes, blind signiertes Ticket
+ *      (Privacy-Pass-Verfahren): beweist „eine Meldung je Woche",
+ *      ohne den Absender zu kennen. Richtig, und echte Kryptoarbeit.
+ *   c) Es bleibt bei „k Meldungen" statt „k Haushalten" — dann muss
+ *      die App genau das sagen und nichts anderes behaupten.
+ *
+ * Vor Stufe 2 muss eine davon gewählt sein. Es ist dieselbe
+ * Fehlerklasse wie die Doppelzählungen weiter oben in diesem
+ * Projekt: eine Zahl, die über einen Kanal gezählt wird, der etwas
+ * anderes misst, als ihr Name sagt.
+ *
  * DIESES MODUL ÜBERTRÄGT NICHTS. Es entscheidet nur, was eine
  * übertragbare Sichtung wäre, und rechnet den Index aus fertigen
  * Sichtungen. Beides ist reine Logik und hier prüfbar — die Frage,

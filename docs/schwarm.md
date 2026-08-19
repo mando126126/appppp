@@ -133,6 +133,30 @@ Grenzen, die schon im Code stehen (`offerAdvisor.js`):
   Vorschau auf einen Kauf, der noch nicht stattgefunden hat.
   Realisiert zählt sie erst `receiptSavings` beim Buchen.
 
+### Die offene Stelle: k zählt Meldungen, nicht Haushalte
+
+`buildPriceIndex` zählt **Sichtungen**. Solange jeder einmal meldet,
+ist das dasselbe wie „fünf Haushalte". Wer dieselbe Sichtung fünfmal
+schickt, erfüllt die Schwelle aber im Alleingang — und dann schützt
+sie niemanden mehr und glättet auch nichts.
+
+Ohne Kennung lässt sich das nicht sauber auflösen: „ein Haushalt,
+eine Meldung" zu prüfen setzt voraus, Haushalte unterscheiden zu
+können, und genau das soll es nicht geben. Drei Auswege:
+
+| Weg | Bewertung |
+|---|---|
+| **a) Ratenbegrenzung je IP** | schwach (geteilte Anschlüsse, Mobilfunk-NAT, VPN), aber billig und sofort |
+| **b) Blind signiertes Wochenticket** (Privacy-Pass-Verfahren) | beweist „eine Meldung je Woche", ohne den Absender zu kennen. Die richtige Lösung — und echte Kryptoarbeit plus ein zweiter Dienst, der die Tickets ausgibt |
+| **c) Ehrlich umbenennen** | es bleibt bei „k **Meldungen**" statt „k Haushalten", und die App sagt genau das |
+
+**Vor Stufe 2 muss eine davon gewählt sein.** Es ist dieselbe
+Fehlerklasse wie die Doppelzählungen an anderer Stelle in diesem
+Projekt: eine Zahl, die über einen Kanal gezählt wird, der etwas
+anderes misst, als ihr Name sagt. Mein Vorschlag für den Anfang: (a)
+plus (c) — schwacher Schutz, aber eine ehrliche Beschriftung. (b),
+sobald es genug Nutzer gibt, dass sich Missbrauch lohnt.
+
 ---
 
 ## 4. Missbrauch
