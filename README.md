@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1638 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1642 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -1963,6 +1963,47 @@ zurückgeworfen, das gerade erst funktioniert.
 
 ---
 
+## Nachtrag: „Kaes.aufschn." fällt nicht mehr auf Wurst
+
+Der oben festgehaltene, bewusst nicht mitkorrigierte Fund bekam eine
+eigene Runde, wie angekündigt.
+
+**Der erste Reparaturversuch war zu groß.** Naheliegend schien
+dieselbe Regel, die `looksLikeMeat` schon länger befolgt: ein
+Teilwort-Treffer zählt nur an Wortanfang oder -ende, nie mittendrin.
+Implementiert, gemessen — und der gemeldete Fall verschwand
+tatsächlich. Aber ein neuer tauchte im selben Testlauf auf:
+„ZottProteinPuddingCho200g" verlor seinen bis dahin richtigen Treffer
+auf „Protein-Pudding". Der Grund: „proteinpudding" steht dort ECHT
+mittendrin, umschlossen von Marke (Zott) und Geschmack (Cho[ko]),
+ohne Leerzeichen zusammengeklebt — genau wie es auf echten Bons
+laufend vorkommt. Die allgemeine Regel konnte den einen Fall nicht
+lösen, ohne den anderen kaputtzumachen.
+
+**Der eigentliche Fehler saß nicht im Algorithmus, sondern in einem
+einzelnen Katalog-Alias.** `wurst_aufschnitt` trug „AUFSCHNITT" als
+BLOSSEN, von „Wurst" losgelösten Alias. Bare, ohne Qualifizierung, ist
+das Wort im Deutschen nicht eindeutig — Aufschnitt gibt es auch beim
+Käse, und der Katalog hatte dafür ohnehin kein Gegenstück, gegen das
+„Käse" hätte konkurrieren können. Diesen einen Alias entfernt, und der
+gemeldete Fall verschwindet vollständig — ohne die allgemeinere,
+riskantere Regel, und ohne den Pudding-Treffer zu verlieren. Der volle
+Name „Wurstaufschnitt" bleibt über die normale Ähnlichkeitsrechnung
+weiterhin treffbar, auch als bloßes „AUFSCHNITT" ganz ohne „Wurst"
+davor.
+
+**Die Lehre, die den Umweg wert war:** eine Sicherheitsregel, die an
+einer Stelle bewährt ist (`looksLikeMeat`, gegen Fleisch-
+Fehlzuordnungen), überträgt sich nicht automatisch verlustfrei auf
+eine andere Stelle mit anderen Daten. Erst die volle Messung über alle
+139 echten Positionen hat das gezeigt — nicht die Überlegung vorher,
+so plausibel sie klang. Beide Versuche stehen in `test/matching.js`,
+Abschnitt G: der verworfene Weg als Begründung im Kommentar, der
+behaltene als drei Tests, inklusive des Falls, den die verworfene
+Regel kaputtgemacht hätte.
+
+---
+
 ## Aufbau
 
 ```
@@ -2025,8 +2066,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1638
-npm run test:algo # 1091 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1642
+npm run test:algo # 1095 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

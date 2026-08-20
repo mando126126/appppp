@@ -417,7 +417,16 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
 ]);
 
 group("Wurstwaren", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
-  ["wurst_aufschnitt","Wurstaufschnitt",M,10,4,EST,1.79,150,["AUFSCHNITT","LYONER","MORTADELLA"]],
+  /* „AUFSCHNITT" stand hier lange als eigener, von „Wurst" losgelöster
+     Alias. Bare, ohne Qualifizierung ist das Wort im Deutschen aber
+     nicht eindeutig — Aufschnitt gibt es auch beim Käse. Eine echte
+     Bon-Zeile „Kaes.aufschn." landete deshalb bei Wurst statt Käse:
+     die Kürzungsregel griff exakt auf diesen isolierten Alias zu.
+     Der volle Name „Wurstaufschnitt" bleibt über die allgemeine
+     Endungs-Erkennung (boundaryOverlap) weiterhin treffbar — auch als
+     bloßes „AUFSCHNITT" ohne „Wurst" davor —, nur eben nicht mehr als
+     Vorrang-Kurzschluss vor jeder Käse-Zeile. */
+  ["wurst_aufschnitt","Wurstaufschnitt",M,10,4,EST,1.79,150,["LYONER","MORTADELLA"]],
   ["salami","Salami",M,25,10,EST,1.99,100,["SALAMI"]],
   ["schinken_gekocht","Kochschinken",M,10,4,EST,1.99,150,["KOCHSCHINKEN","SCHINKEN GEKOCHT"]],
   ["schinken_roh","Rohschinken",M,21,10,EST,2.49,100,["ROHSCHINKEN","SCHWARZWAELDER SCHINKEN","SERRANO"],{note:"Bei geräuchertem Schinken laut Fachquellen bis 2 Wochen über MHD; bei schmierigem Belag entsorgen."}],

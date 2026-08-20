@@ -298,6 +298,62 @@ t("Über alle echten Bons hinweg: keine Verschlechterung durch die neue Regel", 
 });
 
 // ================================================================
+section("G: „Kaes.aufschn.“ fällt nicht mehr auf Wurst");
+
+/* Beim Testen von Abschnitt F sichtbar geworden: „Kaes.aufschn."
+   matchte auf „Wurstaufschnitt" (Fleisch), nicht auf ein Käseprodukt
+   — weil „AUFSCHNITT" als BLOSSER, von „Wurst" losgelöster Alias im
+   Katalog stand. Bare, ohne Qualifizierung, ist das Wort im
+   Deutschen nicht eindeutig: Aufschnitt gibt es auch beim Käse.
+
+   Der erste Reparaturversuch war eine allgemeinere Regel
+   („Teilwort-Treffer nur an Wortanfang/-ende, nie mittendrin" — das
+   Prinzip, das `looksLikeMeat` schon länger befolgt). Sie hat den
+   Fall gelöst, aber auch einen neuen geschaffen: „ZottProtein-
+   PuddingCho200g" verlor seinen bis dahin richtigen Treffer auf
+   „Protein-Pudding", weil das Wort dort ECHT mittendrin steht — von
+   Marke und Geschmack umschlossen, ohne Leerzeichen zusammen-
+   geklebt, wie es auf echten Bons dauernd vorkommt. Die allgemeine
+   Regel wurde deshalb wieder verworfen; der gezielte Fix — den
+   irreführenden Alias entfernen — behebt den gemeldeten Fall
+   vollständig und ohne diesen Nebenschaden. */
+
+t("„Kaes.aufschn.“ bekommt keinen falschen Treffer mehr", () => {
+  const m = matchProduct("Kaes.aufschn.");
+  const p = m.productId ? FOOD_DATABASE.find((x) => x.id === m.productId) : null;
+  return !p || p.category !== "Wurstwaren"
+    ? true : `landete auf „${p.name}“ (${p.category})`;
+});
+
+t("Der volle Name „Wurstaufschnitt“ bleibt weiterhin treffbar", () => {
+  const m = matchProduct("Wurstaufschnitt 150g");
+  return m.productId === "wurst_aufschnitt" && !m.needsConfirmation
+    ? true : JSON.stringify(m);
+});
+
+t("Zusammengeklebte Marke+Produkt+Geschmack verliert den Treffer NICHT", () => {
+  // Der Fall, an dem die verworfene Regel gescheitert wäre: das
+  // Zielwort steht echt mittendrin, ohne Leerzeichen.
+  const m = matchProduct("ZottProteinPuddingCho200g");
+  return m.productId === "proteinpudding"
+    ? true : JSON.stringify(m);
+});
+
+t("Über alle echten Bons hinweg: keine Verschlechterung durch diese Korrektur", () => {
+  const geprueft139 = fs.readdirSync(path.join(__dirname, "fixtures"))
+    .filter((f) => f.endsWith(".txt"))
+    .flatMap((f) => parseReceipt(bon(f.replace(/\.txt$/, ""))).items);
+  let ok = 0, unsicher = 0;
+  geprueft139.forEach((it) => {
+    const m = matchProduct(it.raw);
+    if (m.productId && !m.needsConfirmation) ok++;
+    else if (m.productId) unsicher++;
+  });
+  const quote = (ok + unsicher) / geprueft139.length;
+  return quote >= 0.50 ? true : `${Math.round(quote * 100)}%`;
+});
+
+// ================================================================
 console.log("\n" + "=".repeat(60));
 console.log(`ABGLEICH: ${pass} bestanden, ${fail} fehlgeschlagen`);
 console.log("=".repeat(60));
