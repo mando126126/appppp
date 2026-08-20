@@ -83,7 +83,15 @@ const FILLER_WORDS = new Set([
      zu "Proteinjogh.sort.200g" (Vorschlag: Proteinriegel, 0.74).
      Geprüft: keines der beiden kollidiert mit einem echten
      Katalog-Token (test/matching.js). */
-  "gl", "vl"
+  "gl", "vl",
+  /* "AS" (REWE/Netto: "American Style"-Toastbrot) und "KM" (Netto,
+     Bedeutung nicht sicher geklärt, aber strukturell identisch zu
+     GL/VL: ein zwei Buchstaben langes Kürzel vor dem eigentlichen
+     Produktnamen) blockierten ebenfalls nur den Rest der Zeile:
+     "AS Sandwich Vollkorn 750g" (kein Treffer) wird ohne "AS" zu
+     "Sandwich Vollkorn 750g" (Vorschlag, 0.81). Geprüft: keine
+     Kollision mit einem echten Katalog-Token (test/matching.js). */
+  "as", "km"
 ]);
 
 /**

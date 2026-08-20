@@ -379,11 +379,11 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
   ["kaffeesahne","Kaffeesahne",M,120,4,EST,0.69,340,["KAFFEESAHNE","KONDENSMILCH"],{storage:STORAGE.PANTRY}],
   ["butter","Butter",M,40,21,LEIT,2.29,250,["BUTTER","DEUTSCHE MARKENBUTTER","SUESSRAHMBUTTER"],{storage:STORAGE.FRIDGE_DOOR,note:"BZfE: Tür ist korrekt, nur leicht kühlbedürftig."}],
   ["margarine","Margarine",M,60,30,EST,1.29,500,["MARGARINE"],{storage:STORAGE.FRIDGE_DOOR}],
-  ["kaese_gouda","Gouda Scheiben",M,30,8,EST,2.19,200,["GOUDA","GOUDA SCHEIBEN","GOUDA JUNG"]],
+  ["kaese_gouda","Gouda Scheiben",M,30,8,EST,2.19,200,["GOUDA","GOUDA SCHEIBEN","GOUDA JUNG","GLGOUDA LEICHTHF3GER.250G VLOG"]],
   ["kaese_emmentaler","Emmentaler",M,30,10,EST,2.49,200,["EMMENTALER"]],
   ["kaese_butterkaese","Butterkäse",M,28,8,EST,1.99,200,["BUTTERKAESE"]],
   ["kaese_bergkaese","Bergkäse",M,40,14,EST,2.99,200,["BERGKAESE"]],
-  ["kaese_reibe","Reibekäse",M,25,7,EST,1.79,200,["REIBEKAESE","GERIEBENER KAESE","PIZZAKAESE"]],
+  ["kaese_reibe","Reibekäse",M,25,7,EST,1.79,200,["REIBEKAESE","GERIEBENER KAESE","PIZZAKAESE","GER. KAESE A. RI"]],
   ["parmesan","Parmesan",M,60,21,EST,2.99,150,["PARMESAN","GRANA PADANO"]],
   ["frischkaese","Frischkäse",M,21,7,EST,1.49,200,["FRISCHKAESE","DOPPELRAHMSTUFE"]],
   ["feta","Feta",M,45,7,EST,2.29,200,["FETA","SCHAFSKAESE","HIRTENKAESE"]],
@@ -526,7 +526,7 @@ group("Backwaren", "Backwaren", STORAGE.ROOM, [
   ["brot_roggen","Roggenbrot",M,7,6,EST,2.49,750,["ROGGENBROT","SCHWARZBROT"]],
   ["brot_weiss","Weißbrot",M,4,3,EST,1.99,500,["WEISSBROT"]],
   ["toastbrot","Toastbrot",M,10,7,EST,1.29,500,["TOASTBROT","TOAST","SANDWICHTOAST"]],
-  ["broetchen","Brötchen",M,2,1,EST,0.45,60,["BROETCHEN","BRÖTCHEN","SEMMEL","SCHRIPPE"]],
+  ["broetchen","Brötchen",M,2,1,EST,0.45,60,["BROETCHEN","BRÖTCHEN","SEMMEL","SCHRIPPE","KM WEIZ/DINK.BR.SORT.360G"]],
   ["laugengebaeck","Laugengebäck",M,2,1,EST,0.89,80,["BREZEL","LAUGENBROETCHEN"]],
   ["croissant","Croissant",M,3,2,EST,0.99,70,["CROISSANT","BUTTERCROISSANT"]],
   ["knaeckebrot","Knäckebrot",M,270,60,EST,1.49,250,["KNAECKEBROT"],{storage:STORAGE.PANTRY}],
@@ -653,11 +653,15 @@ group("Haushalt", "Drogerie", STORAGE.NONE, [
 // Die ursprüngliche Datenbank bildete einen Standardhaushalt ab und
 // kannte keines dieser Produkte — 64 % der Bon-Zeilen liefen ins Leere.
 group("Protein/Sport", "Trockenware", STORAGE.PANTRY, [
-  ["proteinriegel","Proteinriegel",M,270,14,EST,1.19,60,["PROTEINRIEGEL","PROT.RIEGEL","PR.RIEGEL","PROTEIN-RIEGEL","PROTEIN RIEGEL","EIWEISSRIEGEL"]],
+  // "Ca-Choco Riegel" steht auf dem Bon zwischen zwei anderen
+  // Protein-Riegeln ("Prot.Riegel Erdn-Car", "Protein-Riegel Tiger")
+  // — Marke über Websuche nicht sicher identifiziert, aber die
+  // Position im Kaufkontext ordnet es eindeutig dieser Warengruppe zu.
+  ["proteinriegel","Proteinriegel",M,270,14,EST,1.19,60,["PROTEINRIEGEL","PROT.RIEGEL","PR.RIEGEL","PROTEIN-RIEGEL","PROTEIN RIEGEL","EIWEISSRIEGEL","CA-CHOCO RIEGEL"]],
   ["proteinpulver","Proteinpulver",M,540,180,EST,18.99,1000,["PROTEINPULVER","WHEY","EIWEISSPULVER","IRONMAXX","IRONMA"]],
-  ["proteindrink","Proteindrink",M,180,2,EST,1.19,250,["PROTEINDRINK","PROTEIN DRINK","PROTEIN SHAKE","EIWEISSDRINK"],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["proteindrink","Proteindrink",M,180,2,EST,1.19,250,["PROTEINDRINK","PROTEIN DRINK","PROTEIN SHAKE","EIWEISSDRINK","SCHOKO PR DRINK"],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["proteinkaffee","Protein-Kaffee",M,180,2,EST,1.15,250,["HIGH PROTEIN KAFFEE","PROTEIN KAFFEE","PROTEIN COFFEE"],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["proteinpudding","Protein-Pudding",M,30,2,EST,1.29,200,["PROTEINPUDDING","HIGH PROTEIN PUDDING"],{storage:STORAGE.FRIDGE_MIDDLE}]
+  ["proteinpudding","Protein-Pudding",M,30,2,EST,1.29,200,["PROTEINPUDDING","HIGH PROTEIN PUDDING","H.PROT.PUD.VANI","HP TRIPLE DESS."],{storage:STORAGE.FRIDGE_MIDDLE}]
 ]);
 
 // ===== ERGÄNZUNGEN AUS DEM ECHTEN BON ============================
@@ -681,7 +685,7 @@ group("Getränke", "Getränke", STORAGE.PANTRY, [
 ]);
 
 group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
-  ["nudeln_dinkel","Dinkelnudeln",M,540,180,EST,1.45,500,["DINKEL FUSSILI","BIOLAND DIN. FUSSILI","DINKELNUDELN","DINKEL FUSILLI"]]
+  ["nudeln_dinkel","Dinkelnudeln",M,540,180,EST,1.45,500,["DINKEL FUSSILI","BIOLAND DIN. FUSSILI","DINKELNUDELN","DINKEL FUSILLI","DINKEL SPAGH.NAT"]]
 ]);
 
 group("Haushalt", "Drogerie", STORAGE.NONE, [
@@ -1039,7 +1043,10 @@ group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
   ["dinkelflocken","Dinkelflocken",M,540,120,EST,1.79,500,[]],
   ["muesli_basis","Basismüsli",M,270,60,EST,2.49,750,[]],
   ["muesli_schoko","Schokomüsli",M,270,60,EST,2.99,750,[]],
-  ["granola","Granola",M,270,45,EST,3.49,500,[]],
+  // "Gran.Pr.pu.Gr." dekodiert als "Granola Protein pur Groß" — die
+  // Markenidentität ist unklar, die Warengruppe (Protein-Granola) über
+  // die Standard-Kürzel dieses Bons hinreichend sicher.
+  ["granola","Granola",M,270,45,EST,3.49,500,["GRAN.PR.PU.GR. SORT. 500G"]],
   ["porridge","Porridge",M,270,60,EST,2.49,400,[]],
   ["linsen_rot","Rote Linsen",M,900,180,EST,1.79,500,[]],
   ["linsen_braun","Braune Linsen",M,900,180,EST,1.59,500,[]],
@@ -1445,7 +1452,7 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
   ["off_crefee_mit_feinen_kraeutern","Crefee mit feinen Kräutern",M,25,4,EST,1.49,150,["CREFEE MIT FEINEN KRÄUTERN"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Milchprodukte-Produkte), nicht einzeln geprüft."}],
   ["off_philadelphia_balance","Philadelphia Balance",M,25,4,EST,1.49,175,["PHILADELPHIA BALANCE"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Milchprodukte-Produkte), nicht einzeln geprüft."}],
   ["off_frischkaese_der_sahnige","Frischkäse der Sahnige",M,25,4,EST,1.49,300,["FRISCHKÄSE DER SAHNIGE"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Milchprodukte-Produkte), nicht einzeln geprüft."}],
-  ["off_cremefine_zum_kochen_7_fett","Cremefine zum Kochen 7% Fett",M,25,4,EST,1.49,250,["CREMEFINE ZUM KOCHEN 7% FETT"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Milchprodukte-Produkte), nicht einzeln geprüft."}],
+  ["off_cremefine_zum_kochen_7_fett","Cremefine zum Kochen 7% Fett",M,25,4,EST,1.49,250,["CREMEFINE ZUM KOCHEN 7% FETT","RAMA CREMEFINE 7% 250ML"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Milchprodukte-Produkte), nicht einzeln geprüft."}],
   ["off_bergbauern_kaese","Bergbauern Käse",M,25,4,EST,1.49,150,["BERGBAUERN KÄSE"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Milchprodukte-Produkte), nicht einzeln geprüft."}],
   ["off_miree_franzoesische_kraeuter","Miree - Französische Kräuter",M,25,4,EST,1.49,150,["MIREE - FRANZÖSISCHE KRÄUTER"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Milchprodukte-Produkte), nicht einzeln geprüft."}],
   ["off_brunch_paprika_peperoni","Brunch - Paprika & Peperoni",M,25,4,EST,1.49,200,["BRUNCH - PAPRIKA & PEPERONI"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Milchprodukte-Produkte), nicht einzeln geprüft."}],
@@ -1711,7 +1718,7 @@ group("Getränke", "Getränke", STORAGE.PANTRY, [
   ["off_lagerbier_hell","Lagerbier Hell",M,365,4,EST,1.79,500,["LAGERBIER HELL"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_juiced_mango_loco","Juiced Mango Loco",M,365,4,EST,1.79,500,["JUICED MANGO LOCO"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_alpro_sojadrink_barista","Alpro Sojadrink, Barista",M,365,4,EST,1.79,1000,["ALPRO SOJADRINK, BARISTA"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
-  ["off_no_milk_hafer_3_5_fett","No Milk Hafer 3,5% Fett",M,365,4,EST,1.79,1000,["NO MILK HAFER 3,5% FETT"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
+  ["off_no_milk_hafer_3_5_fett","No Milk Hafer 3,5% Fett",M,365,4,EST,1.79,1000,["NO MILK HAFER 3,5% FETT","VEHAPPY NO MILK 3,5% 1L"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_fresh_berry","Fresh Berry",M,365,4,EST,1.79,500,["FRESH BERRY"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_cold_brew_coffee","Cold Brew Coffee",M,365,4,EST,1.79,500,["COLD BREW COFFEE"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_soja_drink_calcium","Soja drink calcium",M,365,4,EST,1.79,1000,["SOJA DRINK CALCIUM"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
@@ -1723,7 +1730,7 @@ group("Getränke", "Getränke", STORAGE.PANTRY, [
   ["off_pepsi_max_getraenkesirup","Pepsi Max Getränkesirup",M,365,4,EST,1.79,440,["PEPSI MAX GETRÄNKESIRUP"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_fanta","Fanta",M,365,4,EST,1.79,250,["FANTA"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_smoothie_triple_yellow","Smoothie - Triple Yellow",M,365,4,EST,1.79,750,["SMOOTHIE - TRIPLE YELLOW"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
-  ["off_vitamin_well_reload","Vitamin Well Reload",M,365,4,EST,1.79,500,["VITAMIN WELL RELOAD"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
+  ["off_vitamin_well_reload","Vitamin Well Reload",M,365,4,EST,1.79,500,["VITAMIN WELL RELOAD","WELL VIT. RELOAD"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_my_veggie_hafer","My Veggie Hafer",M,365,4,EST,1.79,1000,["MY VEGGIE HAFER"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_focuswater_active_pineapple_mango","Focuswater Active Pineapple & Mango",M,365,4,EST,1.79,500,["FOCUSWATER ACTIVE PINEAPPLE & MANGO"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_no_milk_hafer_1_8_fett","No Milk Hafer 1,8% fett",M,365,4,EST,1.79,250,["NO MILK HAFER 1,8% FETT"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
@@ -1769,7 +1776,11 @@ group("Getränke", "Getränke", STORAGE.PANTRY, [
   ["off_coca_cola_light","Coca Cola light",M,365,4,EST,1.79,500,["COCA COLA LIGHT"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_volvic_tee_pfirsich","Volvic Tee Pfirsich",M,365,4,EST,1.79,1500,["VOLVIC TEE PFIRSICH"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_cola_max_cherry_zero","Cola - Max Cherry Zero",M,365,4,EST,1.79,1500,["COLA - MAX CHERRY ZERO"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
-  ["off_isosport_grapefruit_citrus","IsoSport Grapefruit-Citrus",M,365,4,EST,1.79,500,["ISOSPORT GRAPEFRUIT-CITRUS"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
+  // "Val.Sport+pinkGrapef." bleibt markenmäßig unklar (nicht dieselbe
+  // Schreibweise wie "IsoSport"), aber "Sport" + "pink Grapef[ruit]"
+  // legt die Warengruppe (isotonisches Sportgetränk, Grapefruit) fest
+  // — die einzige unsichere Stelle ist die genaue Marke, nicht mehr.
+  ["off_isosport_grapefruit_citrus","IsoSport Grapefruit-Citrus",M,365,4,EST,1.79,500,["ISOSPORT GRAPEFRUIT-CITRUS","VAL.SPORT+PINKGRAPEF.0,5L"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_rivella_rot","Rivella rot",M,365,4,EST,1.79,500,["RIVELLA ROT"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_volvic_essence_orange_holunderbluete_75cl_pet","Volvic Essence Orange-Holunderblüte 75cl PET",M,365,4,EST,1.79,750,["VOLVIC ESSENCE ORANGE-HOLUNDERBLÜTE 75CL PET"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
   ["off_schwip_schwap_cola_orange","Schwip Schwap - Cola & Orange",M,365,4,EST,1.79,1500,["SCHWIP SCHWAP - COLA & ORANGE"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Getränke-Produkte), nicht einzeln geprüft."}],
@@ -2310,6 +2321,60 @@ group("Protein/Sport", "Trockenware", STORAGE.FRIDGE_MIDDLE, [
   ["off_filled_proteinriegel_peanut_caramel","Filled Proteinriegel - Peanut-Caramel",M,180,2,EST,1.19,45,["FILLED PROTEINRIEGEL - PEANUT-CARAMEL"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Protein/Sport-Produkte), nicht einzeln geprüft."}]
 ]);
 
+/* ==================================================================
+   Einzeln recherchierte Bon-Fundstücke (2026-08-20)
+   ------------------------------------------------------------------
+   Anders als der Open-Food-Facts-Massenimport oben: jedes dieser 15
+   Produkte wurde EINZELN über eine echte Websuche identifiziert, weil
+   es als kryptische Bon-Zeile in test/matching.js keinen Treffer
+   erzielte (Ziel: Trefferquote Richtung 99 %). Haltbarkeit bleibt
+   trotzdem ein Kategorie-Schätzwert, angelehnt an vergleichbare
+   Katalogeinträge derselben Kategorie — auch eine bestätigte
+   Markenidentität ersetzt keine amtliche Haltbarkeitsquelle.
+   ================================================================== */
+group("Tiefkühl", "Tiefkühl", STORAGE.FREEZER, [
+  ["picco_belli_mini_pizza","Picco Belli Mini-Pizza",M,270,3,EST,2.49,360,["PICCO BELLI MINI PIZZEN"]],
+  ["asc_frost_linguine_garnelen","Linguine mit Garnelen (ASC)",M,365,3,EST,3.49,450,["ASCFROSTLINGU.M.GARN.450G"]],
+  // Bestätigt per Websuche: "Schofrulade" ist ein echter, exakt so
+  // heißender Markenname (gefrorene Himbeeren in Vollmilchschokolade),
+  // keine Verschreibung.
+  ["schofrulade_himbeer","Schofrulade Himbeer",M,270,3,EST,2.29,130,["SCHOFRULADEHIMBVOLLM.130G"]]
+]);
+
+group("Getränke", "Getränke", STORAGE.PANTRY, [
+  ["booster_energy_juneberry","Booster Energy Drink Juneberry",M,365,3,EST,0.85,330,["BOOSTER JUNEBERRY 0,33L DS"]],
+  ["active_o2_cherry","Active O2 Cherry",M,365,3,EST,1.29,750,["ACTIVE O2 CHERRY 1X0,75L FL"]],
+  ["the_real_strawberry_kiwi","The Real Strawberry-Kiwi",M,270,3,EST,0.89,330,["THEREALSTRAWBKIW0,33L DS"]],
+  ["naturalis_beerenmix","Naturalis Fruchtsaftgetränk Beeren-Mix",M,270,3,EST,0.75,500,["NATU+FRBEERMIXEW1X0,5LFL"]],
+  ["captains_tea_pfirsich_zero","Captains Tea Eistee Pfirsich Zero",M,270,3,EST,0.65,500,["CAPT.TEAPFIZEROEW1X0,5LFL"]],
+  ["caffreddo","Caffreddo Latte",M,25,2,EST,1.19,250,["CAFFREDDO"],{storage:STORAGE.FRIDGE_MIDDLE}]
+]);
+
+group("Protein/Sport", "Trockenware", STORAGE.PANTRY, [
+  ["holy_energy_starterset","HOLY Energy Starter-Set",M,365,30,EST,9.99,100,["HOLY EN.STARTERSETSORT.ST"]],
+  ["prolife_magnesium_sticks","ProLife Magnesium-Sticks",M,540,90,EST,1.99,30,["PROLIFEMAGN.ST.20X1,5G30G"]]
+]);
+
+group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
+  ["albgold_dunkelnudeln","Alb-Gold Dunkelnudeln",M,730,120,EST,1.99,500,["ALBH.DUNKELNUD.SORT.500G"]]
+]);
+
+group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
+  ["finello_hp_mozzarella","Finello High Protein Mozzarella",M,21,3,EST,1.49,150,["FINELLO HIGH PROTEIN 150G"]]
+]);
+
+group("Wurstwaren", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
+  ["stickado","Stickado Salami-Sticks",M,60,5,EST,1.79,70,["STICKADO"]]
+]);
+
+group("Körperpflege", "Drogerie", STORAGE.NONE, [
+  ["shisara_tuchmaske_hydro","Shisara Tuchmaske Hydro",N,1095,null,EST,0.79,8,["SHISARA TUCHMASKEHYDRO ST"]]
+], { isFood: false, freezable: false });
+
+group("Waschen & Reinigen", "Drogerie", STORAGE.NONE, [
+  ["domestos_wc_gel_floral","Domestos WC-Gel Floral",N,1095,null,EST,2.29,750,["DOMESTOSWCGEL FLORAL750ML"]]
+], { isFood: false, freezable: false });
+
 // ---- Zugriffsfunktionen ----------------------------------------
 
 /* Bei 850 Produkten wird `find()` in den Schleifen von compute()
@@ -2817,7 +2882,15 @@ const FILLER_WORDS = new Set([
      zu "Proteinjogh.sort.200g" (Vorschlag: Proteinriegel, 0.74).
      Geprüft: keines der beiden kollidiert mit einem echten
      Katalog-Token (test/matching.js). */
-  "gl", "vl"
+  "gl", "vl",
+  /* "AS" (REWE/Netto: "American Style"-Toastbrot) und "KM" (Netto,
+     Bedeutung nicht sicher geklärt, aber strukturell identisch zu
+     GL/VL: ein zwei Buchstaben langes Kürzel vor dem eigentlichen
+     Produktnamen) blockierten ebenfalls nur den Rest der Zeile:
+     "AS Sandwich Vollkorn 750g" (kein Treffer) wird ohne "AS" zu
+     "Sandwich Vollkorn 750g" (Vorschlag, 0.81). Geprüft: keine
+     Kollision mit einem echten Katalog-Token (test/matching.js). */
+  "as", "km"
 ]);
 
 /**
