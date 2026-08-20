@@ -2679,6 +2679,85 @@ function ocrPicker(box, cap, app) {
   box.append(wrap);
 }
 
+/**
+ * Eine unsichere Bon-Zeile nach der anderen bestätigen — nie alle auf
+ * einmal. Drei Vorschläge zum Antippen (dieselbe Bewertung wie der
+ * automatische Abgleich, nur die besten drei statt nur der einen),
+ * dazu die Möglichkeit, selbst etwas einzutragen, und eine Zeile
+ * bewusst nicht zu buchen. Kein Dropdown mit dem ganzen Katalog —
+ * genau DAS war die Beschwerde, die zu dieser Karte geführt hat.
+ */
+function renderConfirmStep(box, p, app) {
+  const idx = p.rows.findIndex((r) => r.needsConfirmation);
+  if (idx === -1) return;
+  const rowData = p.rows[idx];
+
+  const entscheiden = (productId) => {
+    p.rows[idx].productId = productId;
+    p.rows[idx].productName = productId ? byId(productId).name : null;
+    p.rows[idx].needsConfirmation = false;
+    p.rows[idx].learn = !!productId;
+    p.sure = p.rows.filter((x) => !x.needsConfirmation).length;
+    p.open = p.rows.filter((x) => x.needsConfirmation).length;
+    app.render();
+  };
+
+  const card = el("div", "confirmCard");
+  card.append(el("div", "confirmProgress",
+    `${zahlwort(p.open, "Position", "Positionen")} noch zu bestätigen`));
+  card.append(el("div", "confirmRaw", esc(rowData.raw)));
+  // Auch hier schon sichtbar, nicht erst nach dem Bestätigen: ein
+  // Vorschlag über den Umweg Open Food Facts bleibt ein Vorschlag
+  // über zwei Ecken, das gehört zur Entscheidung dazu.
+  if (String(rowData.method || "").startsWith("extern:")) {
+    card.append(el("div", "srcnote", "über Internet-Abgleich vorgeschlagen, bitte prüfen"));
+  }
+
+  const choices = el("div", "confirmChoices");
+  topMatches(rowData.raw, undefined, 3).forEach((v) => {
+    const prod = byId(v.productId);
+    if (!prod) return;
+    const b = el("button", "confirmChoice", esc(prod.name));
+    b.addEventListener("click", () => entscheiden(v.productId));
+    choices.append(b);
+  });
+  card.append(choices);
+
+  const searchWrap = el("div", "confirmSearchWrap hide");
+  const inp = el("input");
+  inp.type = "search";
+  inp.placeholder = "Anderes Produkt suchen";
+  inp.setAttribute("aria-label", "Anderes Produkt suchen");
+  const results = el("ul", "results");
+  inp.addEventListener("input", () => {
+    results.innerHTML = "";
+    const q = inp.value.trim();
+    if (!q) return;
+    Data.searchProducts(q, 6).forEach((x) => {
+      const li = el("li");
+      const b = el("button", null, `<span class="rn">${esc(x.name)}</span>`);
+      b.addEventListener("click", () => entscheiden(x.id));
+      li.append(b);
+      results.append(li);
+    });
+  });
+  searchWrap.append(inp, results);
+  card.append(searchWrap);
+
+  const foot = el("div", "confirmFoot");
+  const altBtn = el("button", "confirmAlt", "Anders? Selbst eintragen");
+  altBtn.addEventListener("click", () => {
+    searchWrap.classList.toggle("hide");
+    if (!searchWrap.classList.contains("hide")) inp.focus();
+  });
+  const skip = el("button", "confirmSkip", "nicht buchen");
+  skip.addEventListener("click", () => entscheiden(null));
+  foot.append(altBtn, skip);
+  card.append(foot);
+
+  box.append(card);
+}
+
 function renderScan(box, cap, app) {
   ocrPicker(box, cap, app);
 
@@ -2752,8 +2831,13 @@ function renderScan(box, cap, app) {
       { onClick: () => app.notice("Rechenprobe", p.warnings.join("\n\n")) }));
   }
 
+  renderConfirmStep(box, p, app);
+
   const rows = el("div");
-  p.rows.forEach((rowData, idx) => {
+  p.rows.forEach((rowData) => {
+    // Unsichere Zeilen laufen jetzt über die Karte oben, eine nach der
+    // anderen — hier stehen sie erst, sobald sie entschieden sind.
+    if (rowData.needsConfirmation) return;
     const r = el("div", "matchRow");
     const left = el("div", "raw");
     left.append(el("div", "n", rowData.productName ? esc(rowData.productName) : "nicht zugeordnet"));
@@ -2763,28 +2847,6 @@ function renderScan(box, cap, app) {
     // nicht falsch, aber es verschweigt, woher er kommt.
     if (String(rowData.method || "").startsWith("extern:")) {
       left.append(el("div", "srcnote", "über Internet-Abgleich vorgeschlagen, bitte prüfen"));
-    }
-
-    if (rowData.needsConfirmation) {
-      const sel = el("select");
-      sel.setAttribute("aria-label", `Zuordnung für ${rowData.raw}`);
-      const pool = new Map();
-      if (rowData.productId && byId(rowData.productId)) pool.set(rowData.productId, byId(rowData.productId));
-      Data.searchProducts(rowData.raw.split(/\s+/)[0] || "", 8).forEach((x) => pool.set(x.id, x));
-      FOOD_DATABASE.forEach((x) => { if (!pool.has(x.id)) pool.set(x.id, x); });
-      sel.innerHTML = `<option value="">— nicht buchen —</option>` +
-        [...pool.values()].map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
-      sel.value = rowData.productId || "";
-      sel.addEventListener("change", () => {
-        p.rows[idx].productId = sel.value || null;
-        p.rows[idx].productName = sel.value ? byId(sel.value).name : null;
-        p.rows[idx].needsConfirmation = false;
-        p.rows[idx].learn = !!sel.value;
-        p.sure = p.rows.filter((x) => !x.needsConfirmation).length;
-        p.open = p.rows.filter((x) => x.needsConfirmation).length;
-        app.render();
-      });
-      left.append(sel);
     }
 
     r.append(left, el("div", "amt",
@@ -2797,10 +2859,15 @@ function renderScan(box, cap, app) {
      der Liste und der in den Gängen: einen Einkauf buchen. Die Zahl
      bleibt, weil sie hier etwas sagt, was nirgends sonst steht —
      wie viele der erkannten Zeilen tatsächlich gebucht werden. Das
-     Verb ist jetzt überall dasselbe. */
-  const buchbar = p.rows.filter((r) => r.productId).length;
+     Verb ist jetzt überall dasselbe.
+
+     Gesperrt, solange p.open > 0: erst wenn jede unsichere Zeile oben
+     in der Karte eine Entscheidung bekommen hat — ausgewählt, selbst
+     eingetragen oder bewusst „nicht buchen" —, ist überhaupt etwas zu
+     buchen, das nicht nur eine unbestätigte Vermutung ist. */
+  const buchbar = p.rows.filter((r) => r.productId && !r.needsConfirmation).length;
   const save = el("button", "cta", `${zahlwort(buchbar, "Position", "Positionen")} buchen`);
-  save.disabled = !p.rows.some((r) => r.productId);
+  save.disabled = p.open > 0 || buchbar === 0;
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
     const res = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });

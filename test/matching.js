@@ -45,7 +45,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { matchProduct, parseProductName, truncationSimilarity, splitGlued } = require("../src/algo/productMatcher2");
+const { matchProduct, parseProductName, truncationSimilarity, splitGlued, topMatches } = require("../src/algo/productMatcher2");
 const { parseReceipt } = require("../src/algo/receiptParser");
 const { FOOD_DATABASE } = require("../src/algo/foodDatabase");
 
@@ -423,6 +423,41 @@ t("Über alle echten Bons hinweg: die getrennte Lesart macht nichts schlechter, 
   // Vor dieser Erweiterung: 72 sicher, 64 unsicher, 3 kein Treffer.
   return (ok + unsicher) >= 136 && kein <= 3
     ? true : `${ok} sicher, ${unsicher} unsicher, ${kein} kein Treffer`;
+});
+
+// ================================================================
+section("I: Drei Vorschläge für die Bestätigungsfrage");
+
+/* Grundlage für die Oberfläche: bei einer unsicheren Zeile soll die
+   Nutzerin drei Produkte zum Antippen sehen, kein Dropdown mit dem
+   ganzen Katalog. topMatches liefert das — dieselbe Bewertung wie
+   matchProduct, nur mit den besten n statt nur dem einen besten. */
+t("Liefert höchstens n Vorschläge, absteigend sortiert", () => {
+  const liste = topMatches("Layenb.HP Skyr sort. 200g", undefined, 3);
+  const sortiert = liste.every((x, i) => i === 0 || liste[i - 1].confidence >= x.confidence);
+  return liste.length <= 3 && sortiert ? true : JSON.stringify(liste);
+});
+
+t("Jedes Produkt taucht höchstens einmal auf, auch bei mehreren treffenden Aliasen", () => {
+  const liste = topMatches("Proteinjogh.sort.200g", undefined, 5);
+  const ids = liste.map((x) => x.productId);
+  return new Set(ids).size === ids.length ? true : JSON.stringify(liste);
+});
+
+t("Der erste Vorschlag stimmt mit dem von matchProduct gewählten Produkt überein", () => {
+  const m = matchProduct("Frosta XXL ReisHähn.");
+  const liste = topMatches("Frosta XXL ReisHähn.");
+  return liste[0] && liste[0].productId === m.productId ? true : JSON.stringify({ m, liste });
+});
+
+t("Nutzt dieselbe Zwei-Lesarten-Erweiterung wie matchProduct (zusammengeklebte Wörter)", () => {
+  const liste = topMatches("GLGouda leichtHF3ger.250g VLOG");
+  return liste[0] && liste[0].productId === "kaese_gouda" ? true : JSON.stringify(liste);
+});
+
+t("Kein Treffer im Katalog liefert eine leere Liste, keinen Absturz", () => {
+  const liste = topMatches("");
+  return Array.isArray(liste) ? true : JSON.stringify(liste);
 });
 
 // ================================================================

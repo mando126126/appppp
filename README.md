@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1648 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1674 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2312,6 +2312,61 @@ hätte. Alle jetzt 1648 Tests bestehen, keine Regression.
 
 ---
 
+## Eine Frage nach der anderen statt eines Dropdowns mit dem ganzen Katalog
+
+Die Bestätigung einer unsicheren Bon-Zeile war bis hierhin ein
+`<select>`-Feld direkt in der Zeile, gefüllt mit dem gesamten Katalog
+als Fallback — bei 1682 Produkten eine lange Liste zum Durchscrollen,
+und mehrere davon gleichzeitig sichtbar, wenn ein Bon mehrere unsichere
+Zeilen hatte. Der Auftrag: „super einfach, intuitiv — ein Produkt nach
+dem anderen, mit jeweils drei Vorschlägen, und alternativ die
+Möglichkeit, selbst etwas einzutragen."
+
+**Die neue Karte (`renderConfirmStep`, `views.js`).** Es wird immer nur
+DIE ERSTE noch offene Zeile gezeigt — Rohtext, drei antippbare
+Vorschläge, ein Feld „Anders? Selbst eintragen" (versteckt, bis
+gebraucht) und „nicht buchen". Jede Entscheidung — auch „nicht
+buchen" — lässt die Karte zur nächsten offenen Zeile weiterspringen.
+Sind alle entschieden, verschwindet die Karte, und die Liste darunter
+zeigt jede Zeile mit ihrem jetzt bestätigten Produkt.
+
+**Woher die drei Vorschläge kommen — ein neuer, allgemeiner
+Algorithmus-Baustein, keine feste Liste.** `topMatches` (`productMatcher2.js`)
+nutzt dieselbe Bewertung wie `matchProduct`, auch dieselbe
+Zwei-Lesarten-Erweiterung für zusammengeklebte Wörter — nur werden die
+besten DREI VERSCHIEDENEN Produkte behalten statt nur das eine beste.
+Der erste Vorschlag ist deshalb immer genau das, was der automatische
+Abgleich auch vorgeschlagen hätte; die anderen zwei sind die nächst-
+plausiblen Alternativen aus demselben Katalog, keine Zufallsauswahl.
+
+**Ein Sicherheitsloch, das die Umstellung selbst aufgedeckt hat.**
+`Data.addReceipt` filterte bisher nur auf `productId` — nicht auf
+`needsConfirmation`. Da eine unsichere Zeile schon VOR jeder
+menschlichen Bestätigung ihre Best-Schätzung als `productId` trägt
+(genau deshalb kann sie überhaupt als „unsicher, mit Vorschlag"
+gelten), hätte ein zu früh gedrückter Buchen-Knopf diese Schätzung
+stillschweigend gebucht — nie widersprochen, aber auch nie wirklich
+bestätigt. Ein Regressionstest (`test/uitest.js`, „Der Bon lässt sich
+buchen") bucht seither eine ECHTE OCR-Zeile ("Bananen lose", 0,81,
+unsicher) und deckte genau das auf: der bisherige Test prüfte nur, ob
+alle drei Zeilen ein `productId` trugen, nicht ob sie wirklich bestätigt
+waren. Behoben an der Wurzel: `addReceipt` verlangt jetzt zusätzlich
+`!needsConfirmation`, und der Buchen-Knopf in der Bon-Ansicht bleibt
+gesperrt, solange `p.open > 0` ist. Manuell erfasste Positionen (Von-
+Hand-Tab, Ladenmodus) tragen dieses Feld gar nicht und sind unverändert
+sofort buchbar.
+
+**Getestet:** ein echter Lidl-Bon läuft im UI-Test jetzt durch die
+Karte, eine Zeile nach der anderen, bis alles entschieden ist, bevor
+gebucht wird; ein eigener Testblock prüft „Anders? Selbst eintragen"
+(Suchfeld erscheint, liefert echte Treffer) und „nicht buchen"
+(Zeile gilt danach als entschieden, aber ohne Produkt). Fünf neue
+Algorithmus-Tests für `topMatches` (`test/matching.js`, Abschnitt I).
+Alle jetzt 1674 Tests bestehen, keine Regression an der gemessenen
+Trefferquote (weiterhin 136 von 139, 97,8 %).
+
+---
+
 ## Aufbau
 
 ```
@@ -2374,8 +2429,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1648
-npm run test:algo # 1085 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1674
+npm run test:algo # 1090 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

@@ -293,7 +293,14 @@ const newId = () => `${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 function addReceipt(receipt) {
   const date = receipt.date || today();
   const store = receipt.store || "Unbekannt";
-  const rows = receipt.items.filter((i) => i.productId);
+  // needsConfirmation heißt: der Abgleich hat einen Kandidaten
+  // gefunden, aber noch NICHT bestätigt bekommen. Ohne diesen Filter
+  // würde ein zu früh gedrückter Buchen-Knopf denselben Kandidaten
+  // stillschweigend buchen — die Vermutung wäre nie wirklich
+  // bestätigt worden, nur nicht widersprochen. Manuell erfasste
+  // Positionen tragen dieses Feld gar nicht (undefined ist falsy),
+  // sind also unverändert buchbar.
+  const rows = receipt.items.filter((i) => i.productId && !i.needsConfirmation);
 
   // Vor dem Einbuchen: gegen welchen üblichen Preis wurde gekauft?
   // Danach wäre die Antwort verfälscht — der neue Kauf verschöbe den

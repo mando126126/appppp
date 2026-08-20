@@ -558,14 +558,66 @@ if (ta) {
   ok("Auswerten rendert das Ergebnis", errors.length === b4 && $("main").querySelectorAll(".matchRow").length > 0,
     errors[b4]);
 
+  // Unsicheres läuft jetzt über die Bestätigungskarte, eine Zeile
+  // nach der anderen — hier wird die Buchen-Sperre erst geprüft,
+  // dann jede Karte durch Antippen des ersten Vorschlags aufgelöst.
+  const saveBtnVorher = [...$("main").querySelectorAll("button.cta")].find((b) => /buchen$/.test(b.textContent));
+  ok("Buchen ist gesperrt, solange unsichere Zeilen offen sind",
+    !!saveBtnVorher && saveBtnVorher.disabled, saveBtnVorher && saveBtnVorher.disabled);
+
+  let runden = 0;
+  while ($("main").querySelector(".confirmCard") && runden < 30) {
+    const wahl = $("main").querySelector(".confirmChoice");
+    ok("Bestätigungskarte zeigt mindestens einen Vorschlag", !!wahl);
+    click(wahl);
+    runden++;
+  }
+  ok("Alle unsicheren Zeilen sind irgendwann aufgelöst",
+    !$("main").querySelector(".confirmCard") && runden > 0, runden);
+
   const before = D.get().purchases.length;
   const saveBtn = [...$("main").querySelectorAll("button.cta")].find((b) => /buchen$/.test(b.textContent));
-  ok("Buchen-Knopf ist vorhanden", !!saveBtn, saveBtn && saveBtn.textContent);
+  ok("Buchen-Knopf ist jetzt frei", !!saveBtn && !saveBtn.disabled, saveBtn && saveBtn.disabled);
   if (saveBtn && !saveBtn.disabled) {
     click(saveBtn);
     ok("Bon-Positionen landen in der Historie", D.get().purchases.length > before,
       `${before} -> ${D.get().purchases.length}`);
   }
+}
+
+console.log("\n--- Bestätigungskarte: Alternative Wege ---");
+App.goto("erfassen");
+App.capture.tab = "scan";
+App.capture.text = "Layenb.HP Skyr sort. 200g    1,49 A";
+App.capture.parsed = D.parseReceiptText(App.capture.text);
+App.render();
+
+const card = $("main").querySelector(".confirmCard");
+ok("Bestätigungskarte erscheint für eine einzelne unsichere Zeile", !!card);
+if (card) {
+  const choiceCount = $("main").querySelectorAll(".confirmChoice").length;
+  ok("Zeigt zwischen einem und drei Vorschlägen", choiceCount > 0 && choiceCount <= 3, choiceCount);
+
+  const altBtn = $("main").querySelector(".confirmAlt");
+  const searchWrap = $("main").querySelector(".confirmSearchWrap");
+  ok("„Anders? Selbst eintragen“ ist da, Suchfeld zunächst versteckt",
+    !!altBtn && searchWrap.classList.contains("hide"));
+  click(altBtn);
+  ok("Antippen zeigt das Suchfeld", !searchWrap.classList.contains("hide"));
+
+  const inp = searchWrap.querySelector("input");
+  inp.value = "Joghurt";
+  inp.dispatchEvent(new window.Event("input", { bubbles: true }));
+  ok("Die eigene Suche liefert Ergebnisse", searchWrap.querySelectorAll(".results button").length > 0);
+
+  // "nicht buchen" statt eines Vorschlags: die Zeile gilt als
+  // entschieden, aber ohne Produkt -- kein Rateergebnis wird gebucht.
+  const skip = $("main").querySelector(".confirmSkip");
+  ok("„nicht buchen“ ist da", !!skip);
+  click(skip);
+  ok("Danach ist keine Karte mehr offen", !$("main").querySelector(".confirmCard"));
+  ok("Die Zeile hat kein Produkt bekommen, wurde aber entschieden",
+    App.capture.parsed.rows[0].productId === null && !App.capture.parsed.rows[0].needsConfirmation);
 }
 
 console.log("\n--- Von Hand erfassen ---");
@@ -1757,12 +1809,20 @@ console.log("\n--- Einkauf aus einem Bild ---");
     p.rows.every((r) => !/summe/i.test(r.raw)), p.rows.map((r) => r.raw).join(" | "));
   ok("Die Gegenprobe gegen die aufgedruckte Summe geht auf",
     p.printedTotal === 3.77 && p.totalOk === true, `${p.printedTotal} / ${p.totalOk}`);
-  ok("Und die sicheren sind wirklich sicher",
-    p.rows.filter((r) => r.productId).length === 3,
-    p.rows.map((r) => r.raw + "->" + r.productId).join(" | "));
+
+  // Nicht alle drei sind schon sicher -- "Bananen lose" braucht eine
+  // Bestätigung (0.81, unter der sicher-Schwelle). addReceipt bucht
+  // unbestätigte Zeilen NICHT automatisch (siehe Kommentar dort);
+  // hier wird die Bestätigung darum wie in der Oberfläche nachgeholt,
+  // bevor gebucht wird.
+  ok("Zwei Zeilen sind sofort sicher, eine braucht eine Bestätigung",
+    p.rows.filter((r) => r.productId && !r.needsConfirmation).length === 2 &&
+    p.rows.filter((r) => r.needsConfirmation).length === 1,
+    p.rows.map((r) => `${r.raw}->${r.productId}${r.needsConfirmation ? " (unsicher)" : ""}`).join(" | "));
+  p.rows.forEach((r) => { if (r.needsConfirmation) r.needsConfirmation = false; });
 
   const res = D.addReceipt({ date: gelesen.date, store: gelesen.store, items: p.rows });
-  ok("Der Bon lässt sich buchen", res.count === 3, res.count);
+  ok("Der Bon lässt sich buchen, sobald alles bestätigt ist", res.count === 3, res.count);
   ok("Und steht in der Historie", D.get().receipts.length === vorher + 1);
 
   // Aus dem Bild kommt die Bonzeile — und damit die Marke. Ohne sie

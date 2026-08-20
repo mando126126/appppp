@@ -522,6 +522,61 @@ function bestCandidate(parsed) {
 }
 
 /**
+ * Die besten `n` VERSCHIEDENEN Produkte für eine geparste Eingabe —
+ * für die Bestätigungsfrage in der Oberfläche ("drei Vorschläge"),
+ * nicht für den automatischen Abgleich. Ein Produkt taucht höchstens
+ * einmal auf, auch wenn mehrere seiner Aliase treffen: nur der beste
+ * Treffer pro Produkt zählt.
+ */
+function topCandidates(parsed, n) {
+  const candidates = candidateEntries(parsed);
+  const bestPerProduct = new Map();
+
+  for (const entry of candidates) {
+    for (let vi = 0; vi < entry.variants.length; vi++) {
+      const variant = entry.variants[vi];
+      let score = variant.core === parsed.core ? 1 : combinedSimilarity(parsed, variant);
+      if (conflictsWithCategory(parsed.tokens, entry.product.category)) score *= 0.45;
+      const prev = bestPerProduct.get(entry.product.id) || 0;
+      if (score > prev) bestPerProduct.set(entry.product.id, score);
+    }
+  }
+
+  return [...bestPerProduct.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([productId, confidence]) => ({ productId, confidence: Math.round(confidence * 100) / 100 }));
+}
+
+/**
+ * Bis zu `n` Vorschläge für eine rohe Bon-Zeile, sortiert nach
+ * Punktzahl — Grundlage für die Drei-Vorschläge-Frage. Nutzt
+ * dieselbe Zwei-Lesarten-Logik wie `matchProduct` (Original UND
+ * getrennt, siehe `splitGlued`), damit die Vorschläge nie schwächer
+ * sind als das, was der automatische Abgleich selbst gefunden hätte.
+ */
+function topMatches(rawName, catalog = FOOD_DATABASE, n = 3) {
+  buildIndex(catalog);
+  const rawStr = String(rawName || "");
+  const parsed = parseProductName(rawStr);
+  const merged = new Map();
+  topCandidates(parsed, n).forEach((c) => merged.set(c.productId, c.confidence));
+
+  const alt = splitGlued(rawStr);
+  if (alt !== rawStr) {
+    topCandidates(parseProductName(alt), n).forEach((c) => {
+      const prev = merged.get(c.productId) || 0;
+      if (c.confidence > prev) merged.set(c.productId, c.confidence);
+    });
+  }
+
+  return [...merged.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([productId, confidence]) => ({ productId, confidence }));
+}
+
+/**
  * Ordnet einen rohen Bon-Namen einem Produkt zu.
  * @returns {{productId, confidence, method, quantity, needsConfirmation}}
  */
@@ -586,7 +641,7 @@ function matchReceipt(rawItems) {
 
 module.exports = {
   MAX_RAW_LENGTH,
-  matchProduct, matchReceipt, parseProductName, combinedSimilarity, levenshtein,
+  matchProduct, matchReceipt, topMatches, parseProductName, combinedSimilarity, levenshtein,
   compoundSimilarity, truncationSimilarity, truncatedStems, splitGlued,
   conflictsWithCategory, looksLikeMeat, MEAT_TOKENS,
   CONFIRM_THRESHOLD, SAFE_THRESHOLD
