@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1674 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1683 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2367,6 +2367,54 @@ Trefferquote (weiterhin 136 von 139, 97,8 %).
 
 ---
 
+## „Wo dein Geld hingeht" — Filter mit vorgeschlagenen und eigenen Zeiträumen
+
+Zwei Wünsche in einer Nachricht. Der erste war schon erledigt, nur
+nicht bestätigt: die Bestätigungskarte erscheint ausschließlich für
+`needsConfirmation`-Zeilen — ein sicherer Treffer (`method: "exakt"`
+oder `"aehnlich"`) trägt sein Produkt von Anfang an und läuft nie
+durch die Karte. Keine Änderung nötig, nur der Nachweis, dass es
+bereits so war.
+
+Der zweite Wunsch war neu: Filter für die Zahlen-Ansicht, „frei aber
+auch vorgeschlagene", um zu sehen, wo das Geld hingeht — dazu der
+Wochendurchschnitt, „intuitiv und optisch schön".
+
+**Was es schon gab.** „Ø pro Woche" stand längst oben als Kachel —
+aber fest für die gesamte Historie, kein Zeitraum wählbar, und ohne
+jede Aufschlüsselung, WOFÜR das Geld ausgegeben wird. Der Monats-Chart
+(`chartCard`) zeigt Ausgaben über Zeit, aber nur gegessen/verdorben,
+keine Kategorien oder Märkte.
+
+**Neu: `moneyFlowCard` (`views.js`).** Fünf Zeitraum-Chips — 4 Wochen,
+12 Wochen, Jahr, Gesamt, dazu „eigener" mit zwei Datumsfeldern für
+einen wirklich freien Zeitraum. Darunter Gesamtsumme und
+Wochendurchschnitt FÜR GENAU DIESEN Zeitraum, dann zwei Ranglisten —
+Kategorien und Märkte —, jede Zeile mit einem Balken im Hintergrund,
+proportional zum Anteil, plus Betrag und Prozent. Kein Diagramm-
+Werkzeug, dieselbe Handschrift wie der bestehende SVG-Chart: einfache
+Formen, keine Bibliothek.
+
+**Bewusst eine reine Anzeige-Einstellung, kein Haushaltsfeld.** Der
+gewählte Zeitraum lebt in `App.zahlenFilter`, nicht in `Data`/
+`localStorage` — er geht nie durch `Data.update()`, taucht nicht in
+der Sicherung auf und ein Neuladen setzt ihn zurück. Das ist kein
+Versehen: welchen Zeitraum man sich gerade ansieht, ist keine
+Information über den Haushalt, die eine Sicherung tragen müsste, so
+wie auch der Bon-Entwurf im Erfassen-Tab (`App.capture`) nicht
+gesichert wird.
+
+**Woher „Markt" kommt.** `ctx.history` (aus `compute()`) trug den
+Markt bisher nicht mit, obwohl `state.purchases` ihn längst speichert
+— eine Zeile ergänzt (`store: p.store || null`), rein additiv, kein
+bestehendes Feld angefasst.
+
+Neun neue UI-Tests (Chips vorhanden, ein anderer Zeitraum zeigt eine
+andere Zahl, „eigener" zeigt zwei Datumsfelder, jede Zeile nennt einen
+Prozentanteil). Alle jetzt 1683 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2429,7 +2477,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1674
+npm test          # alle 1683
 npm run test:algo # 1090 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

@@ -1427,6 +1427,46 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
   })());
 }
 
+console.log("\n--- Wo dein Geld hingeht ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.zahlenFilter = { range: "12w", from: null, to: null };
+  App.goto("zahlen");
+  const txt = $("main").textContent;
+  ok("Zahlen zeigt die Geldaufteilung", /Wo dein Geld hingeht/.test(txt));
+  ok("Mit Kategorien und Märkten", /Kategorien/.test(txt) && /Märkte/.test(txt));
+
+  const rows = $("main").querySelectorAll(".moneyRow");
+  ok("Zeigt mindestens eine Zeile", rows.length > 0, rows.length);
+  ok("Jede Zeile nennt einen Anteil in Prozent",
+    [...rows].every((r) => /\d+ %/.test(r.textContent)), rows[0] && rows[0].textContent);
+
+  const woReihe = () => [...$("main").querySelectorAll(".row")].find((r) => /Ø .*\/Woche/.test(r.textContent));
+  const vorher = woReihe() ? woReihe().textContent : null;
+  ok("Zeigt den Wochendurchschnitt für den gewählten Zeitraum", !!vorher);
+
+  const chips = () => [...$("main").querySelectorAll(".segmented button")];
+  const chip4w = chips().find((b) => b.textContent === "4 Wochen");
+  ok("Zeitraum-Chips sind da (4 Wochen, 12 Wochen, Jahr, Gesamt, eigener)", chips().length >= 5, chips().length);
+  if (chip4w) {
+    click(chip4w);
+    const nachher = woReihe() ? woReihe().textContent : null;
+    ok("Ein anderer Zeitraum zeigt eine andere Zahl, keine feste Anzeige",
+      nachher !== vorher, `${vorher} -> ${nachher}`);
+  }
+
+  const chipEigen = chips().find((b) => b.textContent === "eigener");
+  ok("„eigener“ Zeitraum ist eine Option", !!chipEigen);
+  if (chipEigen) {
+    click(chipEigen);
+    const datumsfelder = $("main").querySelectorAll('input[type="date"]');
+    ok("Zeigt zwei Datumsfelder (Von/Bis) für einen freien Zeitraum", datumsfelder.length >= 2, datumsfelder.length);
+  }
+
+  App.zahlenFilter = { range: "12w", from: null, to: null };
+}
+
 console.log("\n--- Die Übersicht ---");
 {
   D.reset();

@@ -914,7 +914,8 @@ function compute() {
     unitPrice: p.unitPrice,
     weightG: p.weightG,
     brand: p.brand || null,
-    brandLabel: p.brandLabel || null
+    brandLabel: p.brandLabel || null,
+    store: p.store || null
   }));
 
   /* --- Rhythmen, dreifach nachgeschärft ---------------------------

@@ -3070,6 +3070,7 @@ function viewZahlen(ctx, app) {
     c.append(g);
   }
 
+  c.append(moneyFlowCard(ctx, app));
   c.append(chartCard(ctx));
 
   /* --- Inflation --- */
@@ -3171,6 +3172,100 @@ function viewZahlen(ctx, app) {
   c.append(ig);
 
   return c;
+}
+
+/**
+ * Vom Filter gewählter Zeitraum als {from, to} (ISO-Daten, from kann
+ * null sein für "Gesamt"). Eigener Fensterausdruck statt fester
+ * Wochenzahl in `compute()` — das hier ist eine reine Anzeigefrage,
+ * berührt keine Rhythmen oder Rückblicke.
+ */
+function zahlenSpanne(filter, ref) {
+  if (filter.range === "custom") return { from: filter.from || Data.plusDays(ref, -84), to: filter.to || ref };
+  if (filter.range === "all") return { from: null, to: ref };
+  const wochen = { "4w": 4, "12w": 12, "year": 52 }[filter.range] || 12;
+  return { from: Data.plusDays(ref, -wochen * 7), to: ref };
+}
+
+/** Eine Zeile der Geld-Aufteilung: Balken im Hintergrund, Betrag und Anteil rechts. */
+function moneyRow(label, amount, share) {
+  const r = el("div", "moneyRow");
+  r.innerHTML =
+    `<div class="moneyBar" style="width:${Math.max(2, Math.round(share * 100))}%"></div>` +
+    `<div class="moneyLabel">${esc(label)}</div>` +
+    `<div class="moneyAmt">${eur(amount)}<small>${pct(share)}</small></div>`;
+  return r;
+}
+
+/**
+ * „Wo dein Geld hingeht“ — Kategorien und Märkte für einen frei
+ * wählbaren Zeitraum, mit vorgeschlagenen Zeiträumen als Chips und
+ * einem eigenen Zeitraum als Ausweg. Rein additive Anzeige: nichts
+ * hier verändert Rhythmen, Rückblick oder eine andere Auswertung —
+ * nur `ctx.history`, gefiltert nach Datum.
+ */
+function moneyFlowCard(ctx, app) {
+  const g = uiGroup("Wo dein Geld hingeht",
+    "Aus deinen eigenen Bons, nach Kategorie und Markt aufgeteilt, für den gewählten Zeitraum. " +
+    "Frei erfasste Zeilen ohne Produkt zählen unter „Ohne Kategorie“, weil ihnen keine Kategorie zugeordnet ist.");
+
+  const filter = App.zahlenFilter;
+  const ref = Data.today();
+
+  g.body.append(uiRow("Zeitraum", null,
+    segmented(
+      [["4w", "4 Wochen"], ["12w", "12 Wochen"], ["year", "Jahr"], ["all", "Gesamt"], ["custom", "eigener"]],
+      filter.range,
+      (v) => { filter.range = v; app.render(); },
+      "Zeitraum für Geldaufteilung"
+    ), { stacked: true }));
+
+  if (filter.range === "custom") {
+    const row = el("div", "row2");
+    const ff = el("label", "field", '<span class="lbl">Von</span>');
+    const fi = el("input"); fi.type = "date"; fi.value = filter.from || Data.plusDays(ref, -84);
+    fi.addEventListener("change", () => { filter.from = fi.value; app.render(); });
+    ff.append(fi);
+    const tf = el("label", "field", '<span class="lbl">Bis</span>');
+    const ti = el("input"); ti.type = "date"; ti.value = filter.to || ref;
+    ti.addEventListener("change", () => { filter.to = ti.value; app.render(); });
+    tf.append(ti);
+    row.append(ff, tf);
+    g.body.append(row);
+  }
+
+  const { from, to } = zahlenSpanne(filter, ref);
+  const rows = ctx.history.filter((h) => (!from || h.date >= from) && h.date <= to);
+
+  if (!rows.length) {
+    g.body.append(el("p", "empty", "Keine Käufe in diesem Zeitraum."));
+    return g;
+  }
+
+  const total = rows.reduce((a, h) => a + h.unitPrice * h.quantity, 0);
+  const tage = Math.max(1, daysBetween(from || rows[0].date, to) + 1);
+  const proWoche = total / (tage / 7);
+  g.body.append(uiRow(eur(total), `${zahlwort(rows.length, "Kauf", "Käufe")} in diesem Zeitraum`, null,
+    { value: `Ø ${eur(proWoche)}/Woche` }));
+
+  const byCat = new Map(), byStore = new Map();
+  rows.forEach((h) => {
+    const p = h.productId ? byId(h.productId) : null;
+    const cat = p ? p.category : "Ohne Kategorie";
+    byCat.set(cat, (byCat.get(cat) || 0) + h.unitPrice * h.quantity);
+    const store = h.store || "Unbekannt";
+    byStore.set(store, (byStore.get(store) || 0) + h.unitPrice * h.quantity);
+  });
+
+  g.body.append(uiRow("Kategorien", null));
+  [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .forEach(([label, amount]) => g.body.append(moneyRow(label, amount, total > 0 ? amount / total : 0)));
+
+  g.body.append(uiRow("Märkte", null));
+  [...byStore.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .forEach(([label, amount]) => g.body.append(moneyRow(label, amount, total > 0 ? amount / total : 0)));
+
+  return g;
 }
 
 /** Balken je Monat, mit geschätztem Verderb-Anteil obenauf. */

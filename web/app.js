@@ -69,6 +69,12 @@ const App = {
   ctx: null,
   storeOpen: false,
   capture: { tab: "scan", text: "", parsed: null, basket: [], query: "", date: null, store: "" },
+  // Nur die Ansicht, nicht der Haushalt: der gewählte Zeitraum in
+  // "Wo dein Geld hingeht" ist eine Anzeige-Einstellung, kein
+  // Haushaltsdatum -- sie geht deshalb nicht über Data.update() und
+  // landet nicht in der Sicherung. Ein Neuladen setzt sie zurück,
+  // das ist hier kein Verlust.
+  zahlenFilter: { range: "12w", from: null, to: null },
 
   /* ---------- Zustand ändern ---------- */
   set(fn) { Data.update(fn); },

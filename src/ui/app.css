@@ -433,6 +433,19 @@ button.row:active,label.row:active{background:var(--fill)}
 .srcnote{font-size:0.73rem;color:var(--ink-3);margin-top:13px;line-height:1.45}
 .empty{font-size:0.9rem;color:var(--ink-2);padding:26px 0;text-align:center}
 
+/* "Wo dein Geld hingeht": Balken im Hintergrund, Text obenauf. Der
+   Anteil bemisst die Breite, keine gesonderte Skala -- die längste
+   Zeile ist ohnehin die auffälligste, sie braucht keinen Vergleichswert. */
+.moneyRow{position:relative;display:flex;align-items:center;justify-content:space-between;
+  padding:11px 16px;gap:10px;overflow:hidden}
+.moneyRow + .moneyRow::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
+.moneyBar{position:absolute;left:0;top:0;bottom:0;background:var(--accent-soft);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;transition:width .3s var(--spring)}
+.moneyLabel{position:relative;font-size:0.94rem;z-index:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.moneyAmt{position:relative;font-size:0.9rem;font-variant-numeric:tabular-nums;text-align:right;
+  z-index:1;flex:0 0 auto;color:var(--ink)}
+.moneyAmt small{display:block;font-size:0.72rem;color:var(--ink-3);font-weight:400}
+
 .infoBtn{
   width:17px;height:17px;flex:0 0 auto;border-radius:99px;
   background:var(--fill);color:var(--ink-2);border:none;
