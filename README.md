@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1628 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1638 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -1886,6 +1886,83 @@ werden sollte.
 
 ---
 
+## Der Punkt als Kürzungszeichen: Abkürzungen selbst lesen, statt zu raten
+
+Der nächste, direktere Wunsch: der eigene Abgleich soll Kürzungen selbst
+erkennen können, nicht erst über den Umweg eines fremden Dienstes.
+
+Der Ansatzpunkt kam aus einer einfachen Beobachtung: Kassenbons kürzen
+lange Namen fast immer auf dieselbe Art — sie schneiden das Ende ab und
+markieren das mit einem Punkt. „Proteinjogh." statt „Proteinjoghurt",
+„Prot.Riegel Erdn.-Car." statt „Protein-Riegel Erdnuss-Caramel". **Über
+alle acht echten Bons dieses Projekts tragen 47 von 139 Positionen —
+gut ein Drittel — genau dieses Zeichen.**
+
+Der Punkt ist damit kein Rauschen, sondern ein Signal: die Kasse selbst
+sagt „hier fehlt der Rest". Nur wurde er bisher VOR dem Vergleich zu
+einem Leerzeichen gemacht — derselbe Bereinigungsschritt, der Kommas
+und Sonderzeichen entfernt, hat ihn mit entsorgt, bevor der Abgleich
+ihn je zu Gesicht bekam. `parseProductName` liest ihn jetzt vorher und
+merkt sich, welche Wörter er betrifft (`truncated`, eine Menge von
+Wortstämmen).
+
+**Warum eine eigene Regel, und nicht einfach die alte Teilwort-Prüfung
+lockern.** Der bestehende Abgleich erkennt Teilwörter schon — aber
+erst ab fünf Zeichen, und zwar an JEDER Stelle im Wort, nicht nur am
+Anfang. Diese Grenze existiert aus gutem Grund: ein kurzes Teilwort,
+das zufällig irgendwo in einem anderen Wort auftaucht, ist leicht ein
+Zufallstreffer. Ein Wort, das die Kasse selbst mit einem Punkt als
+abgeschnitten markiert hat, ist kein Zufallsrisiko mehr — deshalb darf
+die neue Regel bei drei Zeichen greifen statt bei fünf, dafür aber
+ausschließlich als PRÄFIX (das Katalogwort muss damit *beginnen*), nie
+als Teilwort irgendwo in der Mitte. „gurk." darf „Gewürzgurken" nicht
+treffen, obwohl „gurk" darin steckt — es steckt in der Mitte, und ein
+Bon kürzt ein Wort immer am Ende, nie in der Mitte.
+
+**Eine Kürzung bucht sich nie automatisch — sie bleibt immer ein
+Vorschlag.** Der erste Test dieser Änderung hat das selbst
+durchbrochen: „Gurk." → „Gurke" erreichte mit 0,87 eine Punktzahl über
+der „sicher"-Schwelle (0,85) und hätte sich stillschweigend gebucht.
+Das widerspricht der Regel, die für jeden anderen unsicheren Weg in
+dieser App gilt — auch der Umweg über Open Food Facts bucht nie
+automatisch, aus demselben Grund: „Kaes." trifft genauso auf
+Käsekuchen wie auf ein Dutzend anderer Käseprodukte, und ein Bon nennt
+nie, welches gemeint war. Eine Kürzungs-Punktzahl wird deshalb jetzt
+technisch gedeckelt, bevor sie die „sicher"-Schwelle je erreichen kann
+— das ist eine bewusste Entwurfsentscheidung, im Code als Kommentar
+festgehalten, kein Kalibrierungsdetail, an dem später wieder gedreht
+werden könnte, ohne die Begründung zu sehen.
+
+**Über die acht echten Bons dieses Projekts hinweg bewegt sich die
+gemessene Trefferquote durch diese Änderung NICHT** (weiterhin 56 %,
+25 sicher, 53 mit Vorschlag). Das ist kein Widerspruch zu den 47
+betroffenen Positionen — die meisten davon stammen von den Ketten, die
+in früheren Schritten dieses Projekts bereits von Hand kalibriert
+wurden, mit exakten Alias-Einträgen, die höher punkten als jede
+allgemeine Regel es könnte. Die neue Regel zeigt ihren Wert deshalb
+nicht an diesem einen, schon eingeübten Korpus, sondern an jedem
+kommenden Bon, der noch nie gesehen wurde — geprüft an eigenen,
+isolierten Beispielen ohne vorhandenen Alias-Eintrag (`test/matching.js`,
+Abschnitt F): „Gurk." → Gurke, „Zwie." → Zwiebeln, „Kaes." →
+Käsekuchen, alle als Vorschlag, keines automatisch gebucht.
+
+Beim Testen dieser Änderung ist außerdem eine zweite, unabhängige
+Schwachstelle sichtbar geworden, die schon vorher da war: „Kaes.aufschn."
+matcht über die ALTE, allgemeine Teilwort-Regel auf „Wurstaufschnitt"
+(Fleisch), nicht auf ein Käseprodukt — weil es zum Zeitpunkt dieser
+Änderung gar kein „Käseaufschnitt" im Katalog gibt und „aufschnitt" als
+Teilwort mitten in „Wurstaufschnitt" steckt. Das ist kein Fehler dieser
+Änderung (die neue, striktere Präfix-Regel hätte diesen Treffer gar
+nicht zugelassen), sondern ein vorher schon vorhandenes Risiko der
+älteren, großzügigeren Regel — festgehalten hier, damit es nicht wieder
+neu entdeckt werden muss, aber bewusst nicht im selben Schritt
+mitkorrigiert: die alte Regel ist an mehreren realen Bons fein
+kalibriert, und sie ohne dieselbe Sorgfalt (volle Korpus-Messung,
+Sicherheitstests) zu ändern, hätte an anderer Stelle etwas
+zurückgeworfen, das gerade erst funktioniert.
+
+---
+
 ## Aufbau
 
 ```
@@ -1948,8 +2025,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1628
-npm run test:algo # 1081 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1638
+npm run test:algo # 1091 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

@@ -45,7 +45,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { matchProduct } = require("../src/algo/productMatcher2");
+const { matchProduct, parseProductName, truncationSimilarity } = require("../src/algo/productMatcher2");
 const { parseReceipt } = require("../src/algo/receiptParser");
 const { FOOD_DATABASE } = require("../src/algo/foodDatabase");
 
@@ -210,6 +210,91 @@ t("Fleisch/Fisch fällt weiterhin nicht auf Trockenware", () => {
   const p = m.productId ? FOOD_DATABASE.find((x) => x.id === m.productId) : null;
   return !p || p.category === "Fleisch/Fisch" || p.category === "Tiefkühl"
     ? true : `landete auf „${p.name}“ (${p.category})`;
+});
+
+// ================================================================
+section("F: Der Punkt als Kürzungszeichen — „Proteinjogh.“ statt raten");
+
+/* „unsere Datenbank ist viel zu klein" führte zu Open Food Facts als
+   Übersetzer (siehe README, „Wenn der eigene Katalog nicht reicht").
+   Der nächste, direktere Schritt: der eigene Abgleich soll Kürzungen
+   selbst lesen können, ohne einen Umweg über einen fremden Dienst.
+   Die Kasse markiert eine Kürzung fast immer mit einem Punkt —
+   „Proteinjogh." statt „Proteinjoghurt" — und dieser Punkt wurde
+   bisher VOR dem Vergleich zu einem Leerzeichen gemacht und damit
+   zerstört. Jetzt wird er vorher gelesen. */
+
+t("Der Punkt wird als Kürzungszeichen erkannt, nicht als Leerzeichen verschluckt", () => {
+  const parsed = parseProductName("Prot.Riegel Erdn.-Car.");
+  return parsed.truncated.has("prot") && parsed.truncated.has("erdn")
+    ? true : JSON.stringify([...parsed.truncated]);
+});
+
+t("Ein Wort ohne Punkt gilt nicht als gekürzt", () => {
+  const parsed = parseProductName("Vollmilch 3,5%");
+  return parsed.truncated.size === 0 ? true : JSON.stringify([...parsed.truncated]);
+});
+
+t("Eine Initiale vor einem Punkt ist keine Wortkürzung", () => {
+  // „M.I Grana Padano" — sonst würde jedes Produkt, das mit „m"
+  // beginnt, als Kandidat markiert.
+  const parsed = parseProductName("M.I Grana Padano");
+  return !parsed.truncated.has("m") && !parsed.truncated.has("i")
+    ? true : JSON.stringify([...parsed.truncated]);
+});
+
+/* Drei Kürzungen, jeweils UNTER der 5-Zeichen-Grenze, ab der die
+   ältere, allgemeine Teilwort-Regel (compoundSimilarity) schon
+   greift — hier zeigt sich ausschließlich die neue Regel. Keine der
+   drei Zeilen hat einen von Hand gepflegten Alias-Eintrag. */
+const KUERZUNGEN = [
+  ["Gurk.", "gurke"],
+  ["Zwie.", "zwiebeln"],
+  ["Kaes.", "kaesekuchen"]
+];
+KUERZUNGEN.forEach(([raw, erwartet]) => {
+  t(`„${raw}“ (${raw.replace(".", "").length} Zeichen vor dem Punkt) findet einen Vorschlag`, () => {
+    const m = matchProduct(raw);
+    return m.productId === erwartet && m.needsConfirmation
+      ? true : `${m.productId}, needsConfirmation=${m.needsConfirmation}, Punktzahl ${m.confidence}`;
+  });
+});
+
+t("Eine Kürzung bucht sich nie automatisch — sie bleibt ein Vorschlag", () => {
+  // Selbst ein sehr sauberer Präfix-Treffer verlangt eine
+  // Bestätigung; der Punkt ersetzt keine Gewissheit.
+  const treffer = KUERZUNGEN.map(([raw]) => matchProduct(raw));
+  return treffer.every((m) => m.needsConfirmation)
+    ? true : treffer.map((m) => m.needsConfirmation).join(", ");
+});
+
+t("Die Kürzung wirkt nur als Präfix, nicht als Teilwort irgendwo", () => {
+  // „gurk." darf „Gewürzgurken" nicht treffen, obwohl „gurk" darin
+  // steckt — es steckt in der MITTE, nicht am Anfang, und ein Bon
+  // kürzt ein Wort immer am Ende, nie in der Mitte.
+  return truncationSimilarity(
+    { tokens: ["gurk"], truncated: new Set(["gurk"]) },
+    ["gewuerzgurken"]
+  ) === 0 ? true : "traf trotzdem";
+});
+
+t("Die alte Sicherung gegen Fleisch-Fehlzuordnung bleibt bestehen", () => {
+  // Dieselbe Prüfung wie in Abschnitt E, jetzt mit Punkt statt
+  // zusammengeschriebenem Wort — die Kürzungsregel darf die Sperre
+  // nicht umgehen.
+  const m = matchProduct("Chick.Nug.Cornfl.");
+  const p = m.productId ? FOOD_DATABASE.find((x) => x.id === m.productId) : null;
+  return !p || p.category === "Fleisch/Fisch" || p.category === "Tiefkühl"
+    ? true : `landete auf „${p.name}“ (${p.category})`;
+});
+
+t("Über alle echten Bons hinweg: keine Verschlechterung durch die neue Regel", () => {
+  // Die Kürzungsregel ist additiv — sie darf einen vorher
+  // gefundenen sicheren Treffer nicht zu einem unsicheren machen
+  // oder umgekehrt verschlechtern. Gemessen gegen dieselbe
+  // Trefferquote wie Abschnitt C.
+  const quote = (gesamtOk + gesamtUnsicher) / gesamtWaren;
+  return quote >= 0.50 ? true : `${Math.round(quote * 100)}%`;
 });
 
 // ================================================================

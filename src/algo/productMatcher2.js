@@ -108,9 +108,33 @@ function foldUmlauts(s) {
  */
 const MAX_RAW_LENGTH = 120;
 
+/**
+ * Welche Wörter trägt ein PUNKT als Kürzungszeichen — nicht geraten,
+ * sondern gelesen, was die Kasse selbst markiert hat.
+ *
+ * „Proteinjogh." ist keine zufällig kurze Zeichenfolge: der Punkt
+ * dahinter sagt „hier fehlt der Rest, abgeschnitten, weil die Spalte
+ * zu schmal war". Dasselbe Zeichen, das gleich danach beim Bereinigen
+ * zu einem Leerzeichen wird und damit verschwindet — bevor der
+ * Vergleich es je zu Gesicht bekommt. Diese Funktion liest es vorher.
+ *
+ * Absichtlich auf „Buchstaben, dann Punkt" beschränkt: eine Zahl vor
+ * einem Punkt ist ein Tausendertrennzeichen („1.234"), kein
+ * abgekürztes Wort, und ein einzelner Buchstabe vor einem Punkt ist
+ * eine Initiale („M.I Grana Padano"), kein Wortanfang.
+ */
+function truncatedStems(s) {
+  const stems = new Set();
+  const re = /([a-zäöüß]{2,})\./g;
+  let m;
+  while ((m = re.exec(s))) stems.add(m[1]);
+  return stems;
+}
+
 /** Zerlegt "H-MILCH 3,5% 1L" in { core:"h milch 3,5%", quantity:1, unit:"l" } */
 function parseProductName(raw) {
   let s = foldUmlauts(String(raw || "").slice(0, MAX_RAW_LENGTH).toLowerCase());
+  const truncated = truncatedStems(s);
 
   // Mengenangabe herausziehen (1l, 500g, 10er, 2x)
   let quantity = 1;
@@ -137,7 +161,7 @@ function parseProductName(raw) {
 
   const tokens = core.split(" ").filter((t) => t.length > 1 && !FILLER_WORDS.has(t));
 
-  return { core, tokens, quantity, unit };
+  return { core, tokens, quantity, unit, truncated };
 }
 
 function levenshtein(a, b) {
@@ -196,6 +220,44 @@ function compoundSimilarity(tokensA, tokensB) {
     score += bestForToken;
   }
   return score / Math.max(tokensA.length, tokensB.length);
+}
+
+/**
+ * Vom Drucker selbst markierte Kürzung — ein Präfix-Treffer, kein
+ * Teilwort-Zufall.
+ *
+ * Der Unterschied zu `compoundSimilarity`: die dort geltende
+ * 5-Zeichen-Grenze existiert, weil ein kurzes Teilwort IRGENDWO in
+ * einem anderen Wort leicht zufällig passt. Bei einem Wort, das die
+ * Kasse selbst mit einem Punkt als abgeschnitten markiert hat, ist
+ * das kein Zufallsrisiko mehr — „Prot." VOR einem Katalogwort, das
+ * mit „prot" beginnt, ist keine Übereinstimmung, die zufällig
+ * entstehen könnte, sie ist die Kürzung. Deshalb reichen hier drei
+ * Zeichen, und deshalb ausdrücklich nur PRÄFIX (das Katalogwort
+ * beginnt damit), nicht „irgendwo enthalten" — ein Bon kürzt ein
+ * Wort am Ende, nie in der Mitte.
+ *
+ * Gilt nur für `tokensA` (die Bon-Zeile): der Katalog ist die eigene,
+ * kuratierte, immer vollständig ausgeschriebene Liste — dort wird
+ * nichts gekürzt, also muss dort auch nichts erkannt werden.
+ */
+function truncationSimilarity(parsedA, tokensB) {
+  if (!parsedA.truncated || !parsedA.truncated.size) return 0;
+  let score = 0, betroffen = 0;
+  for (const a of parsedA.tokens) {
+    if (a.length < 3 || !parsedA.truncated.has(a)) continue;
+    betroffen++;
+    let best = 0;
+    for (const b of tokensB) {
+      if (b.startsWith(a)) {
+        const ratio = a.length / b.length;
+        best = Math.max(best, 0.82 + 0.18 * ratio);
+      }
+    }
+    score += best;
+  }
+  if (!betroffen) return 0;
+  return score / Math.max(parsedA.tokens.length, tokensB.length);
 }
 
 /**
@@ -298,11 +360,21 @@ function combinedSimilarity(parsedA, parsedB) {
   const jaccard = tokenSimilarity(parsedA.tokens, parsedB.tokens);
   const compound = compoundSimilarity(parsedA.tokens, parsedB.tokens);
   const overlap = overlapSimilarity(parsedA.tokens, parsedB.tokens);
+  const trunc = truncationSimilarity(parsedA, parsedB.tokens);
   const tok = Math.max(jaccard, compound);
   const lev = levenshteinSimilarity(parsedA.core, parsedB.core);
 
   const weighted = tok * 0.65 + lev * 0.35;
-  return Math.max(weighted, lev * 0.95, tok * 0.9, overlap * 0.92);
+  /* Die Kürzungsregel darf bis an die Bestätigungs-Schwelle heran,
+     aber NIE darüber hinaus bis zur „sicher"-Schwelle — auch nicht
+     bei einem sehr sauberen Präfix wie „Gurk." → „Gurke". Der Punkt
+     ist ein starkes Indiz, aber nie eine Gewissheit: „Kaes." trifft
+     genauso auf Käsekuchen wie auf ein Dutzend anderer Käseprodukte,
+     und ein Bon nennt nie, welches gemeint war. Jede Kürzung bleibt
+     deshalb ein Vorschlag zum Bestätigen — dieselbe Regel, die auch
+     für den Umweg über Open Food Facts gilt (siehe offLookup.js). */
+  const truncCapped = Math.min(trunc * 0.9, SAFE_THRESHOLD - 0.01);
+  return Math.max(weighted, lev * 0.95, tok * 0.9, overlap * 0.92, truncCapped);
 }
 
 let CACHE = null;
@@ -434,6 +506,7 @@ function matchReceipt(rawItems) {
 module.exports = {
   MAX_RAW_LENGTH,
   matchProduct, matchReceipt, parseProductName, combinedSimilarity, levenshtein,
+  compoundSimilarity, truncationSimilarity, truncatedStems,
   conflictsWithCategory, looksLikeMeat, MEAT_TOKENS,
   CONFIRM_THRESHOLD, SAFE_THRESHOLD
 };
