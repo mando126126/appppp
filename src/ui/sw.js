@@ -9,7 +9,7 @@
 const CACHE = "einkaufsanker-%%BUILD%%";
 const FILES = [
   "./", "./index.html", "./app.css",
-  "./bundle.js", "./backup.js", "./data.js", "./ocr.js", "./views.js", "./app.js",
+  "./bundle.js", "./backup.js", "./offLookup.js", "./data.js", "./ocr.js", "./views.js", "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png",
   /* Die Schrift gehört in den Vorrat, nicht in den Nachschlag. Ohne

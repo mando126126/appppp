@@ -94,7 +94,7 @@ try {
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
-    " zahlwort, tage, tagen, alleTage };"
+    " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -114,7 +114,7 @@ const ready = new Promise((res) => {
   else window.addEventListener("load", () => res());
 });
 
-ready.then(() => {
+ready.then(async () => {
 
 console.log("\n--- Start ---");
 ok("App startet ohne Laufzeitfehler", errors.length === 0, errors[0]);
@@ -1731,7 +1731,9 @@ console.log("\n--- Einkauf aus einem Bild ---");
   App.render();
   const txt = $("main").textContent;
   ok("Mit Texterkennung erscheint der Bildweg", /fotografieren|Bild wählen/.test(txt));
-  ok("Und sagt, wo das Bild bleibt", /bleibt auf dem Gerät/.test(txt));
+  ok("Und sagt, wo Bild und Bon-Text bleiben", /bleiben auf dem Gerät/.test(txt));
+  ok("Und sagt ehrlich, was NICHT auf dem Gerät bleibt",
+    /Open Food Facts/.test(txt) && /nur der Name, ohne Preis, Datum oder Markt/.test(txt), txt);
   const knopf = [...$("main").querySelectorAll("button")].find((b) => /Bild wählen/.test(b.textContent));
   ok("Es gibt eine Schaltfläche zum Wählen", !!knopf);
   const kamera = [...$("main").querySelectorAll("input[type=file]")].find((i) => i.hasAttribute("capture"));
@@ -1786,6 +1788,111 @@ console.log("\n--- Einkauf aus einem Bild ---");
   App.goto("liste");
   ok("Kein Hörer bleibt nach dem Wechsel hängen",
     !App._cleanup || App._cleanup.length === 0, App._cleanup && App._cleanup.length);
+}
+
+console.log("\n--- Zweite Stufe: Open Food Facts als Übersetzer ---");
+{
+  /* T.OffLookup.fetcher ersetzt fetch() — genau das Muster von
+     T.OCR.engine. Kein Testlauf hier geht jemals ins echte Internet. */
+  window.localStorage.removeItem(T.OffLookup.CACHE_KEY);
+
+  let anfragen;
+  const antwortMit = (name) => {
+    anfragen = [];
+    T.OffLookup.fetcher = (url) => {
+      anfragen.push(url);
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ products: name ? [{ product_name_de: name }] : [] })
+      });
+    };
+  };
+
+  antwortMit("Naturjoghurt");
+  const treffer = await T.OffLookup.find("GL Proteinjogh.sort.200g");
+  ok("Ein Treffer liefert den ausgeschriebenen Namen", treffer === "Naturjoghurt", treffer);
+  ok("Genau eine Anfrage wurde gestellt", anfragen.length === 1, anfragen.length);
+
+  const url = new URL(anfragen[0]);
+  const params = url.searchParams;
+  ok("Es geht nur der bereinigte Name raus, kein Preis/Datum/Markt",
+    !/\d/.test(params.get("search_terms") || "") &&
+    !/[0-9]{1,2}[.\/][0-9]{1,2}/.test(anfragen[0]) &&
+    !anfragen[0].includes("Netto") && !anfragen[0].includes("REWE"),
+    anfragen[0]);
+  ok("Die Anfrage geht an Open Food Facts, sonst nirgendwohin",
+    url.hostname === "world.openfoodfacts.org", url.hostname);
+
+  antwortMit("sollte nie gerufen werden");
+  const zweitesMal = await T.OffLookup.find("GL Proteinjogh.sort.200g");
+  ok("Dieselbe Schreibweise wird kein zweites Mal gefragt",
+    zweitesMal === "Naturjoghurt" && anfragen.length === 0, `${zweitesMal}, ${anfragen.length} Anfragen`);
+
+  antwortMit(null);
+  const keinTreffer = await T.OffLookup.find("Vollkommen Erfundenes Produkt XYZ");
+  ok("Kein Treffer ist kein Fehler", keinTreffer === null);
+  antwortMit("sollte wieder nie gerufen werden");
+  await T.OffLookup.find("Vollkommen Erfundenes Produkt XYZ");
+  ok("Auch ein Fehlschlag wird nicht zweimal gefragt", anfragen.length === 0, anfragen.length);
+
+  window.localStorage.removeItem(T.OffLookup.CACHE_KEY);
+  const urspruenglichOnline = window.navigator.onLine;
+  Object.defineProperty(window.navigator, "onLine", { value: false, configurable: true });
+  antwortMit("sollte offline nie gerufen werden");
+  const ohneNetz = await T.OffLookup.find("Ganz Neuer Name");
+  ok("Ohne Netz wird gar nicht erst gefragt",
+    ohneNetz === null && anfragen.length === 0, anfragen.length);
+  Object.defineProperty(window.navigator, "onLine", { value: urspruenglichOnline, configurable: true });
+
+  window.localStorage.removeItem(T.OffLookup.CACHE_KEY);
+  T.OffLookup.fetcher = () => Promise.reject(new Error("Netzwerk weg"));
+  const beiFehler = await T.OffLookup.find("Wieder Ein Neuer Name");
+  ok("Ein Netzwerkfehler wirft nicht, sondern zählt als kein Treffer", beiFehler === null);
+
+  // ---------------------------------------------------------------
+  // Data.enrichUnmatched: der Umweg bucht nie automatisch
+  // ---------------------------------------------------------------
+  window.localStorage.removeItem(T.OffLookup.CACHE_KEY);
+
+  const ohneUnbekannte = D.parseReceiptText("Vollmilch 3,5%  1,29 A");
+  const vorherOffen = ohneUnbekannte.open;
+  T.OffLookup.fetcher = () => { throw new Error("Es hätte gar nicht erst gefragt werden dürfen"); };
+  const nichtsZuTun = await D.enrichUnmatched(ohneUnbekannte);
+  ok("Ein Bon voller sicherer Treffer verursacht keinen einzigen Netzwerkversuch",
+    nichtsZuTun === false && ohneUnbekannte.open === vorherOffen);
+
+  antwortMit("Vollmilch");
+  const mitUnbekannter = D.parseReceiptText("VL Xyzabc Vollmilch FH 1L  1,29 A");
+  const zeileVorher = mitUnbekannter.rows[0];
+  const geaendert = await D.enrichUnmatched(mitUnbekannter);
+  const zeileNachher = mitUnbekannter.rows[0];
+  ok("Eine unbekannte Zeile bekommt über den Umweg einen Vorschlag",
+    geaendert === true && !!zeileNachher.productId, JSON.stringify(zeileNachher));
+  ok("Der Vorschlag bleibt IMMER zu bestätigen, nie automatisch sicher",
+    zeileNachher.needsConfirmation === true, JSON.stringify(zeileNachher));
+  ok("Die Herkunft ist am Weg erkennbar (für die Anzeige „über Internet-Abgleich“)",
+    String(zeileNachher.method || "").startsWith("extern:"), zeileNachher.method);
+  ok("sure/open werden nach der Ergänzung neu gezählt",
+    mitUnbekannter.open === mitUnbekannter.rows.filter((r) => r.needsConfirmation).length);
+
+  antwortMit(null);
+  const bleibtOffen = D.parseReceiptText("Voellig Unbekanntes Zeug Ohne Treffer XQ9  1,29 A");
+  await D.enrichUnmatched(bleibtOffen);
+  ok("Kein Treffer bei Open Food Facts lässt die Zeile ehrlich offen, statt zu raten",
+    bleibtOffen.rows[0].productId === null);
+
+  /* An der echten Schnittstelle beobachtet, nicht ausgedacht: manche
+     Open-Food-Facts-Einträge hängen die Barcode-Nummer direkt hinter
+     den Namen — „Milsani Joghurt mild 3,5 % Fett 4061458028820".
+     Eine 13-stellige Ziffernfolge im Rückabgleich verdünnt nur das
+     Ergebnis, kein echter Produktname enthält so etwas. */
+  ok("Eine angehängte Barcode-Nummer wird entfernt",
+    T.OffLookup._bereinigt("Milsani Joghurt mild 3,5 % Fett 4061458028820") ===
+      "Milsani Joghurt mild 3,5 % Fett");
+  ok("Eine kurze, plausible Zahl im Namen bleibt unangetastet",
+    T.OffLookup._bereinigt("Produkt 12345") === "Produkt 12345");
+
+  T.OffLookup.fetcher = null;
 }
 
 console.log("\n--- Marken erklären sich ---");

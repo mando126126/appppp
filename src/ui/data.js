@@ -1524,6 +1524,58 @@ function parseReceiptText(text) {
 }
 
 /**
+ * Zweite Stufe für Zeilen, die `parseReceiptText` nicht zuordnen
+ * konnte — ein Umweg über Open Food Facts, Details und Grenzen (nur
+ * der Name geht raus, jede Schreibweise höchstens einmal, ohne Netz
+ * übersprungen) stehen in offLookup.js.
+ *
+ * WAS HIER BEWUSST GLEICH BLEIBT: die Produktidentität kommt immer
+ * aus dem eigenen Katalog. Open Food Facts liefert nur einen
+ * ausgeschriebenen Namen („Joghurt" statt „GL Proteinjogh.sort."),
+ * der danach GENAUSO durch `matchProduct` läuft wie jede getippte
+ * Zeile. Ein Treffer über diesen Umweg bleibt deshalb immer
+ * `needsConfirmation: true` — er ist ein Vorschlag über zwei Ecken
+ * (fremder Dienst, dann der eigene Abgleich), keine Gewissheit, und
+ * bucht sich nie von selbst.
+ *
+ * Verändert `parsed.rows` in-place und aktualisiert `sure`/`open`
+ * gleich mit — die Oberfläche muss sonst zwei Zählweisen synchron
+ * halten.
+ *
+ * @returns {Promise<boolean>} ob sich überhaupt etwas geändert hat.
+ *   Die Oberfläche zeichnet nur dann neu; ein Bon voller sicherer
+ *   Treffer verursacht keinen einzigen Netzwerkversuch.
+ */
+async function enrichUnmatched(parsed) {
+  const kandidaten = parsed.rows.filter((r) => !r.productId);
+  if (!kandidaten.length) return false;
+
+  let geaendert = false;
+  for (const row of kandidaten) {
+    const uebersetzt = await OffLookup.find(row.raw);
+    if (!uebersetzt) continue;
+    const learned = state.aliases[normalizeRaw(uebersetzt)];
+    const m = learned
+      ? { productId: learned, confidence: 1, method: "gelernt" }
+      : matchProduct(uebersetzt);
+    if (!m.productId) continue;
+    const p = byId(m.productId);
+    row.productId = m.productId;
+    row.productName = p ? p.name : null;
+    row.confidence = m.confidence;
+    row.method = "extern:" + m.method;
+    row.needsConfirmation = true;
+    geaendert = true;
+  }
+
+  if (geaendert) {
+    parsed.sure = parsed.rows.filter((r) => !r.needsConfirmation).length;
+    parsed.open = parsed.rows.filter((r) => r.needsConfirmation).length;
+  }
+  return geaendert;
+}
+
+/**
  * Produktsuche für die Nachfrage-Liste und das manuelle Erfassen.
  *
  * Die Rangfolge steht in productSearch.js — hier wird nur ergänzt,
@@ -1545,6 +1597,6 @@ const Data = {
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,
   exportJson, importJson,
-  compute, parseReceiptText, searchProducts,
+  compute, parseReceiptText, enrichUnmatched, searchProducts,
   today, plusDays, weekKey, weekdayOf
 };

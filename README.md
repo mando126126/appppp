@@ -1,13 +1,16 @@
 # Einkaufs-Anker — Web-App
 
 Wochenliste, Vorratsschätzung und Verschwendungsrechnung aus den eigenen
-Kassenbons. Kein KI-Modell, kein Server, kein Konto: robuste Statistik,
-Textabgleich und Tabellen, gerechnet im Browser.
+Kassenbons. Kein KI-Modell, kein Konto: robuste Statistik, Textabgleich
+und Tabellen, gerechnet im Browser. Ein eigener Server fehlt weiterhin —
+nur ein Produktname, den der eigene Katalog nicht kennt, geht zur
+Übersetzung an Open Food Facts (Details unten, „Wenn der eigene Katalog
+nicht reicht").
 
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1610 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1628 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -1799,6 +1802,90 @@ lassen, in beide Richtungen.
 
 ---
 
+## Wenn der eigene Katalog nicht reicht: ein Umweg über Open Food Facts
+
+Der Wunsch war unmissverständlich: der Abgleich soll (fast) immer ein
+Produkt erkennen, nicht bei jeder fünften Zeile aufgeben. Die
+Rauschwort-Erweiterung im vorigen Abschnitt schafft das nicht allein —
+sie hebt eine Zeile über die Bestätigungs-Schwelle, sie kann aber
+keinen Namen erraten, den kein Katalogeintrag ähnlich genug schreibt.
+
+Dafür jetzt ein zweiter Versuch, NUR für Zeilen, die der lokale
+Abgleich nicht einordnen konnte: Open Food Facts liefert einen
+ausgeschriebenen Produktnamen — „Joghurt" statt „GL Proteinjogh.sort."
+—, und der läuft anschließend GENAUSO durch den eigenen Katalog wie
+jede getippte Bon-Zeile. Open Food Facts ist damit nur die Übersetzung
+von Kassenjargon in normales Deutsch. Die Produktidentität —
+Haltbarkeit, Lagerort, Verbrauchsdatum-Status — kommt weiterhin immer
+aus der eigenen, geprüften Liste, nie von einem fremden Dienst. Ein
+Treffer über diesen Umweg bleibt deshalb immer ein Vorschlag zum
+Bestätigen, nie ein automatisch gebuchter — er ist eine Vermutung über
+zwei Ecken, keine Gewissheit.
+
+### Das ist eine Ausnahme von einem bisher absoluten Versprechen
+
+Die App hat an mehreren Stellen wörtlich behauptet, keine Daten würden
+das Gerät verlassen. Das stimmt für Bild und Bon-Text weiterhin
+uneingeschränkt — die Texterkennung bleibt vollständig lokal (siehe
+oben, „Die Erkennung läuft auf dem Gerät"). Für einen einzelnen
+unbekannten Produktnamen gilt es nicht mehr, und diese Ausnahme wird
+nicht versteckt: der Text im Bon-Erfassen-Bildschirm nennt sie
+ausdrücklich, bevor man scannt — *„Ein nicht erkannter Produktname
+wird — nur der Name, ohne Preis, Datum oder Markt — bei Open Food
+Facts nachgeschlagen."* Die Kurzbeschreibung im Manifest, die vorher
+pauschal „ohne Server" versprach, ist entsprechend angepasst.
+
+Es gibt bewusst KEINEN Schalter dafür in den Einstellungen. Das war
+eine echte Abwägung, keine Bequemlichkeit: eine Ein/Aus-Option hätte
+suggeriert, es gäbe eine Version dieser Funktion, die genauso gut
+funktioniert und dabei mehr Privatsphäre böte — das stimmt nicht,
+„aus" heißt schlicht „ein Fünftel der Zeilen bleibt unerkannt". Wer
+das nicht will, ist mit dem sichtbaren Hinweistext ausreichend
+informiert; ein Schalter, den man einmal umlegt und vergisst, wäre
+keine bessere Aufklärung gewesen, nur ein zusätzlicher Klick.
+
+### Vier Grenzen, technisch durchgesetzt (`src/ui/offLookup.js`)
+
+1. **Nur der bereinigte Name geht raus.** Kein Preis, kein Datum, kein
+   Markt — die Anfrage nutzt dieselbe Namens-Bereinigung wie der lokale
+   Abgleich (`parseProductName(...).core`), die Mengenangaben und
+   Sonderzeichen längst entfernt hat. Sie verrät ein Wort, nicht wann
+   oder wo jemand eingekauft hat.
+2. **Jede Schreibweise wird höchstens einmal gefragt.** Ergebnis UND
+   Fehlschlag landen dauerhaft im lokalen Zwischenspeicher
+   (`localStorage`, mit Obergrenze gegen unbegrenztes Wachstum). Dieselbe
+   Bon-Zeile fragt beim nächsten Einkauf nicht noch einmal — weniger
+   Anfragen an Open Food Facts, und dieselbe „einmal lernen, nie wieder
+   fragen"-Haltung wie bei `learnAlias`.
+3. **Ohne Netz wird es still übersprungen.** Kein Fehler, keine
+   Wartezeit — die Grundfunktion der App bleibt vollständig offline
+   nutzbar, dieser Umweg ist ein Zusatz, keine Voraussetzung.
+4. **Ein Timeout, damit nichts hängt.** Nach vier Sekunden gilt eine
+   Anfrage als erfolglos, nicht als Absturz — eine Oberfläche, die auf
+   eine fremde Antwort wartet, fühlt sich sonst kaputt an.
+
+Für Tests ist `OffLookup.fetcher` austauschbar — genau das Muster, das
+`OCR.engine` schon für Tesseract nutzt, damit kein Testlauf jemals
+gegen das echte Internet läuft.
+
+### Was noch offen ist
+
+Der dritte, in der ursprünglichen Empfehlung vorgeschlagene Schritt —
+ein reiner Kategorie-Fallback („Schlüsselwort → eine der 19
+Kategorien → konservativer Schätzwert") für Zeilen, die auch über
+Open Food Facts nicht auflösbar sind — ist bewusst noch nicht gebaut.
+Der Grund: `addReceipt` bucht heute ausschließlich Zeilen mit einer
+echten Katalog-Kennung; ein Kategorie-Rateergebnis hat keine. Es
+einfach einzubauen hätte entweder eine Fantasie-Kennung im Katalog
+erfunden (der Katalog ist kuratiert und sicherheitsgeprüft — genau die
+Sorte Vermischung, vor der `FILLER_WORDS` im Kommentar warnt) oder das
+Buchungsschema an einer zentralen Stelle geändert, ohne die Zeit für
+dieselbe Sorgfalt wie beim Rest dieses Abschnitts. Das ist eine
+eigene, saubere Aufgabe für später, keine, die im Vorbeigehen erledigt
+werden sollte.
+
+---
+
 ## Aufbau
 
 ```
@@ -1861,8 +1948,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1610
-npm run test:algo # 1065 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1628
+npm run test:algo # 1081 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

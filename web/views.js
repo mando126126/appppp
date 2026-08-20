@@ -2517,6 +2517,25 @@ function viewErfassen(ctx, app) {
   return c;
 }
 
+/**
+ * Zweite Stufe im Hintergrund anstoßen — für Zeilen, die der eigene
+ * Katalog nicht einordnen konnte. Läuft nach dem Rendern, still, und
+ * zeichnet nur neu, wenn sich wirklich etwas ergeben hat.
+ *
+ * Die Prüfung `cap.parsed !== parsed` fängt den Fall ab, dass der
+ * Nutzer während der Anfrage schon den nächsten Bon fotografiert
+ * oder das Feld geleert hat — sonst würde eine späte Antwort auf
+ * einen Bon, der gar nicht mehr angezeigt wird, trotzdem die
+ * Oberfläche verändern.
+ */
+function nachschlagen(cap, app) {
+  const parsed = cap.parsed;
+  if (!parsed) return;
+  Data.enrichUnmatched(parsed).then((geaendert) => {
+    if (geaendert && cap.parsed === parsed) app.render();
+  });
+}
+
 /* ================================================================
    Bild statt Abtippen
    ================================================================
@@ -2594,6 +2613,7 @@ function ocrPicker(box, cap, app) {
         cap.parsed = gelesen.quality.ok ? Data.parseReceiptText(gelesen.text) : null;
         app.render();
         if (!gelesen.quality.ok) app.notice("Nicht genug erkannt", gelesen.quality.message);
+        nachschlagen(cap, app);
       })
       .catch((e) => {
         laeuft = false;
@@ -2646,8 +2666,10 @@ function ocrPicker(box, cap, app) {
   });
 
   wrap.append(el("p", "srcnote",
-    "Foto eines Papierbons oder Screenshot aus der Händler-App. Das Bild bleibt auf dem Gerät — " +
-    "die Erkennung läuft hier, nicht auf einem Server."));
+    "Foto eines Papierbons oder Screenshot aus der Händler-App. Bild und Bon-Text bleiben auf " +
+    "dem Gerät — die Erkennung läuft hier, nicht auf einem Server. Ein nicht erkannter " +
+    "Produktname wird — nur der Name, ohne Preis, Datum oder Markt — bei Open Food Facts " +
+    "nachgeschlagen."));
 
   if (cap.ocr) {
     const q = cap.ocr.quality;
@@ -2692,6 +2714,7 @@ function renderScan(box, cap, app) {
       if (!cap.parsed.rows.length) app.toast("Nichts erkannt");
     } catch (e) { app.toast("Nicht lesbar"); console.error(e); }
     app.render();
+    nachschlagen(cap, app);
   });
   box.append(go);
 
@@ -2735,6 +2758,12 @@ function renderScan(box, cap, app) {
     const left = el("div", "raw");
     left.append(el("div", "n", rowData.productName ? esc(rowData.productName) : "nicht zugeordnet"));
     left.append(el("div", "r", esc(rowData.raw)));
+    // Ein Vorschlag über zwei Ecken (fremder Dienst, dann der eigene
+    // Katalog) sieht sonst aus wie ein normaler Treffer — das wäre
+    // nicht falsch, aber es verschweigt, woher er kommt.
+    if (String(rowData.method || "").startsWith("extern:")) {
+      left.append(el("div", "srcnote", "über Internet-Abgleich vorgeschlagen, bitte prüfen"));
+    }
 
     if (rowData.needsConfirmation) {
       const sel = el("select");

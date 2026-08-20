@@ -3,13 +3,13 @@
    zuerst von dort antworten. Für eine App ohne Serverdaten ist das
    die einfachste und zuverlässigste Variante.
 
-   Der Cache-Name trägt die Bauversion (build.js ersetzt bo8hyq).
+   Der Cache-Name trägt die Bauversion (build.js ersetzt 9h7k0a).
    Dadurch verwirft ein neuer Stand die alten Dateien zuverlässig —
    sonst bekämen Nutzer nach einem Update wochenlang die alte App. */
-const CACHE = "einkaufsanker-bo8hyq";
+const CACHE = "einkaufsanker-9h7k0a";
 const FILES = [
   "./", "./index.html", "./app.css",
-  "./bundle.js", "./backup.js", "./data.js", "./ocr.js", "./views.js", "./app.js",
+  "./bundle.js", "./backup.js", "./offLookup.js", "./data.js", "./ocr.js", "./views.js", "./app.js",
   "./manifest.webmanifest",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png",
   /* Die Schrift gehört in den Vorrat, nicht in den Nachschlag. Ohne

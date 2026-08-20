@@ -1,7 +1,7 @@
 {
   "name": "Einkaufs-Anker",
   "short_name": "Anker",
-  "description": "Wochenliste, Vorrat und Verschwendung im Blick — gerechnet aus den eigenen Bons, ohne Konto und ohne Server.",
+  "description": "Wochenliste, Vorrat und Verschwendung im Blick — gerechnet aus den eigenen Bons, ohne Konto.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
