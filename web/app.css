@@ -24,10 +24,69 @@
      4. EINE TIEFENSTUFE. Genau ein Schatten, überall derselbe. Karten
         liegen auf dem Grund, nicht Karten auf Karten auf Karten.
 
+     5. EINE EIGENE SCHRIFT. Manrope, mitgeliefert statt geladen.
+        Die Systemschrift war die vernünftige Wahl und zugleich der
+        Grund, warum die App auf jedem Gerät wie das Betriebssystem
+        aussah und auf keinem wie sie selbst.
+
    Weiche Kanten, Bewegung mit ein wenig Nachschwingen, Ziffern in
    Tabellenbreite (damit Beträge untereinander stehen, ohne dass man
-   sie liest) — aber in der Systemschrift, nicht in Schreibmaschine.
+   sie liest) — aber in der Textschrift, nicht in Schreibmaschine.
    ================================================================ */
+
+/* ---------------- Schrift ----------------
+   MANROPE, und zwar aus dem eigenen Verzeichnis.
+
+   Warum überhaupt eine eigene: die Systemschrift ist auf jedem Gerät
+   eine andere. Dieselbe Zeile stand auf dem iPhone in SF Pro, auf
+   Android in Roboto und auf dem Rechner in Segoe — mit
+   unterschiedlicher Laufweite, Zahlenbreite und x-Höhe. Alles, was
+   hier an Hierarchie eingestellt ist, galt damit immer nur für ein
+   Gerät. Manrope ist auf allen dasselbe.
+
+   Warum ausgerechnet Manrope: halb-grotesk, offene Punzen, sehr
+   ruhige Ziffern — und eine hohe x-Höhe, die kleine Beschriftungen
+   auf einem Handy lesbar hält. Sie wirkt freundlich, ohne rund und
+   verspielt zu sein. Das trifft genau das, was diese App sein will.
+
+   Warum ausgeliefert und nicht von Google Fonts geladen: eine
+   eingebundene Schrift ist eine Anfrage an einen Dritten, bei jedem
+   Start, mit IP und Browserkennung. Diese App verspricht, dass die
+   Daten auf dem Gerät bleiben. 40 KB im eigenen Verzeichnis kosten
+   weniger als eine Ausnahme von diesem Satz — und die App
+   funktioniert damit auch ohne Netz unverändert.
+
+   `font-display: swap`: bis die Datei da ist, steht der Text in der
+   Systemschrift. Lieber ein kurzer Sprung als eine leere Seite.
+
+   Nicht jedes Zeichen steckt drin — „→", „✓" und „↻" fehlen dem
+   Schnitt. Der Browser holt sie sich Zeichen für Zeichen aus der
+   Systemschrift; das sind Symbole, keine Wörter, und es fällt nicht
+   auf. Ein eigener Schnitt nur dafür wäre teurer als der Gewinn. */
+@font-face{
+  font-family:"Manrope";
+  font-style:normal;
+  font-weight:200 800;          /* variabel — ein Datei für alle Schnitte */
+  font-display:swap;
+  src:url("fonts/manrope-latin.woff2") format("woff2");
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,
+                U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,
+                U+2212,U+2215,U+FEFF,U+FFFD;
+}
+/* Der zweite Bereich wird nur geladen, wenn wirklich ein Zeichen
+   daraus vorkommt — für Deutsch also nie. Er liegt dabei, damit ein
+   polnischer oder tschechischer Produktname nicht plötzlich in einer
+   anderen Schrift steht. */
+@font-face{
+  font-family:"Manrope";
+  font-style:normal;
+  font-weight:200 800;
+  font-display:swap;
+  src:url("fonts/manrope-latin-ext.woff2") format("woff2");
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,
+                U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,
+                U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
 
 :root{
   color-scheme: light dark;
@@ -38,8 +97,15 @@
   --surface-2:#F0F2F5;        /* eingelassene Felder */
   --material:rgba(244,245,247,.82);
   --ink:#15181E;
-  --ink-2:#6A7180;
-  --ink-3:#A3AAB6;
+  --ink-2:#626977;
+  /* War #A3AAB6 und damit 2,14:1 auf dem Seitengrund — für die
+     Quellenhinweise, Kachelbeschriftungen und die Rohzeilen des Bons,
+     die alle in dieser Farbe stehen, deutlich zu wenig. Der Abstand
+     zu --ink-2 ist dadurch kleiner geworden; die Rangfolge tragen
+     jetzt Größe und Gewicht, nicht mehr die Helligkeit. Das ist die
+     ehrlichere Lösung: drei Graustufen, von denen zwei lesbar sein
+     müssen, lassen keinen Platz für eine dritte. */
+  --ink-3:#667080;
   --on-accent:#FFFFFF;
 
   --hairline:rgba(21,24,30,.07);
@@ -48,6 +114,10 @@
   /* Die Palette. Jede Farbe hat eine Aufgabe. */
   --accent:#0EA46B;           /* erledigt, im Vorrat, gespart */
   --accent-soft:rgba(14,164,107,.11);
+  /* Für gefüllte Flächen mit weißer Schrift. Auf dem hellen Grün lag
+     Weiß bei 3,21:1 — bei der Schaltfläche, die in dieser App am
+     häufigsten gedrückt wird. Derselbe Farbton, nur tief genug. */
+  --accent-strong:#0B8557;
   --green:#0EA46B;
   --red:#F0533B;              /* dringend, verdorben */
   --red-soft:rgba(240,83,59,.11);
@@ -59,6 +129,28 @@
   --violet-soft:rgba(123,92,240,.11);
   --pink:#E4499A;             /* nur Abzeichen — hält Korall für Dringendes frei */
   --pink-soft:rgba(228,73,154,.12);
+
+  /* ---- Schriftfarben AUF den getönten Flächen -------------------
+     Die Palettenfarbe selbst ist als Schrift auf ihrer eigenen
+     11-prozentigen Tönung zu hell: gemessen 1,93:1 beim Gelb, 2,84:1
+     beim Grün — die Norm verlangt 4,5:1 für Text. Und diese Chips
+     tragen Bedeutung („+8 %", „doppelt?", „VD", „3 T"), sie sind
+     keine Dekoration.
+
+     Deshalb ein zweiter Satz Werte: derselbe Farbton, nur tiefer, und
+     ausschließlich für Schrift auf der zugehörigen Tönung. Die helle
+     Farbe bleibt, wo sie stark genug ist — auf Flächen, Balken,
+     Punkten. Im dunklen Modus sind die hellen Töne auf dunklem Grund
+     ohnehin über 4,9:1; dort zeigen die Marken deshalb auf dieselben
+     Werte. Nachgerechnet wird das in test/contrast.js. */
+  --accent-ink:#0A774E;
+  --red-ink:#C5270F;
+  --on-red:#FFFFFF;          /* Schrift auf voller roter Fläche */
+  --red-strong:#DF2C11;      /* rote Fläche mit weißer Schrift */
+  --amber-ink:#945D0B;
+  --blue-ink:#0B5DE8;
+  --violet-ink:#6845EE;
+  --pink-ink:#BF1C71;
   /* Die farbige Karte des Wochenrückblicks. Als eigener Wert, damit
      der dunkle Modus eigene Deckkräfte bekommt statt derselben. */
   --wash:linear-gradient(150deg,rgba(14,164,107,.20),rgba(61,130,246,.13) 52%,rgba(123,92,240,.20));
@@ -66,10 +158,34 @@
   --fill:rgba(21,24,30,.05);
   --fill-2:rgba(21,24,30,.09);
 
-  /* Weich, aber nicht wabbelig */
-  --r-lg:20px;
-  --r-md:13px;
-  --r-sm:9px;
+  /* KANTEN: Flächen sind eckig, Punkte bleiben Punkte.
+     ------------------------------------------------------------
+     Die App war durchgehend abgerundet. Das sah freundlich aus und
+     hatte einen Preis, der erst im Vergleich auffiel: alles wirkte
+     gleich weich, und eine Fläche, die etwas MISST — ein Balken, ein
+     Feld, eine Zeile — sah aus wie Dekoration. Eckig gesetzt liest
+     sich derselbe Balken als Messwert.
+
+     Die Regel, nach der hier entschieden wird, ist keine
+     Geschmacksfrage, sondern eine Frage der Natur des Elements:
+
+       ECKIG  ist alles, was eine FLÄCHE ist — Karten, Gruppen,
+              Zeilen, Knöpfe, Eingabefelder, Blätter, Balken.
+       RUND   bleibt, was ein PUNKT oder ein KREIS ist — Abhak-
+              Kreise, der Pfeilkreis, Streak-Punkte, der Schalter,
+              das (i), die Marken („Beispieldaten“, „!“, „2“).
+
+     Marken bleiben rund, obwohl sie Flächen sind: sie sind
+     Beschriftungen, keine Bedienelemente, und als Rechtecke bekämen
+     sie ein Gewicht, das ihnen nicht zusteht. Ein Knopf dagegen
+     WILL Gewicht — deshalb ist „Im Laden“ eckig geworden und
+     „Beispieldaten“ nicht.
+
+     Die drei Werte stehen auf 0 und nicht die Regeln auf „entfernt“:
+     so ist der Weg zurück ein Zahlenwert und keine Archäologie. */
+  --r-lg:0px;
+  --r-md:0px;
+  --r-sm:0px;
 
   /* Genau eine Tiefenstufe */
   --lift:0 1px 2px rgba(16,24,40,.04), 0 10px 26px -12px rgba(16,24,40,.16);
@@ -93,12 +209,13 @@
     --material:rgba(14,16,19,.84);
     --ink:#F2F4F7;
     --ink-2:#98A1B0;
-    --ink-3:#666E7C;
+    --ink-3:#89919E;
     --on-accent:#04150D;
     --hairline:rgba(255,255,255,.07);
     --hairline-strong:rgba(255,255,255,.13);
     --accent:#34D48D;
     --accent-soft:rgba(52,212,141,.15);
+    --accent-strong:#34D48D;   /* dort steht dunkle Schrift darauf */
     --green:#34D48D;
     --red:#FF7A62;
     --red-soft:rgba(255,122,98,.15);
@@ -114,6 +231,15 @@
     --pink:#FF7CC0;
     --pink-soft:rgba(255,124,192,.16);
     --wash:linear-gradient(150deg,rgba(52,212,141,.20),rgba(107,163,255,.13) 52%,rgba(164,140,255,.20));
+    /* Auf dunklem Grund reichen die hellen Töne (4,9 bis 7,3:1). */
+    --accent-ink:#34D48D;
+    --red-ink:#FF7A62;
+    --on-red:#2A0B04;          /* im Dunkeln ist Rot hell — Weiß darauf lag bei 2,56:1 */
+    --red-strong:#FF7A62;      /* dort steht dunkle Schrift darauf */
+    --amber-ink:#FFBE4D;
+    --blue-ink:#6BA3FF;
+    --violet-ink:#A48CFF;
+    --pink-ink:#FF7CC0;
     --fill:rgba(255,255,255,.06);
     --fill-2:rgba(255,255,255,.11);
     --lift:0 1px 2px rgba(0,0,0,.30), 0 10px 26px -12px rgba(0,0,0,.60);
@@ -162,16 +288,29 @@ html,body{margin:0;padding:0;min-height:100%}
 html{font-size:calc(16.5px * var(--text-scale))}
 body{
   background:var(--paper);color:var(--ink);
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,system-ui,sans-serif;
-  font-size:1rem;line-height:1.45;letter-spacing:-.01em;
+  font-family:"Manrope",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
+  /* Zwei Korrekturen gegenüber der Systemschrift, beide gemessen und
+     nicht geschätzt:
+
+     LAUFWEITE auf 0 statt -.01em. Alle Werte im Stil waren auf SF Pro
+     eingestellt, die von Haus aus weiter läuft; unverändert
+     übernommen klebten die Buchstaben aneinander. Sämtliche negativen
+     Werte im Stil sind entsprechend halbiert.
+
+     WORTABSTAND leicht positiv. Manropes Leerzeichen ist schmaler als
+     das der Systemschriften, und Laufweite wirkt auch darauf — in
+     „2 Sachen tauschen“ stand die Zahl fast am Wort. Hier wird nur
+     der Abstand ZWISCHEN Wörtern zurückgegeben, nicht der zwischen
+     Buchstaben. */
+  font-size:1rem;line-height:1.45;letter-spacing:0;word-spacing:.055em;
   -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
   overscroll-behavior-y:none;
 }
-h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.025em}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.0125em}
 p{margin:0}
 button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;background:none;color:inherit;letter-spacing:inherit}
 input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inherit}
-:focus-visible{outline:2.5px solid var(--blue);outline-offset:2px;border-radius:7px}
+:focus-visible{outline:2.5px solid var(--blue);outline-offset:2px}
 .hide{display:none !important}
 
 /* Beträge untereinander sollen sich vergleichen lassen, ohne dass man
@@ -195,29 +334,29 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 .appbar.scrolled{border-bottom-color:var(--hairline-strong)}
 .barRow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:38px}
 .barTitle{
-  font-size:1.03rem;font-weight:650;letter-spacing:-.02em;
+  font-size:1.03rem;font-weight:650;letter-spacing:-.01em;
   opacity:0;transform:translateY(6px);
   transition:opacity .18s var(--ease),transform .18s var(--ease);
 }
 .appbar.scrolled .barTitle{opacity:1;transform:none}
 .barActions{display:flex;gap:9px;margin-left:auto}
 .barBtn{
-  color:var(--accent);font-size:0.94rem;font-weight:600;
-  padding:7px 2px;min-height:38px;white-space:nowrap;border-radius:99px;
+  color:var(--accent-ink);font-size:0.94rem;font-weight:600;
+  padding:7px 2px;min-height:38px;white-space:nowrap;
 }
 .barBtn:active{opacity:.45}
 .barBtn.filled{
-  background:var(--accent);color:var(--on-accent);
+  background:var(--accent-strong);color:var(--on-accent);
   padding:9px 17px;box-shadow:var(--lift);
   transition:transform .16s var(--spring);
 }
 .barBtn.filled:active{transform:scale(.94)}
 
 .largeTitle{padding:2px var(--pad) 0}
-.largeTitle h1{font-size:1.94rem;line-height:1.14;letter-spacing:-.032em}
+.largeTitle h1{font-size:1.94rem;line-height:1.14;letter-spacing:-.016em}
 .largeTitle .sub{
   font-size:0.85rem;color:var(--ink-2);margin-top:5px;padding-bottom:2px;
-  display:flex;align-items:center;gap:8px;flex-wrap:wrap;letter-spacing:-.005em;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;letter-spacing:-.0025em;
 }
 
 main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px);width:100%}
@@ -232,7 +371,7 @@ main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px
 }
 .nav button{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  height:var(--nav-h);font-size:min(0.6rem,12px);font-weight:600;letter-spacing:-.005em;
+  height:var(--nav-h);font-size:min(0.6rem,12px);font-weight:600;letter-spacing:-.0025em;
   color:var(--ink-3);transition:color .16s linear;
 }
 .nav button svg{
@@ -253,7 +392,7 @@ main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px
 .groupTitle{
   display:flex;align-items:center;gap:7px;
   font-size:0.82rem;font-weight:600;color:var(--ink-2);
-  padding:0 4px 8px;letter-spacing:-.005em;
+  padding:0 4px 8px;letter-spacing:-.0025em;
 }
 .groupBody{
   background:var(--surface);border-radius:var(--r-lg);overflow:hidden;
@@ -272,14 +411,14 @@ main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px
 button.row,label.row{transition:background .14s linear}
 button.row:active,label.row:active{background:var(--fill)}
 .row .rowMain{flex:1;min-width:0}
-.row .rowTitle{font-size:1rem;letter-spacing:-.015em}
+.row .rowTitle{font-size:1rem;letter-spacing:-.0075em}
 .row .rowSub{font-size:0.8rem;color:var(--ink-2);margin-top:1px;line-height:1.35}
 .row .rowValue{font-size:1rem;color:var(--ink-2);flex:0 0 auto;text-align:right}
 .row .rowValue small{display:block;font-size:0.7rem;color:var(--ink-3);text-align:right}
 .row .chev{
   width:8px;height:8px;flex:0 0 auto;
   border-right:2px solid var(--ink-3);border-top:2px solid var(--ink-3);
-  transform:rotate(45deg);border-radius:1px;
+  transform:rotate(45deg);
 }
 .row.stacked{flex-direction:column;align-items:stretch;gap:11px;padding:14px 16px}
 .row.stacked .segmented{width:100%}
@@ -325,12 +464,12 @@ button.row:active,label.row:active{background:var(--fill)}
 }
 .hero:active{transform:scale(.985)}
 .hero .txt{min-width:0;padding-right:78px}
-.hero .txt b{display:block;font-size:1.09rem;font-weight:650;letter-spacing:-.022em}
+.hero .txt b{display:block;font-size:1.09rem;font-weight:650;letter-spacing:-.011em}
 .hero .txt small{display:block;font-size:0.82rem;color:var(--ink-2);margin-top:3px;line-height:1.4}
 .heroRing{display:block;width:100%;margin-top:15px;position:relative}
 .heroRing svg{width:100%;height:12px;display:block}
 .heroRing .val{position:absolute;right:0;top:-58px;display:flex;align-items:baseline;gap:4px}
-.heroRing .n{font-size:2.06rem;font-weight:750;letter-spacing:-.045em;line-height:1;font-variant-numeric:tabular-nums}
+.heroRing .n{font-size:2.06rem;font-weight:750;letter-spacing:-.0225em;line-height:1;font-variant-numeric:tabular-nums}
 .heroRing .u{font-size:0.79rem;font-weight:600;color:var(--ink-2)}
 .hero .chev{display:none}
 
@@ -345,7 +484,7 @@ button.row:active,label.row:active{background:var(--fill)}
   border-radius:var(--r-lg);padding:14px 15px 15px;box-shadow:var(--lift);
 }
 .tile .l{font-size:0.76rem;color:var(--ink-2);font-weight:500}
-.tile .v{font-size:1.55rem;font-weight:750;margin-top:5px;letter-spacing:-.04em;line-height:1.05}
+.tile .v{font-size:1.55rem;font-weight:750;margin-top:5px;letter-spacing:-.02em;line-height:1.05}
 .tile .v.good{color:var(--accent)}
 .tile .v.warn{color:var(--red)}
 .tile .t{font-size:0.7rem;color:var(--ink-3);margin-top:4px}
@@ -376,7 +515,7 @@ button.row:active,label.row:active{background:var(--fill)}
 
 .segmented{display:flex;background:var(--fill);border-radius:var(--r-sm);padding:3px;gap:3px}
 .segmented button{
-  flex:1;padding:7px 10px;border-radius:7px;font-size:0.82rem;font-weight:600;
+  flex:1;padding:7px 10px;font-size:0.82rem;font-weight:600;
   color:var(--ink-2);transition:background .2s var(--ease),color .2s linear;white-space:nowrap;
 }
 .segmented button[aria-selected="true"]{
@@ -402,35 +541,67 @@ button.row:active,label.row:active{background:var(--fill)}
 /* ---------------- Knöpfe ---------------- */
 .cta{
   display:block;width:100%;margin-top:14px;padding:14px;border-radius:var(--r-md);
-  background:var(--accent);color:var(--on-accent);font-weight:650;font-size:1rem;min-height:50px;
-  letter-spacing:-.015em;box-shadow:var(--lift);
+  background:var(--accent-strong);color:var(--on-accent);font-weight:650;font-size:1rem;min-height:50px;
+  letter-spacing:-.0075em;box-shadow:var(--lift);
   transition:transform .18s var(--spring),opacity .14s linear;
 }
 .cta:active{transform:scale(.975)}
 .cta:disabled{opacity:.35;cursor:default;transform:none;box-shadow:none}
-.cta.light{background:var(--fill);color:var(--accent);box-shadow:none}
-.cta.danger{background:var(--red-soft);color:var(--red);box-shadow:none}
+.cta.light{background:var(--fill);color:var(--accent-ink);box-shadow:none}
+.cta.danger{background:var(--red-soft);color:var(--red-ink);box-shadow:none}
 .ctaRow{display:flex;gap:10px;margin-top:14px}
 .ctaRow .cta{margin-top:0;flex:1}
 .ctaRow .cta.light{flex:0 0 34%}
+/* Sind beide hell, sind beide gleich breit: es gibt dann keinen
+   Hauptknopf mehr in dieser Reihe — der steht in der Wagenleiste. */
+.ctaRow .cta.light:first-child{flex:1}
 
 .pillBtn{
-  padding:8px 15px;border-radius:99px;background:var(--fill);
+  padding:8px 15px;background:var(--fill);
   font-size:0.85rem;font-weight:600;color:var(--ink);min-height:34px;white-space:nowrap;
   transition:transform .18s var(--spring),background .14s linear;
 }
-.pillBtn.on{background:var(--accent);color:var(--on-accent)}
+.pillBtn.on{background:var(--accent-strong);color:var(--on-accent)}
 .pillBtn:active{transform:scale(.92)}
 .pillBtn:disabled{opacity:.3;cursor:default;transform:none}
 .rowActions{display:flex;gap:7px;flex:0 0 auto}
-.linkBtn{color:var(--accent);font-size:0.9rem;font-weight:600;padding:6px 0}
+.linkBtn{color:var(--accent-ink);font-size:0.9rem;font-weight:600;padding:6px 0}
 .linkBtn:active{opacity:.5}
 
 /* ---------------- Positionen ---------------- */
 .items{list-style:none;margin:0;padding:0}
 .item{padding:12px 16px;position:relative;background:var(--surface)}
 .item + .item::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.item.off{opacity:.42}
+/* ABGEWÄHLT HEISST ABGEWÄHLT — NICHT ABGESCHALTET.
+   Das Dimmen lag auf der ganzen Zeile und damit auch auf den vier
+   Antworten, die ja gerade erscheinen, WEIL jetzt etwas zu tun ist.
+   Nachgerechnet: der Kontrast der Knopfbeschriftung fiel dadurch von
+   4,92:1 auf 1,74:1. Das ist nicht nur unter jeder Lesbarkeitsgrenze,
+   es sieht aus wie „deaktiviert" — und damit war der Rückkanal, über
+   den die App ihre Rhythmen korrigiert, optisch ausgeschaltet.
+   Gedimmt wird jetzt nur noch die Zeile selbst. */
+.item.off .top{opacity:.62}
+/* Im Wagen: durchgestrichen und zurückgenommen — dieselbe Sprache
+   wie in der Gangansicht, weil es dieselbe Sache ist. */
+.imWagen .top{opacity:.62}
+.imWagen .nm{text-decoration:line-through;text-decoration-color:var(--ink-3)}
+
+/* Die Wagenleiste. Klebt am unteren Rand, solange die Liste
+   weiterläuft, und setzt sich am Seitenende an ihren eigenen Platz. */
+.cartBar{
+  position:sticky;bottom:calc(var(--nav-h) + var(--safe-bottom) + 8px);z-index:4;
+  display:flex;align-items:center;gap:12px;margin-top:14px;
+  background:var(--surface);padding:12px 14px;box-shadow:var(--lift);
+  border:1px solid var(--hairline-strong);
+}
+.cartBar .t{flex:1;min-width:0;font-size:0.82rem;color:var(--ink-2)}
+.cartBar .t b{display:block;font-size:1.03rem;font-weight:650;color:var(--ink)}
+.cartBar .cta{margin-top:0;width:auto;flex:0 0 auto;padding:12px 16px;font-size:0.94rem}
+
+/* Die gewählte Antwort im Blatt. */
+.row.chosen{background:var(--accent-soft)}
+.row.chosen .rowTitle{color:var(--accent-ink);font-weight:650}
+.row.chosen .rowValue{color:var(--accent-ink)}
 .item .top{display:flex;align-items:flex-start;gap:13px}
 
 /* Gefüllter Kreis, kein Haken darin — die Füllung allein sagt genug. */
@@ -442,10 +613,21 @@ button.row:active,label.row:active{background:var(--fill)}
   transition:background .18s var(--ease),border-color .18s var(--ease),transform .3s var(--spring);
 }
 .box:checked{background:var(--accent);border-color:var(--accent)}
-.item .main{flex:1;min-width:0;text-align:left;padding:0;background:none;display:block}
+.item .main{flex:1;min-width:0;text-align:left;padding:0;background:none;display:block;cursor:pointer}
+/* Nur die Zeile selbst blasst beim Tippen ab, nicht ihre Marken —
+   die haben ihre eigene Rückmeldung und ihr eigenes Ziel. */
 .item .main:active{opacity:.55}
-.item .nm{font-size:1rem;font-weight:520;display:flex;flex-wrap:wrap;align-items:center;gap:6px;letter-spacing:-.018em}
+.item .main .pill:active{opacity:1}
+.item .nm{font-size:1rem;font-weight:520;display:flex;flex-wrap:wrap;align-items:center;gap:6px;letter-spacing:-.009em}
 .item .price{font-size:1rem;text-align:right;flex:0 0 auto}
+/* Der Winkel sitzt auf der Höhe der ersten Zeile, nicht mittig: eine
+   Position mit Marke ist zweizeilig, und ein mitwanderndes Zeichen
+   sähe aus, als gehöre es zur Marke statt zur Zeile. */
+.item .top > .chev{
+  width:8px;height:8px;flex:0 0 auto;margin-top:7px;
+  border-right:2px solid var(--ink-3);border-top:2px solid var(--ink-3);
+  transform:rotate(45deg);
+}
 .item .price small{display:block;font-size:0.7rem;color:var(--ink-3);font-weight:400}
 .item .calc{font-size:0.8rem;color:var(--ink-2);margin-top:4px;padding-left:37px;line-height:1.4}
 .item .why{padding-left:37px}
@@ -465,42 +647,64 @@ button.row:active,label.row:active{background:var(--fill)}
 .addRow::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
 .addRow .plusMark{
   width:26px;height:26px;flex:0 0 auto;border-radius:99px;
-  background:var(--accent-soft);color:var(--accent);
+  background:var(--accent-soft);color:var(--accent-ink);
   display:flex;align-items:center;justify-content:center;
   font-size:1.03rem;font-weight:600;line-height:1;
   transition:transform .22s var(--spring);
 }
 .addRow:active .plusMark{transform:rotate(90deg) scale(.9)}
-.addRow .rowTitle{color:var(--accent);font-weight:600}
+.addRow .rowTitle{color:var(--accent-ink);font-weight:600}
 
 /* Freie Zeile im Suchblatt — sichtbar anders als ein Katalogtreffer. */
 .results .freeRow{background:var(--accent-soft)}
-.results .freeRow .rn{color:var(--accent);font-weight:600}
+.results .freeRow .rn{color:var(--accent-ink);font-weight:600}
+
+/* Bilderfassung: Fotografieren, wählen, hineinziehen */
+.shot{margin-bottom:14px}
+.shotRow{display:flex;gap:10px}
+.shotRow .cta{margin-top:0;flex:1}
+.shotRow .cta.light{flex:0 0 42%}
+/* Zwei Wörter auf einem Knopf brechen sonst auf 390 Pixeln um. */
+.shotRow .cta{font-size:0.95rem;white-space:nowrap}
+.shot.over{outline:2px dashed var(--accent);outline-offset:6px;border-radius:var(--r-lg)}
+.shotStatus{font-size:0.82rem;color:var(--ink-2);margin-top:10px;min-height:1.1em}
+.shotBar{height:6px;background:var(--fill);overflow:hidden;margin-top:6px}
+.shotBar i{display:block;height:100%;background:var(--accent);transition:width .2s linear}
 
 /* Getönte Chips: farbig, rund, ohne Rahmen */
 .pill{
   font-size:0.68rem;font-weight:650;padding:3px 9px;border-radius:99px;
   background:var(--fill);color:var(--ink-2);white-space:nowrap;letter-spacing:0;
 }
-.pill.rh{background:var(--accent-soft);color:var(--accent)}
-.pill.risk{background:var(--red-soft);color:var(--red)}
-.pill.dup{background:var(--blue-soft);color:var(--blue)}
-.pill.warn{background:var(--amber-soft);color:var(--amber)}
+.pill.rh{background:var(--accent-soft);color:var(--accent-ink)}
+.pill.risk{background:var(--red-soft);color:var(--red-ink)}
+.pill.dup{background:var(--blue-soft);color:var(--blue-ink)}
+.pill.warn{background:var(--amber-soft);color:var(--amber-ink)}
 .pill.state{background:var(--fill-2);color:var(--ink-2)}
-.pill.safety{background:var(--red);color:#fff}
-.pill.cheap{background:var(--accent-soft);color:var(--accent)}
-.pill.own{background:var(--violet-soft);color:var(--violet)}
+.pill.safety{background:var(--red-strong);color:var(--on-red)}
+.pill.cheap{background:var(--accent-soft);color:var(--accent-ink)}
+.pill.own{background:var(--violet-soft);color:var(--violet-ink)}
+
+/* Antippbare Marken: erklären sich auf Tippen (Telefon) oder beim
+   Verweilen mit dem Zeiger (Rechner). Der Unterschied zur stummen
+   Marke muss sichtbar sein, ohne laut zu werden — deshalb nur der
+   Zeiger, ein kleiner Druckpunkt und ein Fokusring für die Tastatur. */
+.pill[role="button"],.flag[role="button"]{cursor:help;transition:transform .12s var(--spring)}
+.pill[role="button"]:active,.flag[role="button"]:active{transform:scale(.9)}
+.pill[role="button"]:focus-visible,.flag[role="button"]:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
 
 .reasons{margin-top:11px;padding-left:37px}
 .reasons .q{font-size:0.79rem;color:var(--ink-2);margin-bottom:8px}
 .opts{display:flex;gap:8px;flex-wrap:wrap}
 .opt{
-  flex:1 1 30%;min-width:104px;text-align:center;padding:9px 12px;border-radius:99px;
+  flex:1 1 30%;min-width:104px;text-align:center;padding:9px 12px;
   background:var(--surface-2);border:1.5px solid transparent;
   font-size:0.85rem;font-weight:550;color:var(--ink-2);
   transition:border-color .16s linear,color .16s linear,background .16s linear;
 }
-.opt[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.opt[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
 .opt span{display:block}
 .out{margin-top:10px;font-size:0.82rem;padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2)}
 .out.watch{background:var(--amber-soft)}
@@ -510,7 +714,7 @@ button.row:active,label.row:active{background:var(--fill)}
   padding:15px 16px;background:var(--surface);position:relative;
 }
 .totals::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.totals .big{font-size:1.7rem;font-weight:750;line-height:1;letter-spacing:-.042em}
+.totals .big{font-size:1.7rem;font-weight:750;line-height:1;letter-spacing:-.021em}
 .totals .l{font-size:0.79rem;color:var(--ink-2);margin-bottom:5px}
 .totals .saved{font-size:0.85rem;color:var(--accent);font-weight:600;text-align:right}
 .totals.bare{background:none;padding:14px 0 0}
@@ -518,7 +722,7 @@ button.row:active,label.row:active{background:var(--fill)}
 
 .sectionRow{
   padding:10px 16px 6px;font-size:0.73rem;font-weight:650;
-  color:var(--ink-2);background:var(--surface);position:relative;letter-spacing:-.005em;
+  color:var(--ink-2);background:var(--surface);position:relative;letter-spacing:-.0025em;
 }
 
 /* ---------------- Tabellen und Listen ---------------- */
@@ -537,25 +741,25 @@ tbody tr:last-child td{border-bottom:none}
   flex:0 0 auto;font-size:0.73rem;font-weight:650;padding:4px 10px;border-radius:99px;
   white-space:nowrap;min-width:52px;text-align:center;background:var(--fill);color:var(--ink-2);
 }
-.f-ok{background:var(--accent-soft);color:var(--accent)}
-.f-gold{background:var(--amber-soft);color:var(--amber)}
-.f-miss{background:var(--red-soft);color:var(--red)}
-.f-new{background:var(--blue-soft);color:var(--blue)}
+.f-ok{background:var(--accent-soft);color:var(--accent-ink)}
+.f-gold{background:var(--amber-soft);color:var(--amber-ink)}
+.f-miss{background:var(--red-soft);color:var(--red-ink)}
+.f-new{background:var(--blue-soft);color:var(--blue-ink)}
 
 .chartBox{padding:15px 16px 16px}
 .chart{width:100%;height:auto;display:block}
 .legend{display:flex;gap:18px;font-size:0.76rem;color:var(--ink-2);margin-top:11px;flex-wrap:wrap}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:4px;margin-right:6px;vertical-align:-1px}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
 
 .save{display:flex;align-items:center;gap:13px;padding:13px 16px;position:relative;background:var(--surface)}
 .save + .save::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.save .amt{font-size:1rem;font-weight:750;color:var(--accent);flex:0 0 66px;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.save .amt{font-size:1rem;font-weight:750;color:var(--accent);flex:0 0 66px;letter-spacing:-.015em;font-variant-numeric:tabular-nums}
 .save .txt{flex:1;min-width:0}
 .save .txt b{display:block;font-size:0.94rem;font-weight:550}
 .save .txt small{display:block;font-size:0.76rem;color:var(--ink-2);line-height:1.4;margin-top:2px}
 .strip{display:flex;justify-content:space-between;padding:15px 16px;position:relative;background:var(--surface)}
 .strip::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.strip .big{font-size:1.4rem;font-weight:750;letter-spacing:-.04em}
+.strip .big{font-size:1.4rem;font-weight:750;letter-spacing:-.02em}
 .strip .l{font-size:0.76rem;color:var(--ink-2);margin-top:3px}
 
 /* ---------------- Erfassen ---------------- */
@@ -614,9 +818,13 @@ button.row.action,label.row.action{cursor:pointer}
   width:25px;height:25px;flex:0 0 auto;border:2px solid var(--ink-3);border-radius:99px;position:relative;
   transition:background .18s var(--ease),border-color .18s var(--ease);
 }
-.sItem.done{opacity:.44}
+/* Wie bei der Position in der Liste: .44 hieß 2,84:1 auf dem Namen
+   des Artikels, den man gerade in den Wagen gelegt hat — und den man
+   noch lesen können muss, um zu prüfen, ob es der richtige war. Der
+   gefüllte Kreis und der Strich tragen die Aussage ohnehin. */
+.sItem.done{opacity:.62}
 .sItem.done .tick{background:var(--accent);border-color:var(--accent)}
-.sItem .sn{flex:1;font-size:1rem;font-weight:520;letter-spacing:-.018em}
+.sItem .sn{flex:1;font-size:1rem;font-weight:520;letter-spacing:-.009em}
 .sItem .sn small{display:block;font-size:0.76rem;font-weight:400;color:var(--ink-2);margin-top:1px}
 .sItem .sp{font-size:0.97rem;color:var(--ink-2)}
 
@@ -642,7 +850,7 @@ button.row.action,label.row.action{cursor:pointer}
   padding:12px var(--pad) calc(var(--safe-bottom) + 12px);
 }
 .storeFoot .stat{display:block;margin-bottom:2px}
-.storeFoot .sum{font-size:1.33rem;font-weight:750;letter-spacing:-.04em}
+.storeFoot .sum{font-size:1.33rem;font-weight:750;letter-spacing:-.02em}
 .storeFoot .cta{margin:0;width:auto;padding:13px 22px;flex:0 0 auto}
 
 /* ---------------- Blatt ---------------- */
@@ -655,13 +863,13 @@ button.row.action,label.row.action{cursor:pointer}
 .sheet[hidden]{display:none}
 .sheetBody{
   width:100%;max-width:540px;background:var(--surface);
-  border-radius:26px 26px 0 0;padding:8px 18px calc(var(--safe-bottom) + 18px);
+  padding:8px 18px calc(var(--safe-bottom) + 18px);
   max-height:88vh;overflow-y:auto;animation:rise .34s var(--ease);
 }
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes rise{from{transform:translateY(100%)}to{transform:none}}
 .grabber{width:38px;height:5px;border-radius:99px;background:var(--fill-2);margin:0 auto 16px}
-.sheetTitle{font-size:1.21rem;font-weight:700;letter-spacing:-.025em}
+.sheetTitle{font-size:1.21rem;font-weight:700;letter-spacing:-.0125em}
 .sheetSub{font-size:0.9rem;color:var(--ink-2);margin:6px 0 16px;line-height:1.42}
 .sheetPara{font-size:0.9rem;line-height:1.5;color:var(--ink);margin:0 0 12px}
 .sheetPara:last-child{margin-bottom:0}
@@ -679,7 +887,7 @@ button.row.action,label.row.action{cursor:pointer}
 .toast{
   position:fixed;left:0;right:0;margin-inline:auto;width:fit-content;
   bottom:calc(var(--nav-h) + var(--safe-bottom) + 18px);z-index:120;
-  background:rgba(21,24,30,.95);color:#fff;padding:12px 20px 12px 14px;border-radius:99px;
+  background:rgba(21,24,30,.95);color:#fff;padding:12px 20px 12px 14px;
   font-size:0.9rem;max-width:92vw;text-align:left;
   box-shadow:0 12px 32px rgba(16,24,40,.30);
   -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
@@ -721,12 +929,12 @@ button.row.action,label.row.action{cursor:pointer}
 .rvClose:active{transform:scale(.85)}
 .rvBody{display:block;width:100%;text-align:left;padding:6px 16px 16px;transition:opacity .14s linear}
 .rvBody:active{opacity:.65}
-.rvHead2{font-size:1.21rem;font-weight:700;letter-spacing:-.028em;line-height:1.26}
+.rvHead2{font-size:1.21rem;font-weight:700;letter-spacing:-.014em;line-height:1.26}
 .rvStrip{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .rvItem{
   flex:1 1 88px;min-width:88px;background:var(--surface);border-radius:var(--r-md);padding:10px 12px;
 }
-.rvItem .v{font-size:1.09rem;font-weight:750;letter-spacing:-.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvItem .v{font-size:1.09rem;font-weight:750;letter-spacing:-.015em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rvItem .l{font-size:0.7rem;color:var(--ink-2);margin-top:2px;line-height:1.3;font-weight:500}
 .rvStreak{font-size:0.8rem;color:var(--ink-2);margin-top:12px}
 
@@ -740,6 +948,111 @@ button.row.action,label.row.action{cursor:pointer}
 .sDot.on.now{box-shadow:0 0 0 3.5px var(--accent-soft)}
 .streak .sTxt{font-size:0.82rem;color:var(--ink-2);flex:1;min-width:0}
 
+/* ================================================================
+   Startseite
+   ================================================================
+   Der Wochenstreifen ist das einzige große Element der App. Er darf
+   das sein, weil er das Einzige ist, was drei Quellen zu einer
+   Aussage zusammenfasst.
+
+   Ein Feld = ein Ereignis. Die Höhe eines Feldes ist FEST (10 px),
+   nicht auf das Maximum normiert: nur so bleibt eine ruhige Woche
+   auch flach. Ein Balkendiagramm, das sich selbst skaliert, sieht
+   bei einer Sache genauso dramatisch aus wie bei zwölf.
+   ================================================================ */
+.welcome{
+  font-size:1.06rem;line-height:1.5;color:var(--ink);
+  padding:22px 4px 4px;letter-spacing:-.0075em;
+}
+
+.pulse{background:var(--surface);padding:15px 14px 13px}
+.pulseHead{
+  font-size:1.02rem;font-weight:600;letter-spacing:-.01em;
+  line-height:1.35;padding:0 3px 14px;color:var(--ink);
+}
+.pulseDays{display:flex;gap:5px;align-items:flex-end}
+/* Eine leichte Fläche unter jedem Tag. Ohne sie standen dort sieben
+   Säulen, die aussahen wie eine Grafik — und niemand tippt auf eine
+   Grafik. Mit ihr sind es sieben Schaltflächen, und der Inhalt jedes
+   Tages ist auffindbar statt zufällig entdeckbar. */
+.pDay{
+  flex:1 1 0;min-width:0;background:var(--fill);border:none;padding:7px 0 5px;
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  transition:background .14s linear;
+}
+.pDay:active{background:var(--fill)}
+/* Der Boden liegt für alle Tage gleich, damit die Säulen vergleichbar
+   sind — deshalb feste Höhe statt „so hoch wie nötig“. */
+.pCol{
+  height:calc(var(--rows) * 13px + 6px);
+  min-height:19px;width:100%;max-width:34px;
+  display:flex;flex-direction:column-reverse;justify-content:flex-start;
+  gap:3px;
+}
+.pSeg{display:block;height:10px;background:var(--fill-2)}
+.pSeg.k-red{background:var(--red)}
+.pSeg.k-amber{background:var(--amber)}
+.pSeg.k-green{background:var(--accent)}
+/* Ein ruhiger Tag ist nicht leer, er ist ruhig — ein Strich sagt das
+   besser als nichts, das wie ein Fehler aussieht. */
+.pFlat{display:block;height:3px;background:var(--fill-2)}
+.pNum{
+  font-size:0.7rem;color:var(--ink-2);height:0.95rem;line-height:0.95rem;
+  font-variant-numeric:tabular-nums;font-weight:600;
+}
+.pName{font-size:0.72rem;color:var(--ink-2);letter-spacing:-.005em;white-space:nowrap}
+.pDay.today .pNum{color:var(--accent-ink)}
+.pDay.today .pName{color:var(--accent-ink);font-weight:650}
+/* Heute ist eine getönte Fläche, keine Linie. Eine grüne Linie unter
+   der Säule sah aus wie ein weiteres Feld — dieselbe Farbe, dieselbe
+   Form, direkt darunter. Die Fläche umfasst dagegen die ganze Spalte
+   und kann mit nichts verwechselt werden. */
+.pDay.today{background:var(--accent-soft)}
+.pDay.today:active{background:var(--accent-soft)}
+/* Der gelernte Einkaufstag: ein Punkt unter dem Namen. Ein Ring UM
+   den Namen kollidierte mit der Hervorhebung für heute — und wenn
+   beides auf denselben Tag fällt, sah man nur noch eines. */
+.pShop{height:8px;display:flex;align-items:center;justify-content:center}
+.pShop i{width:4px;height:4px;border-radius:99px;background:var(--ink-3);display:block}
+/* Gedimmt wird die SÄULE, nicht der Wochentag. Auf dem Namen ergab
+   .72 einen Kontrast von 3,08:1 — und „Do“ muss auch an einem ruhigen
+   Tag lesbar sein, sonst fehlt der Bezugspunkt für die Tage daneben.
+   Derselbe Fehler wie bei der abgewählten Position: ein Dimmen, das
+   über den Inhalt hinweggeht, den es gar nicht meint. */
+.pDay.quiet .pCol{opacity:.72}
+.pLegend{display:flex;flex-wrap:wrap;gap:9px 11px;padding:15px 3px 0}
+.pLegend span{display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--ink-2)}
+.pLegend i{width:9px;height:9px;display:block;background:var(--fill-2)}
+.pLegend i.k-red{background:var(--red)}
+.pLegend i.k-amber{background:var(--amber)}
+.pLegend i.k-green{background:var(--accent)}
+.pLegend .legShop i{width:4px;height:4px;border-radius:99px;background:var(--ink-3);margin:0 2.5px}
+
+/* Die Liste als ein Feld: eine Zeile, die aussieht, als könne man
+   sie drücken — weil man genau das tun soll. */
+.bigAction{
+  display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+  padding:17px 16px;background:var(--surface);
+  transition:background .14s linear;
+}
+.bigAction:active{background:var(--fill)}
+.baMain{flex:1;min-width:0}
+.baTitle{font-size:1.12rem;font-weight:640;letter-spacing:-.0125em}
+.baSub{font-size:0.92rem;color:var(--accent-ink);margin-top:3px;font-weight:560}
+.baPreview{
+  font-size:0.79rem;color:var(--ink-2);margin-top:5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.baGo{
+  flex:0 0 auto;width:34px;height:34px;border-radius:99px;
+  background:var(--accent-soft);color:var(--accent-ink);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.05rem;line-height:1;
+}
+
+.runRow{display:flex;align-items:center;width:100%;background:var(--surface);padding-right:16px}
+.runRow .streak{flex:1;min-width:0}
+
 /* Meilensteine: je eine Farbe, gezeichnete Marke im getönten Kreis. */
 .badgeRow{display:block;background:var(--surface);padding:0}
 .badge{
@@ -751,47 +1064,171 @@ button.row.action,label.row.action{cursor:pointer}
 .badge + .badge::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
 .badge:active{background:var(--fill)}
 .badge .bIcon{
-  grid-row:1 / span 2;width:38px;height:38px;border-radius:13px;
+  grid-row:1 / span 2;width:38px;height:38px;
   display:flex;align-items:center;justify-content:center;
   background:var(--fill);color:var(--ink-3);
 }
 .badge .bIcon svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 /* Jede Reihe hat ihre eigene Farbe — das ist der eine Ort, an dem die
    App bunt sein darf. Erreicht heißt getönt, offen heißt grau. */
-.badge.m-gerettet.on  .bIcon{background:var(--accent-soft);color:var(--accent)}
-.badge.m-guenstig.on  .bIcon{background:var(--amber-soft);color:var(--amber)}
-.badge.m-getauscht.on .bIcon{background:var(--blue-soft);color:var(--blue)}
-.badge.m-erfasst.on   .bIcon{background:var(--violet-soft);color:var(--violet)}
-.badge.m-wochen.on    .bIcon{background:var(--pink-soft);color:var(--pink)}
+.badge.m-gerettet.on  .bIcon{background:var(--accent-soft);color:var(--accent-ink)}
+.badge.m-guenstig.on  .bIcon{background:var(--amber-soft);color:var(--amber-ink)}
+.badge.m-getauscht.on .bIcon{background:var(--blue-soft);color:var(--blue-ink)}
+.badge.m-erfasst.on   .bIcon{background:var(--violet-soft);color:var(--violet-ink)}
+.badge.m-wochen.on    .bIcon{background:var(--pink-soft);color:var(--pink-ink)}
 .badge.m-gerettet  .bBar i{background:var(--accent)}
 .badge.m-guenstig  .bBar i{background:var(--amber)}
 .badge.m-getauscht .bBar i{background:var(--blue)}
 .badge.m-erfasst   .bBar i{background:var(--violet)}
 .badge.m-wochen    .bBar i{background:var(--pink)}
-.badge .bLbl{grid-column:2;grid-row:1;font-size:0.94rem;font-weight:600;letter-spacing:-.015em}
-.badge .bVal{grid-column:3;grid-row:1;text-align:right;font-size:1.03rem;font-weight:750;letter-spacing:-.03em}
-.badge .bBar{grid-column:2;grid-row:2;height:7px;border-radius:99px;background:var(--fill-2);overflow:hidden}
-.badge .bBar i{display:block;height:100%;border-radius:99px;background:var(--ink-3);transition:width .6s var(--ease)}
+.badge .bLbl{grid-column:2;grid-row:1;font-size:0.94rem;font-weight:600;letter-spacing:-.0075em}
+.badge .bVal{grid-column:3;grid-row:1;text-align:right;font-size:1.03rem;font-weight:750;letter-spacing:-.015em}
+.badge .bBar{grid-column:2;grid-row:2;height:7px;background:var(--fill-2);overflow:hidden}
+.badge .bBar i{display:block;height:100%;background:var(--ink-3);transition:width .6s var(--ease)}
 .badge .bNext{grid-column:3;grid-row:2;text-align:right;font-size:0.7rem;color:var(--ink-3);white-space:nowrap}
 
 /* Glückwunsch */
-.sheet.celebration .sheetTitle{text-align:center;font-size:0.79rem;color:var(--accent);letter-spacing:.02em}
-.celebrate{text-align:center;padding:10px 0 4px}
-.celebrate .cIcon{
-  width:76px;height:76px;margin:0 auto 18px;border-radius:26px;
-  background:var(--accent-soft);color:var(--accent);
-  display:flex;align-items:center;justify-content:center;
-  animation:cheer .55s var(--spring);
+/* ================================================================
+   Der Auftritt bei einem Meilenstein
+   ================================================================
+   Der einzige Ort in dieser App, an dem etwas laut sein darf. Das
+   ist Absicht und zugleich die Grenze: laut ist die BEWEGUNG, nicht
+   die Aussage. Die Zahl in der Mitte ist die echte, sie läuft nur
+   hoch wie eine Walze und rastet ein.
+
+   Alles hier hat einen Aus-Schalter: unter `prefers-reduced-motion`
+   erscheint dasselbe Fenster mit derselben Zahl, sofort und still.
+   ================================================================ */
+.party{
+  position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:rgba(10,12,16,.62);backdrop-filter:blur(3px);
+  opacity:0;transition:opacity .22s ease;
 }
-.celebrate .cIcon svg{width:36px;height:36px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-.celebrate .cTitle{font-size:1.33rem;font-weight:750;letter-spacing:-.03em;line-height:1.25}
-.celebrate .cLevel{font-size:0.85rem;color:var(--accent);font-weight:650;margin-top:7px}
-.celebrate .cNote{font-size:0.85rem;color:var(--ink-2);line-height:1.5;margin:14px 0 0}
-.cIcon.m-guenstig{background:var(--amber-soft);color:var(--amber)}
-.cIcon.m-getauscht{background:var(--blue-soft);color:var(--blue)}
-.cIcon.m-erfasst{background:var(--violet-soft);color:var(--violet)}
-.cIcon.m-wochen{background:var(--pink-soft);color:var(--pink)}
-.sheet.celebration .sheetTitle{color:inherit}
+.party.show{opacity:1}
+.party[hidden]{display:none}
+
+/* Der Schein hinter der Karte trägt die Farbe der Reihe. Er ist der
+   einzige Farbträger — die Karte selbst bleibt weiß, sonst wird aus
+   dem Moment eine Litfaßsäule. */
+.partyGlow{
+  position:absolute;width:min(520px,120vw);aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle,var(--party) 0%,transparent 62%);
+  opacity:.55;filter:blur(6px);
+}
+.party:not(.still) .partyGlow{animation:glowPulse 2.4s ease-out}
+@keyframes glowPulse{
+  0%{transform:scale(.2);opacity:0}
+  22%{transform:scale(1.06);opacity:.75}
+  100%{transform:scale(1);opacity:.45}
+}
+
+.partyCard{
+  position:relative;z-index:2;width:100%;max-width:340px;text-align:center;
+  background:var(--surface);padding:26px 22px 20px;box-shadow:var(--lift);
+}
+.party:not(.still) .partyCard{animation:cardIn .5s var(--spring) both}
+@keyframes cardIn{
+  from{transform:scale(.86) translateY(14px);opacity:0}
+  to{transform:scale(1) translateY(0);opacity:1}
+}
+
+.partyKicker{
+  font-size:0.7rem;font-weight:750;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--party-ink);
+}
+
+.partyMark{
+  width:74px;height:74px;margin:12px auto 4px;
+  display:grid;place-items:center;background:var(--party-soft);color:var(--party-ink);
+  position:relative;overflow:hidden;
+}
+.partyMark svg{width:38px;height:38px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.party:not(.still) .partyMark{animation:markIn .62s var(--spring) .08s both}
+@keyframes markIn{
+  from{transform:scale(.3) rotate(-14deg);opacity:0}
+  to{transform:scale(1) rotate(0);opacity:1}
+}
+/* Ein Lichtstreifen, der einmal über das Zeichen läuft. Genau
+   einmal — als Dauerschleife wäre es ein Werbebanner. */
+.party:not(.still) .partyMark::after{
+  content:"";position:absolute;inset:-40% -120%;
+  background:linear-gradient(76deg,transparent 42%,rgba(255,255,255,.85) 50%,transparent 58%);
+  animation:shine 1.1s ease-in-out .7s 1 both;
+}
+@keyframes shine{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* Die Walze. Tabellenziffern, damit die Zahl beim Hochlaufen nicht
+   zappelt — proportionale Ziffern sind verschieden breit, und eine
+   Zahl, die bei jedem Bild ihre Breite ändert, wirkt kaputt. */
+.partyNum{
+  font-size:2.9rem;font-weight:800;letter-spacing:-.02em;line-height:1.05;
+  font-variant-numeric:tabular-nums;color:var(--ink);margin-top:6px;
+}
+.partyNum.land{animation:landPunch .34s var(--spring)}
+@keyframes landPunch{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.16)}
+  100%{transform:scale(1)}
+}
+
+.partyTitle{font-size:1.02rem;font-weight:650;line-height:1.35;margin:8px 0 0;color:var(--ink)}
+.partyLevel{font-size:0.82rem;font-weight:650;color:var(--party-ink);margin-top:9px}
+
+.partyPips{display:flex;gap:6px;justify-content:center;margin-top:10px}
+.partyPips i{width:7px;height:7px;border-radius:50%;background:var(--fill-2)}
+.partyPips i.on{background:var(--party-ink)}
+
+.partyNote{font-size:0.83rem;color:var(--ink-2);line-height:1.5;margin:14px 0 0}
+
+/* Der Knopf bleibt im Grün der App und nimmt NICHT die Farbe der
+   Reihe an. Zwei Gründe: „Weiter" ist überall dieselbe Handlung, und
+   Grün ist in dieser App die Farbe des Handelns. Und praktisch: Weiß
+   auf dem Gelb der Sparreihe wäre kaum lesbar. Die Zugehörigkeit
+   tragen schon vier Elemente — Überzeile, Zeichen, Stufe, Punkte. */
+.partyCard .cta{margin-top:18px}
+
+/* Die Schnipsel. Sechs Farben aus der Palette, kein Regenbogen —
+   es sind dieselben Farben, die die App sonst auch benutzt. */
+/* HINTER der Karte, nicht davor. Davor legen sich die Schnipsel
+   über die Schrift und man liest nicht mehr, wofür man gerade
+   gefeiert wird — der Auftritt verdeckte seine eigene Aussage. So
+   fliegen sie unter der Karte hervor nach außen, was ohnehin mehr
+   nach Wurf aussieht. */
+.partyBurst{position:absolute;inset:0;z-index:1;pointer-events:none;
+  display:grid;place-items:center}
+.partyBurst i{
+  position:absolute;width:9px;height:14px;opacity:0;
+  animation:confetti 1.5s cubic-bezier(.2,.7,.35,1) var(--d) both;
+}
+.partyBurst .p0{background:var(--accent)}
+.partyBurst .p1{background:var(--amber)}
+.partyBurst .p2{background:var(--blue)}
+.partyBurst .p3{background:var(--violet)}
+.partyBurst .p4{background:var(--pink)}
+.partyBurst .p5{background:var(--red)}
+@keyframes confetti{
+  0%{transform:translate(0,0) rotate(0);opacity:0}
+  12%{opacity:1}
+  /* Der Bogen: erst nach außen und oben, dann fallen. Ein gerader
+     Strahl sieht aus wie ein Fehler, kein Wurf. */
+  55%{transform:translate(var(--x),var(--y)) rotate(var(--r));opacity:1}
+  100%{transform:translate(calc(var(--x) * 1.18),calc(var(--y) + 260px)) rotate(calc(var(--r) * 2));opacity:0}
+}
+
+/* Farbe je Reihe. Sie kommt aus derselben Palette wie die Abzeichen
+   in „Zahlen" — dieselbe Sache, dieselbe Farbe. */
+.party{--party:rgba(14,164,107,.42);--party-soft:var(--accent-soft);--party-ink:var(--accent-ink)}
+.party.m-guenstig{--party:rgba(239,161,42,.42);--party-soft:var(--amber-soft);--party-ink:var(--amber-ink)}
+.party.m-getauscht{--party:rgba(61,130,246,.42);--party-soft:var(--blue-soft);--party-ink:var(--blue-ink)}
+.party.m-erfasst{--party:rgba(123,92,240,.42);--party-soft:var(--violet-soft);--party-ink:var(--violet-ink)}
+.party.m-wochen{--party:rgba(228,73,154,.42);--party-soft:var(--pink-soft);--party-ink:var(--pink-ink)}
+
+/* Weniger Bewegung heißt: keine. Nicht „etwas weniger". */
+@media (prefers-reduced-motion: reduce){
+  .party,.party *{animation:none !important;transition:none !important}
+  .partyBurst{display:none}
+}
 @keyframes cheer{
   0%{transform:scale(.3) rotate(-12deg);opacity:0}
   100%{transform:scale(1) rotate(0);opacity:1}
@@ -803,6 +1240,37 @@ button.row.action,label.row.action{cursor:pointer}
 .dot.full{background:var(--accent);border-color:var(--accent)}
 .dot.half{background:linear-gradient(90deg,var(--accent) 50%,transparent 50%);border-color:var(--accent)}
 .dot.none{border-style:dashed;opacity:.5}
+
+/* Die Öffnen-Fläche einer Bonzeile. Sie liegt neben dem Betrag und
+   dem ×, deshalb eine eigene schmale Schaltfläche statt einer Zeile,
+   die als Ganzes klickt — sonst träfe man beim Löschen daneben. */
+.rowOpen{flex:0 0 auto;padding:8px 2px 8px 8px;display:flex;align-items:center;background:none}
+.rowOpen:active{opacity:.5}
+
+/* Zwischenüberschrift in einem Blatt — trennt die gesammelten
+   Hinweise nach Art, ohne dass jede Art eine eigene Karte braucht. */
+/* Der Vorschlag zur halben Menge. Kein Knopf, der aussieht wie ein
+   Knopf — ein Satz, den man antippen kann. Er steht eingerückt unter
+   seiner Zeile und gehört sichtbar dazu. */
+.halfRow{
+  display:flex;align-items:center;gap:9px;width:100%;margin:2px 0 4px 37px;
+  padding:8px 12px 8px 9px;background:var(--amber-soft);
+  color:var(--amber-ink);font-size:0.82rem;font-weight:550;text-align:left;
+  width:calc(100% - 37px);
+}
+.halfRow .hMark{
+  flex:0 0 auto;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;
+  background:var(--amber-ink);color:var(--surface);font-size:0.72rem;font-weight:700;
+}
+.halfRow:active{transform:scale(.985)}
+.halfRow.on{background:var(--accent-soft);color:var(--accent-ink)}
+.halfRow.on .hMark{background:var(--accent-ink)}
+
+.sheetGroupTitle{
+  font-size:0.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-2);margin:16px 0 6px;
+}
+.sheetGroupTitle:first-child{margin-top:4px}
 
 .plainBtn{text-align:left;padding:0;background:none;display:block}
 .plainBtn:active{opacity:.55}
@@ -823,11 +1291,11 @@ button.row.action,label.row.action{cursor:pointer}
   }
   .nav::before{
     content:"Einkaufs-Anker";display:block;font-size:1.03rem;font-weight:750;
-    letter-spacing:-.026em;padding:6px 12px 20px;color:var(--ink);
+    letter-spacing:-.013em;padding:6px 12px 20px;color:var(--ink);
   }
   .nav button{
     flex:0 0 auto;flex-direction:row;justify-content:flex-start;gap:12px;
-    height:44px;padding:0 12px;border-radius:12px;font-size:0.94rem;font-weight:550;
+    height:44px;padding:0 12px;font-size:0.94rem;font-weight:550;
   }
   .nav button svg{width:22px;height:22px}
   .nav button[aria-current="page"]{background:var(--accent-soft)}
@@ -842,7 +1310,7 @@ button.row.action,label.row.action{cursor:pointer}
   .cards2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
   .cards2 .card + .card{margin-top:0}
   .sheet{align-items:center}
-  .sheetBody{border-radius:22px;max-width:560px;padding-bottom:20px;animation:zoom .26s var(--spring)}
+  .sheetBody{max-width:560px;padding-bottom:20px;animation:zoom .26s var(--spring)}
   @keyframes zoom{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
   .toast{bottom:28px}
   .storeTop{padding:18px 32px 12px}

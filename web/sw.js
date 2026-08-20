@@ -3,15 +3,22 @@
    zuerst von dort antworten. Für eine App ohne Serverdaten ist das
    die einfachste und zuverlässigste Variante.
 
-   Der Cache-Name trägt die Bauversion (build.js ersetzt ol6km0).
+   Der Cache-Name trägt die Bauversion (build.js ersetzt zn53fh).
    Dadurch verwirft ein neuer Stand die alten Dateien zuverlässig —
    sonst bekämen Nutzer nach einem Update wochenlang die alte App. */
-const CACHE = "einkaufsanker-ol6km0";
+const CACHE = "einkaufsanker-zn53fh";
 const FILES = [
   "./", "./index.html", "./app.css",
-  "./bundle.js", "./data.js", "./views.js", "./app.js",
+  "./bundle.js", "./backup.js", "./data.js", "./ocr.js", "./views.js", "./app.js",
   "./manifest.webmanifest",
-  "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png"
+  "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png",
+  /* Die Schrift gehört in den Vorrat, nicht in den Nachschlag. Ohne
+     sie hier stünde die App beim ersten Start ohne Netz in der
+     Systemschrift und beim zweiten in Manrope — derselbe Bildschirm,
+     zweimal anders. 25 KB sind das nicht wert.
+     latin-ext bleibt draußen: der Browser holt ihn nur, wenn ein
+     Zeichen daraus vorkommt, und dann ist er auch online. */
+  "./fonts/manrope-latin.woff2"
 ];
 
 self.addEventListener("install", (e) => {

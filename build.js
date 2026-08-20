@@ -33,6 +33,8 @@ const OUT = path.join(ROOT, "web");
 
 // Reihenfolge = Abhängigkeitsreihenfolge
 const MODULES = [
+  // Vor dem Katalog: er liest die Höchsttemperaturen daraus.
+  "safetyRules.js",
   "foodDatabase.js",
   "rhythmEngine2.js",
   "absenceDetector.js",
@@ -55,7 +57,7 @@ const MODULES = [
   "receiptArchive.js",
   "expiryWarning.js",
   "savingsEngine.js",
-  "lidlParser.js",
+  "receiptParser.js",
   "stockRange.js",
   "freezeAdvisor.js",
   "priceMemory.js",
@@ -76,17 +78,51 @@ const MODULES = [
   "feedbackLearner.js",
   "seasonalRhythm.js",
   "changeDetector.js",
+  "receiptOcr.js",
+  "backupGuard.js",
   "activityLog.js",
   "streakTracker.js",
   "weeklyReview.js",
-  "milestones.js"
+  "milestones.js",
+  "weekPulse.js",
+  "hoardDetector.js",
+  "priceShare.js",
+  "offerAdvisor.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt
 // index.html für die <script>-Zeilen und sw.js für den Cache.
-const UI_SCRIPTS = ["bundle.js", "data.js", "views.js", "app.js"];
+const UI_SCRIPTS = ["bundle.js", "backup.js", "data.js", "ocr.js", "views.js", "app.js"];
 const UI_ASSETS = ["index.html", "app.css", "manifest.webmanifest", "sw.js"];
 const ICONS = ["icon-180.png", "icon-192.png", "icon-512.png"];
+
+/* Die Schrift liegt mit aus, sie wird nicht geladen.
+ *
+ * Manrope käme von Google Fonts mit zwei Zeilen — und dann meldete
+ * jeder Start der App eine fremde Adresse mit IP und User-Agent an
+ * einen Dritten. Eine App, deren ganzes Versprechen lautet, dass die
+ * Daten auf dem Gerät bleiben, kann das nicht machen; sie wäre auch
+ * ohne Netz plötzlich eine andere App. 40 KB neben den Symbolen sind
+ * der Preis dafür, und er ist niedrig.
+ *
+ * Zwei Schnitte, beide variabel (200–800) und nach Zeichenbereich
+ * getrennt: „latin" reicht für Deutsch, „latin-ext" lädt der Browser
+ * nur nach, wenn ein Zeichen daraus wirklich vorkommt. OFL.txt gehört
+ * dazu — die Lizenz verlangt, dass sie mitgeliefert wird. */
+const FONTS = ["manrope-latin.woff2", "manrope-latin-ext.woff2", "OFL.txt"];
+
+// Fremde Dateien (Texterkennung). Sie werden nur kopiert, nie
+// angefasst — Herkunft und Fassungen stehen in src/ui/vendor/HERKUNFT.md.
+// Bewusst NICHT im Service-Worker-Vorrat: 4,4 MB bei der Installation
+// für eine Funktion, die viele nie benutzen, wäre unverschämt. Der
+// Worker legt sie beim ersten Bild von selbst ab.
+const VENDOR = [
+  "tesseract.min.js",
+  "worker.min.js",
+  "tesseract-core-simd-lstm.js",
+  "tesseract-core-simd-lstm.wasm",
+  "deu.traineddata.gz"
+];
 
 function strip(src) {
   return src
@@ -194,13 +230,28 @@ function build({ quiet = false } = {}) {
     fs.copyFileSync(path.join(UI, "icons", f), path.join(OUT, "icons", f));
   });
 
+  fs.mkdirSync(path.join(OUT, "fonts"), { recursive: true });
+  FONTS.forEach((f) => {
+    fs.copyFileSync(path.join(UI, "fonts", f), path.join(OUT, "fonts", f));
+  });
+
+  fs.mkdirSync(path.join(OUT, "vendor"), { recursive: true });
+  let vendorFehlt = 0;
+  VENDOR.forEach((f) => {
+    const src = path.join(UI, "vendor", f);
+    if (!fs.existsSync(src)) { vendorFehlt++; return; }
+    fs.copyFileSync(src, path.join(OUT, "vendor", f));
+  });
+
   const kb = (s) => Math.round(s.length / 1024) + " KB";
   log(`Bündel:      ${MODULES.length} Module, ${kb(bundle)}`);
-  log(`Oberfläche:  ${UI_SCRIPTS.length - 1} Skripte, ${UI_ASSETS.length} Dateien, ${ICONS.length} Symbole`);
+  log(`Oberfläche:  ${UI_SCRIPTS.length - 1} Skripte, ${UI_ASSETS.length} Dateien, ${ICONS.length} Symbole, ${FONTS.length - 1} Schriftschnitte`);
+  log(`Fremdteile:  ${VENDOR.length - vendorFehlt} von ${VENDOR.length} (Texterkennung)`);
+  if (vendorFehlt) log(`             ${vendorFehlt} fehlen — Bilderfassung bleibt aus, siehe src/ui/vendor/HERKUNFT.md`);
   log(`Bauversion:  ${version}`);
   log(`Ziel:        ${path.relative(ROOT, OUT)}/`);
   return { bundle, version };
 }
 
 if (require.main === module) build();
-module.exports = { build, buildBundle, MODULES, UI_SCRIPTS, UI_ASSETS, ICONS };
+module.exports = { build, buildBundle, MODULES, UI_SCRIPTS, UI_ASSETS, ICONS, FONTS, VENDOR };

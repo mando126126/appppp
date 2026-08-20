@@ -1,5 +1,270 @@
-/* Gebündelt aus 47 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 54 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
+
+/* ===== safetyRules.js ===== */
+/**
+ * safetyRules.js — die Prüfgrundlage für verderbliche Lebensmittel
+ * ================================================================
+ * DAS ERGEBNIS DER QUELLENPRÜFUNG, UND ES IST UNBEQUEM:
+ *
+ * Die Haltbarkeitszahlen der 54 sicherheitskritischen Produkte trugen
+ * bisher die Stufe „regulatorisch“ — also „rechtlich definiert“. Das
+ * war falsch, und zwar an der empfindlichsten Stelle des Katalogs.
+ *
+ * Rechtlich definiert ist nämlich NICHT die Anzahl der Tage. Kein
+ * Gesetz sagt, dass Hähnchenbrust zwei Tage hält. Rechtlich definiert
+ * sind genau zwei andere Dinge:
+ *
+ *   1. DIE PFLICHT ZUM VERBRAUCHSDATUM.
+ *      VO (EU) 1169/2011 (LMIV), Art. 24 und Anhang X: Bei
+ *      Lebensmitteln, die „in mikrobiologischer Hinsicht sehr leicht
+ *      verderblich sind und daher nach kurzer Zeit eine unmittelbare
+ *      Gefahr für die Gesundheit darstellen können", ersetzt das
+ *      Verbrauchsdatum das Mindesthaltbarkeitsdatum. Nach dessen
+ *      Ablauf ist der Verkauf verboten.
+ *
+ *   2. DIE HÖCHSTTEMPERATUR.
+ *      Tier-LMHV (Anlage 5) in Verbindung mit VO (EG) 853/2004:
+ *      Hackfleisch höchstens +2 °C, Innereien +3 °C,
+ *      Fleischzubereitungen und Geflügelfleisch +4 °C.
+ *
+ * Für die TAGE gibt es dagegen bewusst keine amtliche Zahl. Die
+ * Behörden nennen keine, weil es keine gibt, die für jedes Produkt,
+ * jede Kette und jeden Kühlschrank stimmt. BZfE und BMEL sagen
+ * stattdessen zweierlei: es gilt das AUFGEDRUCKTE Datum, und als
+ * grobe Orientierung existieren Lagerempfehlungen — Geflügel und rohe
+ * Innereien ein bis zwei Tage, Rindfleisch am Stück drei bis vier,
+ * Fisch nicht länger als zwei; loses Hackfleisch am selben Tag.
+ *
+ * DARAUS FOLGEN DREI ENTSCHEIDUNGEN:
+ *
+ *   a) Die Tageszahlen heißen jetzt ehrlich „leitlinie“ statt
+ *      „regulatorisch“. Eine App, die ihre unsicherste Zahl als ihre
+ *      sicherste ausweist, ist an genau der Stelle unehrlich, an der
+ *      es gefährlich wird.
+ *   b) Wo eine Empfehlung eine Spanne nennt, gilt die UNTERE Grenze.
+ *      Bei Sicherheit ist der optimistische Wert der falsche.
+ *   c) Das aufgedruckte Datum schlägt jede Schätzung. Die Oberfläche
+ *      lässt es eintragen, und ab dann rechnet die App damit.
+ *
+ * Diese Datei ist keine Dokumentation, sondern eine PRÜFUNG:
+ * `checkSafetyData` hält den Katalog gegen die Gruppen, und
+ * `test/safety.js` bricht ab, sobald ein Produkt darüber liegt oder
+ * ohne Beleg dasteht. Damit bleibt die Prüfung gültig, wenn der
+ * Katalog wächst — eine einmalige Durchsicht wäre in drei Monaten
+ * wieder wertlos.
+ * ================================================================
+ */
+
+/* Bewusst OHNE Zugriff auf den Katalog: dieses Modul ist die
+   Prüfgrundlage, und der Katalog liest sie (für die Temperaturen).
+   Andersherum entstünde ein Ring, und die Prüfung würde von dem
+   abhängen, was sie prüfen soll. */
+
+/** Rechtsgrundlagen, einmal benannt und überall referenziert. */
+const LEGAL = {
+  LMIV_24: "VO (EU) 1169/2011 (LMIV), Art. 24 i. V. m. Anhang X — Verbrauchsdatum " +
+           "statt MHD bei sehr leicht verderblichen Lebensmitteln; nach Ablauf Abgabeverbot.",
+  TIER_LMHV: "Tier-LMHV Anlage 5 i. V. m. VO (EG) 853/2004 — Höchsttemperaturen " +
+             "bei Lagerung und Abgabe.",
+  BMEL_LAGER: "BMEL, „Zu gut für die Tonne!“, Lagerempfehlungen — Geflügel und rohe " +
+              "Innereien 1–2 Tage, Rindfleisch am Stück 3–4 Tage, Fisch höchstens 2 Tage.",
+  BZFE_HACK: "BZfE, „Lebensmittel richtig lagern“ — loses Hackfleisch am selben Tag " +
+             "(6 bis 8 Stunden), abgepacktes innerhalb des aufgedruckten Verbrauchsdatums."
+};
+
+/**
+ * Gruppen mit ihren Obergrenzen.
+ *
+ * `maxDays` ist eine OBERGRENZE, keine Vorgabe: ein Produkt darf
+ * kürzer angesetzt sein, nie länger. `maxTempC` ist dagegen die
+ * rechtliche Zahl und wird unverändert angezeigt.
+ *
+ * Die Zuordnung steht als ausdrückliche Liste da und wird NICHT aus
+ * Kategorie oder Namen abgeleitet. Bei Sicherheit ist eine Heuristik
+ * der falsche Ort für Bequemlichkeit: „Entenbrust“ enthält kein Wort,
+ * an dem eine Regel erkennt, dass es Geflügel ist — und genau dieser
+ * Eintrag stand vorher mit drei Tagen im Katalog, ein Tag über der
+ * Empfehlung für Geflügel.
+ */
+const SAFETY_GROUPS = [
+  {
+    id: "hack",
+    label: "Hackfleisch, zerkleinertes rohes Fleisch",
+    maxDays: 1,
+    maxTempC: 2,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: LEGAL.BZFE_HACK,
+    ids: ["hackfleisch", "hack_rind"]
+  },
+  {
+    id: "gefluegel",
+    label: "Geflügelfleisch und Zubereitungen daraus",
+    maxDays: 2,
+    maxTempC: 4,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: LEGAL.BMEL_LAGER,
+    ids: ["haehnchen", "haehnchen_schenkel", "haehnchen_ganz", "haehnchen_fluegel",
+      "haehnchen_innen", "haehnchen_nuggets", "putenbrust", "putengeschnetzeltes",
+      "entenbrust", "gans"]
+  },
+  {
+    id: "innereien",
+    label: "Innereien",
+    maxDays: 2,
+    maxTempC: 3,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: LEGAL.BMEL_LAGER,
+    ids: ["leber"]
+  },
+  {
+    id: "zubereitung",
+    label: "Fleischzubereitungen (mariniert, gewürzt, gewürfelt)",
+    maxDays: 2,
+    maxTempC: 4,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: "Abgeleitet aus der Hackfleisch- und Geflügelempfehlung: durch das " +
+           "Zerkleinern und Würzen ist die Oberfläche größer und die Haltbarkeit " +
+           "kürzer als bei einem Stück Fleisch.",
+    ids: ["bratwurst", "gyros_frisch", "merguez", "spiesse_grill", "hackbaellchen_frisch",
+      "gulasch"]
+  },
+  {
+    id: "rotfleisch",
+    label: "Rotes Fleisch am Stück",
+    maxDays: 3,
+    maxTempC: 7,
+    legal: [LEGAL.LMIV_24, LEGAL.TIER_LMHV],
+    guide: LEGAL.BMEL_LAGER,
+    ids: ["rindersteak", "rinderhueftsteak", "rinderbraten", "rinderfilet", "tafelspitz",
+      "suppenfleisch", "schweineschnitzel", "schweinefilet", "schweinebauch",
+      "schweinenacken", "schweinerueckensteak", "lammkotelett", "lammkeule",
+      "kalbsschnitzel"]
+  },
+  {
+    id: "fisch",
+    label: "Frischer Fisch, Meeresfrüchte",
+    maxDays: 2,
+    maxTempC: 2,
+    legal: [LEGAL.LMIV_24,
+      "VO (EG) 853/2004 Anhang III Abschnitt VIII — frische Fischereierzeugnisse " +
+      "bei annähernd der Temperatur von schmelzendem Eis."],
+    guide: LEGAL.BMEL_LAGER,
+    ids: ["fisch_lachs", "fisch_weiss", "forelle", "zander", "dorade", "wolfsbarsch",
+      "rotbarsch", "scholle", "hering_frisch", "makrele_frisch", "thunfisch_frisch",
+      "garnelen", "muscheln", "tintenfisch", "fischstaebchen_frisch"]
+  },
+  {
+    id: "verzehrfertig",
+    label: "Vorzerkleinert und verzehrfertig",
+    maxDays: 2,
+    maxTempC: 7,
+    legal: [LEGAL.LMIV_24],
+    guide: "BZfE nennt vorgeschnittene Salate und kleingeschnittenes Obst " +
+           "ausdrücklich als Verbrauchsdatum-Produkte; eine Tageszahl nennt keine " +
+           "amtliche Quelle. Angesetzt wird deshalb der kürzeste Wert der " +
+           "vergleichbaren Gruppen.",
+    ids: ["obst_geschnitten", "salat_geschnitten", "sprossen", "sandwich_fertig",
+      "salat_fertig", "sushi_fertig"]
+  }
+];
+
+/** Gruppe eines Produkts — null, wenn es keiner zugeordnet ist. */
+function safetyGroupOf(productId) {
+  return SAFETY_GROUPS.find((g) => g.ids.includes(productId)) || null;
+}
+
+/**
+ * Katalog gegen die Gruppen prüfen.
+ *
+ * @returns {Array<{productId, level, message}>} leer = alles in Ordnung
+ */
+function checkSafetyData(catalog) {
+  const probleme = [];
+  if (!Array.isArray(catalog)) return [{ productId: null, level: "fehler", message: "kein Katalog übergeben" }];
+  const zugeordnet = new Set();
+
+  catalog.forEach((p) => {
+    if (!p.safetyCritical) {
+      // Umgekehrt gilt auch: was in einer Gruppe steht, MUSS als
+      // sicherheitskritisch geführt sein. Sonst greifen die Sperren
+      // in Rezepten und Verlängerungen nicht.
+      if (safetyGroupOf(p.id)) {
+        probleme.push({ productId: p.id, level: "fehler",
+          message: "steht in einer Sicherheitsgruppe, ist aber nicht safetyCritical" });
+      }
+      return;
+    }
+
+    const g = safetyGroupOf(p.id);
+    if (!g) {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: "sicherheitskritisch, aber keiner geprüften Gruppe zugeordnet" });
+      return;
+    }
+    zugeordnet.add(p.id);
+
+    if (p.dateType !== "verbrauchsdatum") {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: `dateType „${p.dateType}“ statt „verbrauchsdatum“` });
+    }
+    if (p.shelfLifeDays > g.maxDays) {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: `${p.shelfLifeDays} Tage — die Gruppe „${g.label}“ erlaubt höchstens ${g.maxDays}` });
+    }
+    if (p.shelfLifeDays < 0 || !Number.isFinite(p.shelfLifeDays)) {
+      probleme.push({ productId: p.id, level: "fehler", message: `unbrauchbare Haltbarkeit: ${p.shelfLifeDays}` });
+    }
+    if (Number.isFinite(p.shelfLifeOpenedDays) && p.shelfLifeOpenedDays > p.shelfLifeDays) {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: "angebrochen hält länger als ungeöffnet" });
+    }
+    // Die Tageszahl ist eine Empfehlung, kein Gesetz. Wer sie als
+    // „regulatorisch“ ausweist, behauptet eine Sicherheit, die es
+    // nicht gibt — das war der eigentliche Befund der Prüfung.
+    if (p.quality === "regulatorisch") {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: "Haltbarkeit als „regulatorisch“ ausgewiesen — für die Tageszahl gibt es keine Rechtsgrundlage" });
+    }
+    if (p.maxTempC !== g.maxTempC) {
+      probleme.push({ productId: p.id, level: "fehler",
+        message: `maxTempC ${p.maxTempC} statt ${g.maxTempC} (${g.label})` });
+    }
+    if (!p.checked) {
+      probleme.push({ productId: p.id, level: "fehler", message: "ohne Prüfdatum" });
+    }
+  });
+
+  SAFETY_GROUPS.forEach((g) => {
+    g.ids.forEach((id) => {
+      if (!zugeordnet.has(id) && !catalog.some((p) => p.id === id)) {
+        probleme.push({ productId: id, level: "hinweis",
+          message: `steht in Gruppe „${g.label}“, fehlt aber im Katalog` });
+      }
+    });
+  });
+
+  return probleme;
+}
+
+/**
+ * Was die Oberfläche über ein sicherheitskritisches Produkt sagen
+ * darf — Rechtsgrundlage und Empfehlung getrennt, nie vermischt.
+ */
+function safetyFacts(productId) {
+  const g = safetyGroupOf(productId);
+  if (!g) return null;
+  return {
+    group: g.id,
+    label: g.label,
+    maxDays: g.maxDays,
+    maxTempC: g.maxTempC,
+    legal: g.legal,
+    guide: g.guide,
+    printedWins: "Es gilt immer das aufgedruckte Verbrauchsdatum. Danach gehört das " +
+                 "Produkt in den Abfall — auch wenn es unauffällig aussieht und riecht."
+  };
+}
 
 /* ===== foodDatabase.js ===== */
 /**
@@ -49,11 +314,20 @@ const STORAGE = {
 const DATE_TYPE = { MHD: "mhd", VERBRAUCHSDATUM: "verbrauchsdatum", NONE: "keins" };
 const ETHYLENE = { PRODUCER: "produziert", SENSITIVE: "empfindlich", NEUTRAL: "neutral" };
 
+
+
+/* Tag der letzten Quellenprüfung der sicherheitskritischen Produkte.
+   Steht hier und nicht je Zeile: geprüft wurde alles auf einmal, und
+   54-mal dasselbe Datum in die Tabelle zu schreiben lädt nur dazu
+   ein, dass eines davon irgendwann nicht mitgezogen wird. */
+const SAFETY_CHECKED = "2026-08-13";
+
 const FOOD_DATABASE = [];
 
 function group(category, aisle, storage, rows, groupOpts = {}) {
   rows.forEach((r) => {
     const [id, name, dateType, su, so, quality, price, weightG, aliases = [], opts = {}] = r;
+    const sg = safetyGroupOf(id);
     FOOD_DATABASE.push({
       id, name, category, aisle,
       storage: opts.storage || storage,
@@ -68,7 +342,15 @@ function group(category, aisle, storage, rows, groupOpts = {}) {
       typicalPrice: price,
       typicalWeightG: weightG,
       aliases,
-      note: opts.note || null
+      note: opts.note || null,
+      /* Die rechtliche Höchsttemperatur kommt aus safetyRules und
+         wird NICHT je Zeile gepflegt — sie hängt an der Gruppe, nicht
+         am einzelnen Produkt, und eine Zahl, die an 54 Stellen
+         wiederholt wird, ist 54 Gelegenheiten, sie falsch zu
+         schreiben. */
+      maxTempC: sg ? sg.maxTempC : null,
+      safetyGroup: sg ? sg.id : null,
+      checked: sg ? SAFETY_CHECKED : null
     });
   });
 }
@@ -117,19 +399,19 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 
 // ===================== FLEISCH & FISCH ===========================
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["hackfleisch","Hackfleisch gemischt",V,1,1,REG,4.99,500,["HACKFLEISCH","GEMISCHTES HACK","METT"],{note:"BZfE nennt Hackfleisch ausdrücklich als Verbrauchsdatum-Produkt."}],
-  ["hack_rind","Rinderhackfleisch",V,1,1,REG,5.99,500,["RINDERHACK","HACKFLEISCH RIND"]],
-  ["haehnchen","Hähnchenbrust",V,2,1,REG,6.99,400,["HAEHNCHENBRUST","HÄHNCHENBRUSTFILET","GEFLUEGEL BRUST","HAEHNCHENFILET"],{note:"Geflügel laut BZfE Verbrauchsdatum-Produkt."}],
-  ["haehnchen_schenkel","Hähnchenschenkel",V,2,1,REG,3.99,600,["HAEHNCHENSCHENKEL","HAEHNCHENKEULE"]],
-  ["putenbrust","Putenbrust",V,2,1,REG,7.49,400,["PUTENBRUST","PUTENSCHNITZEL"]],
-  ["schweineschnitzel","Schweineschnitzel",V,3,1,REG,5.49,500,["SCHNITZEL","SCHWEINESCHNITZEL"]],
-  ["schweinefilet","Schweinefilet",V,3,1,REG,7.99,400,["SCHWEINEFILET"]],
-  ["rindersteak","Rindersteak",V,3,1,REG,9.99,300,["RUMPSTEAK","RINDERSTEAK","ENTRECOTE"]],
-  ["gulasch","Gulasch",V,2,1,REG,6.49,500,["GULASCH","GULASCHFLEISCH"]],
-  ["bratwurst","Bratwurst",V,3,1,REG,3.49,400,["BRATWURST","ROSTBRATWURST","NUERNBERGER"]],
-  ["fisch_lachs","Lachsfilet",V,1,1,REG,8.99,250,["LACHSFILET","LACHS"],{note:"Roher Fisch laut BZfE Verbrauchsdatum-Produkt."}],
-  ["fisch_weiss","Weißfischfilet",V,1,1,REG,6.99,300,["SEELACHS","KABELJAU","FISCHFILET","PANGASIUS"]],
-  ["garnelen","Garnelen",V,1,1,REG,5.99,200,["GARNELEN","SHRIMPS"]],
+  ["hackfleisch","Hackfleisch gemischt",V,1,1,LEIT,4.99,500,["HACKFLEISCH","GEMISCHTES HACK","METT"],{note:"BZfE nennt Hackfleisch ausdrücklich als Verbrauchsdatum-Produkt."}],
+  ["hack_rind","Rinderhackfleisch",V,1,1,LEIT,5.99,500,["RINDERHACK","HACKFLEISCH RIND"]],
+  ["haehnchen","Hähnchenbrust",V,2,1,LEIT,6.99,400,["HAEHNCHENBRUST","HÄHNCHENBRUSTFILET","GEFLUEGEL BRUST","HAEHNCHENFILET"],{note:"Geflügel laut BZfE Verbrauchsdatum-Produkt."}],
+  ["haehnchen_schenkel","Hähnchenschenkel",V,2,1,LEIT,3.99,600,["HAEHNCHENSCHENKEL","HAEHNCHENKEULE"]],
+  ["putenbrust","Putenbrust",V,2,1,LEIT,7.49,400,["PUTENBRUST","PUTENSCHNITZEL"]],
+  ["schweineschnitzel","Schweineschnitzel",V,3,1,LEIT,5.49,500,["SCHNITZEL","SCHWEINESCHNITZEL"]],
+  ["schweinefilet","Schweinefilet",V,3,1,LEIT,7.99,400,["SCHWEINEFILET"]],
+  ["rindersteak","Rindersteak",V,3,1,LEIT,9.99,300,["RUMPSTEAK","RINDERSTEAK","ENTRECOTE"]],
+  ["gulasch","Gulasch",V,2,1,LEIT,6.49,500,["GULASCH","GULASCHFLEISCH"]],
+  ["bratwurst","Bratwurst",V,2,1,LEIT,3.49,400,["BRATWURST","ROSTBRATWURST","NUERNBERGER"]],
+  ["fisch_lachs","Lachsfilet",V,1,1,LEIT,8.99,250,["LACHSFILET","LACHS"],{note:"Roher Fisch laut BZfE Verbrauchsdatum-Produkt."}],
+  ["fisch_weiss","Weißfischfilet",V,1,1,LEIT,6.99,300,["SEELACHS","KABELJAU","FISCHFILET","PANGASIUS"]],
+  ["garnelen","Garnelen",V,1,1,LEIT,5.99,200,["GARNELEN","SHRIMPS"]],
   ["raeucherlachs","Räucherlachs",M,14,2,EST,3.99,100,["RAEUCHERLACHS","GRAVED LACHS"],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["thunfisch_dose","Thunfisch, Dose",M,900,2,LEIT,1.29,150,["THUNFISCH DOSE","THUNFISCH"],{storage:STORAGE.PANTRY}]
 ]);
@@ -169,7 +451,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["mango","Mango",M,7,3,LEIT,1.99,400,["MANGO"],{ethylene:ETHYLENE.PRODUCER}],
   ["granatapfel","Granatapfel",M,21,5,LEIT,2.49,400,["GRANATAPFEL"],{ethylene:ETHYLENE.SENSITIVE}],
   ["feigen","Feigen",M,5,3,LEIT,3.49,300,["FEIGEN"],{ethylene:ETHYLENE.PRODUCER}],
-  ["obst_geschnitten","Obst, geschnitten",V,1,1,REG,2.99,300,["OBSTSALAT","MELONE GESCHNITTEN","ANANAS GESCHNITTEN"],{freezable:false,note:"Kleingeschnittenes Obst laut BZfE Verbrauchsdatum-Produkt."}]
+  ["obst_geschnitten","Obst, geschnitten",V,1,1,LEIT,2.99,300,["OBSTSALAT","MELONE GESCHNITTEN","ANANAS GESCHNITTEN"],{freezable:false,note:"Kleingeschnittenes Obst laut BZfE Verbrauchsdatum-Produkt."}]
 ]);
 
 // ===================== OBST/GEMÜSE (Zimmertemperatur) ============
@@ -198,7 +480,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.PANTRY, [
 // ===================== GEMÜSE (Gemüsefach) ======================
 group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["salat_kopf","Kopfsalat",M,5,2,LEIT,1.39,400,["KOPFSALAT","SALAT KOPF","EISBERG"],{freezable:false,note:"BZfE: Gemüsefach, in Behälter oder feuchtem Tuch."}],
-  ["salat_geschnitten","Salatmischung, geschnitten",V,2,1,REG,1.29,150,["BLATTSALAT GESCHNITTEN","FELDSALAT BEUTEL","ROHKOSTSALAT"],{freezable:false,note:"Vorgeschnittene Salate laut BZfE Verbrauchsdatum-Produkt."}],
+  ["salat_geschnitten","Salatmischung, geschnitten",V,2,1,LEIT,1.29,150,["BLATTSALAT GESCHNITTEN","FELDSALAT BEUTEL","ROHKOSTSALAT"],{freezable:false,note:"Vorgeschnittene Salate laut BZfE Verbrauchsdatum-Produkt."}],
   ["feldsalat","Feldsalat",M,4,2,LEIT,1.99,150,["FELDSALAT","RAPUNZEL"],{freezable:false}],
   ["rucola","Rucola",M,4,2,LEIT,1.49,125,["RUCOLA","RAUKE"],{freezable:false}],
   ["moehren","Möhren",M,21,10,LEIT,1.29,1000,["MOEHREN","KAROTTEN","MÖHREN"],{note:"BZfE: aus dem Folienbeutel nehmen, Grün abschneiden."}],
@@ -225,7 +507,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["pastinaken","Pastinaken",M,18,8,LEIT,1.99,500,["PASTINAKEN"]],
   ["lauchzwiebeln","Frühlingszwiebeln",M,7,4,LEIT,0.89,150,["FRUEHLINGSZWIEBELN","LAUCHZWIEBELN"]],
   ["kresse","Kresse",M,5,3,LEIT,0.99,50,["KRESSE"],{freezable:false}],
-  ["sprossen","Sprossen",V,3,1,REG,1.49,100,["SPROSSEN","MUNGBOHNENSPROSSEN"],{freezable:false}]
+  ["sprossen","Sprossen",V,2,1,LEIT,1.49,100,["SPROSSEN","MUNGBOHNENSPROSSEN"],{freezable:false}]
 ]);
 
 // ===================== BACKWAREN =================================
@@ -376,9 +658,9 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 ]);
 
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["haehnchen_nuggets","Hähnchen-Nuggets",V,3,1,REG,3.99,400,["CHICKENNUG","CHICKEN NUGGETS","HAEHNCHEN NUGGETS","CHICKENNUG.CORNFLAK","NUGGETS"]],
+  ["haehnchen_nuggets","Hähnchen-Nuggets",V,2,1,LEIT,3.99,400,["CHICKENNUG","CHICKEN NUGGETS","HAEHNCHEN NUGGETS","CHICKENNUG.CORNFLAK","NUGGETS"]],
   ["putenaufschnitt","Puten-Aufschnitt",M,10,4,EST,2.69,150,["PUTE GORGONZOLA","PUTENBRUST AUFSCHNITT","PUTE AUFSCHNITT"],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["rinderhueftsteak","Rinderhüftsteak",V,3,1,REG,4.58,200,["RINDERHUEFTSTEAK","HUEFTSTEAK","RINDERHUEFTE"]]
+  ["rinderhueftsteak","Rinderhüftsteak",V,3,1,LEIT,4.58,200,["RINDERHUEFTSTEAK","HUEFTSTEAK","RINDERHUEFTE"]]
 ]);
 
 group("Tiefkühl", "Tiefkühl", STORAGE.FREEZER, [
@@ -626,30 +908,30 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 
 // ===================== FLEISCH & WURST, breit ====================
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["haehnchen_ganz","Hähnchen ganz",V,2,1,REG,5.99,1200,[]],
-  ["haehnchen_fluegel","Hähnchenflügel",V,2,1,REG,3.49,800,[]],
-  ["haehnchen_innen","Hähnchen-Innenfilet",V,2,1,REG,5.49,400,[]],
-  ["putengeschnetzeltes","Putengeschnetzeltes",V,2,1,REG,6.49,400,[]],
-  ["entenbrust","Entenbrust",V,3,1,REG,9.99,350,[]],
-  ["gans","Gans",V,3,1,REG,24.99,3000,[]],
-  ["schweinebauch","Schweinebauch",V,3,1,REG,4.99,600,[]],
-  ["schweinenacken","Schweinenacken",V,3,1,REG,5.49,700,[]],
+  ["haehnchen_ganz","Hähnchen ganz",V,2,1,LEIT,5.99,1200,[]],
+  ["haehnchen_fluegel","Hähnchenflügel",V,2,1,LEIT,3.49,800,[]],
+  ["haehnchen_innen","Hähnchen-Innenfilet",V,2,1,LEIT,5.49,400,[]],
+  ["putengeschnetzeltes","Putengeschnetzeltes",V,2,1,LEIT,6.49,400,[]],
+  ["entenbrust","Entenbrust",V,2,1,LEIT,9.99,350,[]],
+  ["gans","Gans",V,2,1,LEIT,24.99,3000,[]],
+  ["schweinebauch","Schweinebauch",V,3,1,LEIT,4.99,600,[]],
+  ["schweinenacken","Schweinenacken",V,3,1,LEIT,5.49,700,[]],
   ["kasseler","Kasseler",M,10,4,EST,5.99,500,[]],
-  ["schweinerueckensteak","Schweinesteak",V,3,1,REG,5.29,500,[]],
-  ["rinderbraten","Rinderbraten",V,3,1,REG,11.99,1000,[]],
-  ["rinderfilet","Rinderfilet",V,3,1,REG,16.99,400,[]],
-  ["tafelspitz","Tafelspitz",V,3,1,REG,12.99,800,[]],
-  ["suppenfleisch","Suppenfleisch",V,3,1,REG,6.99,600,[]],
-  ["lammkotelett","Lammkoteletts",V,3,1,REG,12.99,400,[]],
-  ["lammkeule","Lammkeule",V,3,1,REG,15.99,1200,[]],
-  ["kalbsschnitzel","Kalbsschnitzel",V,2,1,REG,11.99,400,[]],
-  ["leber","Leber",V,1,1,REG,4.49,300,[]],
-  ["hackbaellchen_frisch","Frikadellen frisch",V,2,1,REG,4.29,400,[]],
-  ["gyros_frisch","Gyros mariniert",V,3,1,REG,5.99,500,[]],
-  ["spiesse_grill","Grillspieße",V,2,1,REG,5.49,400,[]],
+  ["schweinerueckensteak","Schweinesteak",V,3,1,LEIT,5.29,500,[]],
+  ["rinderbraten","Rinderbraten",V,3,1,LEIT,11.99,1000,[]],
+  ["rinderfilet","Rinderfilet",V,3,1,LEIT,16.99,400,[]],
+  ["tafelspitz","Tafelspitz",V,3,1,LEIT,12.99,800,[]],
+  ["suppenfleisch","Suppenfleisch",V,3,1,LEIT,6.99,600,[]],
+  ["lammkotelett","Lammkoteletts",V,3,1,LEIT,12.99,400,[]],
+  ["lammkeule","Lammkeule",V,3,1,LEIT,15.99,1200,[]],
+  ["kalbsschnitzel","Kalbsschnitzel",V,2,1,LEIT,11.99,400,[]],
+  ["leber","Leber",V,1,1,LEIT,4.49,300,[]],
+  ["hackbaellchen_frisch","Frikadellen frisch",V,2,1,LEIT,4.29,400,[]],
+  ["gyros_frisch","Gyros mariniert",V,2,1,LEIT,5.99,500,[]],
+  ["spiesse_grill","Grillspieße",V,2,1,LEIT,5.49,400,[]],
   ["currywurst","Currywurst",M,14,3,EST,2.99,300,[]],
   ["weisswurst","Weißwurst",M,7,2,EST,3.49,300,[]],
-  ["merguez","Merguez",V,3,1,REG,4.99,300,[]],
+  ["merguez","Merguez",V,2,1,LEIT,4.99,300,[]],
   ["chorizo","Chorizo",M,40,14,EST,2.99,200,[]],
   ["cabanossi","Cabanossi",M,35,12,EST,2.49,200,[]],
   ["landjaeger","Landjäger",M,60,20,EST,2.79,100,[]],
@@ -668,17 +950,17 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
 ]);
 
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["forelle","Forelle",V,1,1,REG,5.99,300,[]],
-  ["zander","Zanderfilet",V,1,1,REG,12.99,300,[]],
-  ["dorade","Dorade",V,1,1,REG,7.99,400,[]],
-  ["wolfsbarsch","Wolfsbarsch",V,1,1,REG,9.99,400,[]],
-  ["rotbarsch","Rotbarschfilet",V,1,1,REG,7.49,300,[]],
-  ["scholle","Schollenfilet",V,1,1,REG,6.99,300,[]],
-  ["hering_frisch","Hering frisch",V,1,1,REG,3.99,300,[]],
-  ["makrele_frisch","Makrele frisch",V,1,1,REG,4.99,400,[]],
-  ["thunfisch_frisch","Thunfischsteak",V,1,1,REG,13.99,250,[]],
-  ["muscheln","Miesmuscheln",V,1,1,REG,4.99,1000,[]],
-  ["tintenfisch","Tintenfischringe",V,1,1,REG,6.49,300,[]],
+  ["forelle","Forelle",V,1,1,LEIT,5.99,300,[]],
+  ["zander","Zanderfilet",V,1,1,LEIT,12.99,300,[]],
+  ["dorade","Dorade",V,1,1,LEIT,7.99,400,[]],
+  ["wolfsbarsch","Wolfsbarsch",V,1,1,LEIT,9.99,400,[]],
+  ["rotbarsch","Rotbarschfilet",V,1,1,LEIT,7.49,300,[]],
+  ["scholle","Schollenfilet",V,1,1,LEIT,6.99,300,[]],
+  ["hering_frisch","Hering frisch",V,1,1,LEIT,3.99,300,[]],
+  ["makrele_frisch","Makrele frisch",V,1,1,LEIT,4.99,400,[]],
+  ["thunfisch_frisch","Thunfischsteak",V,1,1,LEIT,13.99,250,[]],
+  ["muscheln","Miesmuscheln",V,1,1,LEIT,4.99,1000,[]],
+  ["tintenfisch","Tintenfischringe",V,1,1,LEIT,6.49,300,[]],
   ["surimi","Surimi",M,14,2,EST,1.99,200,[]],
   ["matjes","Matjesfilet",M,10,3,EST,3.49,200,[]],
   ["rollmops","Rollmops",M,21,5,EST,2.79,250,[]],
@@ -687,7 +969,7 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
   ["makrele_geraeuchert","Räuchermakrele",M,10,3,EST,3.29,200,[]],
   ["sardellen","Sardellenfilets",M,365,5,EST,2.49,50,[],{storage:STORAGE.PANTRY}],
   ["kaviar_ersatz","Seehasenrogen",M,60,7,EST,3.49,100,[]],
-  ["fischstaebchen_frisch","Backfisch",V,2,1,REG,4.49,400,[]]
+  ["fischstaebchen_frisch","Backfisch",V,2,1,LEIT,4.49,400,[]]
 ]);
 
 // ===================== BACKWAREN, breit ==========================
@@ -1103,9 +1385,9 @@ group("Fertiggerichte", "Trockenware", STORAGE.PANTRY, [
   ["pizzabrot_fertig","Pizzateig frisch",M,21,1,EST,1.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["nudelsauce_glas","Nudelsauce Glas",M,540,5,EST,1.79,400,[]],
   ["fixprodukt","Fix-Würzmischung",M,540,30,EST,0.89,40,[]],
-  ["sandwich_fertig","Fertigsandwich",V,2,1,REG,2.99,180,[],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["salat_fertig","Fertigsalat",V,2,1,REG,3.49,250,[],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["sushi_fertig","Sushi Box",V,1,1,REG,6.99,250,[],{storage:STORAGE.FRIDGE_BOTTOM}],
+  ["sandwich_fertig","Fertigsandwich",V,2,1,LEIT,2.99,180,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["salat_fertig","Fertigsalat",V,2,1,LEIT,3.49,250,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["sushi_fertig","Sushi Box",V,1,1,LEIT,6.99,250,[],{storage:STORAGE.FRIDGE_BOTTOM}],
   ["suppe_frisch","Frischesuppe",M,14,2,EST,2.99,600,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["auflauf_fertig","Fertigauflauf",M,10,1,EST,3.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["reisgericht_fertig","Reisgericht Becher",M,300,1,EST,2.49,300,[]]
@@ -2747,16 +3029,168 @@ function inferWaste(history, rhythms) {
 }
 
 /**
- * Explizite Nutzerangabe schlägt jede Schätzung.
- * "consumed" oder "have" heißt: nichts weggeworfen.
+ * Beide Signale zu EINER Bilanz je Produkt zusammenführen.
+ * ================================================================
+ * DER FEHLER, DEN DIESE FUNKTION BEHEBT:
+ *
+ * Vorher wurde in der Oberfläche gerechnet
+ *
+ *     verdorben = round(chronischerAnteil × Käufe) + Ausreißer
+ *
+ * und damit derselbe Kauf zweimal gezählt. Der chronische Anteil
+ * sagt „bei JEDEM Zyklus geht ein Teil verloren“ — die Ausreißer
+ * sagen „dieser eine Zyklus ging ganz verloren“. Ein Ausreißer ist
+ * kein zusätzlicher Verlust, sondern ein besonders schlimmer Fall
+ * desselben Verlusts.
+ *
+ * Sichtbar wurde es an einer Quote von 105 %: 21 von 20 Käufen
+ * verdorben. Eine Zahl, die es nicht geben kann, in einer App, deren
+ * ganzer Wert an der Glaubwürdigkeit ihrer Zahlen hängt. Und es blieb
+ * nicht bei der Anzeige — dieselbe Quote steuert das Risiko-Zeichen
+ * auf der Liste, die Schwelle der Sparvorschläge und den Eurobetrag.
+ *
+ * Es ist dieselbe Fehlerklasse wie die zwei teuersten Fehler dieses
+ * Projekts (das implizite Signal, die absorbierte Rückmeldung):
+ * EIN Ereignis, das über ZWEI Kanäle in dieselbe Summe läuft.
+ *
+ * DIE RECHNUNG JETZT: je Kauf ein Verlustanteil, und zwar der
+ * GRÖSSERE der beiden Schätzungen, nie ihre Summe.
+ *
+ *     Anteil(Kauf) = max(chronischerAnteil, Ausreißer ? 1 : 0)
+ *
+ * Damit gilt „verdorben ≤ gekauft“ nicht als Prüfung, die man
+ * hinterher anklebt, sondern von der Konstruktion her. Und der
+ * Eurobetrag wird mit dem TATSÄCHLICH gezahlten Preis je Kauf
+ * gerechnet statt mit dem letzten Preis für alle — das war neben der
+ * Doppelzählung die zweite Ungenauigkeit.
+ * ================================================================
+ *
+ * DIE AUSNAHME: WAS DER NUTZER SELBST SAGT.
+ * ================================================================
+ * Alles hier ist Schätzung — abgeleitet aus Kaufabstand und
+ * Haltbarkeit, nie beobachtet. Wenn jemand sagt „den Salat vom 3.8.
+ * habe ich aufgegessen“, ist das keine weitere Schätzung, sondern
+ * eine Tatsache, und sie schlägt jede Ableitung.
+ *
+ * ZWEI SIGNALE, ZWEI KORREKTUREN — weil sie Verschiedenes behaupten.
+ *
+ *   `opts.eaten`      Kaufdaten, zu denen der Nutzer gesagt hat:
+ *                     aufgebraucht. Passt zum AUSREISSER, denn der
+ *                     behauptet ein konkretes Ereignis an einem
+ *                     konkreten Datum („die Packung vom 3.8. ist
+ *                     weggekommen“). Dem widerspricht man einzeln.
+ *
+ *   `opts.noChronic`  Der laufende Anteil ist keine Aussage über
+ *                     einen Kauf, sondern über das PRODUKT: „dein
+ *                     Rhythmus ist länger als die Haltbarkeit, also
+ *                     geht bei jedem Zyklus etwas verloren.“ Dem
+ *                     widerspricht man einmal, nicht dreißigmal.
+ *
+ * Die Trennung ist nicht nur Bequemlichkeit. Beim ersten Anlauf
+ * bekam JEDER Kauf eine eigene Zeile mit demselben Anteil — zwölf
+ * identische Zeilen „etwa 14 % von 2,49 €“, und wer sagen wollte
+ * „bei mir verdirbt kein Brot“, hätte dreißigmal tippen müssen. Eine
+ * Korrektur, die so mühsam ist, benutzt niemand, und die Schätzung
+ * bliebe unwidersprochen stehen.
+ *
+ * WAS DIE KORREKTUR AUSDRÜCKLICH NICHT TUT: sie zählt keine
+ * Rettung. Eine Schätzung zurückzunehmen ist kein Erfolg, den man
+ * feiern könnte — es wird nichts gerettet, es war nur nie verloren.
+ * Wer das als Rettung buchte, hätte einen Eurobetrag erfunden und
+ * ihn zusätzlich in die Meilensteine gezählt: EIN Ereignis über ZWEI
+ * Kanäle, die Fehlerklasse dieses Projekts.
+ * ================================================================
+ *
+ * @param {string} productId
+ * @param {Array} purchases Käufe dieses Produkts
+ * @param {object|null} chronic Ergebnis aus inferChronicWaste
+ * @param {Array} anomalies Ausreißer dieses Produkts
+ * @param {object} [opts] `eaten`: Kaufdaten, die der Nutzer als
+ *                        aufgebraucht bestätigt hat
+ * @returns {{purchased, wasted, wastedEuros, wasteRate, spent, chronic, corrected, details}}
  */
-function reconcileWithUserInput(events, userInput) {
-  if (!userInput) return events;
-  if (userInput.userReason === "consumed" || userInput.userReason === "have") {
-    return events.filter((e) => !(e.productId === userInput.productId && e.date === userInput.date));
-  }
-  return events;
+function wasteSummary(productId, purchases, chronic, anomalies, opts = {}) {
+  const rows = Array.isArray(purchases) ? purchases : [];
+  const anomalyDates = new Set((anomalies || []).map((a) => a.date));
+  const eaten = opts.eaten instanceof Set ? opts.eaten : new Set(opts.eaten || []);
+  const grundanteil = chronic && !opts.noChronic
+    ? Math.max(0, Math.min(1, chronic.wastedFraction))
+    : 0;
+
+  let wasted = 0;
+  let wastedEuros = 0;
+  let spent = 0;
+  let corrected = 0;
+  const details = [];
+
+  rows.forEach((kauf, i) => {
+    const menge = Math.max(1, Number(kauf.quantity) || 1);
+    const preis = Math.max(0, Number(kauf.unitPrice) || 0) * menge;
+    spent += preis;
+
+    /* Ein Ausreißer ist auf DEM Kauf vermerkt, bis zu dem die Lücke
+       zu groß war — verdorben ist aber die Ware davor. Deshalb zählt
+       der Kauf als Totalverlust, dessen NACHFOLGER als Ausreißer
+       geführt wird. */
+    const naechster = rows[i + 1];
+    const istAusreisser = !!(naechster && anomalyDates.has(naechster.date));
+
+    const geschaetzt = Math.max(grundanteil, istAusreisser ? 1 : 0);
+    /* Die Aussage des Nutzers gilt, nicht die Schätzung. */
+    const bestaetigt = eaten.has(kauf.date);
+    const anteil = bestaetigt ? 0 : geschaetzt;
+    if (bestaetigt && geschaetzt > 0) corrected++;
+
+    wasted += anteil;
+    wastedEuros += preis * anteil;
+
+    /* In die Aufstellung kommen nur EINZELNE Ereignisse: Ausreißer
+       und was der Nutzer dazu gesagt hat. Der laufende Anteil steht
+       nicht drin — er gilt für alle Käufe gleich und wäre eine Reihe
+       identischer Zeilen ohne eigene Aussage. */
+    if (istAusreisser || bestaetigt) {
+      details.push({
+        date: kauf.date,
+        euros: Math.round(preis * 100) / 100,
+        share: Math.round(geschaetzt * 100) / 100,
+        anomaly: istAusreisser,
+        eaten: bestaetigt
+      });
+    }
+  });
+
+  const purchased = rows.length;
+  return {
+    purchased,
+    // Wie viele Käufe der Nutzer aus der Schätzung herausgenommen hat.
+    corrected,
+    // Der laufende Anteil, den der Nutzer abgestellt hat — für die
+    // Oberfläche, damit sie den Schalter richtig herum zeigt.
+    chronicOff: !!opts.noChronic,
+    chronicShare: chronic ? Math.max(0, Math.min(1, chronic.wastedFraction)) : 0,
+    // Absteigend: der jüngste Verdacht zuerst.
+    details: details.sort((a, b) => (a.date < b.date ? 1 : -1)),
+    // Auf eine Stelle gerundet: „2,4 von 20“ ist ehrlicher als eine
+    // ganze Zahl, die eine Genauigkeit vorspiegelt, die es nicht gibt.
+    wasted: Math.round(wasted * 10) / 10,
+    wastedEuros: Math.round(wastedEuros * 100) / 100,
+    // Die Deckelung kann durch die max-Regel gar nicht mehr greifen.
+    // Sie bleibt als letzte Sperre stehen: falls hier je wieder
+    // addiert statt verglichen wird, fällt es im Test auf und nicht
+    // beim Nutzer.
+    wasteRate: purchased ? Math.min(1, wasted / purchased) : 0,
+    spent: Math.round(spent * 100) / 100,
+    chronic: chronic || null
+  };
 }
+
+/* HIER STAND `reconcileWithUserInput`.
+   Sie filterte Ausreißer-Ereignisse heraus, wenn der Nutzer
+   „verbraucht“ oder „hab noch“ gesagt hatte — und wurde nie
+   aufgerufen. Die Absicht war richtig und ist jetzt in
+   `wasteSummary` eingebaut, dort aber wirksam: als Anteil 0 für den
+   betroffenen Kauf, der BEIDE Kanäle abschaltet. Ein gefilterter
+   Ausreißer allein hätte den chronischen Anteil stehen lassen. */
 
 /* ===== storageAdvisor.js ===== */
 /**
@@ -2879,13 +3313,26 @@ function urgentStorageItems(items) {
 
 
 /**
+ * Ein echtes Kalenderdatum, nicht bloß die richtige Form.
+ *
+ * `/\d{4}-\d{2}-\d{2}/` lässt „2026-13-45" durch, und daraus wird
+ * eine Restzeit von einigen hundert Tagen — auf einem Produkt mit
+ * Verbrauchsdatum. Der Test hat genau das gefunden.
+ */
+function isRealDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(value + "T12:00:00Z");
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+/**
  * Schätzt den Restbestand eines Produkts.
  *
  * @param {object} lastPurchase - {date, quantity, unitPrice}
  * @param {object} rhythm - Ergebnis aus computeRhythm
  * @param {string} today
  */
-function estimateRemaining(productId, lastPurchase, rhythm, today) {
+function estimateRemaining(productId, lastPurchase, rhythm, today, opts = {}) {
   const p = byId(productId);
   if (!p || !lastPurchase) return null;
 
@@ -2897,20 +3344,46 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
   // Verbrauch pro Einheit: aus dem Rhythmus, sonst Kategorie-Annahme
   const perUnitDays = rhythm && rhythm.perUnitDays ? rhythm.perUnitDays : null;
 
+  const printed = opts.useBy && opts.useBy[productId];
+  const printedValid = isRealDate(printed) && printed >= lastPurchase.date;
+
   let remainingUnits;
   let basis;
   if (perUnitDays && perUnitDays > 0) {
     const consumed = daysSince / perUnitDays;
     remainingUnits = Math.max(0, quantity - consumed);
     basis = "rhythmus";
+  } else if (printedValid) {
+    // Auch hier zählt das Etikett und nicht die Katalogzahl. Ohne
+    // diesen Zweig verschwand ein Produkt aus dem Bestand, obwohl auf
+    // der Packung noch fünf Tage standen — die Anzeige rechnete mit
+    // dem aufgedruckten Datum, die Frage „ist es überhaupt noch da?"
+    // aber weiter mit der Schätzung.
+    remainingUnits = today <= printed ? quantity : 0;
+    basis = "aufgedruckt";
   } else {
     // Ohne Rhythmus: nur die Haltbarkeit als grobe Schranke
     remainingUnits = daysSince < p.shelfLifeDays ? quantity : 0;
     basis = "haltbarkeit";
   }
 
-  // Restzeit bis Ablauf, gerechnet ab Kaufdatum
-  const daysLeft = p.shelfLifeDays - daysSince;
+  /* Restzeit bis Ablauf.
+   *
+   * Vorrang hat IMMER das aufgedruckte Datum, wenn es eingetragen
+   * wurde. Das ist keine Feinheit: die Katalogzahl ist eine
+   * Lagerempfehlung an der unteren Grenze, das Etikett dagegen die
+   * Aussage des Herstellers für genau diese Packung. Bei einem
+   * Verbrauchsdatum ist es zusätzlich die rechtlich maßgebliche
+   * Angabe — nach ihrem Ablauf gehört das Produkt in den Abfall,
+   * egal was eine App schätzt.
+   *
+   * Das aufgedruckte Datum darf dabei in beide Richtungen wirken. Es
+   * zu deckeln („höchstens so lange wie geschätzt") klänge vorsichtig,
+   * wäre aber Unfug: dann zeigte die App weiter ihre Schätzung und
+   * ignorierte die Packung, die der Nutzer in der Hand hält. */
+  const daysLeft = printedValid
+    ? daysBetween(today, printed)
+    : p.shelfLifeDays - daysSince;
 
   // Vertrauen: hoher Rhythmus-Vertrauenswert und kurze Zeit seit Kauf
   const rhythmConfidence = rhythm ? rhythm.confidence : 0;
@@ -2929,6 +3402,10 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
     weightG: Math.round(remainingUnits * (p.typicalWeightG || 0)),
     confidence,
     basis,
+    // Wer das Etikett eingetragen hat, bekommt keine Schätzung mehr
+    // angezeigt, sondern eine Tatsache — und die Oberfläche sagt das.
+    dateSource: printedValid ? "aufgedruckt" : "geschaetzt",
+    useBy: printedValid ? printed : null,
     estimated: true
   };
 }
@@ -2937,7 +3414,7 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
  * Schätzt den kompletten Haushaltsbestand.
  * @returns {Array} nur Produkte, die wahrscheinlich noch da sind
  */
-function estimateInventory(history, rhythms, today) {
+function estimateInventory(history, rhythms, today, opts = {}) {
   const lastByProduct = new Map();
   for (const h of history) {
     const prev = lastByProduct.get(h.productId);
@@ -2946,7 +3423,7 @@ function estimateInventory(history, rhythms, today) {
 
   const inventory = [];
   for (const [productId, last] of lastByProduct.entries()) {
-    const est = estimateRemaining(productId, last, rhythms.get(productId), today);
+    const est = estimateRemaining(productId, last, rhythms.get(productId), today, opts);
     if (est && est.likelyPresent) inventory.push(est);
   }
 
@@ -4781,73 +5258,218 @@ function totalSavings(selectedSuggestions) {
   };
 }
 
-/* ===== lidlParser.js ===== */
+/* ===== receiptParser.js ===== */
 /**
- * lidlParser.js — kalibriert an einem ECHTEN Lidl-Bon (22.07.2026)
+ * receiptParser.js — eine Grammatik für vier echte Bons
  * ================================================================
- * Der alte receiptParser.js war an keiner realen Datei geprüft. Was
- * der echte Bon anders macht, als ich angenommen hatte:
+ * Vorgänger war `lidlParser.js`, kalibriert an genau EINEM echten
+ * Lidl-Bon. Er hat vier Dinge richtig gesehen, die auch hier
+ * gelten: Rabatte sind eigene Zeilen, Pfand ist eine eigene
+ * Position, Gewichtsware hat eine Folgezeile, Namen sind brutal
+ * abgekürzt.
  *
- * 1. RABATTE SIND EIGENE ZEILEN.
- *    "Preisvorteil -0,08" und "Lidl Plus Rabatt -0,23" stehen
- *    eingerückt UNTER der Position und müssen von deren Preis
- *    abgezogen werden. Wer das ignoriert, rechnet mit falschen
- *    Preisen — und damit auch falsche Verschwendungsbeträge.
+ * Nur eine Annahme hat nicht getragen — und es war die, auf der
+ * die ganze Zeilenerkennung stand:
  *
- * 2. PFAND IST EINE EIGENE POSITION.
- *    "Pfand 0,25 7%EM  0,25 x 2  0,50" folgt dem Getränk. Es ist
- *    kein Lebensmittel und darf weder in die Verschwendungs- noch
- *    in die Kilogrammrechnung. Es gehört aber zum Getränk davor.
+ *   „EINGERÜCKTE ZEILEN GEHÖREN ZUR POSITION DARÜBER."
  *
- * 3. GEWICHTSWARE HAT EINE FOLGEZEILE.
- *    "0,199 kg x 22,99 EUR/kg" liefert das echte Gewicht — viel
- *    besser als der Schätzwert typicalWeightG aus der Datenbank.
+ * Das stimmt bei Lidl. Bei REWE steht die Mengenzeile eingerückt
+ * UNTER der Position, bei Netto eingerückt DARÜBER, und bei EDEKA
+ * ist der ganze Bon eingerückt. Einrückung trägt also keine
+ * Bedeutung, sie sieht nur so aus.
  *
- * 4. MENGE STEHT INLINE.
- *    "High Protein Kaffee  1,15 x  2  2,30" — Einzelpreis, Anzahl,
- *    Gesamtpreis in einer Zeile.
+ * WAS STATTDESSEN TRÄGT: DIE RECHNUNG.
  *
- * 5. STEUERKENNZEICHEN A/B AM ZEILENENDE.
- *    A = ermäßigt (7 %, meist Lebensmittel), B = voll (19 %, meist
- *    Non-Food). Ein brauchbarer, aber nicht perfekter Hinweis:
- *    Vitaminwasser steht hier auf B, ist aber trinkbar.
+ *   Netto:   16 x 0,89                    ← Menge oben
+ *            Booster Juneberry    14,24
  *
- * 6. NAMEN SIND BRUTAL ABGEKÜRZT.
- *    "ChickenNug.Cornflak.", "Vit.-Was. Pfir.-Holu", "IronMa.100%
- *    Sahne P." — mit 20 Zeichen Feldbreite. Das ist die eigentliche
- *    Schwierigkeit, nicht das Zerlegen der Zeilen.
+ *   REWE:    HAEHNCHEN PAELLA      5,58   ← Menge unten
+ *            2 Stk x 2,79
+ *
+ * Beide Male steht dieselbe nackte Mengenzeile da, einmal vor und
+ * einmal hinter ihrer Position. Welche gemeint ist, verrät kein
+ * Layout und keine Kette, sondern das Produkt: 16 × 0,89 = 14,24
+ * und 2 × 2,79 = 5,58. Die Zeile, zu der es aufgeht, ist die
+ * richtige. Geht es zu keiner auf, wird die Mengenzeile verworfen
+ * — lieber eine Menge zu wenig als eine erfundene.
+ *
+ * DAS ZWEITE, WAS DAZUGEKOMMEN IST: DIE GEGENPROBE.
+ *
+ * Fast jeder Bon nennt seine Summe selbst. Vorher hat der Parser
+ * an dieser Zeile abgebrochen, ohne sie zu lesen — und damit die
+ * einzige Kontrolle weggeworfen, die es überhaupt gibt. Auf dem
+ * EDEKA-Foto stand „BAUCHSPECK 1,19" zweimal; die Texterkennung
+ * hat eine der beiden verloren. Sieben Positionen sahen genauso
+ * richtig aus wie acht. Nur die aufgedruckte 14,84 gegen die
+ * erkannten 13,65 zeigt, dass etwas fehlt.
+ *
+ * Die Gegenprobe BUCHT NICHTS UM. Sie erzeugt eine Warnung, mehr
+ * nicht. Was fehlt, ergänzt ein Mensch — der Parser darf raten,
+ * aber nichts stillschweigend geradebiegen.
  * ================================================================
  */
 
-const num = (s) => parseFloat(String(s).replace(/\./g, "").replace(",", "."));
+/**
+ * Betrag lesen — das letzte Trennzeichen ist das Komma.
+ *
+ * „14.24" ist vierzehn Euro, nicht eintausendvierhundert: die
+ * Texterkennung verwechselt Punkt und Komma nach Belieben, und wer
+ * einfach alle Punkte streicht, macht aus jedem englisch
+ * geschriebenen Betrag das Hundertfache. „1.234,56" muss trotzdem
+ * gehen. Also: hinter dem LETZTEN Trennzeichen stehen die
+ * Nachkommastellen, alles davor ist Tausenderpunkt.
+ */
+const num = (s) => {
+  const t = String(s).trim();
+  const i = Math.max(t.lastIndexOf(","), t.lastIndexOf("."));
+  if (i < 0) return parseFloat(t);
+  return parseFloat(t.slice(0, i).replace(/[.,]/g, "") + "." + t.slice(i + 1));
+};
 
-// Zeile mit Menge:  Name   1,15 x   2    2,30 A
-const RE_QTY   = /^(\S.*?)\s{2,}(\d+[.,]\d{2})\s*x\s*(\d+)\s+(-?\d+[.,]\d{2})\s*([A-Z])?\s*$/;
-// Einfache Zeile:   Name                 4,58 A
-const RE_SIMPLE = /^(\S.*?)\s{2,}(-?\d+[.,]\d{2})\s*([A-Z])?\s*$/;
-// Gewichtszeile:      0,199 kg x 22,99  EUR/kg
-const RE_WEIGHT = /^\s+(\d+[.,]\d+)\s*(kg|g)\s*x\s*(\d+[.,]\d{2})\s*EUR\/(kg|g)/i;
-// Rabattzeile:        Preisvorteil        -0,08
-const RE_DISCOUNT = /^\s+(Preisvorteil|Lidl Plus Rabatt|Rabatt|Coupon)\s+(-\d+[.,]\d{2})/i;
-// Pfandzeile
-const RE_DEPOSIT = /^Pfand\s/i;
+const round2 = (x) => Math.round(x * 100) / 100;
+
+/* Der Schwanz jeder Positionszeile: Betrag, dann in beliebiger
+   Reihenfolge das Steuerkennzeichen (A/B/1/2) und der Stern für
+   „nicht rabattfähig". REWE setzt „0,25 A *", Netto „4,00* A",
+   Lidl gar nichts. */
+const TAIL = String.raw`\s*\*?\s*([A-Z12])?\s*\*?\s*$`;
+
+/* Ein Betrag — mit oder ohne Tausenderpunkt. Die zweite Hälfte der
+   Alternative fängt den Normalfall „4,58"; die erste braucht es
+   für „1.234,56", das auf Bons von Großmärkten vorkommt und ohne
+   sie gar nicht als Betrag erkannt würde. */
+const AMOUNT = String.raw`-?(?:\d{1,3}(?:[.,]\d{3})+|\d+)[.,]\d{2}`;
+
+/* Zeile mit Menge inline (Lidl):  Name   1,15 x   2    2,30 A */
+const RE_QTY = new RegExp(
+  String.raw`^\s*(\S.*?)\s{2,}(${AMOUNT})\s*[xX*]\s*(\d+)\s+(${AMOUNT})` + TAIL);
+/* Einfache Zeile:   Name                 4,58 A */
+const RE_SIMPLE = new RegExp(String.raw`^\s*(\S.*?)\s{2,}(${AMOUNT})` + TAIL);
+/* Gewichtszeile:      0,199 kg x 22,99  EUR/kg */
+const RE_WEIGHT = /^\s*(\d+[.,]\d+)\s*(kg|g)\s*[xX*]\s*(\d+[.,]\d{2})\s*EUR\/(kg|g)/i;
+
+/* Nackte Mengenzeile OHNE Namen — die ganze Zeile ist nur Anzahl
+   und Einzelpreis. REWE schreibt „2 Stk x 2,79", Netto „16 x 0,89".
+   Dass kein Name dabeisteht, ist das Erkennungsmerkmal: eine
+   Position hat immer einen. */
+const RE_QTY_LINE = /^\s*(\d{1,3})\s*(?:Stk|St|Stck|Stück)?\.?\s*[xX*]\s*(\d+[.,]\d{2})\s*$/i;
+
+/* Rabattwörter — irgendwo in der Zeile, nicht nur am Anfang.
+   Netto schreibt „Rabatt", „Rabatt 5%", „25% Rabatt" und
+   „0.20€ Rabatt" auf EINEM Bon; nur die erste Schreibweise fängt
+   mit dem Wort an. „GRATIS" nennt das Wort gar nicht mehr. */
+const DISCOUNT_WORDS =
+  /(Preisvorteil|Lidl\s*Plus\s*Rabatt|Sofortrabatt|Treuerabatt|Aktionsrabatt|Rabatt|Nachlass|Coupon|Gutschein|GRATIS|Gratis)/i;
+/* Eine Rabattzeile ist: irgendein Text, dann ein NEGATIVER Betrag
+   am Zeilenende. Das Vorzeichen ist der zweite Anker — ein Rabatt
+   ohne Minus ist keiner. */
+const RE_NEGATIVE_LINE = new RegExp(String.raw`^\s*(\S.*?)\s+(-\d+[.,]\d{2})` + TAIL);
+
+/* Pfand und Leergut. „Pfand", „EW-Pfand", „Leergut",
+   „Mehrwegleergut", „Einwegleergut" — fünf Namen für zwei Dinge:
+   Pfand, das man zahlt, und Pfand, das man zurückbekommt. Beides
+   ist kein Lebensmittel und gehört weder in die Verschwendungs-
+   noch in die Kilogrammrechnung. */
+const RE_DEPOSIT = /^\s*(?:einweg|mehrweg|ew|mw)?[-\s]?(?:pfand|leergut)/i;
+
+/* Die Zwischensumme — bei ALDI mittendrin, nicht nur am Ende.
+   „ZWI.SUMME 7,49" steht nach den ersten drei Positionen eines
+   30-Positionen-Bons, dann noch einmal „ZWI.SUMME 25,74" nach der
+   letzten. Beide sehen aus wie eine Position (Name, zwei Leerzeichen,
+   Betrag) und wären es beinahe geworden — der Fund kam nicht aus
+   einer Überlegung, sondern aus einem echten ALDI-Bon aus Hesel.
+
+   Anders als die Endsumme ist das KEIN Abbruch: die Liste geht nach
+   der mittleren Zwischensumme weiter. Die Zeile wird übersprungen,
+   nicht als Ende gewertet. */
+const RE_SUBTOTAL = /^\s*Zwi\.?[-\s]?Summe\b/i;
+
+/* Die aufgedruckte Endsumme. */
+const RE_TOTAL = /^\s*(?:SUMME|Summe|GESAMT|Gesamtbetrag|Gesamtsumme|zu zahlen|Zu zahlen)\b/i;
+
+/* Wo die Positionen aufhören.
+
+   „Bar" braucht eine Zahl dahinter. Ohne sie würde die Zeile
+   „Bar Snack 1,99" den Bon mittendrin abschneiden — und der Rest
+   des Einkaufs wäre lautlos weg. Ein Zahlungsvermerk nennt immer
+   einen Betrag, ein Produktname fast nie direkt nach dem ersten
+   Wort. */
+const RE_STOP = /^\s*(?:SUMME|Summe|GESAMT|Gesamtbetrag|Gesamtsumme|zu zahlen|Zu zahlen|Geg\.|Gegeben|Rückgeld|Rueckgeld|Kartenzahlung|EC-|Girocard|Bar\s+\d)/i;
+
+/* Sieht die Zeile überhaupt aus wie eine Position?
+
+   Nur solche Zeilen sind eine Warnung wert. Ein Bon besteht zur
+   Hälfte aus Anschrift, Steuernummer und Werbespruch — wer die
+   alle meldet, macht die Warnliste so lang, dass die eine Zeile,
+   auf die es ankommt, darin untergeht. */
+const RE_LOOKS_LIKE_ITEM = new RegExp(String.raw`(-?\d{1,4}[.,]\d{2})` + TAIL);
+
+/**
+ * Die aufgedruckte Summe suchen — über den GANZEN Text, bevor die
+ * Positionsschleife läuft.
+ *
+ * Der Grund für den eigenen Durchgang: bei REWE steht die
+ * Trennlinie VOR der Summenzeile, bei Netto steht die Summe
+ * zweimal, bei EDEKA folgt darunter noch eine „SUMME MWST". Wer
+ * die Summe erst beim Abbruch mitnimmt, bekommt je nach Kette die
+ * richtige, gar keine oder die falsche. Der erste Treffer über
+ * alles ist bei allen vier Bons der richtige.
+ */
+function findPrintedTotal(lines) {
+  for (const raw of lines) {
+    if (!RE_TOTAL.test(raw)) continue;
+    // Eine Steuertabellen-Zeile („SUMME MWST 1,73 13,11") nennt
+    // mehrere Beträge und ist nie die Endsumme.
+    if (/\b(MwSt|MWST|USt|UST|Steuer)\b/.test(raw)) continue;
+    const alle = [...String(raw).matchAll(/(-?\d{1,5}[.,]\d{2})(?!\d)/g)];
+    if (!alle.length) continue;
+    const wert = num(alle[alle.length - 1][1]);
+    if (Number.isFinite(wert) && wert > 0) return round2(wert);
+  }
+  return null;
+}
 
 /**
  * Zerlegt den Bon-Text in Positionen.
- * @returns {{items, deposits, discountTotal, sum, warnings}}
+ * @returns {{items, deposits, discountTotal, sum, printedTotal, warnings}}
  */
-function parseLidlReceipt(text, opts = {}) {
+function parseReceipt(text, opts = {}) {
   const lines = String(text).split(/\r?\n/);
+  const printedTotal = findPrintedTotal(lines);
+
   const items = [];
   const deposits = [];
   const warnings = [];
-  let last = null;          // zuletzt angelegte Warenposition
+  let last = null;          // zuletzt angelegte WARENposition
   let lastAny = null;       // zuletzt angelegte Zeile (auch Pfand)
+  let pending = null;       // Mengenzeile, die auf ihre Position wartet
+
+  /* Eine wartende Mengenzeile gilt genau für die nächste Position
+     — und nur, wenn die Rechnung aufgeht. Sonst war sie etwas
+     anderes und wird verworfen. */
+  const applyPending = (record) => {
+    if (!pending) return;
+    const erwartet = round2(pending.qty * pending.unit);
+    if (Math.abs(erwartet - record.listed) <= 0.02) {
+      record.quantity = pending.qty;
+      record.unitPrice = pending.unit;
+      record.qtyFromLine = true;
+    } else {
+      warnings.push(
+        `Mengenzeile ohne Position: ${pending.qty} × ${pending.unit.toFixed(2)} ` +
+        `= ${erwartet.toFixed(2)}, nächste Zeile nennt ${record.listed.toFixed(2)}`);
+    }
+    pending = null;
+  };
 
   for (const raw of lines) {
     if (!raw.trim()) continue;
-    if (/^-{5,}/.test(raw.trim())) break;         // Trennlinie = Ende der Positionen
-    if (/^\s*(SUMME|Summe|zu zahlen|Geg\.|Rückgeld)/i.test(raw)) break;
+    if (/^\s*[-=]{5,}/.test(raw)) break;           // Trennlinie = Ende der Positionen
+    if (RE_STOP.test(raw)) break;
+
+    // (0) Zwischensumme — übersprungen, nicht als Ende gewertet.
+    // Die Liste geht danach weiter, im Unterschied zur Endsumme.
+    if (RE_SUBTOTAL.test(raw)) continue;
 
     // (a) Gewichtszeile — gehört zur Position darüber
     const w = raw.match(RE_WEIGHT);
@@ -4859,17 +5481,51 @@ function parseLidlReceipt(text, opts = {}) {
       continue;
     }
 
-    // (b) Rabattzeile — vom Preis der Position darüber abziehen
-    const d = raw.match(RE_DISCOUNT);
-    if (d) {
-      if (!lastAny) { warnings.push(`Rabatt ohne zugehörige Position: ${raw.trim()}`); continue; }
-      const amount = num(d[2]); // negativ
-      lastAny.discounts.push({ label: d[1], amount });
-      lastAny.paid = Math.round((lastAny.paid + amount) * 100) / 100;
+    /* (b) Nackte Mengenzeile — oben oder unten, das entscheidet die
+       Rechnung, nicht die Stelle.
+
+       Rückwärts wird nur geprüft, wenn die Position darüber noch
+       keine Menge hat: sonst würde bei Netto die Mengenzeile der
+       NÄCHSTEN Position der vorigen zugeschlagen, sobald deren
+       Gesamtpreis zufällig passt. */
+    const q = raw.match(RE_QTY_LINE);
+    if (q) {
+      const qty = parseInt(q[1], 10);
+      const unit = num(q[2]);
+      const erwartet = round2(qty * unit);
+      const passtRueckwaerts = lastAny && !lastAny.qtyFromLine && lastAny.quantity === 1 &&
+        Math.abs(erwartet - lastAny.listed) <= 0.02;
+      if (passtRueckwaerts) {
+        lastAny.quantity = qty;
+        lastAny.unitPrice = unit;
+        lastAny.qtyFromLine = true;
+      } else {
+        if (pending) {
+          warnings.push(`Mengenzeile ohne Position: ${pending.qty} × ${pending.unit.toFixed(2)}`);
+        }
+        pending = { qty, unit };
+      }
       continue;
     }
 
-    // (c) Position mit Menge
+    /* (c) Rabattzeile — vom Preis der Position darüber abziehen.
+
+       „Darüber" heißt: die letzte WARE. Pfand wird in Deutschland
+       nie rabattiert, es ist ein gesetzlich fester Betrag. Auf dem
+       Netto-Bon steht zwischen einem Getränk und seinem Rabatt die
+       Pfandzeile — wer den Rabatt dort anhängt, macht aus 25 Cent
+       Pfand minus sechs Euro. */
+    const n = raw.match(RE_NEGATIVE_LINE);
+    if (n && DISCOUNT_WORDS.test(n[1]) && !RE_DEPOSIT.test(raw)) {
+      const ziel = last || lastAny;
+      if (!ziel) { warnings.push(`Rabatt ohne zugehörige Position: ${raw.trim()}`); continue; }
+      const amount = num(n[2]); // negativ
+      ziel.discounts.push({ label: n[1].trim(), amount });
+      ziel.paid = round2(ziel.paid + amount);
+      continue;
+    }
+
+    // (d) Position mit Menge inline
     let m = raw.match(RE_QTY);
     let entry = null;
     if (m) {
@@ -4879,11 +5535,29 @@ function parseLidlReceipt(text, opts = {}) {
       };
     } else {
       m = raw.match(RE_SIMPLE);
-      if (!m) { warnings.push(`Zeile nicht erkannt: ${raw.trim()}`); continue; }
+      if (!m) {
+        if (RE_LOOKS_LIKE_ITEM.test(raw)) warnings.push(`Zeile nicht erkannt: ${raw.trim()}`);
+        continue;
+      }
       entry = {
         raw: m[1].trim(), unitPrice: num(m[2]), quantity: 1,
         listed: num(m[2]), taxClass: m[3] || null
       };
+    }
+
+    /* Ein Name ohne zwei zusammenhängende Buchstaben ist kein
+       Produkt, sondern eine Nummer oder eine Tabellenzeile.
+
+       Gefunden hat das der Zufallstest, nicht ich: wenn die
+       Erkennung ausgerechnet die Summenzeile verliert, liest der
+       Parser weiter in die Steuertabelle hinein und macht aus
+       „7,00 %   0,45   6,40" eine Position namens „7,00 % 0,45".
+       Die Ausrichtung filtert solche Zeilen längst — der Parser
+       aber bekommt auch von Hand eingefügten Text, und dort gab es
+       diesen Riegel bisher nicht. */
+    if (!/[A-Za-zÄÖÜäöüß]{2}/.test(entry.raw)) {
+      warnings.push(`Zeile ohne Produktnamen übersprungen: ${raw.trim()}`);
+      continue;
     }
 
     const record = {
@@ -4896,10 +5570,13 @@ function parseLidlReceipt(text, opts = {}) {
       discounts: [],
       weightG: null,
       pricePerKg: null,
-      byWeight: false
+      byWeight: false,
+      qtyFromLine: false
     };
 
-    // (d) Pfand: eigene Position, gehört aber zum Getränk davor
+    applyPending(record);
+
+    // (e) Pfand und Leergut: eigene Position, gehört zur Ware davor
     if (RE_DEPOSIT.test(entry.raw)) {
       record.isDeposit = true;
       record.belongsTo = last ? last.raw : null;
@@ -4908,33 +5585,64 @@ function parseLidlReceipt(text, opts = {}) {
       continue;
     }
 
+    /* Ein negativer Betrag, der KEIN Rabatt und KEIN Leergut ist,
+       ist eine Stornierung oder ein Lesefehler. Eine Position mit
+       negativem Preis würde in der Historie einen Kaufpreis unter
+       null erzeugen. */
+    if (record.listed < 0) {
+      warnings.push(`Negative Position übersprungen: ${raw.trim()}`);
+      continue;
+    }
+
     items.push(record);
     last = record;
     lastAny = record;
   }
 
+  if (pending) {
+    warnings.push(`Mengenzeile ohne Position: ${pending.qty} × ${pending.unit.toFixed(2)}`);
+  }
+
   // Rechnerische Kontrolle: Einzelpreis × Menge muss dem Zeilenpreis entsprechen
-  for (const it of items) {
-    const expected = Math.round(it.unitPrice * it.quantity * 100) / 100;
+  for (const it of [...items, ...deposits]) {
+    const expected = round2(it.unitPrice * it.quantity);
     if (it.quantity > 1 && Math.abs(expected - it.listed) > 0.02) {
       warnings.push(`Rechenprobe: ${it.raw} — ${it.unitPrice} × ${it.quantity} = ${expected}, Bon nennt ${it.listed}`);
     }
     if (it.byWeight && it.pricePerKg) {
-      const calc = Math.round((it.weightG / 1000) * it.pricePerKg * 100) / 100;
+      const calc = round2((it.weightG / 1000) * it.pricePerKg);
       if (Math.abs(calc - it.listed) > 0.02) {
         warnings.push(`Gewichtsprobe: ${it.raw} — errechnet ${calc}, Bon nennt ${it.listed}`);
       }
     }
   }
 
-  const discountTotal = [...items, ...deposits]
-    .reduce((s, i) => s + i.discounts.reduce((a, d) => a + d.amount, 0), 0);
-  const sum = [...items, ...deposits].reduce((s, i) => s + i.paid, 0);
+  const discountTotal = round2([...items, ...deposits]
+    .reduce((s, i) => s + i.discounts.reduce((a, d) => a + d.amount, 0), 0));
+  const sum = round2([...items, ...deposits].reduce((s, i) => s + i.paid, 0));
+
+  /* Die Gegenprobe. Sie korrigiert nichts — sie sagt nur, dass
+     etwas nicht stimmt, und überlässt die Entscheidung dem
+     Menschen, der den Bon vor sich liegen hat. */
+  let totalDiff = null;
+  if (printedTotal !== null) {
+    totalDiff = round2(printedTotal - sum);
+    if (Math.abs(totalDiff) > 0.02) {
+      warnings.push(
+        `Summenprobe: Der Bon nennt ${printedTotal.toFixed(2)}, erkannt wurden ${sum.toFixed(2)} — ` +
+        (totalDiff > 0
+          ? `${totalDiff.toFixed(2)} fehlen. Wahrscheinlich ist eine Zeile nicht gelesen worden.`
+          : `${Math.abs(totalDiff).toFixed(2)} zu viel. Wahrscheinlich ist eine Zeile doppelt gelesen worden.`));
+    }
+  }
 
   return {
     items, deposits,
-    discountTotal: Math.round(discountTotal * 100) / 100,
-    sum: Math.round(sum * 100) / 100,
+    discountTotal,
+    sum,
+    printedTotal,
+    totalDiff,
+    totalOk: printedTotal === null ? null : Math.abs(totalDiff) <= 0.02,
     warnings
   };
 }
@@ -7599,6 +8307,745 @@ function purchasesSinceChange(purchases, change) {
   return rows.slice(Math.max(0, idx - 1));
 }
 
+/* ===== receiptOcr.js ===== */
+/**
+ * receiptOcr.js — vom erkannten Text zum lesbaren Bon
+ * ================================================================
+ * Die Texterkennung selbst steckt nicht hier. Sie ist ein fremdes
+ * Programm (Tesseract, siehe src/ui/vendor), läuft im Browser und
+ * liefert eine Zeichenkette. Was sie liefert, ist aber noch kein
+ * Bon — und dieser Abstand ist die eigentliche Arbeit.
+ *
+ * DREI DINGE GEHEN BEI EINEM FOTO SCHIEF:
+ *
+ * 1. SPALTEN WERDEN ZU LEERZEICHEN.
+ *    `receiptParser` erkennt eine Position daran, dass zwischen
+ *    Name und Preis MINDESTENS ZWEI Leerzeichen stehen — auf einem
+ *    Bon ist das eine Spalte, kein Zufall. Die Texterkennung macht
+ *    daraus mal zwei, mal eins, mal sieben. Ohne Ausrichtung fällt
+ *    jede zweite Zeile durch.
+ *
+ * 2. ZIFFERN WERDEN ZU BUCHSTABEN.
+ *    Auf Thermopapier ist die Null ein O, die Eins ein l, die Fünf
+ *    ein S. Im NAMEN ist das halb so wild — der Produktabgleich
+ *    verträgt Tippfehler. Im PREIS ist es fatal: aus 2,O9 wird gar
+ *    kein Betrag, die Zeile verschwindet. Deshalb wird ausdrücklich
+ *    NUR im Zahlenbereich zurückübersetzt, nie im Namen. „SOO g
+ *    Mehl" darf nicht zu „500 g" werden, wenn es „Soo" heißt.
+ *
+ * 3. ES STEHT MEHR AUF DEM BILD ALS DER EINKAUF.
+ *    Kopfzeilen, Steuer-Nummer, Adresse, Öffnungszeiten, ein
+ *    Werbespruch, der Kartenbeleg. Alles hat Zahlen, nichts davon
+ *    ist ein Produkt.
+ *
+ *    Der schlimmste Fall ist der Treue-Block am Fuß. „Aktuelles
+ *    Bonus-Guthaben: 2,49 EUR" sieht aus wie eine Position und
+ *    wurde auch als eine gebucht. Dagegen hilft kein Wörterbuch,
+ *    sondern eine Struktur: hinter der Summenzeile steht kein
+ *    Einkauf mehr. Deshalb wird die Summenzeile jetzt ausdrücklich
+ *    DURCHGELASSEN statt als Rauschen verworfen — sie ist der
+ *    Schlussstrich, und ohne sie liest der Parser den ganzen Fuß
+ *    als Waren.
+ *
+ * GRUNDSATZ: LIEBER EINE ZEILE ZU WENIG.
+ * Eine übersehene Position merkt der Nutzer sofort — sie fehlt in
+ * der Liste, die er vor sich sieht, und er tippt sie nach. Eine
+ * erfundene Position dagegen wandert still in die Historie und
+ * verschiebt einen Rhythmus, den danach niemand mehr erklären kann.
+ * Deshalb sind alle Schwellen hier streng und alle Zweifel gehen
+ * gegen die Zeile.
+ *
+ * Das Ergebnis ist bewusst wieder TEXT im Format, das
+ * `receiptParser` ohnehin liest. Keine zweite Bon-Grammatik: die
+ * eine, die an echten Bons kalibriert ist, bleibt die einzige.
+ * ================================================================
+ */
+
+/* Ein Betrag am Zeilenende: 1,29 / -0,08 / 12.99 — die
+   Texterkennung verwechselt Komma und Punkt nach Belieben. */
+const RE_AMOUNT = /(-?\d{1,4}[.,]\d{2})(?!\d)/g;
+
+/* Zeilen, die nie eine Position sind. Bewusst als Anfang geprüft:
+   „Summe" mitten im Produktnamen gibt es, am Zeilenanfang nicht. */
+const NOISE_PREFIX = [
+  "summe", "gesamt", "zu zahlen", "zahlen", "geg", "rueckgeld", "rückgeld",
+  "bar", "ec", "girocard", "kartenzahlung", "mastercard", "visa", "kontaktlos",
+  "mwst", "ust", "steuer", "netto", "brutto", "betrag", "trm", "terminal",
+  "beleg", "bon", "kassenbon", "rechnung", "quittung", "datum", "uhrzeit",
+  "kasse", "bediener", "vielen dank", "danke", "auf wiedersehen", "tel",
+  "telefon", "ustid", "ust-id", "steuernr", "hdb", "filiale", "markt",
+  "oeffnungszeiten", "öffnungszeiten", "www", "http", "punkte", "karte",
+  "eur", "gutschein", "coupon-", "posten", "artikel", "stk gesamt",
+  "zwischensumme", "trinkgeld", "aut", "gen nr", "ta-nr", "as-zeit",
+  // ALDI druckt die Zwischensumme abgekürzt UND mittendrin, nicht nur
+  // am Ende: „ZWI.SUMME 7,49" nach den ersten drei Positionen, dann
+  // noch einmal „ZWI.SUMME 25,74" nach der letzten. Der ausgeschriebene
+  // Eintrag oben fängt das nicht — „zwi." ist ein anderes Wort.
+  "zwi.summe", "zwi summe", "zwi.-summe"
+];
+
+/* Zeilen mit diesen Wörtern SIND Positionen, auch wenn sie oben
+   verdächtig aussehen — „Pfand" beginnt mit P, aber der Parser
+   braucht die Zeile. */
+const KEEP_PREFIX = [
+  "pfand", "leergut", "mehrwegleergut", "einwegleergut", "ew-pfand", "mw-pfand",
+  "preisvorteil", "rabatt", "lidl plus", "gratis"
+];
+
+/* Der Treue- und Werbeblock am Fuß. Diese Wörter stehen NIE in
+   einem Produktnamen und mitten in der Zeile, nicht am Anfang —
+   deshalb eine eigene Liste, die überall sucht.
+
+   Sie ist der zweite Riegel, nicht der erste: normalerweise
+   schneidet die Summenzeile den ganzen Fuß ohnehin ab. Erst wenn
+   die Texterkennung genau diese eine Zeile verliert, wird die
+   Liste gebraucht. */
+const NOISE_CONTAINS = [
+  "bonus-guthaben", "bonusguthaben", "bonus-vorteile", "bonus-coupon", "bonuspunkte",
+  "guthaben", "gesammelt", "deutschlandcard", "payback", "treuepunkte",
+  "rabattberechtigt", "punkte erhalten", "app aktivieren", "gutschein-code"
+];
+
+/* Ab wann eine Zahl kein Preis mehr ist. Über 300 € steht auf einem
+   Lebensmittelbon höchstens die Kartennummer oder das Jahr. */
+const MAX_ITEM_EUROS = 300;
+
+/* Ein Produktname ist kürzer als das, was die Erkennung aus einer
+   Adresszeile macht — und länger als ein Rest von Rauschen. */
+const MIN_NAME_LENGTH = 2;
+const MAX_NAME_LENGTH = 48;
+
+/* Unter diesem Anteil brauchbarer Zeilen war es kein Bon, sondern
+   ein Bild von etwas anderem. */
+const MIN_ITEM_LINES = 2;
+const LOW_QUALITY_RATIO = 0.15;
+
+/** Bekannte Ketten — für den Markt-Namen, nicht für die Logik. */
+const STORE_NAMES = [
+  "Lidl", "Aldi", "Aldi Süd", "Aldi Nord", "Rewe", "Edeka", "Penny", "Netto",
+  "Kaufland", "Real", "Norma", "Tegut", "Denns", "Alnatura", "dm", "Rossmann",
+  "Müller", "Globus", "Famila", "Combi", "Marktkauf", "Hit", "Nahkauf",
+  "Trinkgut", "Getränkeland", "Bio Company", "Basic", "Metro", "Selgros"
+];
+
+/* Schreibweisen, unter denen dieselbe Kette auf dem Bon steht.
+   Der E-center-Bon trägt im Kopf nur das Logo — „EDEKA" fällt erst
+   zwanzig Zeilen weiter unten in der Firmierung. Wer nur nach
+   „Edeka" sucht, findet auf einem EDEKA-Bon keinen Markt. */
+const STORE_ALIASES = {
+  "ecenter": "Edeka", "e center": "Edeka", "e neukauf": "Edeka",
+  "aldi sued": "Aldi Süd", "aldi nord": "Aldi Nord",
+  "netto marken discount": "Netto", "netto online": "Netto",
+  "penny markt": "Penny", "rewe city": "Rewe", "rewe center": "Rewe"
+};
+
+/**
+ * Ziffernverwechslungen zurückdrehen — NUR in einem Betragswort.
+ *
+ * Was als Betragswort gilt, entscheidet `RE_AMOUNT_WORD` unten, und
+ * das ist der ganze Trick: „2,O9" steht zwischen Nicht-Buchstaben und
+ * enthält eine echte Ziffer, „Joghurt" nicht. Ohne diese Eingrenzung
+ * wird aus jedem Namen Kauderwelsch, und der Produktabgleich, der
+ * Tippfehler ohnehin verträgt, verliert seine beste Grundlage.
+ */
+const DIGIT_LOOKALIKE = {
+  O: "0", o: "0", Q: "0", D: "0",
+  I: "1", l: "1", "|": "1", "!": "1", i: "1",
+  S: "5", s: "5", B: "8", G: "6", T: "7", Z: "2", g: "9", b: "6"
+};
+
+const LOOKALIKE_CLASS = "0-9OoQDIl|!iSsBGTZgb";
+
+/* Ein Betragswort: bis zu vier Stellen, Trennzeichen, zwei Stellen —
+   wobei jede „Stelle" auch ein verwechseltes Zeichen sein darf. Die
+   Grenzen links und rechts sind der Kern: direkt an einem Buchstaben
+   ist es kein Betrag, sondern ein Wortteil. Ohne diese Grenzen wird
+   aus „Bio" ein „8io" und aus „Soja" ein „5oja". */
+const RE_AMOUNT_WORD = new RegExp(
+  `(^|[^A-Za-zÄÖÜäöüß])([${LOOKALIKE_CLASS}]{1,4}[.,][${LOOKALIKE_CLASS}]{2})(?![A-Za-zÄÖÜäöüß0-9])`,
+  "g"
+);
+
+function repairDigits(line) {
+  return String(line).replace(RE_AMOUNT_WORD, (ganz, vorher, wort) => {
+    // Ein Betragswort ohne eine einzige echte Ziffer ist wahrscheinlich
+    // gar keine Zahl („Sl,SO" könnte alles sein) — Finger weg.
+    if (!/[0-9]/.test(wort)) return ganz;
+    const repariert = [...wort]
+      .map((c) => (c === "." || c === "," ? c : DIGIT_LOOKALIKE[c] || c))
+      .join("");
+    return vorher + repariert;
+  });
+}
+
+/**
+ * Zeilenweise aufräumen: Zeichen, die keine Kasse druckt, raus;
+ * Punkt zwischen Ziffern zu Komma, weil die Erkennung beides
+ * verwechselt und der Parser mit beidem umgehen kann, der Mensch
+ * beim Nachlesen aber nicht.
+ */
+function cleanLine(line) {
+  return repairDigits(String(line))
+    // Steuerkennzeichen am Zeilenende (A/B/1/2) — es steht HINTER dem
+    // Betrag und schiebt sich sonst zwischen Preis und Zeilenende.
+    // Damit scheitert die Mengenerkennung, und aus „1,15 x 2  2,30"
+    // wird eine Position zum Gesamtpreis mit Menge 1.
+    //
+    // Der Stern für „nicht rabattfähig" steht mal davor, mal
+    // dahinter: REWE druckt „0,25 A *", Netto „4,00* A". Beide
+    // Stellungen müssen weg, sonst bleibt ein Zeichen zwischen
+    // Betrag und Zeilenende stehen und die Zeile fällt durch.
+    .replace(/(\d[.,]\d{2})\s*\*?\s*[A-Z12]?\s*\*?\s*$/, "$1")
+    .replace(/[«»“”„"‚'`´]/g, "")
+    .replace(/[¥€$]/g, " ")
+    .replace(/\s*€\s*/g, " ")
+    // Auch ausgeschrieben: REWE druckt „PFAND 0,25 EURO".
+    .replace(/\bEUROS?\b/gi, " ")
+    .replace(/\bEUR\b/gi, " ")
+    .replace(/[^\wÄÖÜäöüß0-9,.\-+*%/&()\s]/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .trimEnd();
+}
+
+/**
+ * Ist dieser Name ein Satz statt eines Produkts?
+ *
+ * Kassennamen sind abgekürzt bis zur Unkenntlichkeit — der längste
+ * auf allen vier echten Bons hat fünf Wörter („Active O2 Cherry
+ * 1x0,75L FL"), die allermeisten haben zwei oder drei. Wer sechs
+ * Wörter in die 48 Zeichen bekommt, die ein Name hier haben darf,
+ * schreibt keine Abkürzungen mehr, sondern Prosa: „Mit diesem
+ * Einkauf hast du 0,09 EUR". Das ist der Werbefuß, und der ist
+ * kein Einkauf.
+ *
+ * Geprüft wird erst am fertigen Namen, nicht am Zeilenrest: sonst
+ * zählt bei „High Protein Kaffee 1,15 x 2 2,30" die Mengenangabe
+ * als drei Wörter mit, und eine echte Position fällt durch.
+ */
+function istProsa(name) {
+  return String(name).trim().split(/\s+/).length >= 6;
+}
+
+/** Ist das eine Kopf-, Fuß- oder Zahlungszeile? */
+function isNoise(line) {
+  const l = line.trim().toLowerCase();
+  if (!l) return true;
+  if (KEEP_PREFIX.some((k) => l.startsWith(k))) return false;
+  if (NOISE_PREFIX.some((n) => l.startsWith(n))) return true;
+  if (NOISE_CONTAINS.some((n) => l.includes(n))) return true;
+  // Datum, Uhrzeit, lange Nummernfolgen: nie ein Produkt.
+  if (/^\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4}/.test(l)) return true;
+  if (/^\d{1,2}:\d{2}/.test(l)) return true;
+  if (/^[\d\s.\-*#]{8,}$/.test(l)) return true;
+  /* Öffnungszeiten schreiben die Uhrzeit auch mit Punkt statt
+     Doppelpunkt: „MO.-SA. 8.00 UHR - 20.00 UHR". Ohne dieses Wort
+     sieht „20.00" aus wie ein Betrag mit Komma-Punkt-Verwechslung —
+     genau der Fall, den repairDigits eigentlich reparieren soll —
+     und „MO.-SA. 8.00 UHR" wird zum Produktnamen. Das Wortende „uhr"
+     als eigenständiges Wort kommt in keinem Produktnamen vor; die
+     Wortgrenze davor lässt „Kuckucksuhr" unangetastet. Gefunden an
+     einem echten ALDI-Bon (Hesel, 2019), dessen Öffnungszeiten-Zeile
+     sonst zu einer 20-Euro-Fantasieposition geworden wäre. */
+  if (/\buhr\b/i.test(l)) return true;
+  // Reine Großbuchstaben-Adresse ohne Betrag ist ein Kopf.
+  if (!RE_AMOUNT.test(line) && l.length > 24) { RE_AMOUNT.lastIndex = 0; return true; }
+  RE_AMOUNT.lastIndex = 0;
+  return false;
+}
+
+/**
+ * Eine Zeile in die Spaltenform bringen, die `receiptParser`
+ * erwartet: Name, mindestens zwei Leerzeichen, Betrag.
+ *
+ * @returns {null|string} null = keine Position
+ */
+function alignLine(line) {
+  const clean = cleanLine(line);
+  if (!clean.trim()) return null;
+
+  // Gewichtszeile („0,199 kg x 22,99 EUR/kg") gehört zur Position
+  // darüber und behält ihre Einrückung — der Parser erkennt sie
+  // genau daran.
+  const gewicht = clean.match(/^\s*(\d+[.,]\d+)\s*(kg|g)\s*[xX*]\s*(\d+[.,]\d{2})/);
+  if (gewicht) return `   ${gewicht[1]} ${gewicht[2]} x ${gewicht[3]} EUR/${gewicht[2]}`;
+
+  /* Nackte Mengenzeile: „2 Stk x 2,79" (REWE, steht UNTER der
+     Position) oder „16 x 0,89" (Netto, steht DARÜBER). Vorher fiel
+     die REWE-Form durch und wurde zu einer erfundenen Position
+     namens „2 Stk x" — die Netto-Form flog raus, weil „16 x" keine
+     zwei Buchstaben hat. Beides ist jetzt dieselbe Zeilenart; wohin
+     sie gehört, rechnet der Parser aus. */
+  const menge = clean.match(/^\s*(\d{1,3})\s*(?:Stk|St|Stck|Stück)?\.?\s*[xX*]\s*(\d+[.,]\d{2})\s*$/i);
+  if (menge) return `   ${menge[1]} x ${menge[2].replace(".", ",")}`;
+
+  /* Die Summenzeile — ausdrücklich behalten, nicht verwerfen.
+     Sie ist für den Parser der Schlussstrich (alles danach ist
+     Zahlung, Steuer und Werbung) UND die einzige Gegenprobe, die
+     ein Bon von sich aus anbietet. Die Steuertabelle nennt ihre
+     Zwischensummen auch „SUMME MwSt" — die ist keine. */
+  if (/^\s*(SUMME|Summe|GESAMT|Gesamtbetrag|Gesamtsumme|zu zahlen)\b/i.test(clean) &&
+      !/\b(MwSt|MWST|USt|UST|Steuer)\b/i.test(clean)) {
+    const betraege = [...clean.matchAll(RE_AMOUNT)];
+    RE_AMOUNT.lastIndex = 0;
+    if (betraege.length) return `SUMME  ${betraege[betraege.length - 1][1].replace(".", ",")}`;
+    return null;
+  }
+
+  /* Rabattzeile. Das Rabattwort steht nicht immer vorn: Netto
+     schreibt „25% Rabatt" und „0.20€ Rabatt". Anker sind deshalb
+     das Wort IRGENDWO und das Minus am Zeilenende. */
+  const rabatt = clean.match(/^\s*(\S.*?)\s+(-\d+[.,]\d{2})\s*$/);
+  if (rabatt && /(Preisvorteil|Lidl\s*Plus\s*Rabatt|Sofortrabatt|Treuerabatt|Rabatt|Nachlass|Coupon|Gutschein|GRATIS|Gratis)/i.test(rabatt[1])) {
+    return `   ${rabatt[1].trim()}  ${rabatt[2].replace(".", ",")}`;
+  }
+
+  if (isNoise(clean)) return null;
+
+  const betraege = [...clean.matchAll(RE_AMOUNT)];
+  if (!betraege.length) return null;
+
+  const letzter = betraege[betraege.length - 1];
+  const roh = parseFloat(letzter[1].replace(",", "."));
+  const wert = Math.abs(roh);
+  if (!Number.isFinite(wert) || wert === 0 || wert > MAX_ITEM_EUROS) return null;
+
+  // Kein „x" in dieser Klasse: aus „Müsli Mix" würde sonst „Müsli Mi".
+  const name = clean.slice(0, letzter.index).replace(/[\s.\-*]+$/, "").trim();
+
+  /* Ein negativer Betrag ist ein Abzug, kein Produktpreis. Die
+     Rabattzeilen sind oben schon abgefangen; was hier noch negativ
+     ankommt, ist entweder zurückgegebenes Leergut oder eine
+     Stornierung, ein Lesefehler.
+
+     ZURÜCKGEGEBENES LEERGUT MUSS DURCH. „Einwegleergut 19% -6,00"
+     sind sechs Euro, die der Kunde wiederbekommt. Wer die Zeile
+     wegwirft, bekommt die Endsumme nie hin und hält am Ende jeden
+     Bon mit Flaschenrückgabe für falsch gelesen. Alles andere
+     Negative fliegt weiter raus: eine Position mit negativem Preis
+     würde in der Historie einen Kaufpreis unter null erzeugen —
+     der Zufallstest hat genau das gefunden. */
+  if (roh < 0 && !/^\s*(?:einweg|mehrweg|ew|mw)?[-\s]?(?:pfand|leergut)/i.test(name)) return null;
+  if (name.length < MIN_NAME_LENGTH) return null;
+  if (name.length > MAX_NAME_LENGTH) return null;
+  // Ein Name, der nur aus Ziffern besteht, ist eine Nummer.
+  if (!/[A-Za-zÄÖÜäöüß]{2}/.test(name)) return null;
+
+  const preis = letzter[1].replace(".", ",");
+
+  // Menge inline: „Name 1,15 x 2 2,30" — der Parser kann das, aber
+  // nur in genau dieser Schreibweise.
+  if (betraege.length >= 2) {
+    const menge = clean.match(/(\d+[.,]\d{2})\s*[xX*]\s*(\d+)\s+(-?\d+[.,]\d{2})\s*$/);
+    if (menge) {
+      const kopf = clean.slice(0, clean.indexOf(menge[0])).replace(/[\s.\-]+$/, "").trim();
+      if (kopf.length >= MIN_NAME_LENGTH && !istProsa(kopf)) {
+        return `${kopf}  ${menge[1].replace(".", ",")} x ${menge[2]}  ${menge[3].replace(".", ",")}`;
+      }
+    }
+  }
+
+  if (istProsa(name)) return null;
+
+  return `${name}  ${preis}`;
+}
+
+/**
+ * Erkannten Text in Bon-Text übersetzen.
+ * @returns {{text:string, lines:number, kept:number, dropped:Array<string>}}
+ */
+function ocrToReceiptText(raw) {
+  const zeilen = String(raw || "").split(/\r?\n/);
+  const out = [];
+  const dropped = [];
+  zeilen.forEach((z) => {
+    if (!z.trim()) return;
+    const a = alignLine(z);
+    if (a) out.push(a);
+    else if (z.trim().length > 3) dropped.push(z.trim());
+  });
+  return {
+    text: out.join("\n"),
+    lines: zeilen.filter((z) => z.trim()).length,
+    kept: out.length,
+    dropped
+  };
+}
+
+/** Datum aus dem Bild: erstes plausibles Tagesdatum. */
+function ocrDate(raw, today) {
+  const text = String(raw || "");
+  const treffer = text.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/);
+  if (!treffer) return null;
+  let [, t, m, j] = treffer;
+  t = parseInt(t, 10); m = parseInt(m, 10); j = parseInt(j, 10);
+  if (j < 100) j += 2000;
+  if (m < 1 || m > 12 || t < 1 || t > 31) return null;
+  const iso = `${j}-${String(m).padStart(2, "0")}-${String(t).padStart(2, "0")}`;
+  // Ein Bon aus der Zukunft ist ein Lesefehler, kein Einkauf.
+  if (today && iso > today) return null;
+  // Und einer von 2011 ist die Steuernummer.
+  if (today && iso < String(Number(today.slice(0, 4)) - 2) + today.slice(4)) return null;
+  return iso;
+}
+
+/**
+ * Markt aus dem Bon.
+ *
+ * ZWEI DINGE, DIE HIER SCHON SCHIEFGEGANGEN SIND:
+ *
+ * 1. GESUCHT WURDE OHNE WORTGRENZEN.
+ *    „dm" steht in der Liste — und in „Handmixer", „Sandmehl",
+ *    „Feldmais". „Real" steckt in „Realschulweg". Ein Teilstring
+ *    ist kein Markt; gesucht wird jetzt nach ganzen Wörtern.
+ *    (Derselbe Fehler saß in priceShare.chainOf und ist dort
+ *    schon behoben — hier stand er noch.)
+ *
+ * 2. GESUCHT WURDE NUR IM KOPF.
+ *    Auf dem E-center-Bon steht oben nur das Logo; „EDEKA" fällt
+ *    erst in Zeile 21 in der Firmierung. Der Kopf hat weiter
+ *    Vorrang — dort steht der Markt, wenn er irgendwo steht —
+ *    aber wenn er dort fehlt, wird der Rest gelesen, statt
+ *    aufzugeben.
+ */
+function ocrStore(raw) {
+  const text = String(raw || "");
+  const kopf = text.split(/\r?\n/).slice(0, 12).join(" ");
+
+  const suche = (heuhaufen) => {
+    // Alles, was kein Buchstabe und keine Ziffer ist, wird zur
+    // Wortgrenze — „E-center", „E center" und „Ecenter." sind
+    // danach dasselbe.
+    const h = " " + heuhaufen.toLowerCase().replace(/[^a-zäöüß0-9]+/g, " ").trim() + " ";
+    const treffer = (schreibweise) => h.includes(" " + schreibweise + " ");
+
+    for (const [alias, kette] of Object.entries(STORE_ALIASES)) {
+      if (treffer(alias)) return kette;
+    }
+    // Längste Treffer zuerst, damit „Aldi Süd" vor „Aldi" gewinnt.
+    const sortiert = [...STORE_NAMES].sort((a, b) => b.length - a.length);
+    for (const s of sortiert) {
+      if (treffer(s.toLowerCase().replace(/[^a-zäöüß0-9]+/g, " ").trim())) return s;
+    }
+    return null;
+  };
+
+  return suche(kopf) || suche(text);
+}
+
+/**
+ * Wie gut war das Bild? Ein Urteil, kein Wert zwischen 0 und 1 —
+ * der Nutzer braucht einen Satz, keine Prozentzahl, die ihm nichts
+ * sagt und die er nicht beeinflussen kann.
+ */
+function ocrQuality(result) {
+  const { lines, kept } = result;
+  if (!lines) return { ok: false, level: "leer", message: "Auf dem Bild war kein Text zu finden." };
+  if (kept < MIN_ITEM_LINES) {
+    return {
+      ok: false, level: "wenig",
+      message: "Kaum Positionen erkannt. Meist hilft: näher heran, alles im Bild, " +
+               "gerade von oben und ohne Schatten."
+    };
+  }
+  if (kept / lines < LOW_QUALITY_RATIO) {
+    return {
+      ok: true, level: "unsicher",
+      message: `${kept} Positionen erkannt, aber viel Unlesbares drumherum. Bitte durchsehen — ` +
+               "was fehlt, lässt sich unten von Hand ergänzen."
+    };
+  }
+  return {
+    ok: true, level: "gut",
+    message: `${kept} Positionen erkannt. Bitte einmal durchsehen: die Erkennung liest, ` +
+             "sie versteht nicht."
+  };
+}
+
+/** Alles zusammen — was die Oberfläche braucht. */
+function readReceiptImage(rawText, opts = {}) {
+  const result = ocrToReceiptText(rawText);
+  return {
+    ...result,
+    date: ocrDate(rawText, opts.today),
+    store: ocrStore(rawText),
+    quality: ocrQuality(result)
+  };
+}
+
+/* ===== backupGuard.js ===== */
+/**
+ * backupGuard.js — damit drei Jahre nicht an einem Dienstag verschwinden
+ * ================================================================
+ * DAS PROBLEM, UNGESCHÖNT:
+ *
+ * Alles, was diese App weiß, liegt im `localStorage` des Browsers.
+ * Das ist kein Tresor, sondern ein Zwischenspeicher mit guten
+ * Manieren. Er wird geleert, wenn
+ *
+ *   - der Browser Platz braucht (Eviction bei knappem Speicher),
+ *   - jemand „Browserdaten löschen“ tippt, um etwas anderes zu
+ *     reparieren,
+ *   - Safari zuschlägt: bei Web-Apps, die NICHT auf dem Startbildschirm
+ *     installiert sind, räumt die Intelligent Tracking Prevention nach
+ *     sieben Tagen ohne Nutzung auf. Sieben Tage sind ein Urlaub.
+ *
+ * Und der Verlust ist bei dieser App besonders bitter, weil er nicht
+ * eine Einstellung kostet, sondern GELERNTES: drei Jahre Rhythmen,
+ * jede Rückmeldung, jeden Meilenstein. Das kommt nicht wieder, indem
+ * man sich neu anmeldet — es gibt kein Konto, das ist ja der Punkt.
+ *
+ * WAS DIESES MODUL TUT: es entscheidet, wie gefährdet ein Zustand
+ * ist und wann die App etwas sagen muss. Es macht selbst keine
+ * Sicherung — das kann nur der Browser, und das steht in ui/backup.js.
+ * Hier liegt die Urteilslogik, weil sie sich prüfen lässt.
+ *
+ * DREI STUFEN DER ABSICHERUNG, in dieser Reihenfolge:
+ *
+ *   1. DAUERHAFTER SPEICHER (`navigator.storage.persist()`).
+ *      Kostet nichts, hilft am meisten, wird aber nur gewährt, wenn
+ *      der Browser die App für wichtig hält. Deshalb wird sie nicht
+ *      beim ersten Start erbeten, sondern nach dem ersten erfassten
+ *      Einkauf: davor ist die Antwort meistens nein, und ein einmal
+ *      abgelehntes Gesuch lässt sich nicht wiederholen.
+ *   2. SCHATTENKOPIE im selben Speicher. Sie hilft NICHT gegen
+ *      Löschen — dagegen hilft nichts im selben Speicher —, sondern
+ *      gegen den abgebrochenen Schreibvorgang: volle Quote, Absturz
+ *      mitten im Speichern, halbe Datei. Das ist der häufigere Fall.
+ *   3. EINE DATEI AUSSERHALB. Nur sie überlebt das Löschen des
+ *      Browsers. Wo es geht, schreibt die App sie von selbst; wo
+ *      nicht, erinnert sie und macht das Sichern zu einem Tippen.
+ *
+ * WAS HIER BEWUSST FEHLT: eine Wolke. Ein Server würde das Problem
+ * lösen und dabei das Versprechen brechen, auf dem die ganze App
+ * steht. Die Antwort ist deshalb nicht „vertraut uns“, sondern
+ * „nehmt eure Datei mit“.
+ * ================================================================
+ */
+
+/* Wann die App wieder etwas sagt. Beides muss zusammenkommen — Zeit
+   allein nervt jemanden, der nichts erfasst hat, und Menge allein
+   trifft den nicht, der viel auf einmal einträgt. */
+const REMIND_AFTER_DAYS = 14;
+const REMIND_AFTER_RECEIPTS = 6;
+
+/* Ab hier ist es keine Erinnerung mehr, sondern eine Warnung. */
+const CRITICAL_DAYS = 45;
+const CRITICAL_RECEIPTS = 20;
+
+/* Unter so vielen Bons lohnt keine Sicherung und keine Meldung — da
+   ist noch nichts verloren zu gehen. */
+const MIN_RECEIPTS_TO_CARE = 3;
+
+/* Safari räumt bei nicht installierten Web-Apps nach sieben Tagen
+   ohne Besuch auf. Der Wert steht hier, damit die Meldung ihn nennen
+   kann statt vage zu warnen. */
+const WEBKIT_EVICTION_DAYS = 7;
+
+const LEVEL = {
+  UNKRITISCH: "unkritisch",   // zu wenig Daten, um etwas zu verlieren
+  GESICHERT: "gesichert",     // Datei außerhalb, aktuell
+  OK: "ok",                   // gesichert, aber etwas ist dazugekommen
+  ERINNERUNG: "erinnerung",   // lange nichts gesichert
+  GEFAEHRDET: "gefaehrdet"    // nie gesichert und/oder Speicher flüchtig
+};
+
+/* Heißt nicht `isDate` — den Namen vergibt activityLog, und im
+   Bündel teilen sich alle Module einen Namensraum. Der Build bricht
+   sonst ab, und das ist die freundlichere Variante: vorher überschrieb
+   still das eine das andere. */
+const isDayString = (d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+function daysBetweenDates(from, to) {
+  if (!isDayString(from) || !isDayString(to)) return null;
+  const ms = new Date(to + "T12:00:00Z") - new Date(from + "T12:00:00Z");
+  return Math.round(ms / 86400000);
+}
+
+/**
+ * Wie flüchtig ist dieser Speicher?
+ *
+ * @param {{persisted, installed, webkit}} env
+ * @returns {{fluechtig:boolean, grund:string|null, frist:number|null}}
+ */
+function storageRisk(env = {}) {
+  if (env.persisted) {
+    return { fluechtig: false, grund: null, frist: null };
+  }
+  if (env.webkit && !env.installed) {
+    return {
+      fluechtig: true,
+      frist: WEBKIT_EVICTION_DAYS,
+      grund: `Auf diesem Browser werden die Daten einer nicht installierten Web-App nach ` +
+             `${WEBKIT_EVICTION_DAYS} Tagen ohne Nutzung gelöscht. Zum Startbildschirm hinzufügen hilft dagegen.`
+    };
+  }
+  return {
+    fluechtig: true,
+    frist: null,
+    grund: "Der Browser darf diesen Speicher löschen, wenn er Platz braucht — " +
+           "oder wenn jemand die Browserdaten aufräumt."
+  };
+}
+
+/**
+ * Der Gesundheitszustand der Sicherung.
+ *
+ * @param {object} s
+ *   `receipts`        Bons insgesamt
+ *   `lastBackupDate`  letzte Sicherung (JJJJ-MM-TT) oder null
+ *   `receiptsAtBackup` Bonstand bei der letzten Sicherung
+ *   `today`           Stichtag
+ *   `auto`            true, wenn eine Datei automatisch mitgeschrieben wird
+ *   `env`             siehe storageRisk
+ * @returns {{level, title, message, urgent, daysSince, neueBons, risk}}
+ */
+function backupHealth(s = {}) {
+  const today = s.today;
+  const receipts = Math.max(0, Number(s.receipts) || 0);
+  const receiptsAtBackup = Math.max(0, Number(s.receiptsAtBackup) || 0);
+  const neueBons = Math.max(0, receipts - receiptsAtBackup);
+  const daysSince = s.lastBackupDate ? daysBetweenDates(s.lastBackupDate, today) : null;
+  const risk = storageRisk(s.env);
+
+  const basis = { daysSince, neueBons, risk };
+
+  if (receipts < MIN_RECEIPTS_TO_CARE) {
+    return {
+      ...basis, level: LEVEL.UNKRITISCH, urgent: false,
+      title: "Noch nichts zu verlieren",
+      message: "Sobald ein paar Einkäufe erfasst sind, kümmert sich die App um die Sicherung."
+    };
+  }
+
+  /* Die automatische Datei ist der einzige Zustand, der wirklich
+     entspannt ist — und auch nur, solange sie mitgeschrieben wird. */
+  if (s.auto && neueBons === 0) {
+    return {
+      ...basis, level: LEVEL.GESICHERT, urgent: false,
+      title: "Automatisch gesichert",
+      message: "Jede Änderung wird in deine Sicherungsdatei geschrieben."
+    };
+  }
+  if (s.auto) {
+    return {
+      ...basis, level: LEVEL.OK, urgent: false,
+      title: "Automatisch gesichert",
+      message: `${neueBons} ${neueBons === 1 ? "Bon" : "Bons"} seit der letzten Schreibung — wird beim nächsten Mal mitgenommen.`
+    };
+  }
+
+  if (!s.lastBackupDate) {
+    return {
+      ...basis,
+      level: LEVEL.GEFAEHRDET,
+      urgent: true,
+      title: "Noch nie gesichert",
+      message: `${receipts} Bons und alles Gelernte liegen nur in diesem Browser. ` +
+               (risk.grund || "")
+    };
+  }
+
+  const kritisch = (daysSince !== null && daysSince >= CRITICAL_DAYS) || neueBons >= CRITICAL_RECEIPTS;
+  const faellig = (daysSince !== null && daysSince >= REMIND_AFTER_DAYS) && neueBons >= REMIND_AFTER_RECEIPTS;
+
+  if (kritisch) {
+    return {
+      ...basis, level: LEVEL.GEFAEHRDET, urgent: true,
+      title: "Sicherung ist alt",
+      message: `Zuletzt vor ${daysSince} Tagen gesichert, seitdem ${neueBons} ${neueBons === 1 ? "Bon" : "Bons"}. ` +
+               "Bei einem Verlust wäre genau das weg."
+    };
+  }
+  if (faellig) {
+    return {
+      ...basis, level: LEVEL.ERINNERUNG, urgent: false,
+      title: "Zeit für eine Sicherung",
+      message: `Zuletzt vor ${daysSince} Tagen, seitdem ${neueBons} ${neueBons === 1 ? "neuer Bon" : "neue Bons"}.`
+    };
+  }
+  return {
+    ...basis, level: LEVEL.OK, urgent: false,
+    title: "Gesichert",
+    message: daysSince === 0
+      ? "Heute gesichert — der Stand liegt als Datei außerhalb des Browsers."
+      : `Zuletzt vor ${daysSince} ${daysSince === 1 ? "Tag" : "Tagen"} gesichert` +
+        `${neueBons ? `, seitdem ${neueBons} ${neueBons === 1 ? "neuer Bon" : "neue Bons"}` : " — seitdem nichts Neues"}.`
+  };
+}
+
+/**
+ * Darf die App von sich aus damit anfangen?
+ *
+ * Nur bei „gefährdet“, und höchstens alle paar Tage. Eine Erinnerung,
+ * die bei jedem Start erscheint, wird nach dem dritten Mal weggetippt,
+ * ohne gelesen zu werden — und dann fehlt sie an dem Tag, an dem sie
+ * zählt.
+ */
+const NAG_SPACING_DAYS = 7;
+
+function shouldRemind(health, lastNagDate, today) {
+  if (!health || !health.urgent) return false;
+  if (!lastNagDate) return true;
+  const d = daysBetweenDates(lastNagDate, today);
+  return d === null || d >= NAG_SPACING_DAYS;
+}
+
+/**
+ * Ist dieser Stand überhaupt eine brauchbare Sicherung?
+ *
+ * Wird an zwei Stellen gebraucht: beim Zurückholen einer Datei und —
+ * wichtiger — beim Start, wenn die Schattenkopie einspringen soll.
+ * Eine kaputte Kopie über einen guten Stand zu legen wäre schlimmer
+ * als jeder Fehler, den sie beheben soll.
+ */
+function validateSnapshot(parsed, opts = {}) {
+  const fehler = [];
+  if (!parsed || typeof parsed !== "object") return { ok: false, fehler: ["kein Objekt"] };
+  if (opts.schema !== undefined && parsed.schema !== opts.schema) {
+    fehler.push(`Fassung ${parsed.schema} statt ${opts.schema}`);
+  }
+  if (!Array.isArray(parsed.purchases)) fehler.push("keine Kaufliste");
+  if (!Array.isArray(parsed.receipts)) fehler.push("keine Bonliste");
+  if (Array.isArray(parsed.purchases)) {
+    const kaputt = parsed.purchases.filter((p) => !p || !p.productId || !isDayString(p.date)).length;
+    // Ein paar unbrauchbare Zeilen sind normal (alte Fassungen, halb
+    // gelöschte Einträge). Die Hälfte ist ein kaputtes Datei-Ende.
+    if (parsed.purchases.length && kaputt > parsed.purchases.length / 2) {
+      fehler.push(`${kaputt} von ${parsed.purchases.length} Käufen unbrauchbar`);
+    }
+  }
+  return { ok: fehler.length === 0, fehler };
+}
+
+/**
+ * Welcher von zwei Ständen ist der bessere?
+ *
+ * Beim Start, wenn beide Kopien lesbar sind. Entschieden wird nach
+ * Inhalt, nicht nach Zeitstempel: ein Zeitstempel kann neuer und der
+ * Inhalt trotzdem abgeschnitten sein — genau das passiert, wenn die
+ * Quote mitten im Schreiben ausgeht.
+ */
+function pickBetter(a, b, opts = {}) {
+  const va = validateSnapshot(a, opts);
+  const vb = validateSnapshot(b, opts);
+  if (va.ok && !vb.ok) return { chosen: a, why: "zweite Kopie unbrauchbar" };
+  if (!va.ok && vb.ok) return { chosen: b, why: "erste Kopie unbrauchbar" };
+  if (!va.ok && !vb.ok) return { chosen: null, why: "beide unbrauchbar" };
+
+  const za = (a.purchases || []).length + (a.receipts || []).length;
+  const zb = (b.purchases || []).length + (b.receipts || []).length;
+  if (za === zb) return { chosen: a, why: "gleichwertig" };
+  return za > zb
+    ? { chosen: a, why: `mehr Inhalt (${za} zu ${zb})` }
+    : { chosen: b, why: `mehr Inhalt (${zb} zu ${za})` };
+}
+
+/** Dateiname mit Datum — sortiert sich im Ordner von selbst. */
+function backupFileName(today) {
+  const d = isDayString(today) ? today : new Date().toISOString().slice(0, 10);
+  return `einkaufsanker-${d}.json`;
+}
+
 /* ===== activityLog.js ===== */
 /**
  * activityLog.js — das Ereignis-Protokoll
@@ -8349,4 +9796,817 @@ function newMilestones(state, seen) {
   // Die höchste Stufe zuerst — wer zwei auf einmal erreicht, soll die
   // größere sehen.
   return out.sort((a, b) => b.threshold - a.threshold);
+}
+
+/* ===== weekPulse.js ===== */
+/**
+ * weekPulse.js — die nächsten sieben Tage als eine Zeile
+ * ================================================================
+ * Die Startseite soll eine Frage beantworten, bevor irgendetwas
+ * angetippt wird: WANN passiert was?
+ *
+ * Alle Antworten dazu liegen längst in der App verstreut — der
+ * Rhythmus sagt, wann ein Produkt wieder fällig ist, die
+ * Bestandsschätzung sagt, wann etwas verdirbt, die Austauschliste
+ * sagt, wann die Zahnbürste dran ist. Bisher musste man drei
+ * Ansichten aufsuchen, um daraus einen Wochenplan zu machen.
+ *
+ * Hier wird daraus eine Zeile von sieben Tagen, jeder mit den
+ * Ereignissen, die auf ihn fallen.
+ *
+ * DREI REGELN, DIE DAS ERGEBNIS EHRLICH HALTEN:
+ *
+ * 1. KEINE DOPPELZÄHLUNG. Haushaltsprodukte, deren Reichweite
+ *    endet, stehen bereits als Position auf der Liste — `supplies`
+ *    wird deshalb NICHT zusätzlich eingelesen. Dieselbe Sache über
+ *    zwei Kanäle in dieselbe Summe laufen zu lassen, war in diesem
+ *    Projekt schon zweimal der Fehler.
+ *
+ * 2. VERGANGENES IST HEUTE. Was überfällig ist oder schon verdorben
+ *    sein dürfte, fällt auf den heutigen Tag statt aus der Woche zu
+ *    fallen. Ein Streifen, der Überfälliges verschweigt, wäre
+ *    beruhigender als die Lage.
+ *
+ * 3. EIN PRODUKT, EIN EREIGNIS JE TAG. Verdirbt etwas an dem Tag,
+ *    an dem es auch wieder fällig wäre, zählt das Verderben — die
+ *    dringendere der beiden Aussagen. Über die Woche verteilt darf
+ *    dasselbe Produkt aber mehrfach vorkommen: dass der Joghurt am
+ *    Dienstag aufgebraucht ist und am Freitag wieder ansteht, sind
+ *    zwei verschiedene Tatsachen.
+ * ================================================================
+ */
+
+const DAY_NAMES = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const DAY_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
+const HORIZON = 7;
+
+/* Dringlichkeit, nicht Alphabet. Die Reihenfolge entscheidet, was
+   bei einer Kollision stehen bleibt und was in der Anzeige oben
+   steht. */
+const KIND_RANK = { verderb: 0, tausch: 1, einkauf: 2 };
+
+const KIND_TEXT = {
+  verderb: "verdirbt",
+  tausch: "tauschen",
+  einkauf: "einkaufen"
+};
+
+/** Ein Datum um n Tage verschieben. Heißt nicht `addDays` — den
+    Namen vergibt receiptArchive.js, und das Bündel duldet keinen
+    zweiten. */
+function dayPlus(dateStr, days) {
+  const d = new Date(dateStr + "T12:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function pulseWeekday(dateStr) {
+  return new Date(dateStr + "T12:00:00Z").getUTCDay();
+}
+
+/** Auf den Streifen abbilden: alles Vergangene auf heute, alles
+    jenseits der Woche fällt weg (null). */
+function slotFor(days) {
+  if (days === null || days === undefined || !Number.isFinite(days)) return null;
+  const i = Math.round(days);
+  if (i < 0) return 0;
+  return i < HORIZON ? i : null;
+}
+
+/**
+ * Die kommenden sieben Tage.
+ *
+ * @param {object} input
+ * @param {Array} input.items        Vorschlagsliste (enthält Non-Food bereits)
+ * @param {Array} input.inventory    geschätzter Bestand mit `daysLeft`
+ * @param {Array} input.swapsDue     fällige Austauschprodukte
+ * @param {object|null} input.pattern Einkaufsmuster aus shoppingDay.js
+ * @param {string} today
+ * @returns {{days:Array, total:number, todayCount:number, busiest:object|null,
+ *            shoppingSlot:number|null, headline:string}}
+ */
+function weekPulse(input, today) {
+  const items = input.items || [];
+  const inventory = input.inventory || [];
+  const swapsDue = input.swapsDue || [];
+  const pattern = input.pattern || null;
+
+  const days = [];
+  for (let i = 0; i < HORIZON; i++) {
+    const date = dayPlus(today, i);
+    const wd = pulseWeekday(date);
+    days.push({
+      index: i,
+      date,
+      weekday: wd,
+      name: DAY_NAMES[wd],
+      short: DAY_SHORT[wd],
+      isToday: i === 0,
+      isShoppingDay: false,
+      events: [],
+      count: 0
+    });
+  }
+
+  const add = (slot, kind, productId, name, note) => {
+    if (slot === null) return;
+    const day = days[slot];
+    const vorhanden = day.events.findIndex((e) => e.productId === productId && productId);
+    const ereignis = { kind, productId: productId || null, name, note: note || KIND_TEXT[kind] };
+    if (vorhanden < 0) { day.events.push(ereignis); return; }
+    // Regel 3: bei gleichem Produkt am selben Tag gewinnt das
+    // dringendere Ereignis, und es bleibt bei einem.
+    if (KIND_RANK[kind] < KIND_RANK[day.events[vorhanden].kind]) day.events[vorhanden] = ereignis;
+  };
+
+  // Was verdirbt. Nur was wahrscheinlich noch da ist — das hat die
+  // Bestandsschätzung schon gefiltert.
+  inventory.forEach((inv) => {
+    add(slotFor(inv.daysLeft), "verderb", inv.productId, inv.name,
+      inv.dateSource === "aufgedruckt" ? "aufgedrucktes Datum" : "geschätzt");
+  });
+
+  // Was getauscht werden will.
+  swapsDue.forEach((sw) => {
+    add(slotFor(sw.due ? 0 : sw.daysLeft), "tausch", sw.productId, sw.name, null);
+  });
+
+  // Was auf die Liste gehört. `items` enthält Lebensmittel UND
+  // Haushaltsprodukte — siehe Regel 1.
+  items.forEach((it) => {
+    add(slotFor(it.dueIn), "einkauf", it.productId, it.name, null);
+  });
+
+  days.forEach((d) => {
+    d.events.sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || a.name.localeCompare(b.name, "de"));
+    d.count = d.events.length;
+  });
+
+  // Der gelernte Einkaufstag, sofern es einen gibt.
+  let shoppingSlot = null;
+  if (pattern && pattern.favouriteDay !== null && pattern.favouriteDay !== undefined) {
+    const i = days.findIndex((d) => d.weekday === pattern.favouriteDay);
+    if (i >= 0) { shoppingSlot = i; days[i].isShoppingDay = true; }
+  }
+
+  const total = days.reduce((a, d) => a + d.count, 0);
+  const todayCount = days[0].count;
+  const busiest = days.reduce((best, d) => (!best || d.count > best.count ? d : best), null);
+
+  return {
+    days, total, todayCount,
+    busiest: busiest && busiest.count > 0 ? busiest : null,
+    shoppingSlot,
+    headline: headlineFor(days, total, shoppingSlot)
+  };
+}
+
+/**
+ * Ein Satz über die Woche.
+ *
+ * Zuerst das Verderbliche: das ist das Einzige, was sich nicht
+ * nachholen lässt. Danach der Einkaufstag, weil er die Frage
+ * beantwortet, bis wann etwas Zeit hat.
+ */
+function headlineFor(days, total, shoppingSlot) {
+  if (!total) return "Diese Woche steht nichts an.";
+
+  const verderb = days[0].events.filter((e) => e.kind === "verderb");
+  if (verderb.length === 1) return `${verderb[0].name} sollte heute weg.`;
+  if (verderb.length > 1) return `${verderb.length} Sachen sollten heute weg.`;
+
+  const heute = days[0].count;
+  if (heute > 0 && shoppingSlot === 0) return `Heute ist dein Einkaufstag — ${heute} ${heute === 1 ? "Sache" : "Sachen"} stehen an.`;
+  if (shoppingSlot !== null && shoppingSlot > 0) {
+    const bis = days.slice(0, shoppingSlot + 1).reduce((a, d) => a + d.count, 0);
+    return `Bis ${days[shoppingSlot].name} ${bis === 1 ? "kommt eine Sache" : `kommen ${bis} Sachen`} zusammen.`;
+  }
+  if (heute > 0) return `Heute ${heute === 1 ? "steht eine Sache" : `stehen ${heute} Sachen`} an.`;
+
+  const naechster = days.find((d) => d.count > 0);
+  return `Als Nächstes ${naechster.index === 1 ? "morgen" : naechster.name}: ${naechster.count} ${naechster.count === 1 ? "Sache" : "Sachen"}.`;
+}
+
+/* ===== hoardDetector.js ===== */
+/**
+ * hoardDetector.js — Vorratskäufe erkennen
+ * ================================================================
+ * Ein Vorratskauf ist kein Wochenbedarf. Wer sechs Packungen Nudeln
+ * mitnimmt, weil sie im Angebot waren, hat etwas anderes getan als
+ * jemand, der eine Packung kauft — und die App soll das
+ * unterscheiden können, in beide Richtungen:
+ *
+ *   GUT   Sechs Packungen Nudeln reichen ein halbes Jahr und halten
+ *         zwei. Zum halben Preis war das richtig. Die App soll das
+ *         sagen — und ein halbes Jahr lang keine Nudeln vorschlagen.
+ *
+ *   NICHT Sechs Becher Joghurt reichen bei diesem Haushalt zwölf
+ *         Wochen und halten drei. Zwei Drittel davon landen im Müll,
+ *         egal wie günstig sie waren. Das ist der Fall, den diese
+ *         App verhindern soll, und der Moment dafür ist der Bon —
+ *         nicht die Woche, in der es schon verdorben ist.
+ *
+ * ZWEI SUMMEN, IN DIE HIER NICHTS HINEINLÄUFT:
+ *
+ * 1. DIE ERSPARNIS. Was ein Vorratskauf günstiger war, zählt bereits
+ *    `receiptSavings` beim Buchen — realisierte Preisersparnis, aus
+ *    dem Bon. Der Betrag hier ist DERSELBE, nur nach Packungen
+ *    aufgeschlüsselt, und dient der Erklärung. Ihn zusätzlich
+ *    gutzuschreiben wäre EIN Ereignis über ZWEI Kanäle.
+ *
+ * 2. DIE VERSCHWENDUNGSBILANZ. Das Verderb-Risiko eines Stapels ist
+ *    eine VORHERSAGE über etwas, das noch nicht passiert ist.
+ *    `wasteSummary` bilanziert dagegen Vergangenes. Beides zu
+ *    addieren hieße, denselben Joghurt einmal als Warnung und einmal
+ *    als Verlust zu zählen — und wenn er dann doch aufgegessen wird,
+ *    stünde er trotzdem in der Bilanz.
+ *
+ * Dieses Modul liefert deshalb ausschließlich BESCHREIBUNGEN. Keine
+ * Zahl daraus wird irgendwo aufsummiert.
+ * ================================================================
+ */
+
+
+
+
+/* Ab dem Wievielfachen der üblichen Menge ist es ein Vorratskauf?
+   Das Doppelte ist zu wenig — wer sonst eine Packung kauft und
+   diesmal zwei, hat Gäste. Ab dem Dreifachen ist es Absicht. */
+const HOARD_FACTOR = 3;
+
+/* Und mindestens so viele Einheiten, sonst wird aus „sonst eine
+   halbe, heute anderthalb" ein Vorratskauf. */
+const MIN_UNITS = 3;
+
+/* Ohne diese Zahl an früheren Käufen gibt es kein „üblich", gegen
+   das sich „ungewöhnlich viel" messen ließe. */
+const MIN_HISTORY = 3;
+
+/* Anteil des Stapels, der über die Haltbarkeit hinausreicht, ab dem
+   gewarnt wird. Darunter ist es der normale Schwund, den die
+   Verschwendungsbilanz ohnehin führt. */
+const WARN_SHARE = 0.2;
+
+/** Median einer Zahlenreihe. Heißt nicht `medianOf` — den Namen
+    vergibt priceMemory.js, und das Bündel teilt einen Namensraum. */
+function medianQty(values) {
+  if (!values.length) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * Einen einzelnen Kauf beurteilen.
+ *
+ * @param {string} productId
+ * @param {object} purchase       {date, quantity, unitPrice}
+ * @param {Array}  frühere        Käufe VOR diesem, für „üblich"
+ * @param {object|null} rhythm    Ergebnis aus computeRhythm
+ * @param {string} today
+ * @returns {null|object} Beschreibung oder null
+ */
+function judgePurchase(productId, purchase, frühere, rhythm, today) {
+  const p = byId(productId);
+  if (!p) return null;
+
+  const units = Math.max(1, Number(purchase.quantity) || 1);
+  if (units < MIN_UNITS) return null;
+  if (frühere.length < MIN_HISTORY) return null;
+
+  const üblich = medianQty(frühere.map((h) => Math.max(1, Number(h.quantity) || 1)));
+  if (!üblich || units < üblich * HOARD_FACTOR) return null;
+
+  /* Reichweite des Stapels. Ohne gelernten Verbrauch je Einheit gibt
+     es keine — und dann sagt die App dazu nichts, statt zu raten. */
+  const proEinheit = rhythm && rhythm.perUnitDays > 0 ? rhythm.perUnitDays : null;
+  const reichweite = proEinheit === null ? null : Math.round(proEinheit * units);
+
+  /* Wie lange hält der Stapel? Bei Trockenware und Tiefkühl ist die
+     Frage gegenstandslos — dort ist die Haltbarkeit lang genug, dass
+     die Reichweite immer zuerst endet. */
+  const haltbar = p.shelfLifeDays;
+  const überschuss = reichweite !== null && reichweite > haltbar
+    ? (reichweite - haltbar) / reichweite
+    : 0;
+
+  /* Preis: gegen den eigenen Median der früheren Käufe. Ohne
+     Vergleichswert keine Aussage über den Preis. */
+  const preise = frühere.map((h) => Number(h.unitPrice)).filter((x) => Number.isFinite(x) && x > 0);
+  const üblicherPreis = preise.length >= MIN_HISTORY ? medianQty(preise) : null;
+  const bezahlt = Number(purchase.unitPrice);
+  const günstiger = üblicherPreis !== null && Number.isFinite(bezahlt) && bezahlt < üblicherPreis
+    ? Math.round((üblicherPreis - bezahlt) * units * 100) / 100
+    : 0;
+
+  /* Reicht der Stapel noch? Was aufgebraucht ist, braucht keinen
+     Hinweis mehr — weder Lob noch Warnung. */
+  const alter = daysBetween(purchase.date, today);
+  const aktiv = reichweite === null ? alter <= 30 : alter < reichweite;
+
+  /* Sicherheitskritisches wird NIE als guter Vorratskauf gelobt.
+     Hackfleisch auf Vorrat ist auch zum halben Preis keine gute
+     Idee, und die App darf das nicht andeuten. */
+  const kritisch = !!p.safetyCritical;
+  const zuviel = kritisch || überschuss >= WARN_SHARE;
+
+  return {
+    productId,
+    name: p.name,
+    date: purchase.date,
+    kind: zuviel ? "zuviel" : "vorrat",
+    units,
+    üblicheMenge: üblich,
+    reichweiteTage: reichweite,
+    haltbarTage: haltbar,
+    // Anteil des Stapels, der die Haltbarkeit überdauert. Reine
+    // Vorhersage — siehe Kopf: läuft in keine Bilanz.
+    überschussAnteil: Math.round(überschuss * 100) / 100,
+    // Derselbe Betrag, den `receiptSavings` schon gebucht hat, hier
+    // nur nach Packungen aufgeschlüsselt. Nicht addieren.
+    günstiger,
+    üblicherPreis: üblicherPreis === null ? null : Math.round(üblicherPreis * 100) / 100,
+    bezahlt: Number.isFinite(bezahlt) ? Math.round(bezahlt * 100) / 100 : null,
+    safetyCritical: kritisch,
+    aktiv,
+    estimated: true,
+    message: satzFür({ p, units, reichweite, haltbar, überschuss, günstiger, kritisch, zuviel })
+  };
+}
+
+/** Ein Satz, der sagt, was der Fall ist — nicht was zu tun wäre. */
+function satzFür({ p, units, reichweite, haltbar, überschuss, günstiger, kritisch, zuviel }) {
+  const menge = `${units}×`;
+  if (kritisch) {
+    return `${menge} ${p.name} auf einmal. Das Produkt trägt ein Verbrauchsdatum und hält etwa ` +
+           `${haltbar} ${haltbar === 1 ? "Tag" : "Tage"} — Vorrat ist hier keine Option, auch nicht zum guten Preis.`;
+  }
+  if (zuviel) {
+    const anteil = Math.round(überschuss * 100);
+    return `${menge} ${p.name} reichen bei deinem Verbrauch etwa ${reichweite} Tage, ` +
+           `haltbar sind sie ${haltbar}. Rund ${anteil} % davon wären über der Frist.`;
+  }
+  if (reichweite === null) {
+    return `${menge} ${p.name} auf einmal — sieht nach Vorrat aus. Wie lange das reicht, ` +
+           `weiß die App noch nicht.`;
+  }
+  const bis = `reicht etwa ${reichweite} Tage`;
+  return günstiger > 0
+    ? `${menge} ${p.name} zum besseren Preis — ${bis}.`
+    : `${menge} ${p.name} als Vorrat — ${bis}.`;
+}
+
+/**
+ * Alle Vorratskäufe eines Haushalts.
+ *
+ * @param {Array} history  {productId, date, quantity, unitPrice}
+ * @param {Map}   rhythms  productId -> computeRhythm
+ * @param {string} today
+ * @returns {Array} Beschreibungen, jüngste zuerst
+ */
+function detectHoards(history, rhythms, today) {
+  const byProduct = new Map();
+  (history || []).forEach((h) => {
+    if (!h || !h.productId) return;
+    if (!byProduct.has(h.productId)) byProduct.set(h.productId, []);
+    byProduct.get(h.productId).push(h);
+  });
+
+  const out = [];
+  for (const [productId, arr] of byProduct) {
+    const sorted = [...arr].sort((a, b) => (a.date < b.date ? -1 : 1));
+    sorted.forEach((kauf, i) => {
+      const fund = judgePurchase(productId, kauf, sorted.slice(0, i), rhythms.get(productId) || null, today);
+      if (fund) out.push(fund);
+    });
+  }
+  return out.sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+/**
+ * Was davon jetzt noch zählt: laufende Stapel.
+ * Ein Vorratskauf von vor zwei Jahren ist Geschichte, kein Hinweis.
+ */
+function activeHoards(hoards) {
+  return (hoards || []).filter((h) => h.aktiv);
+}
+
+/* ===== priceShare.js ===== */
+/**
+ * priceShare.js — was das Gerät verlassen dürfte, und was nie
+ * ================================================================
+ * Für den Schwarm-Preisindex: viele Haushalte melden, was ein
+ * Produkt gerade kostet, und alle sehen, wo es ungewöhnlich günstig
+ * ist. Der Nutzen ist offensichtlich. Der Preis dafür ist es nicht.
+ *
+ * WAS EIN KASSENBON ÜBER EINEN MENSCHEN VERRÄT, wenn man ihn
+ * überträgt: wo er einkauft (Filiale ≈ Wohnort), wann (Arbeitszeit,
+ * Wochenrhythmus), wie viel (Haushaltsgröße, Einkommen) — und was.
+ * Das Letzte ist das Heikelste: Babynahrung heißt Schwangerschaft,
+ * Halal heißt Religion, Diabetiker-Produkte heißen Gesundheit. Das
+ * sind besondere Kategorien nach Art. 9 DSGVO, und sie stehen auf
+ * ganz gewöhnlichen Bons.
+ *
+ * DESHALB IST DIE EINHEIT HIER KEIN KAUF, SONDERN EINE PREISSICHTUNG.
+ *
+ *     { produkt, kette, kalenderwoche, cent, packung }
+ *
+ * Nicht enthalten, und zwar jedes einzelne aus einem Grund:
+ *
+ *   MENGE        verrät die Haushaltsgröße.
+ *   DATUM        wird zur Kalenderwoche. Ein Datum plus Kette plus
+ *                Produkt ist über mehrere Sichtungen hinweg
+ *                verkettbar, eine Woche kaum.
+ *   FILIALE      wird zur Kette. Die Filiale ist der Wohnort.
+ *   WARENKORB    ist ein Fingerabdruck. Zwölf Positionen in einem
+ *                Bon identifizieren einen Haushalt zuverlässiger als
+ *                ein Name. Sichtungen werden deshalb EINZELN
+ *                übertragen, ohne Bezug zueinander.
+ *   KENNUNG      gibt es nicht. Kein Konto, kein Gerät, kein Zufalls-
+ *                schlüssel — auch kein „pseudonymer". Ein stabiler
+ *                Schlüssel über Wochen ist eine Kennung, egal wie er
+ *                heißt.
+ *
+ * Übrig bleibt eine Aussage über einen HÄNDLER, nicht über einen
+ * Menschen: „in Woche 34 kostete Butter bei Lidl 1,49 €". Das ist
+ * der Punkt der ganzen Konstruktion.
+ *
+ * ZWEI REGELN, DIE NICHT VERHANDELBAR SIND:
+ *
+ * 1. NUR BEKANNTE KETTEN. „Hofladen Müller" wird nicht übertragen.
+ *    Ein seltener Händlername ist selbst ein Merkmal — bei einer
+ *    Handvoll Kunden ist die Sichtung die Person.
+ *
+ * 2. NICHTS OHNE k ANDERE. Ein Wert wird erst ausgeliefert, wenn
+ *    mindestens k unabhängige Sichtungen vorliegen. Das schützt
+ *    doppelt: gegen Rückschlüsse auf den Einzelnen und gegen einen
+ *    falsch erkannten Bon, der sonst den Index verschöbe.
+ *
+ * DIE OFFENE STELLE, UND SIE IST NICHT KLEIN:
+ *
+ * `buildPriceIndex` zählt SICHTUNGEN, nicht HAUSHALTE. Solange jeder
+ * ehrlich einmal meldet, ist das dasselbe. Wer aber dieselbe Sichtung
+ * fünfmal schickt, erfüllt die k-Schwelle im Alleingang — und dann
+ * schützt sie niemanden mehr und glättet auch nichts.
+ *
+ * Ohne Kennung lässt sich das nicht auflösen: „ein Haushalt, eine
+ * Meldung" zu prüfen setzt voraus, Haushalte unterscheiden zu können,
+ * und genau das soll es hier nicht geben. Drei Auswege, alle mit
+ * Preis:
+ *
+ *   a) Ratenbegrenzung je IP. Schwach, aber billig.
+ *   b) Ein wöchentlich wechselndes, blind signiertes Ticket
+ *      (Privacy-Pass-Verfahren): beweist „eine Meldung je Woche",
+ *      ohne den Absender zu kennen. Richtig, und echte Kryptoarbeit.
+ *   c) Es bleibt bei „k Meldungen" statt „k Haushalten" — dann muss
+ *      die App genau das sagen und nichts anderes behaupten.
+ *
+ * Vor Stufe 2 muss eine davon gewählt sein. Es ist dieselbe
+ * Fehlerklasse wie die Doppelzählungen weiter oben in diesem
+ * Projekt: eine Zahl, die über einen Kanal gezählt wird, der etwas
+ * anderes misst, als ihr Name sagt.
+ *
+ * DIESES MODUL ÜBERTRÄGT NICHTS. Es entscheidet nur, was eine
+ * übertragbare Sichtung wäre, und rechnet den Index aus fertigen
+ * Sichtungen. Beides ist reine Logik und hier prüfbar — die Frage,
+ * OB übertragen wird, ist eine Einwilligung und steht woanders.
+ * ================================================================
+ */
+
+
+
+const SHARE_VERSION = 1;
+
+/* Wie viele unabhängige Sichtungen, bevor ein Wert herausgeht.
+   Fünf ist die übliche Untergrenze für k-Anonymität und zugleich
+   die Zahl, ab der ein Median gegen einen Ausreißer robust ist. */
+const K_ANONYMITY = 5;
+
+/* Ketten, die groß genug sind, dass die Nennung niemanden
+   heraushebt. Die Liste ist bewusst kurz und bewusst eine Liste:
+   „alles außer verdächtig" wäre die falsche Richtung. */
+const CHAINS = {
+  lidl: ["lidl"],
+  aldi: ["aldi", "aldi sued", "aldi süd", "aldi nord"],
+  rewe: ["rewe"],
+  edeka: ["edeka", "e center", "e-center"],
+  kaufland: ["kaufland"],
+  penny: ["penny"],
+  netto: ["netto"],
+  norma: ["norma"],
+  real: ["real"],
+  globus: ["globus"],
+  dm: ["dm", "dm drogerie", "dm-drogerie markt"],
+  rossmann: ["rossmann"]
+  /* „Müller" stand hier und ist wieder heraus. Der Test hat gezeigt,
+     was passiert: „Hofladen Müller" wurde als Drogeriekette erkannt
+     und wäre übertragen worden — genau der Fall, den Regel 1
+     verhindern soll. Müller ist einer der häufigsten deutschen
+     Nachnamen; ein Laden dieses Namens ist häufiger ein Einzelfall
+     als eine Filiale. Eine Kette weniger im Index ist der billigere
+     Fehler. */
+};
+
+/** Händlername auf eine bekannte Kette abbilden — oder auf null. */
+function chainOf(store) {
+  if (!store) return null;
+  const s = String(store).toLowerCase()
+    .replace(/[äöüß]/g, (c) => ({ "ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss" }[c]))
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) return null;
+
+  for (const [key, namen] of Object.entries(CHAINS)) {
+    // Wortgrenze, nicht Teilzeichenkette: „Realschulweg" ist kein
+    // „real", und „Netto Marken-Discount" ist eins.
+    if (namen.some((n) => new RegExp(`(^| )${n}( |$)`).test(s))) return key;
+  }
+  return null;
+}
+
+/** ISO-Kalenderwoche. Gröber als ein Datum, fein genug für Angebote. */
+function isoWeek(dateStr) {
+  const d = new Date(dateStr + "T12:00:00Z");
+  if (isNaN(d.getTime())) return null;
+  const tag = (d.getUTCDay() + 6) % 7;              // Montag = 0
+  d.setUTCDate(d.getUTCDate() - tag + 3);           // Donnerstag der Woche
+  const jahr = d.getUTCFullYear();
+  const ersterDo = new Date(Date.UTC(jahr, 0, 4));
+  const versatz = (ersterDo.getUTCDay() + 6) % 7;
+  ersterDo.setUTCDate(ersterDo.getUTCDate() - versatz + 3);
+  const woche = 1 + Math.round((d - ersterDo) / (7 * 86400000));
+  return `${jahr}-W${String(woche).padStart(2, "0")}`;
+}
+
+/**
+ * Aus einem Kauf eine übertragbare Sichtung machen — oder nicht.
+ *
+ * @param {object} purchase {productId, date, unitPrice, weightG}
+ * @param {string} store    Händlername vom Bon
+ * @returns {null|{v, produkt, kette, kw, cent, packung}}
+ */
+function observationFrom(purchase, store) {
+  if (!purchase) return null;
+  const p = byId(purchase.productId);
+  if (!p) return null;                              // nur Katalogprodukte
+
+  const kette = chainOf(store);
+  if (!kette) return null;                          // Regel 1
+
+  const kw = isoWeek(purchase.date);
+  if (!kw) return null;
+
+  const preis = Number(purchase.unitPrice);
+  if (!Number.isFinite(preis) || preis <= 0) return null;
+
+  /* Grobe Plausibilität gegen den Katalogwert. Eine falsch erkannte
+     Bonzeile („1,49" als „149,00") darf nicht in den Index. Die
+     Grenzen sind weit — Angebote sind echt, Tippfehler sind es
+     nicht. */
+  const üblich = p.typicalPrice || 0;
+  if (üblich > 0 && (preis < üblich * 0.2 || preis > üblich * 5)) return null;
+
+  return {
+    v: SHARE_VERSION,
+    produkt: p.id,
+    kette,
+    kw,
+    cent: Math.round(preis * 100),
+    // Packungsgröße macht Preise vergleichbar; sie sagt nichts über
+    // den Haushalt, weil sie am Produkt hängt und nicht am Kauf.
+    packung: purchase.weightG || p.typicalWeightG || null
+  };
+}
+
+/**
+ * Alle übertragbaren Sichtungen eines Zeitraums.
+ *
+ * Bewusst OHNE Bezug zueinander und in zufälliger Reihenfolge: die
+ * Zusammenstellung eines Warenkorbs ist ein Fingerabdruck, und die
+ * Reihenfolge auf dem Bon ist der Weg durch den Laden.
+ */
+function shareableFrom(purchases, storeOf, opts = {}) {
+  const out = [];
+  (purchases || []).forEach((kauf) => {
+    const obs = observationFrom(kauf, storeOf ? storeOf(kauf) : kauf.store);
+    if (obs) out.push(obs);
+  });
+
+  // Mischen mit einem übergebenen Zufall, damit der Test bestimmt bleibt.
+  const rnd = opts.random || Math.random;
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+const keyOf = (o) => `${o.produkt}|${o.kette}|${o.kw}`;
+
+function medianCent(values) {
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : Math.round((s[mid - 1] + s[mid]) / 2);
+}
+
+/**
+ * Sichtungen zu einem Index verdichten.
+ *
+ * Das ist die Rechnung, die auf dem Server liefe — hier, weil sie
+ * dann prüfbar ist und weil dieselbe Funktion für eine geteilte
+ * Datei zwischen drei Haushalten reicht, ganz ohne Server.
+ *
+ * Der Median statt des Mittelwerts, aus demselben Grund wie überall
+ * sonst in dieser App: eine falsch erkannte Zeile soll den Wert
+ * nicht verschieben.
+ *
+ * @returns {Array} nur Einträge mit mindestens k Sichtungen
+ */
+function buildPriceIndex(observations, { k = K_ANONYMITY } = {}) {
+  const groups = new Map();
+  (observations || []).forEach((o) => {
+    if (!o || o.v !== SHARE_VERSION || !o.produkt || !o.kette || !o.kw) return;
+    if (!Number.isFinite(o.cent) || o.cent <= 0) return;
+    const key = keyOf(o);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(o.cent);
+  });
+
+  const out = [];
+  for (const [key, cents] of groups) {
+    if (cents.length < k) continue;                 // Regel 2
+    const [produkt, kette, kw] = key.split("|");
+    out.push({
+      produkt, kette, kw,
+      n: cents.length,
+      medianCent: medianCent(cents),
+      minCent: Math.min(...cents),
+      maxCent: Math.max(...cents)
+    });
+  }
+  return out.sort((a, b) => (a.kw < b.kw ? 1 : a.kw > b.kw ? -1 : a.produkt.localeCompare(b.produkt)));
+}
+
+/**
+ * Wie viele Sichtungen fehlen noch, bis ein Wert herausgehen darf.
+ * Für die Oberfläche: „noch 2 Meldungen" ist eine ehrlichere Auskunft
+ * als eine leere Stelle.
+ */
+function missingFor(observations, produkt, kette, kw, k = K_ANONYMITY) {
+  const n = (observations || []).filter(
+    (o) => o && o.produkt === produkt && o.kette === kette && o.kw === kw
+  ).length;
+  return Math.max(0, k - n);
+}
+
+/* ===== offerAdvisor.js ===== */
+/**
+ * offerAdvisor.js — lohnt sich Vorrat bei diesem Preis?
+ * ================================================================
+ * Die Gegenrichtung zu hoardDetector.js: der beurteilt einen
+ * Vorratskauf, NACHDEM er passiert ist. Hier steht die Frage
+ * davor — bei diesem Preis, wie viel wäre sinnvoll?
+ *
+ * DIE ZAHL, DIE DIESE APP DAFÜR HAT UND SONST NIEMAND:
+ *
+ *     Höchstmenge = Haltbarkeit ÷ dein Verbrauch je Einheit
+ *
+ * Ein Angebotsportal kann sagen, dass Butter gerade billig ist. Was
+ * es nicht sagen kann: dass DU 250 g in zwölf Tagen verbrauchst und
+ * Butter vier Wochen hält, also drei Packungen die Grenze sind und
+ * die vierte im Müll landet. Genau diese Rechnung ist der Grund,
+ * warum die Empfehlung hier stehen darf und in einem Prospekt nicht.
+ *
+ * WOHER DER VERGLEICHSPREIS KOMMT, ist dieser Funktion egal. Sie
+ * bekommt ein „üblich" und rechnet. Ob das aus der eigenen Historie
+ * stammt (funktioniert heute, ohne Netz, ohne irgendwen) oder aus
+ * einem Schwarm-Index (viele Haushalte, siehe priceShare.js), ändert
+ * an der Rechnung nichts — nur an der Herkunftsangabe, die
+ * mitgeführt und angezeigt wird. Eine Empfehlung ohne Herkunft wäre
+ * in dieser App eine Behauptung.
+ *
+ * WAS SIE NICHT TUT: sie schreibt nichts gut. Die genannte Ersparnis
+ * ist eine Vorschau auf einen Kauf, der noch nicht stattgefunden hat.
+ * Realisiert wird sie erst beim Buchen, und dort zählt sie
+ * `receiptSavings`. Beides zu addieren wäre EIN Ereignis über ZWEI
+ * Kanäle — der Fehler, der in diesem Projekt schon dreimal Geld
+ * gekostet hat.
+ * ================================================================
+ */
+
+
+
+/* Ab wie viel Prozent unter üblich ist es ein Angebot? Darunter ist
+   es Preisrauschen — Butter für 2,25 statt 2,29 ist kein Anlass,
+   den Keller vollzustellen. */
+const DEAL_THRESHOLD = 0.15;
+
+/* Obergrenze unabhängig von der Rechnung. Auch wenn Reis zehn Jahre
+   hält: eine App, die zu vierzig Packungen rät, hat den Bezug zum
+   Haushalt verloren — und Kapital ist auch gebunden. */
+const MAX_STOCK_UNITS = 8;
+
+/* Unter zwei sinnvollen Einheiten gibt es keinen Vorrat, sondern
+   einen normalen Einkauf. Dann schweigt die App. */
+const MIN_STOCK_UNITS = 2;
+
+/**
+ * Wie viele Einheiten wären bei diesem Preis sinnvoll?
+ *
+ * @param {string} productId
+ * @param {object} lage
+ *   `preis`        was es gerade kostet (je Einheit)
+ *   `üblich`       Vergleichswert
+ *   `herkunft`     "eigen" | "schwarm" — wird nur weitergereicht
+ *   `n`            wie viele Sichtungen hinter `üblich` stehen (Schwarm)
+ *   `perUnitDays`  gelernter Verbrauch je Einheit, in Tagen
+ * @returns {null|object}
+ */
+function offerAdvice(productId, lage = {}) {
+  const p = byId(productId);
+  if (!p) return null;
+
+  /* Sicherheitskritisches nie. Ein Verbrauchsdatum lässt sich nicht
+     durch einen guten Preis verlängern, und die App darf das an
+     keiner Stelle andeuten. */
+  if (p.safetyCritical) return null;
+
+  const preis = Number(lage.preis);
+  const üblich = Number(lage.üblich);
+  if (!Number.isFinite(preis) || !Number.isFinite(üblich) || preis <= 0 || üblich <= 0) return null;
+
+  const nachlass = (üblich - preis) / üblich;
+  if (nachlass < DEAL_THRESHOLD) return null;       // kein Angebot
+
+  /* Ohne gelernten Verbrauch keine Höchstmenge — und ohne
+     Höchstmenge keine Empfehlung. Lieber nichts sagen als raten:
+     ein Vorratsstapel, der nach vierzehn Monaten noch steht, ist
+     genau das Gegenteil dessen, was diese App verspricht. */
+  const proEinheit = Number(lage.perUnitDays);
+  if (!Number.isFinite(proEinheit) || proEinheit <= 0) return null;
+
+  const haltbar = p.shelfLifeDays;
+  const maxNachHaltbarkeit = Math.floor(haltbar / proEinheit);
+  const einheiten = Math.min(MAX_STOCK_UNITS, maxNachHaltbarkeit);
+
+  if (einheiten < MIN_STOCK_UNITS) {
+    /* Der interessante Fall, und er ist eine eigene Aussage: das
+       Angebot ist echt, aber die Haltbarkeit gibt keinen Vorrat her.
+       Das zu sagen ist nützlicher als zu schweigen — sonst kauft
+       jemand sechs, weil sie günstig waren. */
+    return {
+      productId, name: p.name,
+      kind: "kein-vorrat",
+      einheiten: 1,
+      reichweiteTage: Math.round(proEinheit),
+      haltbarTage: haltbar,
+      nachlass: Math.round(nachlass * 100) / 100,
+      ersparnis: 0,
+      herkunft: lage.herkunft || "eigen",
+      n: lage.n || null,
+      estimated: true,
+      message: `${p.name} ist ${Math.round(nachlass * 100)} % günstiger als üblich — ` +
+               `für Vorrat reicht die Haltbarkeit aber nicht: ${haltbar} ` +
+               `${haltbar === 1 ? "Tag" : "Tage"}, und du verbrauchst eine Einheit in ` +
+               `${Math.round(proEinheit)}.`
+    };
+  }
+
+  const reichweite = Math.round(proEinheit * einheiten);
+  // Vorschau, keine Gutschrift. Siehe Kopf.
+  const ersparnis = Math.round((üblich - preis) * einheiten * 100) / 100;
+
+  return {
+    productId, name: p.name,
+    kind: "vorrat",
+    einheiten,
+    reichweiteTage: reichweite,
+    haltbarTage: haltbar,
+    // Warum nicht mehr: die Haltbarkeit oder die Obergrenze.
+    begrenztDurch: maxNachHaltbarkeit <= MAX_STOCK_UNITS ? "haltbarkeit" : "obergrenze",
+    nachlass: Math.round(nachlass * 100) / 100,
+    ersparnis,
+    herkunft: lage.herkunft || "eigen",
+    n: lage.n || null,
+    estimated: true,
+    message: `${einheiten}× ${p.name} wären hier sinnvoll — das reicht etwa ${reichweite} Tage ` +
+             `und bleibt in der Haltbarkeit von ${haltbar}.`
+  };
+}
+
+/**
+ * Die Herkunftsangabe als Satz. Getrennt gehalten, weil sie das
+ * Einzige ist, was sich zwischen „eigene Historie" und „Schwarm"
+ * unterscheidet — die Rechnung darüber ist dieselbe.
+ */
+function sourceNote(advice) {
+  if (!advice) return "";
+  if (advice.herkunft === "schwarm") {
+    return advice.n
+      ? `Verglichen mit ${advice.n} Meldungen anderer Haushalte aus dieser Woche.`
+      : "Verglichen mit Meldungen anderer Haushalte.";
+  }
+  return "Verglichen mit deinen eigenen bisherigen Preisen für dieses Produkt.";
 }

@@ -1,0 +1,57 @@
+/**
+ * fixtures/rewe-2026-07-07.txt
+ *
+ * ECHTER BON, aus dem REWE-App-Screenshot abgetippt.
+ * Zweiter REWE-Bon, damit die Mengen-Folgezeile nicht an einem
+ * einzigen Beispiel hängt.
+ *
+ * Die ersten drei Namen sind im Screenshot teilweise von der
+ * Blätter-Marke „1 von 2" verdeckt. Abgetippt ist, was lesbar war —
+ * die PREISE sind vollständig, und darauf prüft der Test. Ein
+ * halber Name ist hier kein Mangel, sondern realistisch: die
+ * Texterkennung liefert oft genau solche Bruchstücke.
+ *
+ * Auch dieser Bon geht auf: elf Zeilen ergeben exakt 23,80.
+ *
+ * Der Fuß trägt den REWE-Bonus-Block. Er ist voller Beträge, aber
+ * keiner davon ist ein Einkauf. Genau daran ist die Erkennung
+ * vorher gescheitert: „Aktuelles Bonus-Guthaben: 2,49 EUR" wurde
+ * zu einer Position „Aktuelles Bonus-Guthaben" für 2,49 €.
+ */
+                                      EUR
+STICKADO                             2,49 B
+STICKSIES                            1,99 B
+KAESEAUFSCHNITT                      1,89 B
+SCHOKO PR DRINK                      4,58 B
+            2 Stk x     2,29
+HP TRIPLE DESS.                      1,99 B
+DINKEL SPAGHET                       2,58 B
+            2 Stk x     1,29
+FUSILLI BIO                          1,55 B
+HAFERKRAFT COCOA                     2,79 B
+PROTEIN COCOA                        2,39 B
+TOMATENSAUCE                         1,35 B
+KL.PAPIERTASCHE                      0,20 A
+------------------------------------------
+ SUMME                        EUR   23,80
+==========================================
+ Geg. VISA                    EUR   23,80
+  Steuer %      Netto    Steuer    Brutto
+  A= 19,0%       0,17      0,03      0,20
+  B=  7,0%      22,06      1,54     23,60
+  Gesamtbetrag  22,23      1,57     23,80
+07.07.2026        21:58      Bon-Nr.:3160
+Markt:2120     Kasse:1      Bed.:363636
+
+******************************************
+  Deine REWE Bonus-Vorteile heute
+
+  Mit diesem Einkauf hast du 0,09 EUR
+     REWE Bonus-Guthaben gesammelt:
+  Bonus-Coupon(s)
+     5% auf Kaese & Kaese      0,09 EUR
+
+  Aktuelles Bonus-Guthaben: 2,49 EUR
+     Sammle noch mehr REWE Bonus-Guthaben
+     mit Coupons und weiteren Vorteilen
+     - gleich in der REWE App aktivieren!

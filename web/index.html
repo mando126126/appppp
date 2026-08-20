@@ -16,6 +16,12 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
 
+<!-- Die Schrift vorziehen. Ohne diese Zeile findet der Browser sie erst,
+     nachdem er app.css gelesen hat — der Text steht dann kurz in der
+     Systemschrift und springt danach um. `crossorigin` ist auch bei
+     eigener Herkunft Pflicht: Schriften werden anonym geholt, und ohne
+     das Attribut lädt der Browser die Datei ein zweites Mal. -->
+<link rel="preload" href="fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -30,9 +36,13 @@
 </div>
 
 <!-- Ladenmodus: Vollbild, große Ziele, eine Hand -->
-<div class="store" id="store" hidden role="dialog" aria-label="Ladenmodus">
+<!-- Diese Ansicht hieß an vier Stellen anders: der Knopf sagte „Nach
+     Gängen“, die Überschrift „Im Laden“, die Vorlesehilfe
+     „Ladenmodus“, die Einstellung „Ladenweg“. Wer hier landet, muss
+     denselben Namen wiederfinden, den er angetippt hat. -->
+<div class="store" id="store" hidden role="dialog" aria-label="Nach Gängen">
   <div class="storeTop">
-    <h2>Im Laden</h2>
+    <h2>Nach Gängen</h2>
     <span class="prog num" id="storeProg">0 von 0</span>
     <button class="close" id="storeClose">Fertig</button>
   </div>
@@ -42,7 +52,7 @@
       <div class="stat">im Wagen</div>
       <div class="sum" id="storeSum">0,00 €</div>
     </div>
-    <button class="cta" id="storeDone">buchen</button>
+    <button class="cta" id="storeDone">Einkauf buchen</button>
   </div>
 </div>
 
@@ -57,14 +67,36 @@
   </div>
 </div>
 
+<!-- Erreichter Meilenstein: eigener Vollbild-Auftritt, nicht das
+     nüchterne Blatt. Ein Moment, der die Mühe würdigt — die Zahl
+     darin ist trotzdem die echte. -->
+<div class="party" id="party" hidden role="dialog" aria-modal="true" aria-labelledby="partyTitle">
+  <div class="partyGlow" id="partyGlow" aria-hidden="true"></div>
+  <div class="partyBurst" id="partyBurst" aria-hidden="true"></div>
+  <div class="partyCard" id="partyCard">
+    <div class="partyKicker" id="partyKicker">Geschafft</div>
+    <div class="partyMark" id="partyMark" aria-hidden="true"></div>
+    <div class="partyNum" id="partyNum"></div>
+    <h2 class="partyTitle" id="partyTitle"></h2>
+    <div class="partyLevel" id="partyLevel"></div>
+    <div class="partyPips" id="partyPips" aria-hidden="true"></div>
+    <p class="partyNote" id="partyNote"></p>
+    <button class="cta" id="partyGo">Weiter</button>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script>window.__BUILD__ = "ol6km0";</script>
+<script>window.__BUILD__ = "zn53fh";</script>
 
 <!-- Algorithmen: gebündelt aus src/algo, nicht von Hand abgeschrieben -->
 <script src="bundle.js"></script>
+<!-- Sicherung: dauerhafter Speicher, Schattenkopie, Datei -->
+<script src="backup.js"></script>
 <!-- Speicher und Berechnung -->
 <script src="data.js"></script>
+<!-- Bild lesen (lädt Tesseract erst beim ersten Foto nach) -->
+<script src="ocr.js"></script>
 <!-- Ansichten und Rahmen -->
 <script src="views.js"></script>
 <script src="app.js"></script>

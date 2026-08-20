@@ -1,0 +1,51 @@
+/**
+ * fixtures/rewe-2026-05-30.txt
+ *
+ * ECHTER BON, aus dem REWE-App-Screenshot abgetippt.
+ * REWE Bockenheimer Landstr. 64, 60323 Frankfurt.
+ *
+ * WAS REWE ANDERS MACHT ALS LIDL:
+ *
+ * 1. DIE MENGE STEHT IN EINER EIGENEN ZEILE DARUNTER.
+ *    „HAEHNCHEN PAELLA 5,58" gefolgt von „2 Stk x 2,79".
+ *    Auf dem Lidl-Bon steht beides in einer Zeile. Ohne diese
+ *    Folgezeile wäre die Paella ein Einzelartikel für 5,58 —
+ *    und der Vorratsbestand um die Hälfte zu klein.
+ *
+ * 2. DER GESAMTPREIS STEHT OBEN, DER EINZELPREIS UNTEN.
+ *    Genau umgekehrt zur Leserichtung bei Lidl.
+ *
+ * 3. PFAND HEISST „PFAND 0,25 EURO" — mit ausgeschriebenem EURO
+ *    und einem Stern für „nicht rabattfähig" hinter dem
+ *    Steuerkennzeichen.
+ *
+ * Die Summe geht auf: die zwölf Zeilen ergeben exakt 27,10.
+ */
+              REWE
+      Bockenheimer Landstr.64
+          60323 Frankfurt
+           069-9714990
+       UID Nr.: DE812706034
+                                      EUR
+GRANA PADANO DOP                     3,99 B
+CAFFREDDO                            1,19 B
+H.PROT.PUD.VANI                      2,59 B
+HAEHNCHEN PAELLA                     5,58 B
+            2 Stk x     2,79
+GER. KAESE A. RI                     2,29 B
+DINKEL SPAGH.NAT                     2,90 B
+            2 Stk x     1,45
+TOMATENSAUCE                         1,69 B
+WELL VIT. RELOAD                     1,99 A
+PFAND 0,25 EURO                      0,25 A *
+EDITION APRICOT                      1,49 A
+PFAND 0,25 EURO                      0,25 A *
+ALUMINIUMFOLIE                       2,89 A
+------------------------------------------
+ SUMME                        EUR   27,10
+==========================================
+ Geg. VISA                    EUR   27,10
+  Steuer %      Netto    Steuer    Brutto
+  A= 19,0%       5,77      1,10      6,87
+  B=  7,0%      18,91      1,32     20,23
+  Gesamtbetrag  24,68      2,42     27,10

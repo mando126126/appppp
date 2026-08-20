@@ -1,3 +1,8 @@
 node_modules/
 npm-debug.log*
 .DS_Store
+
+# Die Vorschaudatei ist ein Nebenprodukt (npm run preview) und
+# 640 KB, die sich bei jeder Änderung komplett unterscheiden.
+preview.html
+web/preview.html

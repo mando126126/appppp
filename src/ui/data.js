@@ -21,6 +21,16 @@
    ================================================================ */
 
 const STORE_KEY = "einkaufsanker.v1";
+
+/* Die Schattenkopie. Sie schützt NICHT gegen das Löschen des
+   Browsers — dagegen hilft nichts, was im selben Speicher liegt —,
+   sondern gegen den abgebrochenen Schreibvorgang: volle Quote,
+   Absturz, halb geschriebene Zeichenkette. Das ist der Fall, der
+   ohne Zutun eintritt, und er hinterlässt einen Speicher, der
+   vorhanden und unlesbar ist. Beim Start entscheidet der Inhalt,
+   welche Kopie gilt, nicht der Zeitstempel: eine abgeschnittene
+   Datei ist neuer und trotzdem schlechter. */
+const SHADOW_KEY = "einkaufsanker.v1.schatten";
 const SCHEMA = 1;
 
 /* ---------- Datumshilfen ---------- */
@@ -83,6 +93,11 @@ function emptyState() {
     },
     aisleOrders: {},            // Markt -> Gangreihenfolge
     opened: [],                 // angebrochene Packungen [{productId, openedDate}]
+    // Aufgedruckte Verbrauchs- und Mindesthaltbarkeitsdaten, je
+    // Produkt für den jeweils letzten Kauf. Das ist die einzige
+    // belastbare Zahl, die es gibt — alles andere im Katalog ist
+    // Lagerempfehlung. Sie schlägt deshalb jede Schätzung.
+    useBy: {},                  // productId -> "JJJJ-MM-TT"
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
     dismissed: {                // weggetippte Hinweise, je Woche
       week: null,
@@ -105,7 +120,19 @@ function emptyState() {
     // soll nicht jede Woche gefragt werden.
     brandOff: [],
     storeChecked: [],     // im Ladenmodus abgehakt
-    depositReturned: []   // zurückgegebene Pfandgebinde
+    /* Käufe, von denen der Nutzer gesagt hat: aufgegessen, nichts
+       weggeworfen. Sie nehmen die Verschwendungsschätzung für genau
+       diesen Kauf zurück — siehe wasteSummary. Format: "produkt|datum". */
+    eaten: [],
+    /* Produkte, bei denen der Nutzer dem LAUFENDEN Verlustanteil
+       widersprochen hat („bei mir verdirbt kein Brot“). Das ist eine
+       Aussage über das Produkt, nicht über einen einzelnen Kauf. */
+    noChronic: [],
+    depositReturned: [],  // zurückgegebene Pfandgebinde
+    // Wann zuletzt gesichert wurde und wie. Ohne diese drei Felder
+    // kann die App nicht sagen, ob eine Sicherung fehlt — und eine
+    // Erinnerung, die nicht weiß, wovon sie redet, ist Lärm.
+    backup: { lastDate: null, lastKind: null, receiptsAt: 0, lastNag: null }
   };
 }
 
@@ -124,41 +151,115 @@ const listeners = new Set();
 function merge(parsed) {
   const base = emptyState();
   const out = { ...base, ...parsed };
-  for (const key of ["settings", "dismissed", "household", "lifetime", "review"]) {
+  for (const key of ["settings", "dismissed", "household", "lifetime", "review", "backup"]) {
     out[key] = { ...base[key], ...(parsed[key] || {}) };
   }
   out.settings.vacation = { ...base.settings.vacation, ...(parsed.settings || {}).vacation };
   return out;
 }
 
-function load() {
+/** Eine Kopie lesen und lesbar zurückgeben — oder null. */
+function readSlot(key) {
   let raw = null;
   try {
-    raw = localStorage.getItem(STORE_KEY);
+    raw = localStorage.getItem(key);
   } catch (e) {
-    // Privater Modus oder blockierter Speicher: die App läuft weiter,
-    // merkt sich aber nichts. Besser als ein Absturz beim Start.
-    console.warn("Speicher nicht verfügbar — Daten gehen beim Neuladen verloren.", e);
+    return null;
   }
-  if (raw) {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+/* Was beim letzten Start passiert ist — die Oberfläche sagt es dem
+   Nutzer, wenn die Schattenkopie einspringen musste. Ein stiller
+   Rückgriff wäre bequemer und würde verschweigen, dass gerade etwas
+   schiefgegangen ist. */
+let lastRecovery = null;
+
+function load() {
+  const haupt = readSlot(STORE_KEY);
+  const schatten = readSlot(SHADOW_KEY);
+  lastRecovery = null;
+
+  if (haupt === null && schatten === null) {
     try {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.schema === SCHEMA) state = merge(parsed);
+      if (localStorage.getItem(STORE_KEY)) {
+        lastRecovery = { level: "verloren", message: "Der gespeicherte Stand war unlesbar." };
+      }
     } catch (e) {
-      console.warn("Gespeicherte Daten unlesbar — starte leer.", e);
+      console.warn("Speicher nicht verfügbar — Daten gehen beim Neuladen verloren.", e);
+    }
+  } else {
+    const wahl = pickBetter(haupt, schatten, { schema: SCHEMA });
+    if (wahl.chosen) {
+      state = merge(wahl.chosen);
+      // Nur melden, wenn die Schattenkopie wirklich gerettet hat.
+      if (wahl.chosen === schatten && haupt !== null) {
+        lastRecovery = { level: "gerettet", message: `Der Hauptstand war unbrauchbar (${wahl.why}) — die Sicherungskopie im Browser ist eingesprungen.` };
+      } else if (wahl.chosen === schatten && haupt === null) {
+        lastRecovery = { level: "gerettet", message: "Der Hauptstand fehlte — die Sicherungskopie im Browser ist eingesprungen." };
+      }
+    } else {
+      lastRecovery = { level: "verloren", message: "Beide gespeicherten Stände waren unbrauchbar." };
     }
   }
   if (!state.purchases.length && !state.settings.demo && !state.createdAt) state.createdAt = today();
   return state;
 }
 
+/* Wie oft die Schattenkopie mitgezogen wird. Nicht bei jeder
+   Änderung: dann wären beide Kopien gleichzeitig kaputt, wenn der
+   Speicher mitten im Schreiben ausgeht — und genau davor soll sie
+   schützen. Sie hinkt bewusst hinterher. */
+const SHADOW_EVERY = 10;
+let saveCount = 0;
+
 function save() {
+  let text;
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    text = JSON.stringify(state);
+  } catch (e) {
+    console.warn("Zustand nicht serialisierbar.", e);
+    return;
+  }
+  try {
+    localStorage.setItem(STORE_KEY, text);
   } catch (e) {
     console.warn("Konnte nicht speichern.", e);
+    return;
+  }
+  // Erst NACH dem erfolgreichen Hauptschreiben, und nur ab und zu.
+  if (saveCount++ % SHADOW_EVERY === 0) {
+    try {
+      localStorage.setItem(SHADOW_KEY, text);
+    } catch (e) {
+      // Kein Drama: die Schattenkopie ist ein Extra, kein Muss.
+    }
+  }
+  if (typeof Backup !== "undefined" && Backup.handle) {
+    Backup.schedule(() => exportJson(), (ok) => { if (ok) noteBackup("auto"); });
   }
 }
+
+/** Eine erfolgte Sicherung festhalten. */
+function noteBackup(kind) {
+  state.backup = {
+    ...(state.backup || {}),
+    lastDate: today(),
+    lastKind: kind,
+    receiptsAt: state.receipts.length
+  };
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (e) { /* dann eben beim nächsten Mal */ }
+  listeners.forEach((l) => l());
+}
+
+function recoveryNotice() { return lastRecovery; }
 
 function get() { return state; }
 
@@ -254,6 +355,99 @@ function removeReceipt(receiptId) {
     // tragen keine Bon-Kennung, Tag und Markt genügen in der Praxis.
     s.purchases = s.purchases.filter((p) => !(p.date === r.date && p.store === r.store));
   });
+}
+
+/**
+ * Die Positionen eines Bons.
+ *
+ * Käufe tragen keine Bon-Kennung — sie werden über Tag und Markt
+ * zugeordnet, wie beim Löschen auch. Zwei Einkäufe am selben Tag im
+ * selben Markt wären für diese Zuordnung dasselbe; das kommt vor,
+ * bleibt aber die seltene Ausnahme, und die Alternative (eine Kennung
+ * nachträglich in jede alte Sicherung schreiben) wäre teurer als der
+ * Fehler.
+ */
+function receiptLines(receiptId) {
+  const r = state.receipts.find((x) => x.id === receiptId);
+  if (!r) return [];
+  return state.purchases.filter((p) => p.date === r.date && p.store === r.store);
+}
+
+/**
+ * Eine gebuchte Position ändern oder entfernen.
+ * ================================================================
+ * WARUM ES DAS BRAUCHT: bis hierher gab es nur „ganzen Bon löschen“.
+ * Nach einem Fehltreffer der Texterkennung — und die Prüfliste fängt
+ * nicht alles ab — hieß das: alles wegwerfen und neu erfassen. Das
+ * ist der Moment, in dem eine App zum ersten Mal als lästig erlebt
+ * wird, und er tritt beim Fotografieren häufiger ein als beim Tippen.
+ *
+ * WAS DABEI MITGEZOGEN WIRD, und das ist der heikle Teil:
+ *
+ *   - Der Bon selbst: Summe und Anzahl stimmen danach wieder.
+ *   - Das Ereignis-Protokoll: der `erfasst`-Eintrag dieses Tages
+ *     trägt einen Betrag, und der wäre nach einer Korrektur falsch.
+ *     Er wird um die Differenz angepasst, nicht neu erfunden.
+ *   - Eine als `guenstig` gebuchte Ersparnis, die an der entfernten
+ *     Position hing, verschwindet mit ihr. Sie war die Differenz zu
+ *     einem Preis, den es nicht gab.
+ *
+ * NICHT angepasst werden die Lebenszähler der Meilensteine. Das ist
+ * Absicht: Erreichtes verfällt in dieser App nicht, auch nicht durch
+ * eine Korrektur. Ein Abzeichen, das wieder verschwindet, weil man
+ * einen Tippfehler behoben hat, wäre die schlechtere Botschaft.
+ * ================================================================
+ *
+ * @param {string} purchaseId
+ * @param {null|{productId, quantity, unitPrice}} patch null = entfernen
+ * @returns {boolean} ob etwas geändert wurde
+ */
+function updatePurchase(purchaseId, patch) {
+  const alt = state.purchases.find((p) => p.id === purchaseId);
+  if (!alt) return false;
+
+  const alterWert = (Number(alt.unitPrice) || 0) * (Number(alt.quantity) || 1);
+  let neuerWert = 0;
+
+  update((s) => {
+    const i = s.purchases.findIndex((p) => p.id === purchaseId);
+    if (i < 0) return;
+
+    if (patch === null) {
+      s.purchases.splice(i, 1);
+    } else {
+      const p = s.purchases[i];
+      if (patch.productId) p.productId = patch.productId;
+      if (Number.isFinite(patch.quantity)) p.quantity = Math.max(1, patch.quantity);
+      if (Number.isFinite(patch.unitPrice)) p.unitPrice = Math.max(0, patch.unitPrice);
+      neuerWert = (Number(p.unitPrice) || 0) * (Number(p.quantity) || 1);
+    }
+
+    // Bon nachziehen. Ohne das zeigte die Liste weiter die alte Summe
+    // — und der Nutzer hätte die Korrektur gemacht und keine Wirkung
+    // gesehen.
+    const bon = s.receipts.find((x) => x.date === alt.date && x.store === alt.store);
+    if (bon) {
+      const zeilen = s.purchases.filter((p) => p.date === bon.date && p.store === bon.store);
+      bon.itemCount = zeilen.length;
+      bon.total = Math.round(zeilen.reduce((a, p) => a + p.unitPrice * p.quantity, 0) * 100) / 100;
+      if (!zeilen.length) s.receipts = s.receipts.filter((x) => x.id !== bon.id);
+    }
+
+    // Protokoll: den Erfassungsbetrag dieses Tages um die Differenz
+    // verschieben, nie unter null.
+    const differenz = neuerWert - alterWert;
+    if (differenz !== 0) {
+      const eintrag = s.actions.find((a) => a.date === alt.date && a.kind === ACTION.ERFASST);
+      if (eintrag) eintrag.euros = Math.max(0, Math.round((eintrag.euros + differenz) * 100) / 100);
+    }
+
+    if (patch === null || (patch.productId && patch.productId !== alt.productId)) {
+      s.actions = s.actions.filter((a) =>
+        !(a.kind === ACTION.GUENSTIG && a.date === alt.date && a.productId === alt.productId));
+    }
+  });
+  return true;
 }
 
 /** Packung als angebrochen markieren oder die Markierung entfernen. */
@@ -757,23 +951,30 @@ function compute() {
   const { chronic, anomalies } = inferWaste(history, rhythms);
 
   // Verschwendung je Produkt zusammenfassen (für Warnungen und Sparen)
+  /* Die Zusammenführung beider Verschwendungssignale steht in
+     wasteInference2 und nicht mehr hier. Hier gerechnet, war sie eine
+     Doppelzählung: chronischer Anteil plus Ausreißer ergaben 21 von
+     20 Käufen. Fachlogik gehört nach src/algo — auch damit sie
+     geprüft werden kann. */
   const wasteStats = new Map();
   for (const [pid] of rhythms) {
-    const purchased = history.filter((h) => h.productId === pid).length;
-    const c = chronic.find((x) => x.productId === pid);
-    const an = anomalies.filter((x) => x.productId === pid);
-    const euros = (c ? c.eurosPerCycle.mid * purchased : 0) + an.reduce((a, x) => a + x.euros.mid, 0);
-    const wasted = (c ? Math.round(c.wastedFraction * purchased) : 0) + an.length;
-    wasteStats.set(pid, {
-      purchased, wasted, wastedEuros: euros,
-      wasteRate: purchased ? wasted / purchased : 0, chronic: c
-    });
+    const kaeufe = history
+      .filter((h) => h.productId === pid)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    wasteStats.set(pid, wasteSummary(
+      pid,
+      kaeufe,
+      chronic.find((x) => x.productId === pid) || null,
+      anomalies.filter((x) => x.productId === pid),
+      // Was der Nutzer selbst bestätigt hat, schlägt die Schätzung.
+      { eaten: eatenDates(s.eaten, pid), noChronic: (s.noChronic || []).includes(pid) }
+    ));
   }
 
   // Angebrochenes hält kürzer als die Packung — die Korrektur muss vor
   // Reichweite und Rezepten greifen, sonst rechnen beide mit der Frist
   // der ungeöffneten Ware.
-  const inventory = applyOpened(estimateInventory(history, rhythms, ref), s.opened, ref)
+  const inventory = applyOpened(estimateInventory(history, rhythms, ref, { useBy: s.useBy }), s.opened, ref)
     .filter((i) => !isNonFood(i.productId));
   const opened = openedItems(s.opened, ref);
 
@@ -1099,8 +1300,31 @@ function compute() {
   const brands = brandSwapCandidates(history, { dismissed: s.brandOff });
   const brandHeadline = swapHeadline(brands);
 
+  /* Wie gefährdet ist der Bestand? Die Frage gehört in jede
+     Neuzeichnung, nicht in eine Einstellung, die niemand aufsucht. */
+  const bak = s.backup || {};
+  const backup = backupHealth({
+    receipts: s.receipts.length,
+    receiptsAtBackup: bak.receiptsAt || 0,
+    lastBackupDate: bak.lastDate || null,
+    today: ref,
+    auto: typeof Backup !== "undefined" && !!Backup.handle,
+    env: typeof Backup !== "undefined" ? Backup.envSync() : {}
+  });
+
   const badges = milestoneState({ ...s.lifetime, wochen: streak.weeks });
   const freshBadges = newMilestones(badges, s.badgesSeen);
+
+  /* Die kommenden sieben Tage. Bewusst NACH allem anderen, denn der
+     Streifen erfindet nichts — er ordnet nur, was oben schon
+     gerechnet wurde, nach Tagen. `supplies` bleibt draußen: was
+     ausgeht, steht bereits in `items`. */
+  const pulse = weekPulse({ items, inventory, swapsDue, pattern }, ref);
+
+  /* Vorratskäufe. Rein beschreibend — weder die Ersparnis noch das
+     Verderb-Risiko wird irgendwo aufsummiert; beides steht schon in
+     `savings` bzw. `wasteStats`. Siehe Kopf von hoardDetector.js. */
+  const hoards = activeHoards(detectHoards(history, rhythms, ref));
 
   return {
     ref, weekKey: wk, weekday: weekdayOf(ref),
@@ -1112,17 +1336,27 @@ function compute() {
     opened, pattern, season, seasonNow,
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog, absences,
-    actions: s.actions, review, streak, streakWeeks, badges, freshBadges,
-    brands, brandHeadline,
+    actions: s.actions, review, streak, streakWeeks, badges, freshBadges, pulse, hoards,
+    brands, brandHeadline, backup, recovery: lastRecovery,
     store, aisleList,
     ethylene: checkEthyleneConflicts(known.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
+    /* Kilogramm aus DERSELBEN Zahl wie die Euro.
+     *
+     * Vorher lief das über `chronic` mal Käufe — also über einen der
+     * beiden Kanäle allein. Damit zählte die Kilogramm-Angabe
+     * Ausreißer gar nicht mit (ein Produkt ohne chronischen Anteil
+     * wog null Gramm, auch wenn eine ganze Packung weggeworfen
+     * wurde), und eine Nutzerkorrektur wäre bei den Euro angekommen
+     * und bei den Kilogramm nicht. Zwei Zahlen für dieselbe Sache,
+     * die auseinanderlaufen — dieselbe Fehlerklasse wie die
+     * Doppelzählung, nur andersherum.
+     *
+     * Jetzt: Anteil 1 mal der bereits verrechneten Stückzahl. */
     impact: wasteInKilograms(
-      chronic.map((c) => ({
-        productId: c.productId,
-        wastedFraction: c.wastedFraction,
-        cycles: (wasteStats.get(c.productId) || {}).purchased || 1
-      }))
+      [...wasteStats.entries()]
+        .filter(([, st]) => st.wasted > 0)
+        .map(([pid, st]) => ({ productId: pid, wastedFraction: 1, cycles: st.wasted }))
     ),
     totals: {
       spend,
@@ -1134,6 +1368,98 @@ function compute() {
       firstDate: history.length ? first : null
     }
   };
+}
+
+/**
+ * Aufgedrucktes Datum eintragen — oder wieder entfernen.
+ *
+ * Es gilt für den jeweils letzten Kauf dieses Produkts. Ein Datum,
+ * das vor dem Kauf liegt, wird abgelehnt: das ist ein Vertipper,
+ * kein abgelaufenes Produkt, und es würde den Bestand sofort auf
+ * „verdorben" setzen.
+ */
+function setUseBy(productId, date) {
+  if (!productId) return false;
+  // Dieselbe echte Datumsprüfung wie im Bestand — die Form allein
+  // lässt „2026-13-45" durch.
+  const gueltig = isRealDate(date);
+  if (date && !gueltig) return false;
+  const letzter = state.purchases
+    .filter((p) => p.productId === productId)
+    .map((p) => p.date)
+    .sort()
+    .pop();
+  if (gueltig && letzter && date < letzter) return false;
+  update((st) => {
+    if (!st.useBy) st.useBy = {};
+    if (gueltig) st.useBy[productId] = date;
+    else delete st.useBy[productId];
+  });
+  return true;
+}
+
+/* ---------- Aufgegessen statt weggeworfen ---------- */
+/** Schlüssel eines einzelnen Kaufs. Produkt und Datum, sonst nichts —
+    zwei Käufe desselben Produkts am selben Tag sind für diese Frage
+    derselbe Kauf. */
+const eatenKey = (productId, date) => `${productId}|${date}`;
+
+/** Die bestätigten Kaufdaten eines Produkts, als Menge. */
+function eatenDates(list, productId) {
+  const out = new Set();
+  (list || []).forEach((k) => {
+    const [pid, date] = String(k).split("|");
+    if (pid === productId && date) out.add(date);
+  });
+  return out;
+}
+
+/**
+ * „Das habe ich aufgegessen“ — für einen einzelnen Kauf.
+ *
+ * Nimmt die Verschwendungsschätzung für genau diesen Kauf zurück.
+ * Umschaltbar, weil eine Korrektur, die man nicht zurücknehmen kann,
+ * schlimmer ist als die Schätzung, die sie korrigiert.
+ *
+ * ES WIRD NICHTS GUTGESCHRIEBEN. Kein Eurobetrag, keine Rettung,
+ * kein Meilenstein. Eine Schätzung zurückzunehmen ist kein Erfolg —
+ * es war nur nie ein Verlust. Wer daraus eine Rettung machte, hätte
+ * einen Betrag erfunden und ihn ein zweites Mal gezählt.
+ *
+ * @returns {boolean} ob der Kauf jetzt als aufgegessen gilt
+ */
+function toggleEaten(productId, date) {
+  if (!productId || !date) return false;
+  const key = eatenKey(productId, date);
+  let jetztAn = false;
+  update((s) => {
+    const list = s.eaten || (s.eaten = []);
+    const i = list.indexOf(key);
+    if (i >= 0) list.splice(i, 1);
+    else { list.push(key); jetztAn = true; }
+  });
+  return jetztAn;
+}
+
+/**
+ * Dem laufenden Verlustanteil eines Produkts widersprechen.
+ *
+ * Eine Aussage über das Produkt, nicht über einen einzelnen Kauf —
+ * deshalb ein Schalter und keine dreißig. Auch hier wird nichts
+ * gutgeschrieben.
+ *
+ * @returns {boolean} ob der Anteil jetzt abgestellt ist
+ */
+function toggleNoChronic(productId) {
+  if (!productId) return false;
+  let jetztAus = false;
+  update((s) => {
+    const list = s.noChronic || (s.noChronic = []);
+    const i = list.indexOf(productId);
+    if (i >= 0) list.splice(i, 1);
+    else { list.push(productId); jetztAus = true; }
+  });
+  return jetztAus;
 }
 
 /**
@@ -1156,13 +1482,13 @@ function toggleBrandOff(productId) {
 /* ---------- Bon-Text auswerten ---------- */
 /**
  * Text eines Kassenbons in Vorschlagszeilen übersetzen.
- * Der Parser ist an einem echten Lidl-Bon kalibriert; andere Märkte
- * folgen demselben Aufbau (Name, Preis, optional Menge). Was nicht
- * sicher zugeordnet werden kann, landet in `open` — die Oberfläche
- * fragt nach, statt still etwas Falsches zu buchen.
+ * Der Parser ist an echten Bons von Lidl, REWE, Netto und EDEKA
+ * kalibriert. Was nicht sicher zugeordnet werden kann, landet in
+ * `open` — die Oberfläche fragt nach, statt still etwas Falsches
+ * zu buchen.
  */
 function parseReceiptText(text) {
-  const parsed = parseLidlReceipt(text);
+  const parsed = parseReceipt(text);
   const rows = parsed.items.map((it) => {
     const learned = state.aliases[normalizeRaw(it.raw)];
     const m = learned
@@ -1186,6 +1512,11 @@ function parseReceiptText(text) {
     deposits: parsed.deposits,
     sum: parsed.sum,
     discountTotal: parsed.discountTotal,
+    // Die Gegenprobe gegen die aufgedruckte Summe. `null` heißt
+    // „der Bon nennt keine" — das ist kein Fehler, nur keine Probe.
+    printedTotal: parsed.printedTotal,
+    totalDiff: parsed.totalDiff,
+    totalOk: parsed.totalOk,
     warnings: parsed.warnings,
     sure: rows.filter((r) => !r.needsConfirmation).length,
     open: rows.filter((r) => r.needsConfirmation).length
@@ -1205,10 +1536,11 @@ function searchProducts(query, limit = 12) {
 }
 
 const Data = {
-  STORE_KEY, SCHEMA,
+  STORE_KEY, SHADOW_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
-  addReceipt, removeReceipt, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
-  toggleBrandOff,
+  addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
+  toggleEaten, toggleNoChronic,
+  toggleBrandOff, setUseBy, noteBackup, recoveryNotice,
   addManual, removeManual,
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,

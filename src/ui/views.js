@@ -17,6 +17,26 @@ const pct = (n) => Math.round((Number(n) || 0) * 100) + " %";
     Zeichenketten — die Schreibweise entscheidet die Oberfläche. */
 const de = (n) => String(n).replace(".", ",");
 const sign = (n) => (n > 0 ? "+" : "") + de(n);
+/**
+ * Tage mit richtiger Einzahl.
+ *
+ * An vier Stellen stand `n === 1 ? "Tag" : "Tage"` ausgeschrieben, an
+ * mindestens sechs anderen nur „Tage“ — und die trafen alle
+ * regelmäßig die Eins: ein gelernter Rhythmus von einem Tag (Brot,
+ * Milch), ein Vorrat, der noch einen Tag reicht, Hackfleisch, das
+ * angebrochen einen Tag hält. „noch 1 Tage“ stand also nicht in
+ * einem Randfall, sondern jeden Tag irgendwo auf dem Bildschirm.
+ *
+ * Eine Beugung, eine Stelle. Ausgeschriebene Bedingungen an zehn
+ * Orten sind kein Zufall, der schiefgeht, sondern einer, der
+ * schiefgehen MUSS: die zehnte schreibt sie irgendwann keiner mehr.
+ */
+const zahlwort = (n, eins, viele) => `${de(n)} ${Number(n) === 1 ? eins : viele}`;
+const tage = (n) => zahlwort(n, "Tag", "Tage");
+/** Dieselbe Zahl im Dativ: „seit einem Tag“, „fällig in 3 Tagen“. */
+const tagen = (n) => zahlwort(n, "Tag", "Tagen");
+/** Ein Rhythmus von einem Tag heißt nicht „alle 1 Tage“. */
+const alleTage = (n) => (Number(n) === 1 ? "täglich" : `alle ${de(n)} Tage`);
 const el = (tag, cls, html) => {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -31,22 +51,42 @@ const deDate = (d) => {
   return `${dd}.${m}.${y}`;
 };
 
-/* Die vier Antworten sind bewusst so gewählt, dass zwei davon den
-   Rhythmus korrigieren und zwei ihn ausdrücklich in Ruhe lassen:
+/* DREI ANTWORTEN, ZWEI FRAGEN.
+   ----------------------------------------------------------------
+   Es waren vier unter einer Frage, und zwei davon passten dort nicht:
 
-     „Hab noch“        Vorschlag kam zu früh  -> Rhythmus verlängern
-     „War schon alle“  Vorschlag kam zu spät  -> Rhythmus verkürzen
-     „Verbraucht“      sagt nichts über den Takt
-     „Diese Woche nicht“ bewusste Pause
+   „VERBRAUCHT" ist ersatzlos weg. Sie bewirkte im ganzen Programm
+   exakt dasselbe wie „Diese Woche nicht" — `on: false`, kein Signal
+   an den Rhythmus, dieselbe Protokollzeile. Zwei Knöpfe, ein Effekt,
+   und keine Möglichkeit zu wissen, welchen man nehmen soll. Dazu
+   stand sie inhaltlich verkehrt herum: aufgebraucht ist ein Grund,
+   etwas zu KAUFEN, nicht es wegzulassen. (In wasteInference2 steht
+   eine `reconcileWithUserInput`, die „verbraucht" als „ich habe es
+   gegessen, nicht weggeworfen" auswerten würde — sie wird nirgends
+   aufgerufen. Das wäre ein echter Zweck, aber im Bestand, nicht auf
+   der Einkaufsliste.)
 
-   Ohne die zweite Antwort könnte der Nutzer nur in eine Richtung
-   korrigieren, und die App bliebe systematisch zu spät dran. */
+   „WAR SCHON ALLE" bleibt, steht aber nicht mehr unter „Brauchst du
+   das diese Woche?". Sie ist die einzige Antwort dort, die die
+   Position DRAUF lässt — man tippt sie an, das Blatt schließt sich,
+   und scheinbar passiert nichts. Sie beantwortet auch eine andere
+   Frage: nicht „brauchst du das?", sondern „war ich rechtzeitig?".
+
+   Ihr Platz ist jetzt der Moment, in dem sie wahr wird — beim
+   Hinzufügen eines Produkts, das noch gar nicht fällig war. Siehe
+   `askLate`. Denn sie ist zugleich die WICHTIGSTE: „Hab noch"
+   verlängert den gelernten Abstand, und nur diese hier verkürzt ihn.
+   Ohne sie könnte der Nutzer nur in eine Richtung korrigieren, und
+   die App bliebe systematisch zu spät dran.                        */
 const REASONS = [
   { key: "have", label: "Hab noch" },
   { key: "empty", label: "War schon alle" },
-  { key: "consumed", label: "Verbraucht" },
   { key: "skip", label: "Diese Woche nicht" }
 ];
+
+/* Was im Blatt einer Position zur Wahl steht: die Wochenfrage, und
+   die beantworten genau diese beiden. */
+const WEEK_REASONS = ["have", "skip"];
 
 /* ---------- Gezeichnete Marken ----------
    Fünf Strichzeichnungen für die Meilensteine. Vorher standen dort
@@ -67,6 +107,167 @@ const MARKS = {
 
 const markSvg = (key) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[key] || MARKS.receipt}</svg>`;
+
+/* ================================================================
+   Was bedeutet dieses Zeichen?
+   ================================================================
+   Die Liste ist voller kleiner Marken: „von dir“, „+8 %“, „doppelt?“,
+   „VD“, „3 T“. Sie sind kurz, weil eine Zeile schmal ist — und genau
+   deshalb erklärt sich keine von selbst. Wer „+8 %“ liest, weiß
+   nicht, ob das Mehrwertsteuer, Rabatt oder Preisänderung ist, und
+   niemand tippt eine Zeile an, um das herauszufinden.
+
+   Also: jede Marke ist antippbar und erklärt sich. Auf dem Rechner
+   reicht das Verweilen mit dem Zeiger (`title`), auf dem Telefon —
+   wo es kein Verweilen gibt — öffnet ein Tippen dasselbe Blatt, das
+   auch hinter den (i) steckt.
+
+   Die Texte sind GENERISCH. Sie erklären die Art der Marke, nicht den
+   Einzelfall: „so entsteht diese Zahl“, nicht „deine Äpfel sind 8 %
+   teurer“. Der Einzelfall steht im Detail-Blatt, das eine Zeile
+   weiter aufgeht — hier geht es um die Frage „was ist das für ein
+   Zeichen?“, und die stellt man einmal, nicht bei jedem Produkt neu.
+   ================================================================ */
+/* Der Beispielmarkt im Feld „Markt". Zweimal steht dasselbe Feld in
+   der App — beim Bon und beim Erfassen von Hand — und es stand
+   einmal „Lidl" und einmal „REWE" darin. Ein Platzhalter ist ein
+   Beispiel, kein Vorschlag; zwei verschiedene Beispiele für dasselbe
+   Feld lesen sich wie zwei verschiedene Felder. */
+const MARKT_BEISPIEL = "REWE";
+
+/**
+ * Erklärungen zu den antippbaren Marken.
+ *
+ * WANN EINE MARKE HIERHER GEHÖRT — und wann nicht:
+ *
+ * Nicht „Zeile oder Blatt". Die Frage ist, ob der Zusammenhang die
+ * Marke schon erklärt. „3 T" in der Reichweiten-Übersicht steht
+ * unter einer Quellenzeile, die genau sagt, wie die Zahl entsteht;
+ * „aufbrauchen" im Urlaubsplan steht unter der Zusammenfassung, die
+ * es sagt. Beide brauchen nichts. „Verbrauchsdatum" am Rand einer
+ * Listenzeile steht nackt da — es ist ein Wort, das niemand
+ * angefordert hat und neben dem nichts steht.
+ *
+ * Was NICHT hierher gehört, ist ein Text, den es woanders schon
+ * gibt. Sechs Einträge standen hier ohne jede Marke, die sie
+ * geöffnet hätte: „überfällig", „Verderb-Risiko", „teuer",
+ * „günstig", „Deine Antwort", „Vorratskauf". Die ersten vier
+ * erklärten Zahlen, die längst ins Detail-Blatt gewandert sind und
+ * ihren Rechenweg unter *Zahlen* und *Mehr → Rechenweg* führen; die
+ * fünfte beschrieb Antworten, die es nicht mehr gibt; die sechste
+ * war eine zweite, allgemeinere Fassung dessen, was der Hinweis
+ * „Zu viel auf einmal" ohnehin konkret sagt.
+ *
+ * Eine Erklärung darf an genau einer Stelle stehen. Zwei Fassungen
+ * desselben Sachverhalts driften auseinander, und die falsche
+ * bleibt stehen — die fünfte hier sprach noch von „war schon leer",
+ * einer Antwort, die seit Wochen gelöscht ist.
+ */
+const PILL_INFO = {
+  own: ["Von dir ergänzt",
+    "Diese Zeile hast du selbst auf die Liste gesetzt, die App hat sie nicht vorgeschlagen.\n\n" +
+    "Selbst ergänzte Zeilen verändern keinen Rhythmus: aus einem einmaligen Wunsch lernt die App " +
+    "keinen Kaufabstand. Sie gelten für eine Woche und verschwinden mit dem nächsten gebuchten Einkauf."],
+
+  vd: ["Verbrauchsdatum",
+    "Dieses Produkt trägt ein Verbrauchsdatum, kein Mindesthaltbarkeitsdatum. Das ist ein " +
+    "rechtlicher Unterschied, kein sprachlicher.\n\nNach Ablauf darf es nicht mehr verzehrt werden — " +
+    "hier verlängert die App niemals etwas und schlägt auch keine Resteverwertung vor."],
+
+  doppelt: ["Vielleicht doppelt",
+    "Etwas sehr Ähnliches steht schon auf der Liste oder wurde gerade erst gekauft.\n\nDie App " +
+    "streicht deshalb nichts — sie fragt nur. Manchmal braucht man wirklich zwei."],
+
+  rest: ["Resthaltbarkeit",
+    "Geschätzte Tage, die dieses Produkt bei richtiger Lagerung noch hat — gerechnet ab dem Kaufdatum " +
+    "mit dem Katalogwert.\n\nEine Schätzung, kein Datum von der Packung. Was du aufgedruckt hast, " +
+    "gilt immer mehr als diese Zahl."],
+
+  haltbar: ["Lange haltbar",
+    "Bei diesem Produkt ist die Haltbarkeit kein Thema — Reis, Nudeln, Konserven.\n\nDie App zeigt " +
+    "deshalb keine Tage: eine Zahl wie „400 T“ wäre richtig und trotzdem nutzlos."],
+
+  kuehlen: ["Kühlkette",
+    "Dieses Produkt sollte auf dem Heimweg gekühlt bleiben.\n\nDer Hinweis kommt beim Verlassen des " +
+    "Ladens und nur bei Produkten mit Verbrauchsdatum. Bei jedem Einkauf gezeigt, würde er " +
+    "weggetippt — und dann fehlte er, wenn er zählt."],
+
+  angebrochen: ["Angebrochen",
+    "Als geöffnet vermerkt. Eine offene Packung hält nicht mehr so lange wie eine geschlossene — die " +
+    "App rechnet ab dem Öffnen mit der kürzeren Frist.\n\nOhne diesen Zustand schätzt sie den " +
+    "Vorrat zu großzügig."],
+
+  marke: ["Herstellermarke",
+    "Auf der Bonzeile stand ein Markenname.\n\nDie Marke wird nur für den Preisvergleich " +
+    "festgehalten. Für die Produktzuordnung wird sie weggeworfen — sonst wären „Marken-Butter“ und " +
+    "„Butter“ für die App zwei verschiedene Dinge."],
+
+  zerowaste: ["Zero Waste",
+    "Alles, was dafür sorgt, dass nichts weggeworfen werden muss: Kühlkette, was zuerst " +
+    "aufgebraucht werden sollte, was sich einzufrieren lohnt, ein Vorratskauf, der nicht aufgeht, " +
+    "vergessene Produkte, Saison und Lagerung.\n\nDer gemeinsame Nenner ist der Zeitpunkt: jeder " +
+    "dieser Hinweise kommt, solange sich noch etwas machen lässt. Hinterher wäre es eine Bilanz " +
+    "und keine Hilfe."],
+
+  hinweise: ["Hinweise",
+    "Alles, was die App zu sagen hat außer der Liste selbst: Kühlkette, vergessene Produkte, was sich " +
+    "einzufrieren lohnt, Saison und Lagerhinweise.\n\nDiese Hinweise standen früher einzeln auf der " +
+    "Startseite. Sie sind nicht weniger geworden — sie stehen nur nicht mehr im Weg."],
+
+  gesichert: ["Sicherung",
+    "Zeigt, ob die Daten außerhalb dieses Browsers liegen.\n\nEine Sicherungsdatei ist das Einzige, " +
+    "was „Browserdaten löschen“, ein neues Gerät oder einen kaputten Speicher überlebt. Die App hat " +
+    "keinen Server, der einspringen könnte — das ist Absicht und deshalb deine Datei."],
+
+  gefaehrdet: ["Nicht gesichert",
+    "Alles Gelernte liegt nur in diesem Browser: Rhythmen, Rückmeldungen, Meilensteine.\n\nEs gibt " +
+    "kein Konto, mit dem sich das wiederherstellen ließe. Eine Datei herunterzuladen dauert einen " +
+    "Wimpernschlag und ist der Unterschied zwischen einem Ärgernis und drei verlorenen Jahren."],
+
+  tauschen: ["Zum Tauschen fällig",
+    "Manche Haushaltsprodukte werden nach Zeit gewechselt, nicht nach Verbrauch — Zahnbürste, " +
+    "Spülschwamm, Rasierklinge.\n\nDie Frist kommt aus dem Intervall des Produkts und läuft ab dem " +
+    "letzten Wechsel. „Getauscht“ setzt den Zähler zurück, auch wenn nichts gekauft wurde."],
+
+  eigenmarke: ["Eigenmarke",
+    "Die Handelsmarke des Händlers — ja!, Gut&Günstig, K-Classic, Milbona und so weiter.\n\n" +
+    "Die App empfiehlt nichts davon. Sie zeigt nur, was der Unterschied bei dir ausmachen würde."]
+};
+
+/**
+ * Eine antippbare Marke. `key` wählt die Erklärung, `cls` die Farbe —
+ * getrennt, weil dieselbe Farbe verschiedene Dinge bedeutet: die
+ * gelbe Marke steht mal für „überfällig“, mal für „teurer als
+ * üblich“. Aus der Farbe die Erklärung abzuleiten, hätte genau dort
+ * still den falschen Text gezeigt.
+ */
+function pill(key, cls, label) {
+  const info = PILL_INFO[key];
+  const e = el("span", "pill " + cls, esc(label));
+  if (!info) return e;                       // unbekannter Schlüssel: stumm, aber sichtbar
+  e.setAttribute("role", "button");
+  e.setAttribute("tabindex", "0");
+  e.setAttribute("title", info[0]);          // Zeiger auf dem Rechner
+  e.setAttribute("aria-label", `${label} — ${info[0]}, Erklärung anzeigen`);
+  const open = (ev) => {
+    // Sonst öffnet zusätzlich das Detail-Blatt der Zeile darunter.
+    ev.stopPropagation();
+    ev.preventDefault();
+    App.notice(info[0], info[1]);
+  };
+  e.addEventListener("click", open);
+  e.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") open(ev);
+  });
+  return e;
+}
+
+/** Dasselbe für die breiteren Marken rechts in Listenzeilen. */
+function flag(key, cls, label) {
+  const e = pill(key, cls, label);
+  e.className = "flag " + cls;
+  return e;
+}
 
 /* ---------- Bausteine ---------- */
 
@@ -206,6 +407,96 @@ function supplyValue(sup) {
 /* ================================================================
    Detail-Blatt: alles, was sonst als Fließtext auf der Liste stünde
    ================================================================ */
+/**
+ * „Doch aufgegessen“ — die Schätzung widersprechbar machen.
+ * ================================================================
+ * Der Verlust dieser App ist die einzige große Zahl, die NIE
+ * beobachtet wurde. Sie wird abgeleitet: Kaufabstand länger als
+ * Haltbarkeit heißt „ein Teil geht verloren“, eine ungewöhnlich
+ * lange Lücke heißt „das davor ist weggekommen“. Beides sind gute
+ * Gründe für einen Verdacht und schlechte Gründe für eine
+ * Behauptung.
+ *
+ * Bisher konnte der Nutzer dem nicht widersprechen. Die App sagte
+ * „10,04 € über 30 Käufe“, und wer wusste, dass er den Salat damals
+ * aufgegessen hatte, konnte nichts tun als die Zahl zu ignorieren —
+ * und mit ihr alles, was daran hängt.
+ *
+ * Hier stehen deshalb die einzelnen Verdachtsfälle mit Datum und
+ * Betrag, jeder einzeln zurücknehmbar und jeder einzeln wieder
+ * einschaltbar. Eine Korrektur, die man nicht rückgängig machen
+ * kann, wäre schlimmer als die Schätzung, die sie korrigiert.
+ *
+ * WAS DABEI NICHT PASSIERT: nichts wird gutgeschrieben. Kein
+ * Eurobetrag, keine Rettung, kein Meilenstein. Eine Schätzung
+ * zurückzunehmen ist kein Erfolg — es war nur nie ein Verlust.
+ * ================================================================
+ */
+function wasteSheetGroup(productId, st, ctx) {
+  const g = uiGroup("Was die App für verdorben hält",
+    "Keine dieser Zeilen ist beobachtet — alle sind aus Kaufabstand und Haltbarkeit abgeleitet.\n\n" +
+    "Es sind zwei verschiedene Behauptungen, und du kannst beiden getrennt widersprechen. Der " +
+    "LAUFENDE ANTEIL sagt etwas über das Produkt: dein Kaufabstand ist länger als die Haltbarkeit, " +
+    "also geht bei jedem Zyklus ein Teil verloren. Ein AUSREISSER sagt etwas über einen bestimmten " +
+    "Tag: nach diesem Kauf verging so viel Zeit, dass die Packung kaum aufgebraucht worden sein kann.\n\n" +
+    "Es wird nichts gutgeschrieben: eine Schätzung zurückzunehmen ist kein Erfolg, es war nur nie ein " +
+    "Verlust. Rückgängig geht beides jederzeit.");
+
+  /* Der laufende Anteil: EIN Schalter, nicht einer je Kauf. */
+  if (st.chronicShare > 0) {
+    const r = el("div", "row");
+    r.append(el("div", "rowMain",
+      `<div class="rowTitle">Laufender Anteil</div>` +
+      `<div class="rowSub">${esc(st.chronicOff
+        ? "abgestellt — zählt nicht mehr mit"
+        : `etwa ${pct(st.chronicShare)} bei jedem Kauf`)}</div>`));
+    const b = el("button", "pillBtn" + (st.chronicOff ? " on" : ""),
+      st.chronicOff ? "✓ abgestellt" : "Bei mir nicht");
+    b.setAttribute("aria-pressed", st.chronicOff ? "true" : "false");
+    b.addEventListener("click", () => {
+      const aus = Data.toggleNoChronic(productId);
+      App.toast(aus ? "Zählt nicht mehr als Verlust" : "Wieder als Schätzung geführt", { icon: "·" });
+      App.closeSheet();
+    });
+    r.append(b);
+    g.body.append(r);
+  }
+
+  /* Die einzelnen Ausreißer: je einer eine eigene Zeile, weil jeder
+     ein eigenes Ereignis behauptet. */
+  st.details.slice(0, 12).forEach((d) => {
+    const r = el("div", "row");
+    r.append(el("div", "rowMain",
+      `<div class="rowTitle">${esc(deDate(d.date))}</div>` +
+      `<div class="rowSub">${esc(d.eaten
+        ? "von dir als aufgebraucht bestätigt"
+        : `ganze Packung — ${eur(d.euros)}`)}</div>`));
+    const b = el("button", "pillBtn" + (d.eaten ? " on" : ""), d.eaten ? "✓ gegessen" : "Doch gegessen");
+    b.setAttribute("aria-pressed", d.eaten ? "true" : "false");
+    b.setAttribute("aria-label",
+      `Kauf vom ${deDate(d.date)}: ${d.eaten ? "Bestätigung zurücknehmen" : "als aufgebraucht bestätigen"}`);
+    b.addEventListener("click", () => {
+      const jetzt = Data.toggleEaten(productId, d.date);
+      // Kein `rescue`: hier wird nichts gerettet, nur eine Schätzung
+      // zurückgenommen. Der Hinweis sagt genau das.
+      App.toast(jetzt ? "Zählt nicht mehr als Verlust" : "Wieder als Verdacht geführt", { icon: "·" });
+      App.closeSheet();
+    });
+    r.append(b);
+    g.body.append(r);
+  });
+
+  if (st.details.length > 12) {
+    g.body.append(el("p", "srcnote", `${st.details.length - 12} ältere Fälle nicht gezeigt.`));
+  }
+  if (st.corrected) {
+    g.body.append(el("p", "srcnote",
+      `${st.corrected} ${st.corrected === 1 ? "Kauf zählt" : "Käufe zählen"} nicht mehr mit — ` +
+      "deine Angabe, nicht die Schätzung."));
+  }
+  return g;
+}
+
 function productSheet(productId, ctx) {
   const p = byId(productId);
   if (!p) return;
@@ -219,6 +510,15 @@ function productSheet(productId, ctx) {
   const isOpen = Data.get().opened.some((o) => o.productId === productId);
 
   const body = el("div");
+
+  /* Die Wochenentscheidung steht ganz oben, vor allen Fakten.
+     Sie ist der Grund, aus dem dieses Blatt in der Liste geöffnet
+     wird — Rhythmus, Preisverlauf und Datenqualität sind Nachschlag.
+     Nur wenn das Produkt diese Woche überhaupt ansteht: im Bestand
+     oder im Wochenstreifen wäre die Frage gegenstandslos. */
+  const aufDerListe = (ctx.items || []).find((i) => i.productId === productId && i.basis !== "manuell");
+  if (aufDerListe) body.append(weekChoice(aufDerListe, ctx, App, () => App.closeSheet()));
+
   const facts = el("dl", "facts");
   const fact = (k, v) => {
     if (v === null || v === undefined || v === "") return;
@@ -233,12 +533,12 @@ function productSheet(productId, ctx) {
 
   fact("Kategorie", p.category);
   if (!nf) {
-    fact("Rhythmus", r && r.rhythmDays ? `alle ${r.rhythmDays} Tage · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
+    fact("Rhythmus", r && r.rhythmDays ? `${alleTage(r.rhythmDays)} · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
     // Was der rohe Median sagte, bevor Bruch, Saison und Rückmeldungen
     // darauf gewirkt haben. Ohne diese Zeile wäre die Zahl oben eine
     // Behauptung ohne Herkunft.
     if (r && r.baseRhythmDays && r.baseRhythmDays !== r.rhythmDays) {
-      fact("davor gelernt", `alle ${r.baseRhythmDays} Tage`);
+      fact("davor gelernt", alleTage(r.baseRhythmDays));
     }
     if (r && r.feedback && r.feedback.signals) {
       fact("Rückmeldungen", `${r.feedback.signals} · ${r.feedback.applied ? "wirken auf den Rhythmus" : "noch ohne Wirkung"}`);
@@ -250,7 +550,7 @@ function productSheet(productId, ctx) {
   fact("Zuletzt", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
   if (!nf) {
     fact("Haltbarkeit", p.isFood
-      ? `${p.shelfLifeDays} Tage${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
+      ? `${tage(p.shelfLifeDays)}${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
       : null);
   }
   fact("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
@@ -259,17 +559,26 @@ function productSheet(productId, ctx) {
     : `üblich ${eur(p.typicalPrice)}`);
   if (!nf) {
     fact("Bestand", inv
-      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${inv.daysLeft} Tage · Sicherheit ${pct(inv.confidence)}`
+      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${tage(inv.daysLeft)} · Sicherheit ${pct(inv.confidence)}`
       : "nicht schätzbar");
-    fact("Reichweite", range ? `${de(range.days)} Tage · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
+    fact("Reichweite", range ? `${tage(range.days)} · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
     fact("Verlust", st && st.wastedEuros > 0
-      ? `${eur(st.wastedEuros)} über ${st.purchased} Käufe (${pct(st.wasteRate)})`
+      ? `${eur(st.wastedEuros)} über ${zahlwort(st.purchased, "Kauf", "Käufe")} (${pct(st.wasteRate)})`
       : "keiner erkannt");
     fact("Datenqualität", {
-      regulatorisch: "regulatorisch (BZfE)",
-      leitlinie: "Leitlinie (BZfE)",
+      regulatorisch: "rechtlich definiert",
+      leitlinie: "behördliche Lagerempfehlung",
       schaetzwert: "Schätzwert ohne amtliche Quelle"
     }[p.quality]);
+    // Bei sicherheitskritischen Produkten reicht die Stufe nicht: dort
+    // steht die Rechtsgrundlage daneben, und der wichtigste Satz ist,
+    // dass das aufgedruckte Datum jede Schätzung schlägt.
+    if (p.safetyCritical) {
+      const f = safetyFacts(productId);
+      if (f) {
+        fact("Verbrauchsdatum", `höchstens ${tage(f.maxDays)} · max. ${de(f.maxTempC)} °C`);
+      }
+    }
   }
   if (nf) {
     const sup = ctx.supplies.find((x) => x.productId === productId);
@@ -283,12 +592,12 @@ function productSheet(productId, ctx) {
     fact("Packung", `${de(nf.package.value)} ${nf.package.unit}`);
     if (rate) fact("Verbrauch", `${de(rate.rate)} ${nf.package.unit}/Tag · ${rate.label}`);
     if (sup && sup.daysOfSupply !== null && sup.confidence !== "UNSICHER") {
-      fact("Reicht noch", `${de(sup.daysOfSupply)} Tage`);
+      fact("Reicht noch", tage(sup.daysOfSupply));
     }
     if (swap) {
-      fact("Austausch", `alle ${swap.intervalDays} Tage · ${swap.source}` +
+      fact("Austausch", `${alleTage(swap.intervalDays)} · ${swap.source}` +
         (swap.hardnessAdjusted ? " · an die Wasserhärte angepasst" : ""));
-      fact("Im Einsatz", `${swap.inUse} Tage`);
+      fact("Im Einsatz", tage(swap.inUse));
     }
     const bp = ctx.basePrices && ctx.basePrices.get(productId);
     if (bp) fact("Grundpreis", bp.message);
@@ -301,6 +610,37 @@ function productSheet(productId, ctx) {
     }[nf.requiresDevice]);
   }
   body.append(facts);
+
+  /* Was bei einem guten Preis sinnvoll wäre.
+     Herkunft heute: die eigene Preishistorie. Dieselbe Rechnung
+     nimmt später einen Schwarm-Index entgegen — offerAdvisor.js
+     interessiert nicht, woher das „üblich" kommt, nur dass die
+     Herkunft mitgeführt und angezeigt wird. */
+  if (pm && pm.lowest && pm.usual && r && r.perUnitDays) {
+    const rat = offerAdvice(productId, {
+      preis: pm.lowest, üblich: pm.usual, perUnitDays: r.perUnitDays, herkunft: "eigen"
+    });
+    if (rat) {
+      const g = uiGroup("Wenn es wieder so günstig ist",
+        "Die Höchstmenge ist keine Meinung, sondern eine Rechnung: Haltbarkeit geteilt durch deinen " +
+        "Verbrauch je Einheit. Ein Angebotsprospekt kann sagen, dass etwas billig ist — dass DU davon " +
+        "genau so viel verbrauchst, bevor es schlecht wird, kann nur diese App sagen.\n\n" +
+        "Nichts davon wird gutgeschrieben: das ist eine Vorschau auf einen Kauf, der noch nicht " +
+        "stattgefunden hat. Gezählt wird erst, was tatsächlich auf einem Bon steht.");
+      g.body.append(uiRow(
+        rat.kind === "vorrat" ? `${rat.einheiten}× wären sinnvoll` : "Für Vorrat zu kurz haltbar",
+        rat.message, null,
+        rat.kind === "vorrat" ? { value: "ca. " + eur(rat.ersparnis) } : {}));
+      g.body.append(el("p", "srcnote",
+        `Bester Preis bisher: ${eur(pm.lowest)}, üblich ${eur(pm.usual)}. ` + sourceNote(rat)));
+      body.append(g);
+    }
+  }
+
+  /* Die Schätzung widersprechbar machen. */
+  if (st && (st.chronicShare > 0 || (st.details && st.details.length))) {
+    body.append(wasteSheetGroup(productId, st, ctx));
+  }
 
   if (nf && nf.paoMonths) {
     body.append(el("div", "note gold",
@@ -319,8 +659,54 @@ function productSheet(productId, ctx) {
     if (chg && chg.found) body.append(el("div", "note blue", esc(chg.message)));
   }
   if (p.safetyCritical) {
-    body.append(el("div", "note red",
-      "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. Die App verlängert diese Frist nie."));
+    const f = safetyFacts(productId);
+    const note = el("div", "note red");
+    note.innerHTML = "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. " +
+      "Die App verlängert diese Frist nie.";
+    body.append(note);
+    if (f) {
+      // Rechtsgrundlage und Empfehlung getrennt, nie vermischt: das
+      // eine ist Gesetz, das andere ein Erfahrungswert. Wer beides in
+      // einen Satz packt, verleiht dem Erfahrungswert eine Autorität,
+      // die er nicht hat.
+      const q = el("button", "linkBtn", "Worauf beruht das?");
+      q.addEventListener("click", () => App.notice(p.name,
+        `Gruppe: ${f.label}.\n\n` +
+        `RECHTLICH GEREGELT ist zweierlei:\n${f.legal.join("\n\n")}\n\n` +
+        `NICHT geregelt ist die Anzahl der Tage. Dafür gibt es keine amtliche Zahl. ` +
+        `Die App rechnet mit höchstens ${tagen(f.maxDays)} — das ist die untere Grenze ` +
+        `dieser Lagerempfehlung:\n\n${f.guide}\n\n${f.printedWins}`));
+      body.append(q);
+    }
+  }
+
+  /* Das aufgedruckte Datum eintragen.
+     Für sicherheitskritische Produkte ist das die einzige belastbare
+     Angabe, die es gibt — und sie steht auf der Packung, die gerade
+     in der Hand liegt. Ab dem Eintrag rechnet die App damit statt mit
+     ihrer Lagerempfehlung, und die Bestandsanzeige sagt, dass die
+     Zahl nicht mehr geschätzt ist. */
+  if (p.isFood && ctx.history.some((h) => h.productId === productId)) {
+    const gesetzt = (Data.get().useBy || {})[productId] || "";
+    const wrap = el("label", "field");
+    wrap.append(el("span", "lbl", p.safetyCritical
+      ? "Aufgedrucktes Verbrauchsdatum"
+      : "Aufgedrucktes Mindesthaltbarkeitsdatum"));
+    const inp = el("input");
+    inp.type = "date";
+    inp.value = gesetzt;
+    inp.setAttribute("aria-label", `Aufgedrucktes Datum für ${p.name}`);
+    inp.addEventListener("change", () => {
+      const ok = Data.setUseBy(productId, inp.value || null);
+      if (!ok) { App.toast("Das Datum liegt vor dem Kauf"); inp.value = gesetzt; return; }
+      App.closeSheet();
+      App.toast(inp.value ? "Es gilt jetzt dein Datum" : "Wieder geschätzt");
+    });
+    wrap.append(inp);
+    body.append(wrap);
+    body.append(el("p", "srcnote", gesetzt
+      ? "Die Bestandsanzeige rechnet mit diesem Datum, nicht mehr mit der Schätzung."
+      : "Ohne Eintrag rechnet die App mit einer Lagerempfehlung. Das Etikett ist genauer — es gilt für genau diese Packung."));
   }
   if (season && season.status === "importware") body.append(el("div", "note gold", esc(season.message)));
   if (p.note) body.append(el("div", "note", esc(p.note)));
@@ -331,7 +717,7 @@ function productSheet(productId, ctx) {
     b.addEventListener("click", () => {
       Data.toggleOpened(productId);
       App.closeSheet();
-      App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${p.shelfLifeOpenedDays} Tage`);
+      App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${tage(p.shelfLifeOpenedDays)}`);
     });
     body.append(b);
   }
@@ -340,56 +726,357 @@ function productSheet(productId, ctx) {
 }
 
 /* ================================================================
-   1. Liste
+   1. Start — die Übersicht
+   ================================================================
+   Die Einkaufsliste war die Startseite, und das war falsch. Eine
+   Liste ist ein Werkzeug für einen bestimmten Moment — kurz vor dem
+   Einkauf. Wer die App an einem Dienstagabend öffnet, hält keine
+   Liste in der Hand, sondern hat eine Frage:
+
+       WAS KOMMT AUF MICH ZU?
+
+   Diese Seite beantwortet sie in dieser Reihenfolge:
+
+     1. Die Woche      — sieben Tage, jede Sache ein Feld.
+                         Steigt die Säule, steht mehr an.
+     2. Die Liste      — ein Feld, ein Preis, ein Knopf.
+     3. Jetzt zu tun   — nur, was heute eine Handlung braucht.
+     4. Dein Lauf      — die Wochenreihe, sonst nichts.
+
+   WAS SIE AUSDRÜCKLICH NICHT IST: vier gleich große Kacheln mit
+   Zahlen darin. Kacheln sehen nach Übersicht aus und sind keine —
+   sie zeigen alles gleich groß und beantworten damit nichts. Hier
+   ist genau eine Sache groß, und das ist die Woche.
+
+   Alles hier ist ANSICHT auf Vorhandenes. Keine Zahl entsteht auf
+   dieser Seite, keine wird hier ein zweites Mal gezählt.
+   ================================================================ */
+function viewStart(ctx, app) {
+  const c = frag();
+
+  /* --- Kaltstart: erst einmal Daten --- */
+  if (!ctx.history.length) {
+    const w = card();
+    w.append(el("p", "welcome",
+      "Einkaufs-Anker lernt aus deinen Kassenbons, was wann bei dir ausgeht — " +
+      "und sagt es dir, bevor es fehlt."));
+    const b = el("button", "cta", "Ersten Bon erfassen");
+    b.addEventListener("click", () => app.goto("erfassen"));
+    w.append(b);
+    const demo = el("button", "cta light", "Erst mal ansehen");
+    demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Beispieldaten geladen"); });
+    w.append(demo);
+    c.append(w);
+    return c;
+  }
+
+  c.append(pulseCard(ctx, app));
+  c.append(listCard(ctx, app));
+
+  const todo = todoCard(ctx, app);
+  if (todo) c.append(todo);
+
+  if (ctx.stage.stage >= 2) c.append(runCard(ctx, app));
+  return c;
+}
+
+/* Farbe je Ereignisart. Dieselben drei Farben wie überall sonst:
+   Korall heißt dringend, Bernstein heißt geschätzt oder fällig,
+   Grün heißt Einkauf. Eine eigene Palette für die Startseite hätte
+   die Bedeutungen auseinandergerissen. */
+const PULSE_KIND = {
+  verderb: ["k-red", "verdirbt"],
+  tausch: ["k-amber", "tauschen"],
+  einkauf: ["k-green", "einkaufen"]
+};
+
+/**
+ * Die Woche als sieben Säulen.
+ *
+ * Jedes Feld ist EIN Ereignis — keine normierte Höhe, kein
+ * Maßstab, der sich mit den Daten verschiebt. Damit ist Dienstag
+ * genau dann höher als Mittwoch, wenn dienstags mehr ansteht, und
+ * zwar auch im Vergleich zur Woche davor. Ein Balken, der sich
+ * selbst normiert, sieht immer gleich aus, egal wie viel los ist.
+ *
+ * Über fünf Feldern wird abgeschnitten und die Zahl dazugeschrieben:
+ * eine Säule, die alles zeigt, wäre bei zwölf Positionen einen
+ * halben Bildschirm hoch.
+ */
+function pulseCard(ctx, app) {
+  const p = ctx.pulse;
+  const g = uiGroup("Deine Woche",
+    "Sieben Tage ab heute. Jedes Feld ist eine Sache, die an diesem Tag ansteht: etwas verdirbt, " +
+    "etwas ist zu tauschen, etwas gehört eingekauft.\n\n" +
+    "Woher die Tage kommen: Verderbliches aus der Bestandsschätzung, Einkäufe aus deinem gelernten " +
+    "Kaufabstand, Austausch aus dem Intervall des Produkts. Überfälliges steht auf heute — " +
+    "nicht, weil es heute passiert, sondern weil es liegen geblieben ist.\n\n" +
+    "Was ausgeht, steht nur einmal da: als Einkauf. Eine Sache wird hier nie zweimal gezählt.");
+
+  const box = el("div", "pulse");
+  box.append(el("div", "pulseHead", esc(p.headline)));
+
+  const strip = el("div", "pulseDays");
+  const hoch = Math.min(5, Math.max(1, ...p.days.map((d) => d.count)));
+
+  p.days.forEach((d) => {
+    const b = el("button", "pDay" +
+      (d.isToday ? " today" : "") +
+      (d.isShoppingDay ? " shop" : "") +
+      (d.count ? "" : " quiet"));
+    b.setAttribute("aria-label",
+      `${d.name}, ${d.count === 0 ? "nichts" : d.count === 1 ? "eine Sache" : d.count + " Sachen"}` +
+      (d.isShoppingDay ? ", dein Einkaufstag" : ""));
+
+    // Die Zahl steht ÜBER der Säule, nicht darunter: darunter steht
+    // der Wochentag, und zwei Angaben an derselben Kante lesen sich
+    // als eine. Sie steht immer da, wo etwas ansteht — sonst müsste
+    // man Felder zählen, und ab dem sechsten ginge das nicht mehr.
+    b.append(el("div", "pNum", d.count ? String(d.count) : ""));
+
+    const col = el("div", "pCol");
+    col.style.setProperty("--rows", String(hoch));
+    if (!d.count) col.append(el("i", "pFlat"));
+    d.events.slice(0, 5).forEach((e) => col.append(el("i", "pSeg " + PULSE_KIND[e.kind][0])));
+    b.append(col);
+
+    b.append(el("div", "pName", esc(d.isToday ? "heute" : d.short)));
+    b.append(el("div", "pShop", d.isShoppingDay ? "<i></i>" : ""));
+    b.addEventListener("click", () => daySheet(d, ctx, app));
+    strip.append(b);
+  });
+  box.append(strip);
+
+  // Die Legende steht nur da, wenn die Farben auch vorkommen.
+  const arten = new Set();
+  p.days.forEach((d) => d.events.forEach((e) => arten.add(e.kind)));
+  if (arten.size) {
+    const leg = el("div", "pLegend");
+    ["verderb", "tausch", "einkauf"].filter((k) => arten.has(k)).forEach((k) => {
+      leg.append(el("span", null, `<i class="${PULSE_KIND[k][0]}"></i>${PULSE_KIND[k][1]}`));
+    });
+    if (p.shoppingSlot !== null) leg.append(el("span", "legShop", "<i></i>Einkaufstag"));
+    box.append(leg);
+  }
+
+  g.body.append(box);
+  return g;
+}
+
+/** Was an einem Tag ansteht — mit Weg zu jedem einzelnen Produkt. */
+function daySheet(day, ctx, app) {
+  const body = frag();
+  if (!day.count) {
+    body.append(el("p", "empty", "An diesem Tag steht nichts an."));
+  } else {
+    ["verderb", "tausch", "einkauf"].forEach((kind) => {
+      const rows = day.events.filter((e) => e.kind === kind);
+      if (!rows.length) return;
+      const g = uiGroup(PULSE_KIND[kind][1].replace(/^./, (m) => m.toUpperCase()));
+      rows.forEach((e) => g.body.append(uiRow(e.name,
+        // Die Bemerkung nur, wenn sie etwas hinzufügt. Unter der
+        // Überschrift „Einkaufen“ noch einmal „einkaufen“ zu
+        // schreiben, füllt eine Zeile und sagt nichts; bei
+        // Verderblichem steht dort dagegen, woher das Datum kommt.
+        kind === "verderb" ? e.note : null, null,
+        e.productId && byId(e.productId)
+          ? { onClick: () => productSheet(e.productId, ctx) }
+          : {})));
+      body.append(g);
+    });
+  }
+  const sub = deDate(day.date) + (day.isShoppingDay ? " · dein Einkaufstag" : "");
+  app.sheet(day.isToday ? "Heute" : day.name, sub, body);
+}
+
+/**
+ * Die Liste als ein einziges Feld.
+ *
+ * Nicht die Liste selbst — die hat ihre eigene Seite. Hier steht,
+ * was darauf steht und was es kostet, und ein Knopf führt hin. Die
+ * ersten Namen stehen mit dabei: ohne sie ist „13 Positionen" eine
+ * Zahl, mit ihnen ist es die eigene Liste.
+ */
+function listCard(ctx, app) {
+  const on = ctx.items.filter((i) => i.on);
+  const sum = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+
+  const g = uiGroup();
+  const b = el("button", "bigAction");
+  const main = el("div", "baMain");
+  main.append(el("div", "baTitle", "Einkaufsliste"));
+  main.append(el("div", "baSub", esc(on.length
+    ? `${on.length} ${on.length === 1 ? "Position" : "Positionen"} · ${eur(sum)}`
+    : ctx.stage.stage <= 1 ? "wird noch gelernt" : "noch nichts drauf")));
+  if (on.length) {
+    const namen = on.slice(0, 3).map((i) => i.name).join(", ");
+    const rest = on.length - 3;
+    main.append(el("div", "baPreview", esc(rest > 0 ? `${namen} und ${rest} weitere` : namen)));
+  }
+  b.append(main);
+  b.append(el("div", "baGo", "→"));
+  b.addEventListener("click", () => app.goto("liste"));
+  g.body.append(b);
+  return g;
+}
+
+/**
+ * Jetzt zu tun.
+ *
+ * Die Regel für diese Gruppe: hier steht nur, was HEUTE eine
+ * Handlung braucht. Kein Hinweis, keine Zahl, kein Fortschritt —
+ * dafür sind die anderen Seiten da. Ist nichts zu tun, fehlt die
+ * Gruppe ganz. Eine Sammelstelle, die auch leer dasteht, macht aus
+ * „nichts zu tun" eine Nachricht statt eines Zustands.
+ */
+function todoCard(ctx, app) {
+  const rows = [];
+
+  if (ctx.safety) {
+    rows.push(["Kühlkette", ctx.safety.short, flag("kuehlen", "f-miss", "!"),
+      () => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)]);
+  }
+
+  if (ctx.backup.urgent) {
+    rows.push(["Daten sichern", ctx.backup.title || "nur in diesem Browser",
+      flag("gefaehrdet", "f-miss", "!"), () => app.goto("mehr")]);
+  }
+
+  const faellig = ctx.swapsDue.filter((x) => x.due);
+  if (faellig.length) {
+    rows.push([faellig.length === 1 ? `${faellig[0].name} tauschen` : `${faellig.length} Sachen tauschen`,
+      faellig.length === 1 ? "nach Zeit fällig" : faellig.slice(0, 3).map((x) => x.name).join(", "),
+      flag("tauschen", "f-gold", String(faellig.length)), () => app.goto("faellig")]);
+  }
+
+  if (ctx.review.due) {
+    rows.push(["Wochenrückblick", ctx.review.short || "fertig", null, () => reviewSheet(ctx, app)]);
+  }
+
+  // Alles Übrige läuft weiter über das Sammelblatt der Liste — es ist
+  // dasselbe Blatt, nicht eine zweite Fassung davon.
+  const hinweise = collectHints(ctx).filter((h) => !h.urgent);
+  if (hinweise.length) {
+    rows.push([`${hinweise.length} ${hinweise.length === 1 ? "Hinweis" : "Hinweise"}`,
+      hinweise.slice(0, 3).map((h) => h.title).join(" · "),
+      flag("hinweise", "", String(hinweise.length)), () => hintsSheet(ctx, app)]);
+  }
+
+  if (!rows.length) return null;
+
+  const g = uiGroup("Jetzt zu tun");
+  rows.slice(0, 5).forEach(([title, sub, control, onClick]) =>
+    g.body.append(uiRow(title, sub, control, { onClick })));
+  return g;
+}
+
+/**
+ * Dein Lauf — eine Zeile, kein Kachelfeld.
+ *
+ * Die Wochenreihe steht hier, weil sie das Einzige ist, was diese
+ * Seite über Vergangenes sagen muss: bleibst du dabei? Alles andere
+ * — Ausgaben, Ersparnis, Verlust, Rhythmen — steht unter „Zahlen",
+ * und dorthin führt diese Zeile.
+ */
+function runCard(ctx, app) {
+  const g = uiGroup("Dein Lauf");
+  const b = el("button", "runRow");
+  b.append(streakStrip(ctx));
+  b.append(el("div", "chev"));
+  b.addEventListener("click", () => app.goto("zahlen"));
+  g.body.append(b);
+  if (ctx.badges.nextUp) {
+    g.body.append(uiRow("Als Nächstes", ctx.badges.nextUp.nextTitle, null, {
+      value: `${Math.round(ctx.badges.nextUp.progress * 100)} %`,
+      onClick: () => app.goto("zahlen")
+    }));
+  }
+  return g;
+}
+
+/* ================================================================
+   2. Liste
+   ================================================================
+   RÜCKMELDUNG AUS DER ZIELGRUPPE, und sie war eindeutig: zu voll.
+
+   Die Seite hatte bis zu zehn Blöcke — Vorratsanzeige, Sicherheit,
+   die Liste, zwei Knöpfe, vergessene Produkte, Einfrieren, Saison,
+   Lagerhinweis und vier Einstellungen. Jeder für sich war begründet.
+   Zusammen beantworteten sie zehn Fragen, obwohl beim Öffnen genau
+   eine im Kopf ist:
+
+       WAS MUSS ICH EINKAUFEN?
+
+   Alles andere ist entweder eine Antwort auf eine Frage, die man
+   später stellt, oder eine Einstellung. Beides gehört nicht auf die
+   erste Seite.
+
+   WAS GEBLIEBEN IST: die Liste, ein Knopf zum Loslaufen, ein Weg
+   etwas zu ergänzen. Mehr nicht.
+
+   WAS UMGEZOGEN IST — nichts wurde gelöscht, alles ist einen Tipp
+   entfernt:
+     · Vorrat, Reichweite            -> Bestand
+     · Budget, Personen, Vorausschau,
+       Urlaub                        -> Mehr
+     · Sicherheit, Vergessenes,
+       Einfrieren, Saison, Lagern    -> eine Zeile „Hinweise“
+
+   WAS RUHIGER GEWORDEN IST: höchstens EIN Zeichen je Zeile statt
+   drei. Die Erklärzeile über der Liste ist ins (i) gewandert. Und
+   die Überschrift sagt, was hier ist, statt es zu erklären.
    ================================================================ */
 function viewListe(ctx, app) {
   const c = frag();
   const S = Data.get();
 
-  if (ctx.stage.stage <= 1) {
-    const e = emptyView(
-      ctx.history.length ? "Zwei Bons je Produkt, dann kommen die Vorschläge." : "Noch keine Daten.",
-      "Einkauf erfassen", () => app.goto("erfassen"));
-    if (!ctx.history.length) {
-      const demo = el("button", "cta light", "Beispieldaten laden");
-      demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Geladen"); });
-      e.append(demo);
-    }
-    c.append(e);
-    return c;
-  }
+  /* KEIN AUSSTIEG MEHR FÜR DIE FRÜHEN WOCHEN.
+     ----------------------------------------------------------------
+     Hier stand ein `return`: bis die App zwei Bons je Produkt gesehen
+     hatte, zeigte diese Seite einen Satz und einen Knopf. Vier bis
+     acht Wochen lang. Gemessen an einem einzigen erfassten Bon war
+     das der gesamte Inhalt:
+
+         „Zwei Bons je Produkt, dann kommen die Vorschläge."
+
+     Und weil das Erfassen am Ende `goto("liste")` aufruft, war das
+     der erste Bildschirm nach der ersten echten Handlung eines neuen
+     Nutzers. Er sagte: kann ich noch nicht.
+
+     Dabei war alles da. Die Suche über 846 Produkte, das freie
+     Eintippen, der Ladenmodus, das Teilen, der Wagen — nur gesperrt,
+     weil noch keine VORHERSAGE möglich war. Als könnte man eine
+     Einkaufsliste nur schreiben, wenn ein Algorithmus mithilft.
+
+     Jetzt ist die Seite von der ersten Minute an eine Einkaufsliste,
+     die man selbst füllt. Was die App dazulernt, kommt oben drauf,
+     wenn es so weit ist — und bis dahin sagt eine Zeile am Ende,
+     woran es liegt. */
 
   // Der Rückblick steht obenan, aber nur wenn er fällig ist. Eine
   // Karte, die jeden Tag da ist, ist kein Anlass mehr.
   if (ctx.review.due) c.append(reviewCard(ctx, app));
 
-  if (ctx.range.days !== null) c.append(rangeHero(ctx, app));
-
-  /* --- Sicherheit: eine Zeile --- */
-  if (ctx.safety) {
-    const g = uiGroup("Sicherheit", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source);
-    g.body.append(uiRow(ctx.safety.short, ctx.safety.coldestZone,
-      el("span", "flag f-miss", "kühlen"), {
-        onClick: () => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
-      }));
-    c.append(g);
-  }
+  const hinweise = collectHints(ctx);
+  const dringend = hinweise.some((h) => h.urgent);
+  if (dringend) c.append(hintsRow(ctx, app, hinweise));
 
   /* --- Die Liste --- */
   const on = ctx.items.filter((i) => i.on);
   const sumOn = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
 
-  // „Fällig“ war die Sprache des Algorithmus, nicht die des Nutzers.
-  // Was hier steht, ist eine Einkaufsliste — und das darf sie sagen.
-  const list = uiGroup("Deine nächste Einkaufsliste",
+  /* Ohne Überschrift: die Seite heißt schon „Einkaufsliste“, und
+     eine Karte, die darunter noch einmal „Deine Einkaufsliste“ sagt,
+     kostet eine Zeile und sagt nichts. Die Erklärung sitzt unten an
+     der Summe, wo man ohnehin hinschaut, wenn man wissen will, wie
+     das zustande kommt. */
+  const listInfo =
     "Die App füllt die Liste aus deinen Rhythmen vor: Lebensmittel nach dem gelernten Kaufabstand " +
     "zuzüglich der eingestellten Vorausschau, Haushaltsprodukte nach ihrer Verbrauchsrate.\n\n" +
-    "Sie gehört trotzdem dir. Haken wegnehmen, halbe Menge wählen, eigene Positionen ergänzen — " +
-    "alles unten über „Etwas hinzufügen“. Der Rechenweg jeder vorgeschlagenen Zeile steht in ihrem " +
-    "Detail-Blatt, einfach antippen.");
-  list.body.append(el("div", "listLead",
-    `<span>Vorgeschlagen aus deinen Rhythmen${ctx.pattern && ctx.pattern.dayName
-      ? " · nächster Einkauf " + esc(ctx.pattern.dayName) : ""}</span>`));
+    "Sie gehört trotzdem dir. Haken wegnehmen, halbe Menge wählen, eigene Positionen ergänzen. " +
+    "Der Rechenweg jeder Zeile steht in ihrem Detail-Blatt — einfach antippen.\n\n" +
+    "Vorrat und Reichweite stehen unter „Bestand“, Budget und Vorausschau unter „Mehr“.";
+  const list = uiGroup();
 
   if (ctx.budgetResult.removed.length) {
     list.body.append(uiRow(`${ctx.budgetResult.removed.length} wegen Budget gestrichen`,
@@ -404,17 +1091,24 @@ function viewListe(ctx, app) {
   }
 
   // Drei Sektionen: was die App vorschlägt (Lebensmittel, Haushalt)
-  // und was du selbst ergänzt hast. Die Trennung ist keine Formsache —
-  // sie beantwortet die Frage „woher kommt das hier eigentlich?“, ohne
-  // dass man eine Zeile antippen muss.
-  const auto = ctx.items.filter((i) => i.basis !== "manuell");
-  const eigene = ctx.items.filter((i) => i.basis === "manuell");
+  // und was du selbst ergänzt hast. Die Trennung beantwortet die
+  // Frage „woher kommt das hier eigentlich?“, ohne dass man eine
+  // Zeile antippen muss.
+  /* Nur was ansteht. Abgewähltes stand vorher grau zwischen den
+     anderen Zeilen und sah aus wie eine Position mit hohlem Kreis —
+     seit der Kreis „im Wagen“ heißt, wäre das nicht mehr zu
+     unterscheiden. Es sammelt sich deshalb unten in einer Zeile. */
+  const auto = ctx.items.filter((i) => i.on && i.basis !== "manuell");
+  const eigene = ctx.items.filter((i) => i.on && i.basis === "manuell");
+  const abgewaehlt = ctx.items.filter((i) => !i.on);
   const food = auto.filter((i) => !isNonFood(i.productId));
   const home = auto.filter((i) => isNonFood(i.productId));
 
   const ul = el("ul", "items");
   if (!ctx.items.length) {
-    ul.append(el("li", "item", '<p class="empty">Nichts fällig — die Liste ist leer.</p>'));
+    ul.append(el("li", "item", `<p class="empty">${esc(ctx.stage.stage >= 2
+      ? "Nichts fällig — die Liste ist leer."
+      : "Noch nichts drauf. Tippe unten auf „Etwas hinzufügen“.")}</p>`));
   }
   if (home.length && food.length) ul.append(el("li", "sectionRow", "Lebensmittel"));
   food.forEach((it) => ul.append(listItem(it, ctx, app)));
@@ -426,8 +1120,16 @@ function viewListe(ctx, app) {
   }
   list.body.append(ul);
 
+  if (abgewaehlt.length) {
+    list.body.append(uiRow("Nicht diese Woche",
+      abgewaehlt.slice(0, 3).map((i) => i.name).join(", "), null, {
+        value: String(abgewaehlt.length),
+        onClick: () => weekOffSheet(ctx, app)
+      }));
+  }
+
   // Der wichtigste Knopf dieser Seite: ohne ihn ist die App ein
-  // Automat, den man nur zusehen kann.
+  // Automat, den man nur ansehen kann.
   const add = el("button", "row action addRow");
   add.innerHTML = '<span class="plusMark">+</span>' +
     '<div class="rowMain"><div class="rowTitle">Etwas hinzufügen</div>' +
@@ -435,16 +1137,75 @@ function viewListe(ctx, app) {
   add.addEventListener("click", () => addSheet(ctx, app));
   list.body.append(add);
 
-  const full = ctx.items.reduce((a, i) => a + i.price, 0);
-  const tot = el("div", "totals");
-  tot.innerHTML =
-    `<div><div class="l">${on.length} Positionen</div><div class="big">${eur(sumOn)}</div></div>` +
-    `<div class="saved">${full > sumOn ? "− " + eur(full - sumOn) : ""}</div>`;
-  list.body.append(tot);
+  /* Warum hier (noch) nichts vorgeschlagen wird. Eine Zeile am Ende,
+     nicht ein Satz anstelle der Seite: die Auskunft ist richtig, aber
+     sie ist kein Grund, das Werkzeug wegzunehmen. */
+  if (ctx.stage.stage <= 1) {
+    list.body.append(uiRow(
+      ctx.history.length ? "Vorschläge kommen noch" : "Noch keine Einkäufe erfasst",
+      ctx.history.length
+        ? `${ctx.totals.receipts} ${ctx.totals.receipts === 1 ? "Bon" : "Bons"} erfasst — ab dem zweiten je Produkt lernt die App den Rhythmus`
+        : "Bis dahin ist das hier deine normale Einkaufsliste",
+      null, { onClick: () => app.goto("erfassen") }));
+  }
+
+  /* Die Summe erst, wenn es etwas zu summieren gibt. „0 Positionen ·
+     0,00 €“ unter einer leeren Liste ist keine Auskunft, sondern ein
+     Formular, das sich selbst ausfüllt. */
+  if (ctx.items.length) list.body.append(listTotals(ctx, on, sumOn, listInfo));
   c.append(list);
 
+  return finishListe(c, ctx, app, on, sumOn, hinweise, dringend);
+}
+
+/** Die Summenzeile am Fuß der Liste. */
+function listTotals(ctx, on, sumOn, listInfo) {
+  const full = ctx.items.filter((i) => i.on).reduce((a, i) => a + i.price, 0);
+  const tot = el("div", "totals");
+  const links = el("div");
+  const label = el("div", "l");
+  label.append(document.createTextNode(`${on.length} ${on.length === 1 ? "Position" : "Positionen"}`));
+  const info = el("button", "infoBtn", "i");
+  info.setAttribute("aria-label", "Erklärung: wie diese Liste entsteht");
+  info.addEventListener("click", () => App.notice("Wie diese Liste entsteht", listInfo));
+  label.append(info);
+  links.append(label, el("div", "big", eur(sumOn)));
+  tot.append(links, el("div", "saved", full > sumOn ? "− " + eur(full - sumOn) : ""));
+  return tot;
+}
+
+/** Wagen, Knöpfe und Hinweise unter der Liste. */
+function finishListe(c, ctx, app, on, sumOn, hinweise, dringend) {
+  /* --- Der Wagen ---
+   * Nur wenn etwas drin liegt. Eine Leiste, die auch leer dasteht,
+   * macht aus „nichts im Wagen“ eine Nachricht statt eines Zustands
+   * — und sie stünde die ganze Woche im Weg, obwohl eingekauft wird
+   * an einem Tag.
+   *
+   * `position: sticky` mit einem Abstand über der Leiste: solange die
+   * Liste weiterläuft, klebt sie am unteren Rand; am Ende der Seite
+   * setzt sie sich an ihren eigenen Platz. Deshalb steht sie VOR den
+   * Knöpfen und nicht dahinter — ein klebendes Element als letztes
+   * Element im Fluss hat nichts, woran es kleben könnte. */
+  const wagen = app.cartItems(ctx);
+  if (wagen.length) {
+    const wSum = wagen.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+    const bar = el("div", "cartBar");
+    bar.append(el("div", "t",
+      `<b>${wagen.length} von ${on.length} im Wagen</b>` +
+      `<span>${esc(eur(wSum))} von ${esc(eur(sumOn))}</span>`));
+    const book = el("button", "cta", "Einkauf buchen");
+    book.addEventListener("click", () => app.bookCart());
+    bar.append(book);
+    c.append(bar);
+  }
+
+  /* --- Losgehen --- */
   const actions = el("div", "ctaRow");
-  const go = el("button", "cta", "Einkaufen");
+  /* Kein zweiter Modus, eine andere Sicht: derselbe Wagen, nach
+     Gängen sortiert und mit großen Zielen. Deshalb auch nicht mehr
+     der auffälligste Knopf der Seite — das ist jetzt das Buchen. */
+  const go = el("button", "cta light", "Nach Gängen");
   go.disabled = !on.length;
   go.addEventListener("click", () => app.openStore());
   const share = el("button", "cta light", "Teilen");
@@ -453,103 +1214,166 @@ function viewListe(ctx, app) {
   actions.append(go, share);
   c.append(actions);
 
-  /* --- Vergessen --- */
-  if (ctx.forgotten.length) {
-    const g = uiGroup("Fehlt dir das?",
-      "Produkte, die deutlich über ihrem gelernten Rhythmus liegen und nicht auf der Liste stehen.");
-    ctx.forgotten.slice(0, 4).forEach((f) => {
-      const r = el("div", "row");
-      r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(f.name)}</div><div class="rowSub">${f.daysSince} statt ${f.rhythmDays} Tage</div>`));
-      const acts = el("div", "rowActions");
-      const add = el("button", "pillBtn on", "Dazu");
-      add.addEventListener("click", () => { app.addToList(f.productId); app.toast(f.name + " dazu"); });
-      const no = el("button", "pillBtn", "Nein");
-      no.setAttribute("aria-label", `${f.name} nicht mehr vorschlagen`);
-      no.addEventListener("click", () => app.dismiss("forgotten", f.productId));
-      acts.append(add, no);
-      r.append(acts);
-      g.body.append(r);
-    });
-    c.append(g);
+  /* Ohne jede Historie bleibt der Weg zu den Beispieldaten stehen —
+     er war vorher Teil des Leerzustands, den es nicht mehr gibt. */
+  if (!ctx.history.length) {
+    const demo = el("button", "cta light", "Beispieldaten ansehen");
+    demo.addEventListener("click", () => { Data.loadDemo("full"); app.toast("Geladen"); });
+    c.append(demo);
   }
 
-  /* --- Einfrieren --- */
-  if (ctx.freeze.length) {
-    const g = uiGroup("Einfrieren", "Erscheint nur, wenn die gekaufte Menge länger reicht als die Haltbarkeit.");
-    ctx.freeze.slice(0, 3).forEach((f) => {
-      const r = el("div", "row");
-      r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(f.name)}: ${f.share === 0.5 ? "die Hälfte" : "ein Teil"}</div>` +
-        `<div class="rowSub">rettet ${eur(f.valueAtRisk)}</div>`));
-      const done = el("button", "pillBtn", "Eingefroren");
-      done.addEventListener("click", () => {
+  if (hinweise.length && !dringend) c.append(hintsRow(ctx, app, hinweise));
+
+  return c;
+}
+
+/**
+ * Alles Ratgeberische in EINER Zeile.
+ *
+ * Fünf Gruppen sind zu einer Zeile geworden. Sie erscheint nur, wenn
+ * es etwas zu sagen gibt, und sie sagt, wie viel — damit man
+ * entscheiden kann, ob es sich gerade lohnt.
+ *
+ * Ist etwas Dringendes dabei (Kühlkette), steht sie ÜBER der Liste
+ * und nennt die Sache beim Namen. Sonst darunter. Eine Warnung, die
+ * man erst erscrollen muss, ist keine — dieselbe Regel wie bei der
+ * Sicherung unter „Mehr“.
+ */
+function hintsRow(ctx, app, hinweise) {
+  const g = uiGroup();
+  const dringend = hinweise.find((h) => h.urgent);
+  g.body.append(uiRow(
+    dringend ? dringend.title : `Zero Waste · ${hinweise.length}`,
+    dringend
+      ? (hinweise.length > 1 ? `und ${hinweise.length - 1} ${hinweise.length === 2 ? "weiterer" : "weitere"}` : dringend.sub)
+      : hinweise.slice(0, 3).map((h) => h.title).join(" · "),
+    flag(dringend ? "kuehlen" : "zerowaste", dringend ? "f-miss" : "", String(hinweise.length)),
+    { onClick: () => hintsSheet(ctx, app) }));
+  return g;
+}
+
+/**
+ * Alles einsammeln, was die App zu sagen hat — außer der Liste.
+ *
+ * Jeder Eintrag trägt seine eigene Handlung mit. Das ist der
+ * Unterschied zwischen einem Sammelblatt und einer Abstellkammer:
+ * was hier landet, bleibt bedienbar.
+ */
+function collectHints(ctx) {
+  const out = [];
+
+  if (ctx.safety) {
+    out.push({
+      key: "safety", urgent: true,
+      group: "Sicherheit",
+      title: ctx.safety.short,
+      sub: ctx.safety.coldestZone,
+      badge: "kühlen",
+      onOpen: (app) => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
+    });
+  }
+
+  /* Vorratskäufe, die nicht aufgehen. Sie stehen weit oben, weil
+     sie die einzige Sorte Hinweis sind, bei der noch etwas zu retten
+     ist: einfrieren, verschenken, verteilen — solange die Frist
+     nicht abgelaufen ist. Danach ist es nur noch Bilanz. */
+  (ctx.hoards || []).filter((h) => h.kind === "zuviel").slice(0, 3).forEach((h) => out.push({
+    key: "hoard:" + h.productId + ":" + h.date,
+    urgent: h.safetyCritical,
+    group: "Zu viel auf einmal",
+    title: `${h.units}× ${h.name}`,
+    sub: h.safetyCritical
+      ? `Verbrauchsdatum — hält nur ${tage(h.haltbarTage)}`
+      : `reicht ${tage(h.reichweiteTage)}, haltbar ${h.haltbarTage}`,
+    onOpen: (app) => app.notice("Zu viel auf einmal", h.message +
+      "\n\nEine Vorhersage, keine Bilanz: was hier steht, ist noch nicht passiert. Einfrieren, " +
+      "verschenken oder verteilen ändert es." +
+      (h.günstiger > 0 ? `\n\nGünstiger war der Kauf trotzdem — um ${eur(h.günstiger)}.` : ""))
+  }));
+
+  ctx.forgotten.slice(0, 4).forEach((f) => out.push({
+    key: "forgotten:" + f.productId,
+    title: f.name,
+    sub: `zuletzt vor ${tagen(f.daysSince)}, sonst ${alleTage(f.rhythmDays)}`,
+    group: "Fehlt dir das?",
+    actions: [
+      { label: "Dazu", primary: true, run: (app) => { app.addToList(f.productId); app.toast(f.name + " dazu"); } },
+      { label: "Nein", run: (app) => { app.dismiss("forgotten", f.productId); app.toast("Nicht mehr gefragt"); } }
+    ]
+  }));
+
+  ctx.freeze.slice(0, 3).forEach((f) => out.push({
+    key: "freeze:" + f.productId,
+    title: `${f.name}: ${f.share === 0.5 ? "die Hälfte" : "ein Teil"} einfrieren`,
+    sub: `rettet ${eur(f.valueAtRisk)}`,
+    group: "Einfrieren",
+    actions: [
+      { label: "Eingefroren", primary: true, run: (app) => {
         app.dismiss("freeze", f.productId);
         app.rescue(f.productId, `${f.name} eingefroren`, f.valueAtRisk);
-      });
-      r.append(done);
-      g.body.append(r);
-    });
-    c.append(g);
-  }
+      } }
+    ]
+  }));
 
-  /* --- Saison --- */
-  if (ctx.season.length) {
-    const g = uiGroup("Nicht in Saison", "Saisonkalender des BZfE. Produkte ohne Eintrag bekommen keinen Hinweis.");
-    ctx.season.forEach((s) => g.body.append(uiRow(s.name,
-      "Saison: " + s.peakMonths.map((m) => MONTH_NAMES[m - 1]).join(", "), null, { value: "Import" })));
-    c.append(g);
-  }
+  /* Kein Verb im Titel: aus „Äpfel“ und „ist Importware“ wird
+     „Äpfel ist Importware“, und Produktnamen sind mal Einzahl, mal
+     Mehrzahl. Der Doppelpunkt umgeht die Grammatik, statt sie zu
+     raten. */
+  ctx.season.forEach((s) => out.push({
+    key: "season:" + s.productId,
+    title: s.name,
+    sub: "Importware · Saison: " + s.peakMonths.map((m) => MONTH_NAMES[m - 1]).join(", "),
+    group: "Saison"
+  }));
 
-  /* --- Lagerhinweis --- */
   if (ctx.ethylene) {
-    const g = uiGroup("Lagern");
-    g.body.append(uiRow("Getrennt lagern", "Ethylen lässt die zweite Gruppe schneller verderben", null, {
-      onClick: () => app.notice("Lagern", ctx.ethylene.message + "\n\nQuelle: " + ctx.ethylene.source)
-    }));
-    c.append(g);
-  }
-
-  /* --- Einstellungen --- */
-  const set = uiGroup("Diese Woche");
-  const rest = S.settings.budget - sumOn;
-  set.body.append(uiRow("Budget",
-    S.settings.budget ? (rest >= 0 ? `${eur(rest)} Luft` : `${eur(-rest)} drüber`) : null,
-    stepper(S.settings.budget, (v) => (v ? eur(v) : "aus"),
-      (v) => app.set((s) => { s.settings.budget = v; }), { min: 0, max: 400, step: 5 })));
-  set.body.append(uiRow("Personen", null,
-    stepper(S.settings.household, String,
-      (v) => app.set((s) => { s.settings.household = v; }), { min: 1, max: 8, step: 1 })));
-  set.body.append(uiRow("Vorausschau",
-    ctx.pattern && ctx.pattern.dayName ? `nächster Einkauf ${ctx.pattern.dayName}` : null,
-    stepper(S.settings.lookaheadDays, (v) => (v ? `${v} Tage` : "aus"),
-      (v) => app.set((s) => { s.settings.lookaheadDays = v; }), { min: 0, max: 7, step: 1 })));
-
-  const v = S.settings.vacation;
-  set.body.append(uiRow("Urlaub", v.active && v.from ? `${deDate(v.from)}–${deDate(v.to)}` : null,
-    toggle(v.active, (onOff) => app.set((s) => {
-      s.settings.vacation.active = onOff;
-      if (onOff && !s.settings.vacation.from) {
-        s.settings.vacation.from = Data.plusDays(Data.today(), 2);
-        s.settings.vacation.to = Data.plusDays(Data.today(), 16);
-      }
-    }), "Urlaubsmodus")));
-
-  if (v.active) {
-    const f = el("div", "dateRow");
-    [["from", "Abreise"], ["to", "Rückkehr"]].forEach(([key, label]) => {
-      const w = el("label", "field", `<span class="lbl">${label}</span>`);
-      const i = el("input");
-      i.type = "date";
-      i.value = v[key] || "";
-      i.addEventListener("change", () => app.set((s) => { s.settings.vacation[key] = i.value; }));
-      w.append(i);
-      f.append(w);
+    out.push({
+      key: "ethylene",
+      title: "Getrennt lagern",
+      sub: "Ethylen lässt die zweite Gruppe schneller verderben",
+      group: "Lagern",
+      onOpen: (app) => app.notice("Lagern", ctx.ethylene.message + "\n\nQuelle: " + ctx.ethylene.source)
     });
-    set.body.append(f);
   }
-  c.append(set);
-  return c;
+
+  return out;
+}
+
+/** Das Sammelblatt. Gruppiert, mit den Handlungen von vorher. */
+function hintsSheet(ctx, app) {
+  const body = el("div");
+  const hinweise = collectHints(ctx);
+
+  let letzteGruppe = null;
+  hinweise.forEach((h) => {
+    if (h.group && h.group !== letzteGruppe) {
+      body.append(el("div", "sheetGroupTitle", esc(h.group)));
+      letzteGruppe = h.group;
+    }
+    const r = el("div", "row");
+    const haupt = h.onOpen ? el("button", "rowMain plainBtn") : el("div", "rowMain");
+    haupt.innerHTML = `<div class="rowTitle">${esc(h.title)}</div><div class="rowSub">${esc(h.sub || "")}</div>`;
+    if (h.onOpen) haupt.addEventListener("click", () => h.onOpen(app));
+    r.append(haupt);
+
+    if (h.badge) r.append(flag("kuehlen", "f-miss", h.badge));
+    if (h.actions) {
+      const acts = el("div", "rowActions");
+      h.actions.forEach((a) => {
+        const b = el("button", "pillBtn" + (a.primary ? " on" : ""), esc(a.label));
+        b.addEventListener("click", () => { a.run(app); app.closeSheet(); });
+        acts.append(b);
+      });
+      r.append(acts);
+    }
+    body.append(r);
+  });
+
+  body.append(el("p", "srcnote",
+    "Alles hier hat denselben Zweck: dass nichts weggeworfen werden muss. Jeder Hinweis kommt, " +
+    "solange sich noch etwas machen lässt — nicht hinterher."));
+
+  app.sheet("Zero Waste", `${hinweise.length} ${hinweise.length === 1 ? "Sache" : "Sachen"}`, body);
 }
 
 /**
@@ -734,6 +1558,216 @@ function badgeSheet(row, app) {
 }
 
 /* ================================================================
+   Einen gebuchten Bon korrigieren
+   ================================================================
+   Die Texterkennung liest, sie versteht nicht — und die Prüfliste
+   fängt nicht alles ab. Wer einen Fehltreffer erst später bemerkt,
+   musste bisher den ganzen Bon löschen und neu erfassen. Das ist der
+   Moment, in dem eine App zum ersten Mal als lästig erlebt wird.
+
+   Die Korrektur zieht Summe, Anzahl und den Erfassungsbetrag im
+   Protokoll mit; was dabei passiert, steht in data.js. Hier steht
+   nur, wie man drankommt.
+   ================================================================ */
+function receiptSheet(rec, app) {
+  const body = el("div");
+  const zeilen = Data.receiptLines(rec.id);
+
+  // Datum und Markt stehen schon in der Überschrift des Blatts.
+  body.append(el("p", "sheetPara",
+    `${zeilen.length} ${zeilen.length === 1 ? "Position" : "Positionen"}. Eine antippen, um sie einem ` +
+    "anderen Produkt zuzuordnen — oder mit × entfernen."));
+
+  const liste = el("div");
+  zeilen.forEach((kauf) => {
+    const p = byId(kauf.productId);
+    const r = el("div", "row");
+    const haupt = el("button", "rowMain plainBtn");
+    haupt.innerHTML =
+      `<div class="rowTitle">${esc(p ? p.name : kauf.productId)}</div>` +
+      `<div class="rowSub">${esc(`${de(kauf.quantity)}× ${eur(kauf.unitPrice)}`)}</div>`;
+    haupt.addEventListener("click", () => reassignSheet(kauf, rec, app));
+    r.append(haupt);
+    r.append(el("div", "rowValue", eur(kauf.unitPrice * kauf.quantity)));
+
+    const del = el("button", "del", "×");
+    del.setAttribute("aria-label", `${p ? p.name : "Position"} entfernen`);
+    del.addEventListener("click", () => {
+      Data.updatePurchase(kauf.id, null);
+      app.closeSheet();
+      app.toast("Position entfernt");
+    });
+    r.append(del);
+    liste.append(r);
+  });
+  body.append(liste);
+
+  body.append(el("p", "srcnote",
+    "Eine Korrektur zieht Summe und Anzahl mit. Erreichte Meilensteine bleiben — was einmal " +
+    "geschafft war, verfällt nicht, auch nicht durch einen behobenen Tippfehler."));
+
+  const del = el("button", "cta danger", "Ganzen Bon löschen");
+  del.addEventListener("click", () => app.confirm("Bon löschen?",
+    `${rec.store}, ${deDate(rec.date)} — ${zahlwort(zeilen.length, "Position", "Positionen")} und alles, was daraus gelernt wurde.`,
+    () => { Data.removeReceipt(rec.id); app.closeSheet(); app.toast("Gelöscht"); }, "Löschen"));
+  body.append(del);
+
+  app.sheet(rec.store, deDate(rec.date), body);
+}
+
+/** Eine Position einem anderen Produkt zuordnen. */
+function reassignSheet(kauf, rec, app) {
+  const body = el("div");
+  const p = byId(kauf.productId);
+  body.append(el("p", "sheetPara",
+    `Zurzeit gebucht als ${p ? p.name : kauf.productId}. Ein anderes Produkt suchen — ` +
+    "der Rhythmus zieht mit um."));
+
+  const feld = el("label", "field");
+  const eingabe = el("input");
+  eingabe.type = "search";
+  eingabe.placeholder = "Produkt suchen";
+  eingabe.setAttribute("aria-label", "Anderes Produkt suchen");
+  feld.append(eingabe);
+  body.append(feld);
+
+  const treffer = el("ul", "results");
+  body.append(treffer);
+
+  const zeigen = () => {
+    treffer.innerHTML = "";
+    const query = eingabe.value.trim();
+    if (!query) return;
+    Data.searchProducts(query, 8).forEach((x) => {
+      const li = el("li");
+      const b = el("button");
+      b.innerHTML = `<span class="rn">${esc(x.name)}</span><span class="rc">${esc(x.aisle)}</span>`;
+      b.addEventListener("click", () => {
+        Data.updatePurchase(kauf.id, { productId: x.id });
+        // Und die Schreibweise merken, damit derselbe Fehltreffer
+        // beim nächsten Bon nicht wieder passiert.
+        if (kauf.raw) Data.learnAlias(kauf.raw, x.id);
+        app.closeSheet();
+        app.toast(`Jetzt ${x.name}`);
+      });
+      li.append(b);
+      treffer.append(li);
+    });
+  };
+  eingabe.addEventListener("input", zeigen);
+  body.append(el("p", "srcnote",
+    "Die Zuordnung gilt rückwirkend: der alte Rhythmus verliert diesen Kauf, der neue bekommt ihn."));
+
+  app.sheet("Anders zuordnen", p ? p.name : null, body);
+}
+
+/* ================================================================
+   Sicherung
+   ================================================================
+   Der Text hier ist Teil der Funktion. Eine Zeile „nicht gesichert“
+   bewegt niemanden; „40 Bons und drei Jahre gelernter Rhythmus liegen
+   nur in diesem Browser“ schon. Deshalb nennt jede Meldung, was
+   konkret auf dem Spiel steht, und jede bietet den Handgriff daneben
+   an, statt ihn in eine zweite Ebene zu legen.
+   ================================================================ */
+function backupGroup(ctx, app) {
+  const S = Data.get();
+  const h = ctx.backup;
+  const g = uiGroup("Sicherung",
+    "Diese App hat keinen Server und kein Konto — das ist Absicht, und es hat einen Preis: die Daten " +
+    "liegen ausschließlich in diesem Browser.\n\n" +
+    "Browser dürfen ihren Speicher aufräumen. Auf iPhone und iPad löscht Safari die Daten einer nicht " +
+    "installierten Web-App nach sieben Tagen ohne Nutzung. Und „Browserdaten löschen“ trifft die App mit.\n\n" +
+    "Drei Stufen helfen dagegen, in dieser Reihenfolge: dauerhaften Speicher erlauben, die App zum " +
+    "Startbildschirm hinzufügen, und eine Sicherungsdatei außerhalb des Browsers halten. Nur die letzte " +
+    "überlebt wirklich alles.");
+
+  const klasse = { gesichert: "f-ok", ok: "f-ok", erinnerung: "f-gold", gefaehrdet: "f-miss", unkritisch: "" }[h.level] || "";
+  g.body.append(uiRow(h.title, h.message, flag(
+    h.level === "gefaehrdet" ? "gefaehrdet" : "gesichert",
+    klasse,
+    { gesichert: "sicher", ok: "sicher", erinnerung: "fällig", gefaehrdet: "Achtung", unkritisch: "—" }[h.level] || "—"
+  )));
+
+  /* Dauerhafter Speicher. Wenn der Browser ihn schon gewährt hat,
+     steht es da; sonst ist es ein Tippen. */
+  if (!h.risk.fluechtig) {
+    g.body.append(uiRow("Dauerhafter Speicher", "Der Browser räumt diese Daten nicht mehr weg.", null, { value: "an" }));
+  } else {
+    const b = el("button", "row action");
+    // Nicht denselben Satz wie oben: der Grund steht schon im
+    // Zustand darüber, und zweimal dasselbe zu lesen lässt beide
+    // Zeilen unwichtig wirken.
+    b.append(el("div", "rowMain",
+      '<div class="rowTitle">Dauerhaften Speicher erlauben</div>' +
+      '<div class="rowSub">Nimmt die Daten vom automatischen Aufräumen aus. Kostet nichts, hilft sofort.</div>'));
+    b.addEventListener("click", () => {
+      Backup.requestPersist().then((ok) => {
+        app.render();
+        app.notice(ok ? "Erlaubt" : "Nicht erlaubt", ok
+          ? "Der Browser räumt diese Daten jetzt nicht mehr von selbst weg. Gegen „Browserdaten löschen“ hilft trotzdem nur eine Datei."
+          : "Dieser Browser hat abgelehnt — das entscheidet er selbst, oft nach Nutzungsdauer. Umso wichtiger ist eine Sicherungsdatei; " +
+            "auf iPhone und iPad hilft zusätzlich, die App zum Startbildschirm hinzuzufügen.");
+      });
+    });
+    g.body.append(b);
+  }
+
+  /* Automatische Datei — der einzige Zustand, der ohne Disziplin
+     auskommt. Wo der Browser sie nicht kann, wird das gesagt statt
+     eine tote Schaltfläche zu zeigen. */
+  if (Backup.supportsAutoFile()) {
+    if (Backup.handle) {
+      const row = el("button", "row action");
+      row.append(el("div", "rowMain",
+        '<div class="rowTitle">Automatische Sicherung läuft</div>' +
+        `<div class="rowSub">${esc(Backup.handle.name || "gewählte Datei")} — wird bei jeder Änderung mitgeschrieben</div>`));
+      row.addEventListener("click", () => app.confirm("Automatik beenden?",
+        "Die Datei bleibt liegen, sie wird nur nicht mehr fortgeschrieben.",
+        () => { Backup.forgetTarget().then(() => { app.render(); app.toast("Beendet"); }); }, "Beenden"));
+      g.body.append(row);
+    } else {
+      const row = el("button", "row action");
+      row.append(el("div", "rowMain",
+        '<div class="rowTitle">Datei wählen und automatisch sichern</div>' +
+        '<div class="rowSub">Einmal auswählen, danach schreibt die App bei jeder Änderung selbst hinein</div>'));
+      row.addEventListener("click", () => {
+        Backup.chooseTarget(backupFileName(Data.today()))
+          .then(() => Backup.writeNow(Data.exportJson()))
+          .then((ok) => {
+            if (ok) Data.noteBackup("auto");
+            app.render();
+            app.toast(ok ? "Automatik läuft" : "Nicht geschrieben");
+          })
+          .catch(() => { /* abgebrochen — keine Meldung nötig */ });
+      });
+      g.body.append(row);
+    }
+  }
+
+  /* Der Weg, der überall geht. */
+  const dl = el("button", "row action");
+  dl.append(el("div", "rowMain",
+    '<div class="rowTitle">Sicherung jetzt herunterladen</div>' +
+    `<div class="rowSub">${zahlwort(S.purchases.length, "Kauf", "Käufe")}, ${zahlwort(S.receipts.length, "Bon", "Bons")}, alles Gelernte</div>`));
+  dl.addEventListener("click", () => {
+    const ok = Backup.download(Data.exportJson(), backupFileName(Data.today()));
+    if (ok) Data.noteBackup("datei");
+    app.render();
+    app.toast(ok ? "Gesichert" : "Nicht möglich");
+  });
+  g.body.append(dl);
+
+  if (!Backup.supportsAutoFile()) {
+    g.body.append(el("p", "srcnote",
+      "Dieser Browser kann keine Datei automatisch fortschreiben. Deshalb erinnert die App daran — " +
+      "und deshalb ist es hier wichtiger als anderswo, die Datei irgendwohin zu legen, wo sie gesichert wird."));
+  }
+
+  return g;
+}
+
+/* ================================================================
    Marke oder Eigenmarke
    ================================================================
    Ein Potenzial, kein Auftrag. Die App tauscht nichts, sie zeigt nur,
@@ -761,14 +1795,19 @@ function brandSheet(c, app) {
   const body = el("div");
   const einheit = c.basis === "100g" ? "je 100 g" : "je Packung";
 
+  // „M“ und „E“ sind genau die Art Kürzel, die man einmal erklärt
+  // haben will — beide Marken sind deshalb antippbar.
+  const zeile = (key, cls, kuerzel, titel, unten) => {
+    const li = el("li");
+    li.append(flag(key, cls, kuerzel));
+    li.append(el("span", null, `${esc(titel)}<br><small>${esc(unten)}</small>`));
+    return li;
+  };
   const list = el("ul", "plain");
-  list.append(el("li", null,
-    `<span class="flag">M</span><span>${esc(c.marke ? brandLabel(c.marke) : "Marke")}` +
-    `<br><small>${esc(eur(c.markenPreis) + " " + einheit + " · " + c.markenKaeufe + " Käufe")}</small></span>`));
-  list.append(el("li", null,
-    `<span class="flag f-ok">E</span><span>${esc(c.eigenmarke ? brandLabel(c.eigenmarke) : "Eigenmarke")}` +
-    `<br><small>${esc(eur(c.eigenPreis) + " " + einheit +
-      (c.belegt ? " · " + c.eigenKaeufe + " Käufe" : " · geschätzt"))}</small></span>`));
+  list.append(zeile("marke", "", "M", c.marke ? brandLabel(c.marke) : "Marke",
+    `${eur(c.markenPreis)} ${einheit} · ${zahlwort(c.markenKaeufe, "Kauf", "Käufe")}`));
+  list.append(zeile("eigenmarke", "f-ok", "E", c.eigenmarke ? brandLabel(c.eigenmarke) : "Eigenmarke",
+    `${eur(c.eigenPreis)} ${einheit}${c.belegt ? " · " + c.eigenKaeufe + " Käufe" : " · geschätzt"}`));
   body.append(list);
 
   body.append(uiRow("Unterschied", einheit, null, { value: eur(c.differenz) }));
@@ -810,6 +1849,83 @@ function brandSheet(c, app) {
    freien Zeilen fließen ausdrücklich NICHT in die Rhythmen ein — aus
    „Blumen für Oma“ darf die App keinen Kaufabstand lernen.
    ================================================================ */
+/**
+ * „War die App zu spät?“ — gefragt in dem Moment, in dem es wahr ist.
+ * ================================================================
+ * DAS PROBLEM, DAS DAS LÖST.
+ *
+ * Von den Rückmeldungen hatte genau eine keinen natürlichen Moment.
+ * „Hab noch“ hat einen: du gehst die Liste durch, siehst Milch,
+ * weißt dass noch welche da ist, nimmst sie runter — der Moment IST
+ * die Handlung. „War schon alle“ dagegen wird Tage vorher wahr, vor
+ * dem leeren Kühlschrank. Bis jemand die Liste aufmacht, ist der
+ * Ärger vorbei, und niemand öffnet ein Detail-Blatt, um zu melden,
+ * dass eine App zu spät war.
+ *
+ * Damit konnte die App gut lernen, dass sie zu FRÜH ist, und
+ * praktisch gar nicht, dass sie zu SPÄT ist. Eine Schieflage in
+ * genau die unangenehmere Richtung.
+ *
+ * Der Moment, in dem es wahr wird, ist dieser: jemand setzt ein
+ * Produkt selbst auf die Liste, das die App noch gar nicht
+ * vorgeschlagen hätte. Dann war sie zu spät, und zwar jetzt gerade.
+ *
+ * WARUM GEFRAGT UND NICHT GESCHLOSSEN. Aus „hat es selbst
+ * hinzugefügt“ automatisch „App war zu spät“ abzuleiten, wäre ein
+ * stilles Signal, das neben den Kaufdaten in dieselbe Korrektur
+ * liefe — die Doppelzählung, die dieses Projekt schon dreimal Geld
+ * gekostet hat. Es gibt genug andere Gründe, etwas früher zu kaufen:
+ * Gäste, ein Rezept, ein Angebot. Deshalb eine Frage mit einer
+ * Antwort, die man auch weglassen kann.
+ *
+ * @returns {boolean} ob gefragt wurde — der Aufrufer unterdrückt
+ *                    dann seine eigene Bestätigung.
+ * ================================================================
+ */
+function askLate(productId, ctx, app) {
+  // Haushaltsprodukte rechnen über eine Verbrauchsrate, nicht über
+  // einen Kaufabstand — für sie gibt es nichts zu korrigieren.
+  if (isNonFood(productId)) return false;
+
+  const r = ctx.rhythms.get(productId);
+  if (!r || !r.rhythmDays || !r.lastPurchaseDate || r.confidence < 0.4) return false;
+
+  const dueIn = r.rhythmDays - daysBetween(r.lastPurchaseDate, ctx.ref);
+  /* Erst ab zwei Tagen fragen. Wer einen Tag vor der Fälligkeit
+     einkauft, hat nicht die App korrigiert, sondern eingekauft. */
+  if (!(dueIn >= 2)) return false;
+
+  const p = byId(productId);
+  const body = frag();
+  const g = uiGroup(`Die App hätte ${p.name} erst in ${tagen(dueIn)} vorgeschlagen.`,
+    "Ein Ja verkürzt den gelernten Kaufabstand — es ist die einzige Rückmeldung, die das tut.\n\n" +
+    "Deshalb wird gefragt statt geschlossen: dass du etwas früher kaufst, kann auch an Gästen, einem " +
+    "Rezept oder einem Angebot liegen. Nur du weißt, ob es wirklich schon alle war.\n\n" +
+    "Auch ein Ja wirkt nicht sofort: erst ab drei Rückmeldungen zu einem Produkt passt die App den " +
+    "Rhythmus an, und höchstens um 40 %.");
+
+  const ja = el("button", "row");
+  ja.append(el("div", "rowMain",
+    '<div class="rowTitle">Ja, war schon alle</div>' +
+    '<div class="rowSub">der Abstand wird kürzer</div>'));
+  ja.addEventListener("click", () => {
+    Data.recordFeedback(productId, "empty", dueIn);
+    App.closeSheet();
+    app.toast("Notiert — der Takt wird angepasst", { icon: "↻" });
+  });
+
+  const nein = el("button", "row");
+  nein.append(el("div", "rowMain",
+    '<div class="rowTitle">Nein, nur diesmal</div>' +
+    '<div class="rowSub">der Rhythmus bleibt, wie er ist</div>'));
+  nein.addEventListener("click", () => App.closeSheet());
+
+  g.body.append(ja, nein);
+  body.append(g);
+  app.sheet("Kam das zu spät?", p.name, body);
+  return true;
+}
+
 function addSheet(ctx, app) {
   const body = el("div");
 
@@ -828,7 +1944,12 @@ function addSheet(ctx, app) {
     const entry = Data.addManual({ ...opts, week: ctx.weekKey });
     if (!entry) return;
     app.closeSheet();
-    app.toast(`${entry.name} auf der Liste`, { icon: "+" });
+    /* Die Bestätigung nur, wenn nichts nachgefragt wird. Sonst legt
+       sich der Hinweis über das Blatt und verdeckt die Antwort, um
+       die gerade gebeten wird — das Blatt IST dann die Bestätigung. */
+    if (!(opts.productId && askLate(opts.productId, ctx, app))) {
+      app.toast(`${entry.name} auf der Liste`, { icon: "+" });
+    }
   };
 
   function render() {
@@ -893,34 +2014,74 @@ function manualSheet(it, app) {
 }
 
 /** Eine Position der Vorschlagsliste. Knapp — Details im Blatt. */
+/**
+ * Eine Position der Liste.
+ *
+ * DER KREIS HEISST „IM WAGEN“, NICHT „AUF DER LISTE“.
+ * Begründung steht bei App.toggleCart. Was hier folgt, ist die
+ * Konsequenz: die Zeile kennt nur noch zwei Zustände — sie steht an,
+ * oder sie liegt im Wagen. „Diese Woche nicht“ nimmt sie aus der
+ * Liste heraus, dann steht sie hier gar nicht mehr.
+ */
 function listItem(it, ctx, app) {
   const p = byId(it.productId) || {};
   const manuell = it.basis === "manuell";
-  const li = el("li", "item" + (it.on ? "" : " off"));
+  const imWagen = Data.get().storeChecked.includes(it.choiceKey);
+  const li = el("li", "item" + (imWagen ? " imWagen" : ""));
 
   const top = el("div", "top");
   const cb = el("input");
-  cb.type = "checkbox"; cb.className = "box"; cb.checked = it.on;
-  cb.setAttribute("aria-label", it.name);
-  cb.addEventListener("change", () => app.choose(it.choiceKey, { on: cb.checked, reason: cb.checked ? null : undefined }));
+  cb.type = "checkbox"; cb.className = "box"; cb.checked = imWagen;
+  cb.setAttribute("aria-label", `${it.name} in den Wagen`);
+  cb.addEventListener("change", () => app.toggleCart(it.choiceKey));
 
-  const main = el("button", "main");
+  // Kein <button>, sondern ein Element mit Schaltflächen-Rolle: die
+  // Marken darin sind selbst antippbar, und eine Schaltfläche in
+  // einer Schaltfläche ist ungültiges HTML — Browser hängen die
+  // innere dann aus dem Baum aus, und das Antippen ginge ins Leere.
+  const main = el("div", "main");
+  main.setAttribute("role", "button");
+  main.setAttribute("tabindex", "0");
   main.setAttribute("aria-label", `Details zu ${it.name}`);
   const nm = el("div", "nm", esc(it.name));
-  if (manuell) nm.append(el("span", "pill own", "von dir"));
-  if (!manuell && it.dueIn < 0) nm.append(el("span", "pill warn", `${-it.dueIn} T überfällig`));
-  if (it.riskFlag) nm.append(el("span", "pill risk", pct(it.wasteRate)));
-  if (p.safetyCritical) nm.append(el("span", "pill safety", "VD"));
-  const pm = ctx.prices.get(it.productId);
-  if (pm && pm.verdict !== "üblich") {
-    nm.append(el("span", "pill " + (pm.verdict === "günstig" ? "cheap" : "warn"), sign(pm.changePercent) + " %"));
+
+  /* HÖCHSTENS EIN ZEICHEN, und nur wenn es eine HANDLUNG auslöst.
+     Vorher konnten fünf nebeneinander stehen. Die Zielgruppe nannte
+     das „überladen“, und der Grund ist nicht die Menge allein: „+8,4 %“
+     ändert nichts an der Entscheidung, die Milch zu kaufen. Es ist
+     eine Beobachtung, keine Aufforderung — und Beobachtungen gehören
+     ins Detail-Blatt, das ein Tippen entfernt ist.
+
+     Was bleibt, verlangt eine Entscheidung, BEVOR man losgeht:
+       doppelt?  — vielleicht gar nicht kaufen
+       hab noch  — die eigene Antwort, damit sie nicht vergessen wird
+       von dir   — nicht die App hat das vorgeschlagen, du warst es
+       VD        — direkt kühlen, nicht erst nach dem Kaffee
+     Preisabweichung, Verderb-Risiko und „3 T überfällig“ stehen
+     unverändert im Detail-Blatt. Überfällig ist ohnehin der GRUND,
+     warum die Zeile hier steht — sie erklärt sich damit selbst. */
+  const zeichen = [];
+  if (ctx.duplicates.some((d) => d.productId === it.productId)) {
+    zeichen.push(["doppelt", "dup", "doppelt?"]);
   }
-  if (ctx.duplicates.some((d) => d.productId === it.productId)) nm.append(el("span", "pill dup", "doppelt?"));
-  if (!it.on && it.reason) {
-    const rr = REASONS.find((x) => x.key === it.reason);
-    if (rr) nm.append(el("span", "pill state", rr.label));
-  }
+  /* Die Marke „Deine Antwort" stand hier für abgewählte Positionen.
+     Seit abgewählte Positionen die Liste verlassen und sich unten in
+     „Nicht diese Woche" sammeln, kann sie nie mehr erscheinen — sie
+     wäre ab jetzt toter Code, der bei jeder Zeile mitgeprüft wird. */
+  if (manuell) zeichen.push(["own", "own", "von dir"]);
+  /* Ausgeschrieben, nicht abgekürzt.
+     „VD“ stand hier zwei Buchstaben lang und erklärte sich nur dem,
+     der es antippt — und antippen tut man nur, was man versteht. Die
+     Marke, die vor der einzigen rechtlich harten Frist der App warnt,
+     darf kein Rätsel sein. Sie ist damit die längste Marke der Liste;
+     das ist der Preis und er ist richtig herum bezahlt. */
+  if (p.safetyCritical) zeichen.push(["vd", "safety", "Verbrauchsdatum"]);
+  if (zeichen.length) nm.append(pill(...zeichen[0]));
   main.append(nm);
+  main.addEventListener("keydown", (ev) => {
+    if (ev.target !== main) return;          // eine Marke hat ihre eigene Taste
+    if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); main.click(); }
+  });
   main.addEventListener("click", () => {
     // Eine frei eingetragene Zeile hat kein Detail-Blatt — sie hat ja
     // keine Daten. Sie bekommt ihr eigenes, kleines.
@@ -931,12 +2092,34 @@ function listItem(it, ctx, app) {
 
   // Ohne Preis keine Preisspalte — „0,00 €“ wäre eine Behauptung.
   top.append(cb, main, el("div", "price", it.price > 0 ? eur(it.halved ? it.price / 2 : it.price) : "—"));
+  /* Der Winkel am Ende. Der Name öffnet seit jeher das Detail-Blatt,
+     aber nichts sagte das: überall sonst in der App markiert genau
+     dieser Winkel eine Zeile, die sich öffnen lässt — nur auf der
+     Liste fehlte er. Damit war das Blatt mit Rhythmus, Preisverlauf
+     und Datenqualität für jeden unsichtbar, der nicht zufällig
+     draufgetippt hat. */
+  top.append(el("div", "chev"));
   li.append(top);
 
+  /* Der Vorschlag zur halben Menge.
+     Vorher stand hier ein grauer Knopf „Halbe Menge“ ohne jeden
+     Zusammenhang — die einzige Zeile der Liste, die doppelt so hoch
+     war, und niemand wusste, warum sie es war. Jetzt sagt sie den
+     Grund und ist selbst die Antwort darauf: ein Satz, den man
+     antippt. Das ist dieselbe Handlung, nur verständlich. */
   if (it.on && it.riskFlag) {
-    const acts = el("div", "inlineActions");
-    const h = el("button", "pillBtn" + (it.halved ? " on" : ""), it.halved ? "✓ halbe Menge" : "Halbe Menge");
+    const p2 = byId(it.productId) || {};
+    // Kurz halten: auf 390 Pixeln bricht jeder längere Satz um, und
+    // eine zweizeilige Zeile in einer Liste sieht wieder nach Ballast
+    // aus — genau dem, was hier abgebaut werden sollte.
+    const grund = p2.shelfLifeDays && p2.shelfLifeDays <= 7
+      ? `Hält ${tage(p2.shelfLifeDays)}`
+      : "Bleibt oft übrig";
+    const h = el("button", "halfRow" + (it.halved ? " on" : ""));
     h.setAttribute("aria-pressed", it.halved ? "true" : "false");
+    h.innerHTML = it.halved
+      ? `<span class="hMark">✓</span><span>Halbe Menge · spart ${esc(eur(it.price / 2))}</span>`
+      : `<span class="hMark">½</span><span>${esc(grund)} — halbe Menge?</span>`;
     h.addEventListener("click", () => {
       const now = !it.halved;
       app.choose(it.choiceKey, { halved: now });
@@ -945,23 +2128,87 @@ function listItem(it, ctx, app) {
       // gerettet werden.
       if (now) app.rescue(it.productId, `${it.name}: halbe Menge`, it.price / 2);
     });
-    acts.append(h);
-    li.append(acts);
+    li.append(h);
   }
 
-  // Die vier Antworten korrigieren einen Rhythmus. Eine selbst
-  // ergänzte Zeile hat keinen, also gibt es dort auch nichts zu fragen.
-  if (!manuell && !it.on && (it.perishable || it.price > 3)) {
-    const opts = el("div", "opts");
-    REASONS.forEach((rr) => {
-      const b = el("button", "opt", esc(rr.label));
-      b.setAttribute("aria-pressed", it.reason === rr.key ? "true" : "false");
-      b.addEventListener("click", () => app.choose(it.choiceKey, { reason: rr.key }));
-      opts.append(b);
-    });
-    li.append(opts);
-  }
   return li;
+}
+
+/**
+ * Die vier Antworten — jetzt an einem benannten Ort.
+ *
+ * Sie standen in der Zeile und erschienen, sobald man den Haken
+ * wegnahm. Das war eine Frage ohne Überschrift („warum eigentlich?“)
+ * und dazu falsch aufgehängt: „War schon alle“ heißt ja gerade, dass
+ * das Produkt gebraucht wird — es korrigiert nur den Takt und bleibt
+ * auf der Liste. Als Antwort auf „warum weg?“ ergab das keinen Sinn.
+ *
+ * Jetzt steht die Frage ausgeschrieben da, und die Antworten sagen
+ * jeweils, was sie bewirken.
+ */
+function weekChoice(it, ctx, app, onDone) {
+  const g = uiGroup("Brauchst du das diese Woche?",
+    "„Hab noch“ sagt der App, dass ihr Vorschlag zu früh kam — der gelernte Kaufabstand wird länger. " +
+    "„Diese Woche nicht“ ist eine bewusste Pause und lässt den Rhythmus in Ruhe.\n\n" +
+    "Nichts davon wird sofort verrechnet: erst ab drei Rückmeldungen zu einem Produkt passt die App " +
+    "den Rhythmus an, und höchstens um 40 %. Eine einzelne Antwort kippt nichts um.\n\n" +
+    "Die Gegenrichtung — „war schon alle, du warst zu spät“ — wird nicht hier gefragt, sondern in dem " +
+    "Moment, in dem sie wahr ist: wenn du ein Produkt selbst hinzufügst, das noch gar nicht fällig war.");
+
+  WEEK_REASONS.map((k) => REASONS.find((r) => r.key === k)).forEach((rr) => {
+    const gewaehlt = it.reason === rr.key;
+    const r = el("button", "row" + (gewaehlt ? " chosen" : ""));
+    r.setAttribute("aria-pressed", gewaehlt ? "true" : "false");
+    r.append(el("div", "rowMain",
+      `<div class="rowTitle">${esc(rr.label)}</div><div class="rowSub">${esc(REASON_EFFECT[rr.key])}</div>`));
+    if (gewaehlt) r.append(el("div", "rowValue", "✓"));
+    r.addEventListener("click", () => {
+      app.choose(it.choiceKey, { reason: rr.key });
+      if (onDone) onDone();
+    });
+    g.body.append(r);
+  });
+
+  if (!it.on) {
+    const zurueck = el("button", "row");
+    zurueck.append(el("div", "rowMain",
+      '<div class="rowTitle">Doch drauf</div><div class="rowSub">zurück auf die Liste dieser Woche</div>'));
+    zurueck.addEventListener("click", () => {
+      app.choose(it.choiceKey, { on: true, reason: null });
+      if (onDone) onDone();
+    });
+    g.body.append(zurueck);
+  }
+  return g;
+}
+
+/** Was jede Antwort bewirkt — in einem Halbsatz, nicht in einem Absatz. */
+const REASON_EFFECT = {
+  have: "der Vorschlag kam zu früh — der Abstand wird länger",
+  empty: "kam zu spät — der Abstand wird kürzer",
+  skip: "eine bewusste Pause, ohne Wirkung auf den Rhythmus"
+};
+
+/** Was diese Woche nicht gebraucht wird — gesammelt statt verstreut. */
+function weekOffSheet(ctx, app) {
+  const off = ctx.items.filter((i) => !i.on);
+  const body = frag();
+  if (!off.length) body.append(el("p", "empty", "Nichts abgewählt."));
+  off.forEach((it) => {
+    const g = uiGroup(it.name, null);
+    const rr = REASONS.find((x) => x.key === it.reason);
+    g.body.append(uiRow(rr ? rr.label : "abgewählt", rr ? REASON_EFFECT[rr.key] : null, null, {}));
+    const zurueck = el("button", "row");
+    zurueck.append(el("div", "rowMain",
+      '<div class="rowTitle">Doch drauf</div><div class="rowSub">zurück auf die Liste dieser Woche</div>'));
+    zurueck.addEventListener("click", () => {
+      app.choose(it.choiceKey, { on: true, reason: null });
+      App.closeSheet();
+    });
+    g.body.append(zurueck);
+    body.append(g);
+  });
+  app.sheet("Nicht diese Woche", `${off.length} ${off.length === 1 ? "Position" : "Positionen"}`, body);
 }
 
 
@@ -1044,7 +2291,7 @@ function supplyText(sup) {
   if (sup.daysOfSupply === null || sup.confidence === "UNSICHER") return "unregelmäßig";
   const d = Math.round(sup.daysOfSupply);
   if (d <= 0) return "vermutlich leer";
-  return d === 1 ? "reicht noch einen Tag" : `reicht noch ${d} Tage`;
+  return d === 1 ? "reicht noch einen Tag" : `reicht noch ${tage(d)}`;
 }
 
 /**
@@ -1058,8 +2305,8 @@ function swapRow(x, ctx, app) {
   main.innerHTML =
     `<div class="rowTitle">${esc(x.name)}</div>` +
     `<div class="rowSub">${esc(x.due
-      ? `seit ${x.inUse} ${x.inUse === 1 ? "Tag" : "Tagen"} im Einsatz`
-      : `fällig in ${x.daysLeft} ${x.daysLeft === 1 ? "Tag" : "Tagen"}`)}</div>`;
+      ? `seit ${tagen(x.inUse)} im Einsatz`
+      : `fällig in ${tagen(x.daysLeft)}`)}</div>`;
   main.addEventListener("click", () => productSheet(x.productId, ctx));
   r.append(main);
 
@@ -1070,7 +2317,7 @@ function swapRow(x, ctx, app) {
 }
 
 /* ================================================================
-   2. Bestand
+   3. Bestand
    ================================================================ */
 function viewBestand(ctx, app) {
   const c = frag();
@@ -1089,8 +2336,9 @@ function viewBestand(ctx, app) {
     ctx.opened.forEach((o) => {
       const r = el("div", "row");
       r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(o.name)}</div><div class="rowSub">seit ${o.openedDays} ${o.openedDays === 1 ? "Tag" : "Tagen"}</div>`));
-      r.append(el("span", "flag " + (o.expired ? "f-miss" : o.urgent ? "f-gold" : "f-ok"),
+        `<div class="rowTitle">${esc(o.name)}</div><div class="rowSub">seit ${tagen(o.openedDays)}</div>`));
+      r.append(flag(o.expired ? "angebrochen" : "rest",
+        o.expired ? "f-miss" : o.urgent ? "f-gold" : "f-ok",
         o.expired ? "über Frist" : `${o.daysLeft} T`));
       // Aufgebraucht statt nur „weg“: eine angebrochene Packung, die
       // vor ihrer Frist leer wird, ist genau der Fall, den die App
@@ -1117,11 +2365,20 @@ function viewBestand(ctx, app) {
     const p = byId(i.productId) || {};
     const longLived = !p.isFood || i.daysLeft > 120;
     const flagCls = i.daysLeft <= 2 ? "f-miss" : i.daysLeft <= 5 ? "f-gold" : "f-ok";
-    const r = el("button", "row");
+    // Wie in der Liste: die Marke rechts ist selbst antippbar, also
+    // darf die Zeile keine echte Schaltfläche sein.
+    const r = el("div", "row");
+    r.setAttribute("role", "button");
+    r.setAttribute("tabindex", "0");
     r.append(el("div", "rowMain",
       `<div class="rowTitle">${esc(i.name)}${i.opened ? ' <span class="pill">offen</span>' : ""}</div>` +
       `<div class="rowSub">${de(i.remainingUnits.toFixed(1))} · ${eur(i.value)}</div>`));
-    r.append(el("span", "flag " + (longLived ? "f-ok" : flagCls), longLived ? "haltbar" : `${i.daysLeft} T`));
+    r.append(flag(longLived ? "haltbar" : "rest", longLived ? "f-ok" : flagCls,
+      longLived ? "haltbar" : `${i.daysLeft} T`));
+    r.addEventListener("keydown", (ev) => {
+      if (ev.target !== r) return;
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); r.click(); }
+    });
     r.append(el("div", "chev"));
     r.addEventListener("click", () => productSheet(i.productId, ctx));
     inv.body.append(r);
@@ -1147,6 +2404,20 @@ function viewBestand(ctx, app) {
       r.addEventListener("click", () => productSheet(sup.productId, ctx));
       g.body.append(r);
     });
+
+    /* Der Weg zu „Fällig“.
+     *
+     * Seit die Seite keinen eigenen Reiter mehr hat, führt die
+     * Startseite nur dorthin, wenn wirklich etwas zu tauschen ist.
+     * Ohne diese Zeile wäre sie an ruhigen Tagen nur noch über die
+     * Adresse erreichbar — und „Demnächst“, „Geht aus“ und
+     * „Günstig bevorraten“ wären damit verschwunden statt umgezogen. */
+    if (ctx.swapsDue.length || ctx.stockUp.length) {
+      const offen = ctx.swapsDue.filter((x) => x.due).length;
+      g.body.append(uiRow("Austausch und Nachschub",
+        offen ? `${offen} ${offen === 1 ? "Sache ist" : "Sachen sind"} fällig` : "nichts fällig",
+        null, { onClick: () => app.goto("faellig") }));
+    }
     c.append(g);
   }
 
@@ -1198,7 +2469,7 @@ function viewBestand(ctx, app) {
     const v = S.settings.vacation;
     const plan = useUpPlan(ctx.inventory, v.from, v.to, ctx.ref);
     const p = uiGroup("Vor der Abreise", plan.summary);
-    plan.mustUse.forEach((x) => p.body.append(uiRow(x.name, `noch ${x.daysLeft} Tage`, el("span", "flag f-gold", "aufbrauchen"))));
+    plan.mustUse.forEach((x) => p.body.append(uiRow(x.name, `noch ${tage(x.daysLeft)}`, el("span", "flag f-gold", "aufbrauchen"))));
     plan.freeze.forEach((x) => p.body.append(uiRow(x.name, eur(x.value), el("span", "flag f-new", "einfrieren"))));
     if (!plan.mustUse.length && !plan.freeze.length) p.body.append(el("p", "empty", "Nichts gefährdet."));
     c.append(p);
@@ -1207,7 +2478,7 @@ function viewBestand(ctx, app) {
 }
 
 /* ================================================================
-   3. Erfassen
+   4. Erfassen
    ================================================================ */
 function viewErfassen(ctx, app) {
   const c = frag();
@@ -1229,14 +2500,16 @@ function viewErfassen(ctx, app) {
     [...S.receipts].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).forEach((rec) => {
       const r = el("div", "row");
       r.append(el("div", "rowMain",
-        `<div class="rowTitle">${esc(rec.store)}</div><div class="rowSub">${deDate(rec.date)} · ${rec.itemCount} Positionen</div>`));
+        `<div class="rowTitle">${esc(rec.store)}</div><div class="rowSub">${deDate(rec.date)} · ${zahlwort(rec.itemCount, "Position", "Positionen")}</div>`));
       r.append(el("div", "rowValue", eur(rec.total)));
-      const del = el("button", "del", "×");
-      del.setAttribute("aria-label", `Bon vom ${deDate(rec.date)} löschen`);
-      del.addEventListener("click", () => app.confirm("Bon löschen?",
-        `${rec.store}, ${deDate(rec.date)}`,
-        () => { Data.removeReceipt(rec.id); app.toast("Gelöscht"); }));
-      r.append(del);
+      // Antippen öffnet die Positionen. Bis hierher konnte man einen
+      // Bon nur ganz löschen — nach einem Fehltreffer der Erkennung
+      // hieß das: alles wegwerfen und neu erfassen.
+      const oeffnen = el("button", "rowOpen");
+      oeffnen.setAttribute("aria-label", `Bon vom ${deDate(rec.date)} ansehen`);
+      oeffnen.append(el("div", "chev"));
+      oeffnen.addEventListener("click", () => receiptSheet(rec, app));
+      r.append(oeffnen);
       g.body.append(r);
     });
     c.append(g);
@@ -1244,10 +2517,152 @@ function viewErfassen(ctx, app) {
   return c;
 }
 
+/* ================================================================
+   Bild statt Abtippen
+   ================================================================
+   Zwei Wege führen zum selben Ziel: das Foto eines Papierbons und
+   der Screenshot eines digitalen Bons aus der Händler-App. Beides
+   ist ein Bild, beides landet nach der Erkennung im selben Textfeld
+   und derselben Prüfliste — die Zuordnung bestätigt weiterhin ein
+   Mensch, Zeile für Zeile.
+
+   Das ist keine Bequemlichkeit, sondern die Bedingung: eine
+   Texterkennung liest, sie versteht nicht. Sie darf Vorschläge
+   machen und niemals buchen.
+   ================================================================ */
+function ocrPicker(box, cap, app) {
+  const wrap = el("div", "shot");
+
+  if (!OCR.supported()) {
+    // Kein Vorwurf und kein Fehler: der Textweg steht ja darunter.
+    wrap.append(el("p", "srcnote", esc(OCR.reason())));
+    box.append(wrap);
+    return;
+  }
+
+  const status = el("div", "shotStatus");
+  const bar = el("div", "shotBar");
+  const fill = el("i");
+  bar.append(fill);
+
+  const setStatus = (text, anteil) => {
+    status.textContent = text;
+    bar.hidden = anteil === null;
+    fill.style.width = Math.round((anteil || 0) * 100) + "%";
+  };
+
+  const input = el("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.hidden = true;
+  input.setAttribute("aria-label", "Bon-Bild wählen");
+
+  const kamera = el("input");
+  kamera.type = "file";
+  kamera.accept = "image/*";
+  // Sagt dem Telefon: Kamera, Rückseite. Auf dem Rechner ohne Wirkung.
+  // Als Attribut, nicht als Eigenschaft: `capture` ist nicht überall
+  // an eine Eigenschaft gebunden, das Attribut wird dagegen von jedem
+  // Browser gelesen, der es kennt.
+  kamera.setAttribute("capture", "environment");
+  kamera.hidden = true;
+  kamera.setAttribute("aria-label", "Bon fotografieren");
+
+  let laeuft = false;
+
+  const lies = (datei) => {
+    if (!datei || laeuft) return;
+    if (!/^image\//.test(datei.type || "")) { app.toast("Das ist kein Bild"); return; }
+    laeuft = true;
+    cap.shotName = datei.name || "Bild";
+    setStatus("Bild wird gelesen …", 0);
+    app.render();
+
+    OCR.read(datei, (phase, anteil) => {
+      setStatus(phase === "liest" ? "Text wird gelesen …" : "Texterkennung wird geladen …", anteil);
+    })
+      .then((text) => {
+        const gelesen = readReceiptImage(text, { today: Data.today() });
+        laeuft = false;
+        cap.text = gelesen.text;
+        cap.ocr = gelesen;
+        // Datum und Markt nur setzen, wenn im Bild etwas stand —
+        // eine leere Vorgabe zu überschreiben hilft, eine bewusst
+        // gesetzte zu überschreiben ärgert.
+        if (gelesen.date) cap.date = gelesen.date;
+        if (gelesen.store) cap.store = gelesen.store;
+        cap.parsed = gelesen.quality.ok ? Data.parseReceiptText(gelesen.text) : null;
+        app.render();
+        if (!gelesen.quality.ok) app.notice("Nicht genug erkannt", gelesen.quality.message);
+      })
+      .catch((e) => {
+        laeuft = false;
+        cap.ocr = null;
+        app.render();
+        app.notice("Texterkennung fehlgeschlagen",
+          (e && e.message ? e.message + ".\n\n" : "") +
+          "Der Bontext lässt sich weiter unten von Hand einfügen — daran ändert das nichts.");
+      });
+  };
+
+  input.addEventListener("change", () => lies(input.files && input.files[0]));
+  kamera.addEventListener("change", () => lies(kamera.files && kamera.files[0]));
+
+  const knoepfe = el("div", "shotRow");
+  const foto = el("button", "cta", "Fotografieren");
+  foto.addEventListener("click", () => kamera.click());
+  const waehlen = el("button", "cta light", "Bild wählen");
+  waehlen.addEventListener("click", () => input.click());
+  knoepfe.append(foto, waehlen);
+
+  wrap.append(knoepfe, input, kamera, status, bar);
+  bar.hidden = true;
+
+  // Auf dem Rechner ist Einfügen der schnellste Weg: Screenshot
+  // machen, hierher, Strg+V. Der Hörer bekommt das Fenster, nicht
+  // die Schaltfläche — sonst müsste man erst hineinklicken.
+  const einfuegen = (ev) => {
+    const items = (ev.clipboardData && ev.clipboardData.items) || [];
+    for (const it of items) {
+      if (it.type && it.type.startsWith("image/")) {
+        ev.preventDefault();
+        lies(it.getAsFile());
+        return;
+      }
+    }
+  };
+  document.addEventListener("paste", einfuegen);
+  // Beim nächsten Aufbau der Ansicht wieder abmelden, sonst hängen
+  // nach zehn Wechseln zehn Hörer am Fenster.
+  app.onLeaveView(() => document.removeEventListener("paste", einfuegen));
+
+  wrap.addEventListener("dragover", (ev) => { ev.preventDefault(); wrap.classList.add("over"); });
+  wrap.addEventListener("dragleave", () => wrap.classList.remove("over"));
+  wrap.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    wrap.classList.remove("over");
+    const datei = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+    lies(datei);
+  });
+
+  wrap.append(el("p", "srcnote",
+    "Foto eines Papierbons oder Screenshot aus der Händler-App. Das Bild bleibt auf dem Gerät — " +
+    "die Erkennung läuft hier, nicht auf einem Server."));
+
+  if (cap.ocr) {
+    const q = cap.ocr.quality;
+    wrap.append(uiRow(q.level === "gut" ? "Erkannt" : "Durchsehen", q.message, null, {}));
+  }
+
+  box.append(wrap);
+}
+
 function renderScan(box, cap, app) {
+  ocrPicker(box, cap, app);
+
   const ta = el("textarea");
   ta.value = cap.text || "";
-  ta.placeholder = "Bon-Text einfügen …";
+  ta.placeholder = "… oder Bon-Text einfügen";
   ta.setAttribute("aria-label", "Bon-Text");
   ta.addEventListener("input", () => { cap.text = ta.value; });
   const f = el("label", "field");
@@ -1260,7 +2675,7 @@ function renderScan(box, cap, app) {
   di.addEventListener("change", () => { cap.date = di.value; });
   df.append(di);
   const sf = el("label", "field", '<span class="lbl">Markt</span>');
-  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "Lidl";
+  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = MARKT_BEISPIEL;
   si.addEventListener("input", () => { cap.store = si.value; });
   sf.append(si);
   meta.append(df, sf);
@@ -1286,6 +2701,28 @@ function renderScan(box, cap, app) {
   box.append(uiRow(`${p.rows.length} erkannt, ${p.sure} sicher`,
     p.open ? "unsichere werden gefragt, nicht geraten" : null,
     el("span", "flag " + (p.open ? "f-gold" : "f-ok"), p.open ? p.open + " offen" : "fertig")));
+
+  /* Die Gegenprobe gegen die aufgedruckte Summe.
+     Sie steht bewusst GANZ OBEN und nicht in der Warnliste weiter
+     unten: sie ist die einzige Aussage hier, die der Bon selbst
+     belegen kann. Alles andere ist Vermutung der Erkennung, das
+     hier ist Arithmetik.
+
+     Und sie korrigiert nichts. „Es fehlen 1,19 €" ist ein Hinweis,
+     wo nachzusehen ist — welche Zeile fehlt, sieht nur der Mensch,
+     der den Bon in der Hand hält. */
+  if (p.printedTotal !== null && p.printedTotal !== undefined) {
+    const stimmt = p.totalOk;
+    const fehlt = p.totalDiff > 0;
+    box.append(uiRow(
+      stimmt ? `Summe stimmt: ${eur(p.printedTotal)}` : `Summe weicht ab: ${eur(Math.abs(p.totalDiff))}`,
+      stimmt
+        ? "Preise, Mengen, Rabatte und Pfand gehen zusammen auf"
+        : (fehlt
+          ? `Der Bon nennt ${eur(p.printedTotal)}, erkannt wurden ${eur(p.sum)} — es fehlt vermutlich eine Zeile`
+          : `Der Bon nennt ${eur(p.printedTotal)}, erkannt wurden ${eur(p.sum)} — eine Zeile ist vermutlich doppelt`),
+      el("span", "flag " + (stimmt ? "f-ok" : "f-gold"), stimmt ? "geprüft" : "prüfen")));
+  }
 
   if (p.warnings.length) {
     box.append(uiRow(`${p.warnings.length} Rechenprobe(n) auffällig`, null, null,
@@ -1327,13 +2764,20 @@ function renderScan(box, cap, app) {
   });
   box.append(rows);
 
-  const save = el("button", "cta", `${p.rows.filter((r) => r.productId).length} übernehmen`);
+  /* „N übernehmen“ hieß dieser Knopf, und er tut dasselbe wie der in
+     der Liste und der in den Gängen: einen Einkauf buchen. Die Zahl
+     bleibt, weil sie hier etwas sagt, was nirgends sonst steht —
+     wie viele der erkannten Zeilen tatsächlich gebucht werden. Das
+     Verb ist jetzt überall dasselbe. */
+  const buchbar = p.rows.filter((r) => r.productId).length;
+  const save = el("button", "cta", `${zahlwort(buchbar, "Position", "Positionen")} buchen`);
   save.disabled = !p.rows.some((r) => r.productId);
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
     const res = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
+    app.askPersist();
     cap.parsed = null; cap.text = "";
-    app.toast(`${res.count} gebucht`, { detail: bookedDetail(res) });
+    app.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
   });
   box.append(save);
@@ -1397,7 +2841,7 @@ function renderManual(box, cap, app) {
 
   const total = cap.basket.reduce((a, b) => a + b.unitPrice * b.quantity, 0);
   const tot = el("div", "totals bare");
-  tot.innerHTML = `<div><div class="l">${cap.basket.length} Positionen</div><div class="big">${eur(total)}</div></div>`;
+  tot.innerHTML = `<div><div class="l">${zahlwort(cap.basket.length, "Position", "Positionen")}</div><div class="big">${eur(total)}</div></div>`;
   box.append(tot);
 
   const meta = el("div", "row2");
@@ -1406,24 +2850,24 @@ function renderManual(box, cap, app) {
   di.addEventListener("change", () => { cap.date = di.value; });
   df.append(di);
   const sf = el("label", "field", '<span class="lbl">Markt</span>');
-  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = "REWE";
+  const si = el("input"); si.type = "text"; si.value = cap.store || ""; si.placeholder = MARKT_BEISPIEL;
   si.addEventListener("input", () => { cap.store = si.value; });
   sf.append(si);
   meta.append(df, sf);
   box.append(meta);
 
-  const save = el("button", "cta", "Buchen");
+  const save = el("button", "cta", "Einkauf buchen");
   save.addEventListener("click", () => {
     const res = Data.addReceipt({ date: di.value, store: si.value.trim() || "Unbekannt", items: cap.basket });
     cap.basket = [];
-    app.toast(`${res.count} gebucht`, { detail: bookedDetail(res) });
+    app.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
   });
   box.append(save);
 }
 
 /* ================================================================
-   4. Zahlen
+   5. Zahlen
    ================================================================ */
 function viewZahlen(ctx, app) {
   const c = frag();
@@ -1438,7 +2882,7 @@ function viewZahlen(ctx, app) {
   const s = el("div", "scroller");
   s.append(tile("Am Stück", `${ctx.streak.weeks}`,
     ctx.streak.weeks === 1 ? "Woche" : "Wochen", ctx.streak.weeks > 0 ? "good" : null));
-  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), `${t.receipts} Bons`));
+  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), zahlwort(t.receipts, "Bon", "Bons")));
   s.append(tile("zu holen", eur(savingsTotal), "ohne Verzicht", "good"));
   s.append(tile("Verlust", eur(t.wastedPerWeek), `${de(ctx.impact.kg)} kg gesamt`, "warn"));
   s.append(tile("Rhythmen", String([...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length),
@@ -1523,7 +2967,7 @@ function viewZahlen(ctx, app) {
     const suggested = suggestedLookahead(ctx.pattern);
     const cur = Data.get().settings.lookaheadDays;
     if (suggested && suggested !== cur) {
-      g.body.append(uiRow(`Vorausschau auf ${suggested} Tage`, `aktuell ${cur}`, null, {
+      g.body.append(uiRow(`Vorausschau auf ${tage(suggested)}`, `aktuell ${cur}`, null, {
         onClick: () => { app.set((st) => { st.settings.lookaheadDays = suggested; }); app.toast("Übernommen"); }
       }));
     }
@@ -1536,7 +2980,7 @@ function viewZahlen(ctx, app) {
   if (ctx.inflation && ctx.inflation.productsCompared) {
     const inf = ctx.inflation;
     const g = uiGroup("Persönliche Inflation", inf.caveat);
-    g.body.append(uiRow("Dein Warenkorb", `${inf.productsCompared} Produkte verglichen`,
+    g.body.append(uiRow("Dein Warenkorb", `${zahlwort(inf.productsCompared, "Produkt", "Produkte")} verglichen`,
       null, { value: sign(inf.changePercent) + " %" }));
     inf.biggestIncreases.slice(0, 5).forEach((i) => g.body.append(
       uiRow(i.name, `${eur(i.basePrice)} → ${eur(i.currentPrice)}`, null, { value: sign(i.changePercent) + " %" })));
@@ -1601,7 +3045,7 @@ function viewZahlen(ctx, app) {
     g.body.append(uiRow("Haushaltsprodukte", ctx.nonFoodSaved.basis, null,
       { value: eur(ctx.nonFoodSaved.total) }));
     ctx.nonFoodSaved.byProduct.slice(0, 5).forEach((x) =>
-      g.body.append(uiRow(x.name, `${x.purchases} Käufe`, null, { value: eur(x.saved) })));
+      g.body.append(uiRow(x.name, `${zahlwort(x.purchases, "Kauf", "Käufe")}`, null, { value: eur(x.saved) })));
     c.append(g);
   }
 
@@ -1616,10 +3060,18 @@ function viewZahlen(ctx, app) {
 
   /* --- Wirkung --- */
   const cmp = compareToReference(ctx.impact.kg, Data.get().settings.household);
-  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note);
+  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note +
+    "\n\nJede dieser Zahlen ist abgeleitet, keine ist gewogen. Ein Tippen auf ein Produkt zeigt die " +
+    "einzelnen Verdachtsfälle — und lässt dich widersprechen, wo du es besser weißt.");
   ig.body.append(uiRow("Geschätzter Verlust", null, null, { value: de(ctx.impact.kg) + " kg" }));
-  ctx.impact.byProduct.slice(0, 5).forEach((x) =>
-    ig.body.append(uiRow(x.name, null, null, { value: de(x.kg) + " kg" })));
+  ctx.impact.byProduct.slice(0, 5).forEach((x) => {
+    // Antippbar: von der Gesamtzahl zu den Fällen, aus denen sie besteht.
+    const pid = (FOOD_DATABASE.find((f) => f.name === x.name) || {}).id;
+    ig.body.append(uiRow(x.name, null, null, {
+      value: de(x.kg) + " kg",
+      onClick: pid ? () => productSheet(pid, ctx) : undefined
+    }));
+  });
   c.append(ig);
 
   return c;
@@ -1665,10 +3117,11 @@ function chartCard(ctx) {
 }
 
 /* ================================================================
-   5. Mehr
+   6. Mehr
    ================================================================ */
 function viewMehr(ctx, app) {
   const c = frag();
+  if (ctx.backup.urgent) c.append(backupGroup(ctx, app));
   const S = Data.get();
 
   /* --- Darstellung --- */
@@ -1715,8 +3168,12 @@ function viewMehr(ctx, app) {
   /* --- Gangreihenfolge --- */
   const aisles = relevantAisles(ctx.aisleList, ctx.items);
   if (aisles.length > 1) {
-    const g = uiGroup("Ladenweg" + (ctx.store ? ` · ${ctx.store}` : ""),
-      "So läufst du im Ladenmodus durch den Markt. Die Reihenfolge wird je Markt gemerkt.");
+    /* Heißt wie der Knopf, der dorthin führt. „Ladenweg“ als
+       Überschrift und „Nach Gängen“ als Knopf waren zwei Namen für
+       dieselbe Reihenfolge — man sucht die Einstellung dann dort,
+       wo sie nicht steht. */
+    const g = uiGroup("Nach Gängen" + (ctx.store ? ` · ${ctx.store}` : ""),
+      "Die Reihenfolge, in der die Liste beim Einkaufen durchlaufen wird. Sie wird je Markt gemerkt.");
     aisles.forEach((aisle, i) => {
       const r = el("div", "row");
       r.append(el("div", "rowMain", `<div class="rowTitle">${esc(aisle)}</div>`));
@@ -1749,7 +3206,7 @@ function viewMehr(ctx, app) {
     pg.body.append(uiRow("Nichts offen", null, null, { value: "0,00 €" }));
   } else {
     d.byType.forEach((t) => pg.body.append(uiRow(t.label, `${t.count} Gebinde`, null, { value: eur(t.amount) })));
-    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${d.daysOpen} Tagen`, null, {
+    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${tagen(d.daysOpen)}`, null, {
       onClick: () => {
         app.set((s) => {
           s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
@@ -1783,9 +3240,9 @@ function viewMehr(ctx, app) {
       "Vertrauen: Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung.",
       "Bestand: gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit).",
       "Reichweite: kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit.",
-      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2.",
+      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2. Geschätzt heißt: die App sieht, dass wieder gekauft wurde, bevor die Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank geschaut.",
       "Budget: erst Verschwender halbieren, dann Süßes und Alkohol. Grundnahrung nie.",
-      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet.",
+      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet. Der Median statt des Durchschnitts, damit ein einzelnes Angebot den Bezugswert nicht verschiebt. Kein Vergleich zwischen Märkten — dafür fehlen die Daten, und fremde Preise wären erfunden.",
       "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen.",
       "Haushaltsprodukte rechnen anders: sie verderben nicht, also entspricht die gekaufte Menge der verbrauchten. Statt eines Kaufrhythmus gilt eine Verbrauchsrate, skaliert mit der Haushaltsgröße hoch einem Exponenten je Produkt — Zahnpasta linear, Waschmittel degressiv, Allzweckreiniger gar nicht.",
       "Rate: Referenzwert als Prior, Beobachtung über ein 180-Tage-Fenster als Posterior, gewichtet mit min(Käufe, 6) gegen 2. Nach sechs Käufen bestimmt die Beobachtung drei Viertel.",
@@ -1794,14 +3251,17 @@ function viewMehr(ctx, app) {
   }));
 
   const q = databaseQualityReport();
-  m.body.append(uiRow("Datenbasis", `${q.total} Produkte · ${q.anteilGeschaetzt} % geschätzt`, null, {
+  m.body.append(uiRow("Datenbasis", `${zahlwort(q.total, "Produkt", "Produkte")} · ${q.anteilGeschaetzt} % geschätzt`, null, {
     onClick: () => app.notice("Datenbasis, ungeschönt",
-      `${q.total} Produkte, ${q.kategorien} Kategorien, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
-      `regulatorisch: ${q.regulatorisch} — Verbrauchsdatum-Pflicht, rechtlich definiert (BZfE/BLE)\n` +
-      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE/BLE)\n` +
+      `${zahlwort(q.total, "Produkt", "Produkte")}, ${zahlwort(q.kategorien, "Kategorie", "Kategorien")}, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
+      `rechtlich definiert: ${q.regulatorisch}\n` +
+      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE, BMEL)\n` +
       `Schätzwert: ${q.schaetzwert} — ohne amtliche Quelle, vor Produktivbetrieb prüfen\n\n` +
       `${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen. Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten.\n\n` +
-      `${q.safetyCritical} Produkte tragen ein Verbrauchsdatum — für sie schlägt die App nie eine Weiterverwendung vor.`)
+      `${zahlwort(q.safetyCritical, "Produkt", "Produkte")} tragen ein Verbrauchsdatum. Für sie schlägt die App nie eine Weiterverwendung vor — und ihre Tageszahlen ` +
+      `stehen ausdrücklich NICHT als „rechtlich definiert“ da: geregelt sind die Pflicht zum Verbrauchsdatum (LMIV Art. 24) und die ` +
+      `Höchsttemperatur (Tier-LMHV Anlage 5), nicht die Anzahl der Tage. Die Tage sind Lagerempfehlungen, jeweils an der unteren Grenze. ` +
+      `Es gilt immer das aufgedruckte Datum.`)
   }));
   m.body.append(uiRow("Über", `Bauversion ${window.__BUILD__ || "dev"}`, null, {
     onClick: () => app.notice("Einkaufs-Anker",
@@ -1810,6 +3270,63 @@ function viewMehr(ctx, app) {
       "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\“.")
   }));
   c.append(m);
+
+  /* --- Sicherung ---
+     Steht normalerweise hier unten bei den Daten, wo man sie sucht.
+     Ist der Bestand aber wirklich gefährdet, wandert sie nach ganz
+     oben — eine Warnung, die man erst erscrollen muss, ist keine.
+     Der Zustand kommt aus backupGuard, die Handgriffe aus
+     ui/backup.js. */
+  if (!ctx.backup.urgent) c.append(backupGroup(ctx, app));
+
+  /* --- Einstellungen für die Liste ---
+     Standen bis hierher unten auf der Startseite. Sie sind
+     Einstellungen: man fasst sie einmal an und danach monatelang
+     nicht mehr — auf der Seite, die man täglich öffnet, waren sie
+     vier Blöcke Ballast. */
+  const wl = uiGroup("Deine Liste",
+    "Diese vier Werte steuern, was auf der Einkaufsliste landet.\n\n" +
+    "Das Budget streicht die teuersten entbehrlichen Positionen — Brot, Milch und Eier bleiben immer drauf. " +
+    "Die Personenzahl skaliert die Mengen. Die Vorausschau nimmt mit, was in den nächsten Tagen fällig wird, " +
+    "damit man nicht zweimal geht. Und der Urlaubsmodus stellt zurück, was bis zur Rückkehr verderben würde.");
+  const restBudget = S.settings.budget - ctx.items.filter((i) => i.on)
+    .reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+  wl.body.append(uiRow("Budget",
+    S.settings.budget ? (restBudget >= 0 ? `${eur(restBudget)} Luft` : `${eur(-restBudget)} drüber`) : null,
+    stepper(S.settings.budget, (v) => (v ? eur(v) : "aus"),
+      (v) => app.set((s) => { s.settings.budget = v; }), { min: 0, max: 400, step: 5 })));
+  wl.body.append(uiRow("Personen", null,
+    stepper(S.settings.household, String,
+      (v) => app.set((s) => { s.settings.household = v; }), { min: 1, max: 8, step: 1 })));
+  wl.body.append(uiRow("Vorausschau",
+    ctx.pattern && ctx.pattern.dayName ? `nächster Einkauf ${ctx.pattern.dayName}` : null,
+    stepper(S.settings.lookaheadDays, (v) => (v ? tage(v) : "aus"),
+      (v) => app.set((s) => { s.settings.lookaheadDays = v; }), { min: 0, max: 7, step: 1 })));
+
+  const urlaub = S.settings.vacation;
+  wl.body.append(uiRow("Urlaub",
+    urlaub.active && urlaub.from ? `${deDate(urlaub.from)}–${deDate(urlaub.to)}` : null,
+    toggle(urlaub.active, (onOff) => app.set((s) => {
+      s.settings.vacation.active = onOff;
+      if (onOff && !s.settings.vacation.from) {
+        s.settings.vacation.from = Data.plusDays(Data.today(), 2);
+        s.settings.vacation.to = Data.plusDays(Data.today(), 16);
+      }
+    }), "Urlaubsmodus")));
+  if (urlaub.active) {
+    const f = el("div", "dateRow");
+    [["from", "Abreise"], ["to", "Rückkehr"]].forEach(([key, label]) => {
+      const w = el("label", "field", `<span class="lbl">${label}</span>`);
+      const i = el("input");
+      i.type = "date";
+      i.value = urlaub[key] || "";
+      i.addEventListener("change", () => app.set((s) => { s.settings.vacation[key] = i.value; }));
+      w.append(i);
+      f.append(w);
+    });
+    wl.body.append(f);
+  }
+  c.append(wl);
 
   /* --- Daten --- */
   const dat = uiGroup("Daten",
@@ -1844,7 +3361,7 @@ function viewMehr(ctx, app) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try { app.toast(`${Data.importJson(String(reader.result))} Käufe eingelesen`); }
+      try { app.toast(`${zahlwort(Data.importJson(String(reader.result)), "Kauf", "Käufe")} eingelesen`); }
       catch (e) { app.toast("Nicht lesbar"); console.error(e); }
     };
     reader.readAsText(file);

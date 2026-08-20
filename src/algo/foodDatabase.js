@@ -45,11 +45,20 @@ const STORAGE = {
 const DATE_TYPE = { MHD: "mhd", VERBRAUCHSDATUM: "verbrauchsdatum", NONE: "keins" };
 const ETHYLENE = { PRODUCER: "produziert", SENSITIVE: "empfindlich", NEUTRAL: "neutral" };
 
+const { safetyGroupOf } = require("./safetyRules");
+
+/* Tag der letzten Quellenprüfung der sicherheitskritischen Produkte.
+   Steht hier und nicht je Zeile: geprüft wurde alles auf einmal, und
+   54-mal dasselbe Datum in die Tabelle zu schreiben lädt nur dazu
+   ein, dass eines davon irgendwann nicht mitgezogen wird. */
+const SAFETY_CHECKED = "2026-08-13";
+
 const FOOD_DATABASE = [];
 
 function group(category, aisle, storage, rows, groupOpts = {}) {
   rows.forEach((r) => {
     const [id, name, dateType, su, so, quality, price, weightG, aliases = [], opts = {}] = r;
+    const sg = safetyGroupOf(id);
     FOOD_DATABASE.push({
       id, name, category, aisle,
       storage: opts.storage || storage,
@@ -64,7 +73,15 @@ function group(category, aisle, storage, rows, groupOpts = {}) {
       typicalPrice: price,
       typicalWeightG: weightG,
       aliases,
-      note: opts.note || null
+      note: opts.note || null,
+      /* Die rechtliche Höchsttemperatur kommt aus safetyRules und
+         wird NICHT je Zeile gepflegt — sie hängt an der Gruppe, nicht
+         am einzelnen Produkt, und eine Zahl, die an 54 Stellen
+         wiederholt wird, ist 54 Gelegenheiten, sie falsch zu
+         schreiben. */
+      maxTempC: sg ? sg.maxTempC : null,
+      safetyGroup: sg ? sg.id : null,
+      checked: sg ? SAFETY_CHECKED : null
     });
   });
 }
@@ -113,19 +130,19 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 
 // ===================== FLEISCH & FISCH ===========================
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["hackfleisch","Hackfleisch gemischt",V,1,1,REG,4.99,500,["HACKFLEISCH","GEMISCHTES HACK","METT"],{note:"BZfE nennt Hackfleisch ausdrücklich als Verbrauchsdatum-Produkt."}],
-  ["hack_rind","Rinderhackfleisch",V,1,1,REG,5.99,500,["RINDERHACK","HACKFLEISCH RIND"]],
-  ["haehnchen","Hähnchenbrust",V,2,1,REG,6.99,400,["HAEHNCHENBRUST","HÄHNCHENBRUSTFILET","GEFLUEGEL BRUST","HAEHNCHENFILET"],{note:"Geflügel laut BZfE Verbrauchsdatum-Produkt."}],
-  ["haehnchen_schenkel","Hähnchenschenkel",V,2,1,REG,3.99,600,["HAEHNCHENSCHENKEL","HAEHNCHENKEULE"]],
-  ["putenbrust","Putenbrust",V,2,1,REG,7.49,400,["PUTENBRUST","PUTENSCHNITZEL"]],
-  ["schweineschnitzel","Schweineschnitzel",V,3,1,REG,5.49,500,["SCHNITZEL","SCHWEINESCHNITZEL"]],
-  ["schweinefilet","Schweinefilet",V,3,1,REG,7.99,400,["SCHWEINEFILET"]],
-  ["rindersteak","Rindersteak",V,3,1,REG,9.99,300,["RUMPSTEAK","RINDERSTEAK","ENTRECOTE"]],
-  ["gulasch","Gulasch",V,2,1,REG,6.49,500,["GULASCH","GULASCHFLEISCH"]],
-  ["bratwurst","Bratwurst",V,3,1,REG,3.49,400,["BRATWURST","ROSTBRATWURST","NUERNBERGER"]],
-  ["fisch_lachs","Lachsfilet",V,1,1,REG,8.99,250,["LACHSFILET","LACHS"],{note:"Roher Fisch laut BZfE Verbrauchsdatum-Produkt."}],
-  ["fisch_weiss","Weißfischfilet",V,1,1,REG,6.99,300,["SEELACHS","KABELJAU","FISCHFILET","PANGASIUS"]],
-  ["garnelen","Garnelen",V,1,1,REG,5.99,200,["GARNELEN","SHRIMPS"]],
+  ["hackfleisch","Hackfleisch gemischt",V,1,1,LEIT,4.99,500,["HACKFLEISCH","GEMISCHTES HACK","METT"],{note:"BZfE nennt Hackfleisch ausdrücklich als Verbrauchsdatum-Produkt."}],
+  ["hack_rind","Rinderhackfleisch",V,1,1,LEIT,5.99,500,["RINDERHACK","HACKFLEISCH RIND"]],
+  ["haehnchen","Hähnchenbrust",V,2,1,LEIT,6.99,400,["HAEHNCHENBRUST","HÄHNCHENBRUSTFILET","GEFLUEGEL BRUST","HAEHNCHENFILET"],{note:"Geflügel laut BZfE Verbrauchsdatum-Produkt."}],
+  ["haehnchen_schenkel","Hähnchenschenkel",V,2,1,LEIT,3.99,600,["HAEHNCHENSCHENKEL","HAEHNCHENKEULE"]],
+  ["putenbrust","Putenbrust",V,2,1,LEIT,7.49,400,["PUTENBRUST","PUTENSCHNITZEL"]],
+  ["schweineschnitzel","Schweineschnitzel",V,3,1,LEIT,5.49,500,["SCHNITZEL","SCHWEINESCHNITZEL"]],
+  ["schweinefilet","Schweinefilet",V,3,1,LEIT,7.99,400,["SCHWEINEFILET"]],
+  ["rindersteak","Rindersteak",V,3,1,LEIT,9.99,300,["RUMPSTEAK","RINDERSTEAK","ENTRECOTE"]],
+  ["gulasch","Gulasch",V,2,1,LEIT,6.49,500,["GULASCH","GULASCHFLEISCH"]],
+  ["bratwurst","Bratwurst",V,2,1,LEIT,3.49,400,["BRATWURST","ROSTBRATWURST","NUERNBERGER"]],
+  ["fisch_lachs","Lachsfilet",V,1,1,LEIT,8.99,250,["LACHSFILET","LACHS"],{note:"Roher Fisch laut BZfE Verbrauchsdatum-Produkt."}],
+  ["fisch_weiss","Weißfischfilet",V,1,1,LEIT,6.99,300,["SEELACHS","KABELJAU","FISCHFILET","PANGASIUS"]],
+  ["garnelen","Garnelen",V,1,1,LEIT,5.99,200,["GARNELEN","SHRIMPS"]],
   ["raeucherlachs","Räucherlachs",M,14,2,EST,3.99,100,["RAEUCHERLACHS","GRAVED LACHS"],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["thunfisch_dose","Thunfisch, Dose",M,900,2,LEIT,1.29,150,["THUNFISCH DOSE","THUNFISCH"],{storage:STORAGE.PANTRY}]
 ]);
@@ -165,7 +182,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["mango","Mango",M,7,3,LEIT,1.99,400,["MANGO"],{ethylene:ETHYLENE.PRODUCER}],
   ["granatapfel","Granatapfel",M,21,5,LEIT,2.49,400,["GRANATAPFEL"],{ethylene:ETHYLENE.SENSITIVE}],
   ["feigen","Feigen",M,5,3,LEIT,3.49,300,["FEIGEN"],{ethylene:ETHYLENE.PRODUCER}],
-  ["obst_geschnitten","Obst, geschnitten",V,1,1,REG,2.99,300,["OBSTSALAT","MELONE GESCHNITTEN","ANANAS GESCHNITTEN"],{freezable:false,note:"Kleingeschnittenes Obst laut BZfE Verbrauchsdatum-Produkt."}]
+  ["obst_geschnitten","Obst, geschnitten",V,1,1,LEIT,2.99,300,["OBSTSALAT","MELONE GESCHNITTEN","ANANAS GESCHNITTEN"],{freezable:false,note:"Kleingeschnittenes Obst laut BZfE Verbrauchsdatum-Produkt."}]
 ]);
 
 // ===================== OBST/GEMÜSE (Zimmertemperatur) ============
@@ -194,7 +211,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.PANTRY, [
 // ===================== GEMÜSE (Gemüsefach) ======================
 group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["salat_kopf","Kopfsalat",M,5,2,LEIT,1.39,400,["KOPFSALAT","SALAT KOPF","EISBERG"],{freezable:false,note:"BZfE: Gemüsefach, in Behälter oder feuchtem Tuch."}],
-  ["salat_geschnitten","Salatmischung, geschnitten",V,2,1,REG,1.29,150,["BLATTSALAT GESCHNITTEN","FELDSALAT BEUTEL","ROHKOSTSALAT"],{freezable:false,note:"Vorgeschnittene Salate laut BZfE Verbrauchsdatum-Produkt."}],
+  ["salat_geschnitten","Salatmischung, geschnitten",V,2,1,LEIT,1.29,150,["BLATTSALAT GESCHNITTEN","FELDSALAT BEUTEL","ROHKOSTSALAT"],{freezable:false,note:"Vorgeschnittene Salate laut BZfE Verbrauchsdatum-Produkt."}],
   ["feldsalat","Feldsalat",M,4,2,LEIT,1.99,150,["FELDSALAT","RAPUNZEL"],{freezable:false}],
   ["rucola","Rucola",M,4,2,LEIT,1.49,125,["RUCOLA","RAUKE"],{freezable:false}],
   ["moehren","Möhren",M,21,10,LEIT,1.29,1000,["MOEHREN","KAROTTEN","MÖHREN"],{note:"BZfE: aus dem Folienbeutel nehmen, Grün abschneiden."}],
@@ -221,7 +238,7 @@ group("Frischware", "Obst & Gemüse", STORAGE.FRIDGE_VEG, [
   ["pastinaken","Pastinaken",M,18,8,LEIT,1.99,500,["PASTINAKEN"]],
   ["lauchzwiebeln","Frühlingszwiebeln",M,7,4,LEIT,0.89,150,["FRUEHLINGSZWIEBELN","LAUCHZWIEBELN"]],
   ["kresse","Kresse",M,5,3,LEIT,0.99,50,["KRESSE"],{freezable:false}],
-  ["sprossen","Sprossen",V,3,1,REG,1.49,100,["SPROSSEN","MUNGBOHNENSPROSSEN"],{freezable:false}]
+  ["sprossen","Sprossen",V,2,1,LEIT,1.49,100,["SPROSSEN","MUNGBOHNENSPROSSEN"],{freezable:false}]
 ]);
 
 // ===================== BACKWAREN =================================
@@ -372,9 +389,9 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 ]);
 
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["haehnchen_nuggets","Hähnchen-Nuggets",V,3,1,REG,3.99,400,["CHICKENNUG","CHICKEN NUGGETS","HAEHNCHEN NUGGETS","CHICKENNUG.CORNFLAK","NUGGETS"]],
+  ["haehnchen_nuggets","Hähnchen-Nuggets",V,2,1,LEIT,3.99,400,["CHICKENNUG","CHICKEN NUGGETS","HAEHNCHEN NUGGETS","CHICKENNUG.CORNFLAK","NUGGETS"]],
   ["putenaufschnitt","Puten-Aufschnitt",M,10,4,EST,2.69,150,["PUTE GORGONZOLA","PUTENBRUST AUFSCHNITT","PUTE AUFSCHNITT"],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["rinderhueftsteak","Rinderhüftsteak",V,3,1,REG,4.58,200,["RINDERHUEFTSTEAK","HUEFTSTEAK","RINDERHUEFTE"]]
+  ["rinderhueftsteak","Rinderhüftsteak",V,3,1,LEIT,4.58,200,["RINDERHUEFTSTEAK","HUEFTSTEAK","RINDERHUEFTE"]]
 ]);
 
 group("Tiefkühl", "Tiefkühl", STORAGE.FREEZER, [
@@ -622,30 +639,30 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
 
 // ===================== FLEISCH & WURST, breit ====================
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["haehnchen_ganz","Hähnchen ganz",V,2,1,REG,5.99,1200,[]],
-  ["haehnchen_fluegel","Hähnchenflügel",V,2,1,REG,3.49,800,[]],
-  ["haehnchen_innen","Hähnchen-Innenfilet",V,2,1,REG,5.49,400,[]],
-  ["putengeschnetzeltes","Putengeschnetzeltes",V,2,1,REG,6.49,400,[]],
-  ["entenbrust","Entenbrust",V,3,1,REG,9.99,350,[]],
-  ["gans","Gans",V,3,1,REG,24.99,3000,[]],
-  ["schweinebauch","Schweinebauch",V,3,1,REG,4.99,600,[]],
-  ["schweinenacken","Schweinenacken",V,3,1,REG,5.49,700,[]],
+  ["haehnchen_ganz","Hähnchen ganz",V,2,1,LEIT,5.99,1200,[]],
+  ["haehnchen_fluegel","Hähnchenflügel",V,2,1,LEIT,3.49,800,[]],
+  ["haehnchen_innen","Hähnchen-Innenfilet",V,2,1,LEIT,5.49,400,[]],
+  ["putengeschnetzeltes","Putengeschnetzeltes",V,2,1,LEIT,6.49,400,[]],
+  ["entenbrust","Entenbrust",V,2,1,LEIT,9.99,350,[]],
+  ["gans","Gans",V,2,1,LEIT,24.99,3000,[]],
+  ["schweinebauch","Schweinebauch",V,3,1,LEIT,4.99,600,[]],
+  ["schweinenacken","Schweinenacken",V,3,1,LEIT,5.49,700,[]],
   ["kasseler","Kasseler",M,10,4,EST,5.99,500,[]],
-  ["schweinerueckensteak","Schweinesteak",V,3,1,REG,5.29,500,[]],
-  ["rinderbraten","Rinderbraten",V,3,1,REG,11.99,1000,[]],
-  ["rinderfilet","Rinderfilet",V,3,1,REG,16.99,400,[]],
-  ["tafelspitz","Tafelspitz",V,3,1,REG,12.99,800,[]],
-  ["suppenfleisch","Suppenfleisch",V,3,1,REG,6.99,600,[]],
-  ["lammkotelett","Lammkoteletts",V,3,1,REG,12.99,400,[]],
-  ["lammkeule","Lammkeule",V,3,1,REG,15.99,1200,[]],
-  ["kalbsschnitzel","Kalbsschnitzel",V,2,1,REG,11.99,400,[]],
-  ["leber","Leber",V,1,1,REG,4.49,300,[]],
-  ["hackbaellchen_frisch","Frikadellen frisch",V,2,1,REG,4.29,400,[]],
-  ["gyros_frisch","Gyros mariniert",V,3,1,REG,5.99,500,[]],
-  ["spiesse_grill","Grillspieße",V,2,1,REG,5.49,400,[]],
+  ["schweinerueckensteak","Schweinesteak",V,3,1,LEIT,5.29,500,[]],
+  ["rinderbraten","Rinderbraten",V,3,1,LEIT,11.99,1000,[]],
+  ["rinderfilet","Rinderfilet",V,3,1,LEIT,16.99,400,[]],
+  ["tafelspitz","Tafelspitz",V,3,1,LEIT,12.99,800,[]],
+  ["suppenfleisch","Suppenfleisch",V,3,1,LEIT,6.99,600,[]],
+  ["lammkotelett","Lammkoteletts",V,3,1,LEIT,12.99,400,[]],
+  ["lammkeule","Lammkeule",V,3,1,LEIT,15.99,1200,[]],
+  ["kalbsschnitzel","Kalbsschnitzel",V,2,1,LEIT,11.99,400,[]],
+  ["leber","Leber",V,1,1,LEIT,4.49,300,[]],
+  ["hackbaellchen_frisch","Frikadellen frisch",V,2,1,LEIT,4.29,400,[]],
+  ["gyros_frisch","Gyros mariniert",V,2,1,LEIT,5.99,500,[]],
+  ["spiesse_grill","Grillspieße",V,2,1,LEIT,5.49,400,[]],
   ["currywurst","Currywurst",M,14,3,EST,2.99,300,[]],
   ["weisswurst","Weißwurst",M,7,2,EST,3.49,300,[]],
-  ["merguez","Merguez",V,3,1,REG,4.99,300,[]],
+  ["merguez","Merguez",V,2,1,LEIT,4.99,300,[]],
   ["chorizo","Chorizo",M,40,14,EST,2.99,200,[]],
   ["cabanossi","Cabanossi",M,35,12,EST,2.49,200,[]],
   ["landjaeger","Landjäger",M,60,20,EST,2.79,100,[]],
@@ -664,17 +681,17 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
 ]);
 
 group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
-  ["forelle","Forelle",V,1,1,REG,5.99,300,[]],
-  ["zander","Zanderfilet",V,1,1,REG,12.99,300,[]],
-  ["dorade","Dorade",V,1,1,REG,7.99,400,[]],
-  ["wolfsbarsch","Wolfsbarsch",V,1,1,REG,9.99,400,[]],
-  ["rotbarsch","Rotbarschfilet",V,1,1,REG,7.49,300,[]],
-  ["scholle","Schollenfilet",V,1,1,REG,6.99,300,[]],
-  ["hering_frisch","Hering frisch",V,1,1,REG,3.99,300,[]],
-  ["makrele_frisch","Makrele frisch",V,1,1,REG,4.99,400,[]],
-  ["thunfisch_frisch","Thunfischsteak",V,1,1,REG,13.99,250,[]],
-  ["muscheln","Miesmuscheln",V,1,1,REG,4.99,1000,[]],
-  ["tintenfisch","Tintenfischringe",V,1,1,REG,6.49,300,[]],
+  ["forelle","Forelle",V,1,1,LEIT,5.99,300,[]],
+  ["zander","Zanderfilet",V,1,1,LEIT,12.99,300,[]],
+  ["dorade","Dorade",V,1,1,LEIT,7.99,400,[]],
+  ["wolfsbarsch","Wolfsbarsch",V,1,1,LEIT,9.99,400,[]],
+  ["rotbarsch","Rotbarschfilet",V,1,1,LEIT,7.49,300,[]],
+  ["scholle","Schollenfilet",V,1,1,LEIT,6.99,300,[]],
+  ["hering_frisch","Hering frisch",V,1,1,LEIT,3.99,300,[]],
+  ["makrele_frisch","Makrele frisch",V,1,1,LEIT,4.99,400,[]],
+  ["thunfisch_frisch","Thunfischsteak",V,1,1,LEIT,13.99,250,[]],
+  ["muscheln","Miesmuscheln",V,1,1,LEIT,4.99,1000,[]],
+  ["tintenfisch","Tintenfischringe",V,1,1,LEIT,6.49,300,[]],
   ["surimi","Surimi",M,14,2,EST,1.99,200,[]],
   ["matjes","Matjesfilet",M,10,3,EST,3.49,200,[]],
   ["rollmops","Rollmops",M,21,5,EST,2.79,250,[]],
@@ -683,7 +700,7 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
   ["makrele_geraeuchert","Räuchermakrele",M,10,3,EST,3.29,200,[]],
   ["sardellen","Sardellenfilets",M,365,5,EST,2.49,50,[],{storage:STORAGE.PANTRY}],
   ["kaviar_ersatz","Seehasenrogen",M,60,7,EST,3.49,100,[]],
-  ["fischstaebchen_frisch","Backfisch",V,2,1,REG,4.49,400,[]]
+  ["fischstaebchen_frisch","Backfisch",V,2,1,LEIT,4.49,400,[]]
 ]);
 
 // ===================== BACKWAREN, breit ==========================
@@ -1099,9 +1116,9 @@ group("Fertiggerichte", "Trockenware", STORAGE.PANTRY, [
   ["pizzabrot_fertig","Pizzateig frisch",M,21,1,EST,1.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["nudelsauce_glas","Nudelsauce Glas",M,540,5,EST,1.79,400,[]],
   ["fixprodukt","Fix-Würzmischung",M,540,30,EST,0.89,40,[]],
-  ["sandwich_fertig","Fertigsandwich",V,2,1,REG,2.99,180,[],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["salat_fertig","Fertigsalat",V,2,1,REG,3.49,250,[],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["sushi_fertig","Sushi Box",V,1,1,REG,6.99,250,[],{storage:STORAGE.FRIDGE_BOTTOM}],
+  ["sandwich_fertig","Fertigsandwich",V,2,1,LEIT,2.99,180,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["salat_fertig","Fertigsalat",V,2,1,LEIT,3.49,250,[],{storage:STORAGE.FRIDGE_MIDDLE}],
+  ["sushi_fertig","Sushi Box",V,1,1,LEIT,6.99,250,[],{storage:STORAGE.FRIDGE_BOTTOM}],
   ["suppe_frisch","Frischesuppe",M,14,2,EST,2.99,600,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["auflauf_fertig","Fertigauflauf",M,10,1,EST,3.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["reisgericht_fertig","Reisgericht Becher",M,300,1,EST,2.49,300,[]]

@@ -1,0 +1,57 @@
+/**
+ * fixtures/netto-2026-teil-3.txt
+ *
+ * Dritter Ausschnitt desselben Netto-Bons — die Mitte, die auf den
+ * beiden anderen Screenshots fehlt. Wieder ohne Summe.
+ *
+ * HIER STEHT DIE FÜNFTE RABATTSCHREIBWEISE: „0.20€ Rabatt".
+ * Mit Euro-Zeichen mitten im Wort, mit Punkt statt Komma, und der
+ * Betrag steht trotzdem rechts. Und direkt darüber „Rabatt" und
+ * „Rabatt 5%" — drei Schreibweisen desselben Vorgangs auf einem
+ * Bon.
+ *
+ * Außerdem: zwei Rabattzeilen HINTEREINANDER für dieselbe
+ * Position („Rabatt -0,17" und „0.20€ Rabatt -0,20" vor
+ * „Val.Sport+pinkGrapef.0,5L 0,99"). Der Parser muss beide der
+ * Position darüber zuschlagen und darf nicht bei der ersten
+ * aufhören.
+ */
+DomestosWCGel Floral750ml          1,69  A
+ASCFrostLingu.m.Garn.450g          4,49  B
+KM Weiz/Dink.Br.sort.360g          1,19  B
+      2 x        1,49
+KM Mueslirieg.sort.200g            2,98  B
+VL Eier FH 10ST                    2,99  B
+Albh.Dunkelnud.sort.500g           1,29  B
+ProLifeMagn.St.20x1,5g30g          0,89  B
+M.I.Mozzarella le125g HF3          0,85  B
+GL Proteinjogh.sort.200g           0,79  B
+GL HP Drink sort. 330ml            1,19  B
+EW-Pfand 0,25 EUR 7% WG31          0,25* B
+Finello high Protein 150g          1,49  B
+0.20€ Rabatt                      -0,20
+Ostmn. Pfeffer ganz 50g            2,29  B
+MM Protein sort. 400g              1,79  B
+EW-Pfand 0,25 EUR                  0,25* B
+25% Rabatt                        -0,45
+Zott Jogobella sort. 150g          0,39  B
+      2 x        1,00
+Rama Cremefine 7% 250ml            2,00  B
+Gran.Pr.pu.Gr. sort. 500g          1,59  B
+VitaminWell Reload 0,5L FL         1,69  A
+EW-Pfand 0,25 EUR                  0,25* A
+Rabatt                            -0,17
+0.20€ Rabatt                      -0,20
+Val.Sport+pinkGrapef.0,5L          0,99  A
+EW-Pfand 0,25 EUR                  0,25* A
+Rabatt                            -0,10
+Shisara TuchmaskeHydro ST          0,75  A
+P&B 6- Klingen Damenras. ST        4,45  A
+Natu+FrBeerMixEW1x0,5LFL           0,69  A
+Leergut 0,25 EUR EW                0,25* A
+Rabatt                            -0,07
+Capt.TeaPfiZeroEW1x0,5LFL          0,35  A
+Leergut 0,25 EUR EW                0,25* A
+Rabatt                            -0,04
+vehappy No Milk 3,5% 1L            0,95  A
+Bio Ingwer Lose                    0,46  B

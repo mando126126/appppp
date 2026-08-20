@@ -23,13 +23,26 @@ const { byId } = require("./foodDatabase");
 const { daysBetween } = require("./rhythmEngine2");
 
 /**
+ * Ein echtes Kalenderdatum, nicht bloß die richtige Form.
+ *
+ * `/\d{4}-\d{2}-\d{2}/` lässt „2026-13-45" durch, und daraus wird
+ * eine Restzeit von einigen hundert Tagen — auf einem Produkt mit
+ * Verbrauchsdatum. Der Test hat genau das gefunden.
+ */
+function isRealDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(value + "T12:00:00Z");
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+/**
  * Schätzt den Restbestand eines Produkts.
  *
  * @param {object} lastPurchase - {date, quantity, unitPrice}
  * @param {object} rhythm - Ergebnis aus computeRhythm
  * @param {string} today
  */
-function estimateRemaining(productId, lastPurchase, rhythm, today) {
+function estimateRemaining(productId, lastPurchase, rhythm, today, opts = {}) {
   const p = byId(productId);
   if (!p || !lastPurchase) return null;
 
@@ -41,20 +54,46 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
   // Verbrauch pro Einheit: aus dem Rhythmus, sonst Kategorie-Annahme
   const perUnitDays = rhythm && rhythm.perUnitDays ? rhythm.perUnitDays : null;
 
+  const printed = opts.useBy && opts.useBy[productId];
+  const printedValid = isRealDate(printed) && printed >= lastPurchase.date;
+
   let remainingUnits;
   let basis;
   if (perUnitDays && perUnitDays > 0) {
     const consumed = daysSince / perUnitDays;
     remainingUnits = Math.max(0, quantity - consumed);
     basis = "rhythmus";
+  } else if (printedValid) {
+    // Auch hier zählt das Etikett und nicht die Katalogzahl. Ohne
+    // diesen Zweig verschwand ein Produkt aus dem Bestand, obwohl auf
+    // der Packung noch fünf Tage standen — die Anzeige rechnete mit
+    // dem aufgedruckten Datum, die Frage „ist es überhaupt noch da?"
+    // aber weiter mit der Schätzung.
+    remainingUnits = today <= printed ? quantity : 0;
+    basis = "aufgedruckt";
   } else {
     // Ohne Rhythmus: nur die Haltbarkeit als grobe Schranke
     remainingUnits = daysSince < p.shelfLifeDays ? quantity : 0;
     basis = "haltbarkeit";
   }
 
-  // Restzeit bis Ablauf, gerechnet ab Kaufdatum
-  const daysLeft = p.shelfLifeDays - daysSince;
+  /* Restzeit bis Ablauf.
+   *
+   * Vorrang hat IMMER das aufgedruckte Datum, wenn es eingetragen
+   * wurde. Das ist keine Feinheit: die Katalogzahl ist eine
+   * Lagerempfehlung an der unteren Grenze, das Etikett dagegen die
+   * Aussage des Herstellers für genau diese Packung. Bei einem
+   * Verbrauchsdatum ist es zusätzlich die rechtlich maßgebliche
+   * Angabe — nach ihrem Ablauf gehört das Produkt in den Abfall,
+   * egal was eine App schätzt.
+   *
+   * Das aufgedruckte Datum darf dabei in beide Richtungen wirken. Es
+   * zu deckeln („höchstens so lange wie geschätzt") klänge vorsichtig,
+   * wäre aber Unfug: dann zeigte die App weiter ihre Schätzung und
+   * ignorierte die Packung, die der Nutzer in der Hand hält. */
+  const daysLeft = printedValid
+    ? daysBetween(today, printed)
+    : p.shelfLifeDays - daysSince;
 
   // Vertrauen: hoher Rhythmus-Vertrauenswert und kurze Zeit seit Kauf
   const rhythmConfidence = rhythm ? rhythm.confidence : 0;
@@ -73,6 +112,10 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
     weightG: Math.round(remainingUnits * (p.typicalWeightG || 0)),
     confidence,
     basis,
+    // Wer das Etikett eingetragen hat, bekommt keine Schätzung mehr
+    // angezeigt, sondern eine Tatsache — und die Oberfläche sagt das.
+    dateSource: printedValid ? "aufgedruckt" : "geschaetzt",
+    useBy: printedValid ? printed : null,
     estimated: true
   };
 }
@@ -81,7 +124,7 @@ function estimateRemaining(productId, lastPurchase, rhythm, today) {
  * Schätzt den kompletten Haushaltsbestand.
  * @returns {Array} nur Produkte, die wahrscheinlich noch da sind
  */
-function estimateInventory(history, rhythms, today) {
+function estimateInventory(history, rhythms, today, opts = {}) {
   const lastByProduct = new Map();
   for (const h of history) {
     const prev = lastByProduct.get(h.productId);
@@ -90,7 +133,7 @@ function estimateInventory(history, rhythms, today) {
 
   const inventory = [];
   for (const [productId, last] of lastByProduct.entries()) {
-    const est = estimateRemaining(productId, last, rhythms.get(productId), today);
+    const est = estimateRemaining(productId, last, rhythms.get(productId), today, opts);
     if (est && est.likelyPresent) inventory.push(est);
   }
 
@@ -106,4 +149,5 @@ function toRecipeStock(inventory) {
   }));
 }
 
-module.exports = { estimateRemaining, estimateInventory, toRecipeStock };
+module.exports = {
+  isRealDate, estimateRemaining, estimateInventory, toRecipeStock };
