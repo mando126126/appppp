@@ -913,8 +913,8 @@ führen zum selben Ergebnis. Dieselbe Faltung fehlte im Bonabgleich für
 Akzente — „Crème fraîche" zerfiel zu `cr me fra che`, und wer `creme`
 tippte, bekam Handcreme und Schuhcreme, aber nicht das Produkt, das so
 heißt. `test/search.js` prüft das mit 56 Tests, darunter 30 Eingaben,
-die ein Mensch wirklich tippt, und der Nachweis, dass **jedes** der 846
-Produkte über seinen eigenen Namen auffindbar ist.
+die ein Mensch wirklich tippt, und der Nachweis, dass **jedes** der
+inzwischen 1682 Produkte über seinen eigenen Namen auffindbar ist.
 
 Freie Zeilen bekommen **keine Produktkennung**. Sie fließen
 ausdrücklich nicht in die Rhythmen ein, tauchen in keiner Verderb-,
@@ -1093,7 +1093,8 @@ Erfassen am Ende `goto("liste")` aufruft, war genau das der **erste
 Bildschirm nach der ersten echten Handlung** eines neuen Nutzers. Er
 sagte: kann ich noch nicht.
 
-Dabei war alles fertig gebaut. Die Suche über 846 Produkte, das freie
+Dabei war alles fertig gebaut. Die Suche über 846 Produkte (heute
+1682, siehe weiter unten), das freie
 Eintippen, der Wagen, die Gangansicht, das Teilen — nur gesperrt, weil
 noch keine *Vorhersage* möglich war. Als könnte man eine Einkaufsliste
 nur schreiben, wenn ein Algorithmus mithilft.
@@ -2001,6 +2002,119 @@ so plausibel sie klang. Beide Versuche stehen in `test/matching.js`,
 Abschnitt G: der verworfene Weg als Begründung im Kommentar, der
 behaltene als drei Tests, inklusive des Falls, den die verworfene
 Regel kaputtgemacht hätte.
+
+---
+
+## Der zweite Teil desselben Wunsches: der Katalog selbst, um ein Vielfaches erweitert
+
+Der ursprüngliche Auftrag hatte zwei Hälften: Kürzungen selbst lesen
+(oben beschrieben), und — wörtlich — „wenns sein muss dann müssen wir
+eben auch die Produktkatalog um ein Vielfaches erweitern, nutze doch
+dafür die Datenbank von Open Food Facts […] und ziehe dir alle
+möglichen Produkte und hinterlege sie". Ziel: rund 1000 zusätzliche
+Produkte, zusätzlich zu den bestehenden 846, nicht statt ihnen.
+
+**Woher die Produkte kommen.** Open Food Facts bietet mehrere
+Such-Zugänge; zwei davon lieferten während der Arbeit an dieser
+Erweiterung durchgehend `503 Page temporarily unavailable` — sowohl
+die alte `cgi/search.pl`-Schnittstelle als auch die dokumentierte
+`api/v2/search`, geprüft über mehrere Werkzeuge und Zeitpunkte hinweg,
+also kein einzelner Client-Fehler. Erreichbar war die neuere
+`search.openfoodfacts.org`-Schnittstelle (Codename „search-a-licious"),
+mit echter Kategorie- und Länderfilterung. Abgefragt wurden nur
+Kategorien, die ausschließlich Lebensmittel enthalten — „Fleisch/Fisch"
+und „Wurstwaren" wurden gar nicht erst abgefragt, aus demselben Grund
+wie unten erklärt.
+
+**Drei harte, nicht verhandelbare Grenzen:**
+
+1. **Kein rohes Fleisch, kein Fisch.** Die Sicherheitsklassifizierung
+   für Verbrauchsdatum-Produkte (`safetyRules.js`, `SAFETY_GROUPS`) ist
+   eine von Hand kuratierte Positivliste, kein Automatismus — ein
+   Bulk-Import hätte entweder zu Unrecht Panik ausgelöst oder,
+   schlimmer, ein wirklich verderbliches Produkt als normales
+   MHD-Produkt eingeordnet. Import-Kategorien beschränken sich deshalb
+   auf Milchprodukte, Frischware (Obst/Gemüse), Backwaren,
+   Trocken/Vorrat, Getränke, Tiefkühl, Süßes/Snacks, Protein/Sport,
+   Fertiggerichte und International — die zehn Kategorien dieses
+   Katalogs, in denen „Verbrauchsdatum" nicht vorkommt. Ergebnis nach
+   der Erweiterung: weiterhin genau 54 sicherheitskritische Produkte,
+   keines davon neu.
+2. **Kein Non-Food.** Open *Food* Facts deckt Haushalt, Körperpflege,
+   Wasch-/Reinigungsmittel und Tierbedarf nicht ab — das sind
+   Schwester-Projekte (Open Beauty Facts, Open Products Facts, Open
+   Pet Food Facts) mit eigener, hier nicht zugänglicher Datenbank.
+   Diese Kategorien blieben unangetastet: weiterhin genau 134
+   Non-Food-Produkte, keines davon neu.
+3. **Qualitätsstufe immer `"schaetzwert"`.** Bei dieser Stückzahl ist
+   keine Einzelrecherche möglich. Der Haltbarkeits-Standardwert je
+   neuem Produkt ist der Median der bereits geprüften, bestehenden
+   Werte derselben Kategorie — kein Wert ins Blaue, sondern
+   übernommen aus Zahlen, die für diese Kategorie schon einmal
+   überlegt wurden.
+
+**Die eigentliche Arbeit war Datenqualität, nicht Beschaffung.**
+Rohdaten aus einer crowd-gepflegten Datenbank zu ziehen ist der
+einfache Teil; sie so zu bereinigen, dass sie den gleichen Ansprüchen
+genügen wie der handkuratierte Kern, ist es nicht. Konkret aufgetreten
+und behoben:
+
+- **Falsche Kategorie laut eigenem Tag.** Eine Suche unter „milks"
+  lieferte unter anderem „Bio Vollkorn Penne Rigante" — ein
+  Falsch-Tagging in Open Food Facts selbst, keine Fehlermeldung.
+  Lösung: jeder Treffer wird nach dem Laden anhand seiner EIGENEN,
+  vollständigen `categories_tags` neu bewertet — die Kategorie mit den
+  meisten passenden Tags gewinnt, nicht die Kategorie, unter der
+  zufällig gesucht wurde.
+- **Fremdsprachige Namen trotz „deutschem" Feld.** `product_name_de`
+  war gelegentlich mit einem französischen oder rumänischen Namen
+  befüllt („Ail & Fines Herbes", „Lapte 3,5 % Grasime") — ein
+  Dateneingabefehler bei Beitragenden, keine Falschabfrage. Erst die
+  harte Serverfilterung auf `lang:de` (die von der Community gepflegte
+  Hauptsprache des Eintrags, nicht nur ein befülltes Feld) plus eine
+  kurze Stopwortliste blieb zuverlässig.
+- **Eingebettete Kassenzettel-Fragmente.** Einzelne Namen enthielten
+  Preis- oder Pfandangaben („K-Exquisa der Sahnige-1,89€/19.8",
+  „Wasser Volvic […] EW" mit „EW" für Einwegpfand) — beides entfernt,
+  „EW" zusätzlich deshalb, weil es im Katalog absichtlich als
+  Füllwort reserviert ist (`FILLER_WORDS`, siehe oben) und in keinem
+  echten Produktnamen als eigenes Wort auftauchen darf.
+- **Dubletten querbeet, nicht nur gegen den alten Katalog.** Die
+  Dublettenprüfung lief zuerst nur gegen die alten 846 Produkte
+  (`matchProduct`, Schwelle 0,72) — das ließ Fälle wie „Käse-Aufschnitt"
+  und „Käse Aufschnitt" oder „Hanuta" und „Hanuta 2x" als zwei
+  getrennte Katalogeinträge durch, weil beide neu waren. Ein
+  Stresstest (`test/stresstest.js`, Abschnitt E: „jeder Name und jeder
+  Alias trifft sein eigenes Produkt") deckte das auf zwei
+  Anläufen hintereinander auf. Behoben durch eine Namens-Normalisierung
+  (Satzzeichen vereinheitlicht) für die Dublettenprüfung innerhalb des
+  Imports selbst, plus das Entfernen bloßer Packungs-Vervielfacher
+  („2x", „6er") aus dem Namenstext, weil sie kein Unterscheidungsmerkmal
+  sind.
+
+**Ergebnis:** 836 neue Produkte (Ziel: rund 1000; erreicht wurden 836,
+weil mehrere angefragte Kategorien — etwa „ready-meals" oder
+„mexican-foods" — in der Such-Schnittstelle keine oder kaum Treffer
+lieferten, und weil 543 weitere Kandidaten sich als Dubletten zum
+bestehenden Katalog erwiesen und deshalb bewusst NICHT aufgenommen
+wurden). Katalog gewachsen von **846 auf 1682 Produkte**. Damit
+verschiebt sich der Anteil an Schätzwerten spürbar — ehrlich
+ausgewiesen über `databaseQualityReport()`: von 700 auf 1536
+Schätzwert-Produkte, also von 83 % auf 91 % des Katalogs. Das ist kein
+Rückschritt, der versteckt wird: ein Import dieser Größenordnung KANN
+nicht einzeln geprüft sein, und die App behauptet das an keiner Stelle.
+`safetyCritical` (54) und `nonFood` (134) blieben beide exakt
+unverändert — der Beleg, dass die beiden harten Grenzen oben nicht nur
+Absicht, sondern Ergebnis waren.
+
+**Gemessen, nicht behauptet:** über die 139 echten Bon-Positionen
+dieses Projekts bewegt sich die Trefferquote von 25 auf 27 sicher, von
+53 auf 56 mit Vorschlag, von 61 auf 56 ohne Treffer. Ein echter, aber
+bewusst kleiner Sprung — plausibel, weil diese acht Bons nicht das
+Zielpublikum eines allgemeinen Katalog-Ausbaus sind (sie wurden längst
+mit gezielten Aliasen kalibriert); der Nutzen zeigt sich vor allem bei
+Produkten, Ketten und Marken, die in diesem Korpus gar nicht vorkommen.
+Alle 1642 Tests bestehen weiterhin, keine Regression.
 
 ---
 
