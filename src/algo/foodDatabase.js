@@ -640,7 +640,10 @@ group("Milchprodukte", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
   ["mozzarella_bueffel","Büffelmozzarella",M,18,2,EST,2.29,125,[],{freezable:false}],
   ["sahne_creme","Kochsahne",M,120,3,EST,0.79,200,[],{storage:STORAGE.PANTRY}],
   ["sahne_pflanzlich","Pflanzliche Sahne",M,180,4,EST,1.19,200,[],{storage:STORAGE.PANTRY}],
-  ["desserts_becher","Dessertcreme",M,21,2,EST,0.79,150,[]],
+  // "SCHOKOR" ist kein Tippfehler: ALDI schneidet hier ohne Kürzungspunkt
+  // exakt bei Spaltenbreite ab ("Creme Dessert mit Schokor[..]"). Als
+  // exakter Alias statt als geratenes Vollwort, um nichts zu behaupten.
+  ["desserts_becher","Dessertcreme",M,21,2,EST,0.79,150,["CREME DESSERT","CREME DESSERT MIT SCHOKOR"]],
   ["tiramisu_frisch","Tiramisu Becher",M,14,1,EST,1.99,200,[],{freezable:false}],
   ["eier_wachtel","Wachteleier",M,21,21,EST,2.99,150,[],{freezable:false}],
   ["eier_gekocht","Gekochte Eier",M,14,7,EST,1.99,300,[],{freezable:false}]
@@ -654,7 +657,7 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
   ["putengeschnetzeltes","Putengeschnetzeltes",V,2,1,LEIT,6.49,400,[]],
   ["entenbrust","Entenbrust",V,2,1,LEIT,9.99,350,[]],
   ["gans","Gans",V,2,1,LEIT,24.99,3000,[]],
-  ["schweinebauch","Schweinebauch",V,3,1,LEIT,4.99,600,[]],
+  ["schweinebauch","Schweinebauch",V,3,1,LEIT,4.99,600,["BAUCHSPECK"]],
   ["schweinenacken","Schweinenacken",V,3,1,LEIT,5.49,700,[]],
   ["kasseler","Kasseler",M,10,4,EST,5.99,500,[]],
   ["schweinerueckensteak","Schweinesteak",V,3,1,LEIT,5.29,500,[]],
@@ -924,7 +927,7 @@ group("Getränke", "Getränke", STORAGE.PANTRY, [
   ["bier_hell","Helles",M,180,1,EST,0.95,500,[]],
   ["bier_alkoholfrei","Alkoholfreies Bier",M,180,1,EST,0.85,500,[]],
   ["radler","Radler",M,180,1,EST,0.89,500,[]],
-  ["wein_rot","Rotwein",M,900,3,EST,5.99,750,[]],
+  ["wein_rot","Rotwein",M,900,3,EST,5.99,750,["DORNFELDER"]],
   ["wein_weiss","Weißwein",M,540,3,EST,5.49,750,[]],
   ["wein_rose","Roséwein",M,365,3,EST,5.49,750,[]],
   ["prosecco","Prosecco",M,540,1,EST,5.99,750,[]],
@@ -1130,7 +1133,8 @@ group("Fertiggerichte", "Trockenware", STORAGE.PANTRY, [
   ["sushi_fertig","Sushi Box",V,1,1,LEIT,6.99,250,[],{storage:STORAGE.FRIDGE_BOTTOM}],
   ["suppe_frisch","Frischesuppe",M,14,2,EST,2.99,600,[],{storage:STORAGE.FRIDGE_MIDDLE}],
   ["auflauf_fertig","Fertigauflauf",M,10,1,EST,3.99,400,[],{storage:STORAGE.FRIDGE_MIDDLE}],
-  ["reisgericht_fertig","Reisgericht Becher",M,300,1,EST,2.49,300,[]]
+  ["reisgericht_fertig","Reisgericht Becher",M,300,1,EST,2.49,300,[]],
+  ["maultaschen","Maultaschen",M,25,3,EST,2.99,300,[],{storage:STORAGE.FRIDGE_MIDDLE}]
 ]);
 
 group("International", "Trockenware", STORAGE.PANTRY, [

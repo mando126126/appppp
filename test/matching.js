@@ -137,13 +137,14 @@ t("Jeder echte Bon liefert mindestens einen Treffer oder Vorschlag", () => {
   return leer.length === 0 ? true : leer.map(([d]) => d).join(", ");
 });
 
-t(`Trefferquote (sicher + unsicher) liegt bei mindestens 50 % — gemessen: ${
+t(`Trefferquote (sicher + unsicher) liegt bei mindestens 70 % — gemessen: ${
     Math.round(100 * (gesamtOk + gesamtUnsicher) / gesamtWaren)}%`, () => {
   const quote = (gesamtOk + gesamtUnsicher) / gesamtWaren;
-  return quote >= 0.50
+  return quote >= 0.70
     ? true
     : `${gesamtOk + gesamtUnsicher} von ${gesamtWaren} (${Math.round(quote * 100)}%) — ` +
-      `vor dieser Änderung waren es 53%, danach 56%. Diese Schranke sinkt nie unbemerkt.`;
+      `vor der GL/VL-Rauschwort- und Katalog-Nachschärfung waren es 56%, danach 76%. ` +
+      `Diese Schranke sinkt nie unbemerkt.`;
 });
 
 t("Lidl (die kalibrierte Kette) bleibt bei mindestens 90 % Trefferquote", () => {
@@ -176,19 +177,18 @@ t("„M.I Grana Padano St. 200g“ gilt jetzt als sicher, nicht nur als Vorschla
   return m.productId && !m.needsConfirmation ? true : JSON.stringify(m);
 });
 
-/* „VL Eier FH 10ST" bleibt absichtlich ungelöst. „VL" und „FH"
-   kommen auf allen drei Netto-Fixtures kein einziges Mal sonst vor
-   — zu wenig, um zu wissen, was sie bedeuten, geschweige denn, um
-   sie blind als Rauschen in die globale Liste aufzunehmen. Genau
-   dafür gibt es das Lernen aus Aliasen (Data.learnAlias): der erste
-   Nutzer, der hier „Eier" auswählt, löst es für diese eine
-   Schreibweise dauerhaft — ohne eine Vermutung, die woanders eine
-   echte Bedeutung zerstören könnte. */
-t("„VL Eier FH 10ST“ bleibt bewusst ungelöst, nicht geraten", () => {
+/* Nachtrag: „VL" wurde inzwischen als Rauschwort ergänzt (siehe
+   FILLER_WORDS in productMatcher2.js) — dasselbe Muster wie „GL",
+   ein Netto-Eigenmarken-Kürzel am Wortanfang, das nachweislich
+   NUR den Vergleich blockiert (ohne „VL": 0.70 statt 0.59). „FH"
+   bleibt weiterhin ungeklärt und wird nicht geraten — für den
+   verbleibenden Rest der Zeile („Eier FH 10ST") bleibt der Fund
+   trotzdem ein reiner Vorschlag, kein sicherer Treffer: „FH" senkt
+   die Punktzahl unter die „sicher"-Schwelle, statt sie zu heben. */
+t("„VL Eier FH 10ST“ bekommt jetzt einen Vorschlag, aber keinen sicheren Treffer", () => {
   const m = matchProduct("VL Eier FH 10ST");
-  return !m.productId
-    ? true : `Punktzahl ${m.confidence} — falls das jetzt einen Treffer ergibt, bitte diesen ` +
-      `Test aktualisieren UND dokumentieren, welche Änderung das ausgelöst hat.`;
+  return m.productId === "eier" && m.needsConfirmation
+    ? true : JSON.stringify(m);
 });
 
 t("Ein Verpackungscode allein macht aus einer Ware kein neues Produkt", () => {

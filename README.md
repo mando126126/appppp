@@ -2118,6 +2118,62 @@ Alle 1642 Tests bestehen weiterhin, keine Regression.
 
 ---
 
+## Die 56 offenen Zeilen einzeln durchgesehen — vier konkrete Funde
+
+„Führe die Tests durch und schreib konkret auf, was noch fehlt" war der
+nächste Auftrag. Die 56 „kein Treffer"-Zeilen aus dem vorigen Abschnitt
+wurden dafür einzeln ausgewertet, nicht nur als Prozentzahl gelesen —
+vier Muster kamen dabei zum Vorschein, alle behoben:
+
+1. **Ein einzelnes fehlendes Produkt kostete 10 der 56 Zeilen.** Auf dem
+   ALDI-Bon steht zehnmal „CREME DESSERT MIT SCHOKOR" (echte
+   Mehrfachkäufe). Kein Katalogtreffer, beste Punktzahl 0,53 —
+   „Dessertcreme" existierte zwar, aber in umgekehrter Wortreihenfolge,
+   und „SCHOKOR" ist keine Kürzung mit Punkt, sondern ein harter
+   Spaltenbreiten-Abschnitt bei exakt 25 Zeichen (ALDIs Drucker schneidet
+   hier ohne jedes Kürzungszeichen ab). Deshalb kein geratenes Vollwort
+   als Alias, sondern die Zeile selbst, wortgleich zum Bon: `"CREME
+   DESSERT MIT SCHOKOR"` als Alias auf `desserts_becher`.
+2. **Zwei Netto-Eigenmarken-Kürzel blockierten den gesamten Rest der
+   Zeile.** Gemessen, nicht vermutet:
+   `GL Proteinjogh.sort.200g` kein Treffer (0,45) → ohne „GL" Vorschlag
+   auf Proteinriegel (0,74). `VL Eier FH 10ST` kein Treffer (0,59) →
+   ohne „VL" Vorschlag auf Eier (0,70). Beide jetzt als Rauschwort
+   ergänzt (`FILLER_WORDS`, `productMatcher2.js`) — strukturell
+   dasselbe Muster wie „ST"/„FL"/„DS"/„EW"/„sort.", nur am Wortanfang
+   statt am Wortende. Geprüft: keine Kollision mit einem echten
+   Katalog-Token.
+3. **Drei einzelne, leicht behebbare Katalog-Lücken.** „DORNFELDER"
+   (Rotwein-Rebsorte) und „BAUCHSPECK" trafen ins Leere, weil die
+   jeweiligen Katalogeinträge (`wein_rot`, `schweinebauch`) **gar
+   keinen Alias** hatten — beide ergänzt. „Maultaschen" fehlte
+   komplett und wurde als neuer Eintrag unter Fertiggerichte
+   aufgenommen (Kategorie-Schätzwert wie beim Open-Food-Facts-Import,
+   da nicht einzeln recherchiert).
+4. **Bewusst NICHT geraten:** „Ca-Choco Riegel" (Lidl, sonst 96 %
+   Trefferquote) bleibt offen. Ohne zu wissen, was „Ca" tatsächlich
+   abkürzt (Caramel? ein Markenname?), wäre ein Alias hier eine reine
+   Vermutung — genau die Sorte Risiko, vor der `FILLER_WORDS` im
+   Kommentar warnt. Bleibt für `Data.learnAlias` offen, sobald ein
+   Nutzer die Zeile einmal selbst auswählt.
+
+**Gemessen, nicht behauptet:** von 27 auf 40 sicher, von 56 auf 65 mit
+Vorschlag, von 56 auf **34 ohne Treffer** — ein Rückgang der
+unerkannten Zeilen um mehr als ein Drittel, ausgelöst durch vier sehr
+gezielte, einzeln nachvollziehbare Änderungen, keine allgemeine Regel.
+Die feste Untergrenze in `test/matching.js` (Abschnitt C) wurde von
+50 % auf 70 % angehoben — sie darf ab jetzt nicht mehr darunter fallen,
+ohne dass das ein bewusster, erklärter Schritt zurück ist.
+
+Ein Nebeneffekt zeigte, dass die Sicherung greift, wie sie soll: der
+Test „VL Eier FH 10ST bleibt bewusst ungelöst" schlug nach Änderung 2
+sofort fehl — mit genau der Meldung, die er absichtlich trägt: *„falls
+das jetzt einen Treffer ergibt, bitte diesen Test aktualisieren UND
+dokumentieren, welche Änderung das ausgelöst hat."* Der Test wurde
+entsprechend angepasst, nicht stillschweigend gelöscht.
+
+---
+
 ## Aufbau
 
 ```

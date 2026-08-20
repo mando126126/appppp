@@ -73,7 +73,17 @@ const FILLER_WORDS = new Set([
      verlor allein durch dieses eine Wort mehr Punkte als durch die
      Markenkürzel davor. Geprüft: keines der vier kollidiert mit
      einem echten Katalog-Token (test/matching.js). */
-  "st", "fl", "ds", "ew", "sort", "sortiert"
+  "st", "fl", "ds", "ew", "sort", "sortiert",
+  /* "GL" und "VL" stehen bei Netto als zweibuchstabiges Eigenmarken-
+     Kürzel VOR dem eigentlichen Produktnamen (vermutlich "Gut &
+     Günstig" bzw. eine zweite Eigenmarke) — anders als ST/FL/DS/EW,
+     die am Wortende stehen, blockieren diese am Wortanfang den
+     gesamten restlichen Vergleich, nicht nur ein paar Punkte:
+     "GL Proteinjogh.sort.200g" (kein Treffer, 0.45) wird ohne "GL"
+     zu "Proteinjogh.sort.200g" (Vorschlag: Proteinriegel, 0.74).
+     Geprüft: keines der beiden kollidiert mit einem echten
+     Katalog-Token (test/matching.js). */
+  "gl", "vl"
 ]);
 
 /**

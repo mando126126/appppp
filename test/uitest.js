@@ -1861,8 +1861,12 @@ console.log("\n--- Zweite Stufe: Open Food Facts als Übersetzer ---");
   ok("Ein Bon voller sicherer Treffer verursacht keinen einzigen Netzwerkversuch",
     nichtsZuTun === false && ohneUnbekannte.open === vorherOffen);
 
+  /* "Vollmilch" ausgeschrieben würde inzwischen schon lokal genügen
+     (0.70, über der Bestätigungs-Schwelle) — dieser Test soll aber
+     den Umweg über Open Food Facts prüfen, also eine Zeile, die
+     lokal wirklich unter der Schwelle bleibt (0.62). */
   antwortMit("Vollmilch");
-  const mitUnbekannter = D.parseReceiptText("VL Xyzabc Vollmilch FH 1L  1,29 A");
+  const mitUnbekannter = D.parseReceiptText("Xyzabc Vollm FH 1L  1,29 A");
   const zeileVorher = mitUnbekannter.rows[0];
   const geaendert = await D.enrichUnmatched(mitUnbekannter);
   const zeileNachher = mitUnbekannter.rows[0];
