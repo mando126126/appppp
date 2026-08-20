@@ -5372,6 +5372,18 @@ const RE_NEGATIVE_LINE = new RegExp(String.raw`^\s*(\S.*?)\s+(-\d+[.,]\d{2})` + 
    noch in die Kilogrammrechnung. */
 const RE_DEPOSIT = /^\s*(?:einweg|mehrweg|ew|mw)?[-\s]?(?:pfand|leergut)/i;
 
+/* Die Zwischensumme — bei ALDI mittendrin, nicht nur am Ende.
+   „ZWI.SUMME 7,49" steht nach den ersten drei Positionen eines
+   30-Positionen-Bons, dann noch einmal „ZWI.SUMME 25,74" nach der
+   letzten. Beide sehen aus wie eine Position (Name, zwei Leerzeichen,
+   Betrag) und wären es beinahe geworden — der Fund kam nicht aus
+   einer Überlegung, sondern aus einem echten ALDI-Bon aus Hesel.
+
+   Anders als die Endsumme ist das KEIN Abbruch: die Liste geht nach
+   der mittleren Zwischensumme weiter. Die Zeile wird übersprungen,
+   nicht als Ende gewertet. */
+const RE_SUBTOTAL = /^\s*Zwi\.?[-\s]?Summe\b/i;
+
 /* Die aufgedruckte Endsumme. */
 const RE_TOTAL = /^\s*(?:SUMME|Summe|GESAMT|Gesamtbetrag|Gesamtsumme|zu zahlen|Zu zahlen)\b/i;
 
@@ -5454,6 +5466,10 @@ function parseReceipt(text, opts = {}) {
     if (!raw.trim()) continue;
     if (/^\s*[-=]{5,}/.test(raw)) break;           // Trennlinie = Ende der Positionen
     if (RE_STOP.test(raw)) break;
+
+    // (0) Zwischensumme — übersprungen, nicht als Ende gewertet.
+    // Die Liste geht danach weiter, im Unterschied zur Endsumme.
+    if (RE_SUBTOTAL.test(raw)) continue;
 
     // (a) Gewichtszeile — gehört zur Position darüber
     const w = raw.match(RE_WEIGHT);
@@ -8360,7 +8376,12 @@ const NOISE_PREFIX = [
   "telefon", "ustid", "ust-id", "steuernr", "hdb", "filiale", "markt",
   "oeffnungszeiten", "öffnungszeiten", "www", "http", "punkte", "karte",
   "eur", "gutschein", "coupon-", "posten", "artikel", "stk gesamt",
-  "zwischensumme", "trinkgeld", "aut", "gen nr", "ta-nr", "as-zeit"
+  "zwischensumme", "trinkgeld", "aut", "gen nr", "ta-nr", "as-zeit",
+  // ALDI druckt die Zwischensumme abgekürzt UND mittendrin, nicht nur
+  // am Ende: „ZWI.SUMME 7,49" nach den ersten drei Positionen, dann
+  // noch einmal „ZWI.SUMME 25,74" nach der letzten. Der ausgeschriebene
+  // Eintrag oben fängt das nicht — „zwi." ist ein anderes Wort.
+  "zwi.summe", "zwi summe", "zwi.-summe"
 ];
 
 /* Zeilen mit diesen Wörtern SIND Positionen, auch wenn sie oben
@@ -8516,6 +8537,16 @@ function isNoise(line) {
   if (/^\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4}/.test(l)) return true;
   if (/^\d{1,2}:\d{2}/.test(l)) return true;
   if (/^[\d\s.\-*#]{8,}$/.test(l)) return true;
+  /* Öffnungszeiten schreiben die Uhrzeit auch mit Punkt statt
+     Doppelpunkt: „MO.-SA. 8.00 UHR - 20.00 UHR". Ohne dieses Wort
+     sieht „20.00" aus wie ein Betrag mit Komma-Punkt-Verwechslung —
+     genau der Fall, den repairDigits eigentlich reparieren soll —
+     und „MO.-SA. 8.00 UHR" wird zum Produktnamen. Das Wortende „uhr"
+     als eigenständiges Wort kommt in keinem Produktnamen vor; die
+     Wortgrenze davor lässt „Kuckucksuhr" unangetastet. Gefunden an
+     einem echten ALDI-Bon (Hesel, 2019), dessen Öffnungszeiten-Zeile
+     sonst zu einer 20-Euro-Fantasieposition geworden wäre. */
+  if (/\buhr\b/i.test(l)) return true;
   // Reine Großbuchstaben-Adresse ohne Betrag ist ein Kopf.
   if (!RE_AMOUNT.test(line) && l.length > 24) { RE_AMOUNT.lastIndex = 0; return true; }
   RE_AMOUNT.lastIndex = 0;

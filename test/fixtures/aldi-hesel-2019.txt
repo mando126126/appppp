@@ -1,0 +1,87 @@
+/**
+ * fixtures/aldi-hesel-2019.txt
+ *
+ * ECHTER BON, fotografiert von Nutzer „Weener2019" und unter
+ * CC BY-SA 4.0 auf Wikimedia Commons veröffentlicht: „ALDI Hesel
+ * receipt, Hesel (2019)". ALDI, Im Brink 8, Hesel (Ostfriesland),
+ * 04.05.2019.
+ *
+ * WAS ALDI ANDERS MACHT ALS DIE VIER ANDEREN KETTEN:
+ *
+ * EINE ZWISCHENSUMME MITTEN IN DER LISTE, NICHT NUR AM ENDE.
+ * Nach den ersten drei Positionen steht „ZWI.SUMME 7,49" — ein
+ * Kontrollpunkt der Kasse, kein Einkauf. Die Liste geht danach
+ * normal weiter. Ohne Behandlung sähe „ZWI.SUMME" aus wie eine
+ * Position (Name, zwei Leerzeichen, Betrag) und wäre auch eine
+ * geworden — dieser Bon ist der Grund, warum es jetzt eine eigene
+ * Zeilenart dafür gibt (RE_SUBTOTAL in receiptParser.js), die
+ * übersprungen wird, statt die Liste zu beenden.
+ *
+ * Am Ende steht sie noch einmal — „ZWI.SUMME 25,74" —, diesmal
+ * deckungsgleich mit der Endsumme direkt darunter. Auch die muss
+ * verschwinden, sonst zählt der letzte Einkauf doppelt.
+ *
+ * Steuerkennzeichen heißen hier C (7 %) und D (19 %), nicht A/B wie
+ * bei Lidl und REWE — ein Beleg, dass die Buchstaben Kassen-
+ * Konfiguration sind, keine feste Bedeutung, und der Parser sie zu
+ * Recht nie ausgewertet hat.
+ *
+ * Die Summe geht auf: dreißig Positionen (ANZAHL ARTIKEL 30) ergeben
+ * exakt 25,74 — geprüft über die MwSt-Tabelle (C: Netto 18,36 + MwSt
+ * 1,28 = Brutto 19,64; D: Netto 5,13 + MwSt 0,97 = Brutto 6,10;
+ * 19,64 + 6,10 = 25,74). Die zehn „CREME DESSERT MIT SCHOKOR" und
+ * fünf „SAHNEKEFIR A. FRUCHT" sind über genau diese Rechnung
+ * gegengeprüft, nicht nur abgezählt.
+ */
+ALDI
+HESEL, IM BRINK 8
+
+UNSERE ÖFFNUNGSZEITEN
+MO.-SA. 8.00 UHR - 20.00 UHR
+
+GESCHIRRSPÜLTABS          2,85 D
+TOILETTENPAPIER 4-LAGIG   3,25 D
+BLUMENKOHL                 1,39 C
+ZWI.SUMME                  7,49
+SB-MARGARINE                0,75 C
+PICCO BELLI MINI PIZZEN     1,99 C
+FRUCHT AUF JOGHURT          0,29 C
+FRUCHT AUF JOGHURT          0,29 C
+FRUCHT AUF JOGHURT          0,29 C
+FRUCHT AUF JOGHURT          0,29 C
+TK CHICKEN NUGGETS-QS       1,99 C
+FRISCHKAESE KRAEUTER        0,99 C
+MOZZARELLA MINI             0,89 C
+FRUCHTJOGHURT 0,9%          0,99 C
+CHERRYTOMATEN                0,85 C
+MOZZARELLA MINI              0,89 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+SAHNEKEFIR A. FRUCHT         0,45 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+SAHNEKEFIR A. FRUCHT         0,45 C
+SAHNEKEFIR A. FRUCHT         0,45 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+SAHNEKEFIR A. FRUCHT         0,45 C
+SAHNEKEFIR A. FRUCHT         0,45 C
+CREME DESSERT MIT SCHOKOR    0,55 C
+ZWI.SUMME                   25,74
+
+ZU ZAHLEN EURO               25,74
+BARGELD                      50,00
+ZURUECK                      24,26
+
+MWST          Netto   MWST-BETRAG   BRUTTO
+C  7,00%      18,36          1,28    19,64
+D 19,00%       5,13           0,97    6,10
+
+ANZAHL ARTIKEL                   30
+
+VIELEN DANK FUER IHREN EINKAUF
+
+13(3&006 1145 )              14:12 04.05.2019

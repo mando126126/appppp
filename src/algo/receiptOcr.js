@@ -66,7 +66,12 @@ const NOISE_PREFIX = [
   "telefon", "ustid", "ust-id", "steuernr", "hdb", "filiale", "markt",
   "oeffnungszeiten", "öffnungszeiten", "www", "http", "punkte", "karte",
   "eur", "gutschein", "coupon-", "posten", "artikel", "stk gesamt",
-  "zwischensumme", "trinkgeld", "aut", "gen nr", "ta-nr", "as-zeit"
+  "zwischensumme", "trinkgeld", "aut", "gen nr", "ta-nr", "as-zeit",
+  // ALDI druckt die Zwischensumme abgekürzt UND mittendrin, nicht nur
+  // am Ende: „ZWI.SUMME 7,49" nach den ersten drei Positionen, dann
+  // noch einmal „ZWI.SUMME 25,74" nach der letzten. Der ausgeschriebene
+  // Eintrag oben fängt das nicht — „zwi." ist ein anderes Wort.
+  "zwi.summe", "zwi summe", "zwi.-summe"
 ];
 
 /* Zeilen mit diesen Wörtern SIND Positionen, auch wenn sie oben
@@ -222,6 +227,16 @@ function isNoise(line) {
   if (/^\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4}/.test(l)) return true;
   if (/^\d{1,2}:\d{2}/.test(l)) return true;
   if (/^[\d\s.\-*#]{8,}$/.test(l)) return true;
+  /* Öffnungszeiten schreiben die Uhrzeit auch mit Punkt statt
+     Doppelpunkt: „MO.-SA. 8.00 UHR - 20.00 UHR". Ohne dieses Wort
+     sieht „20.00" aus wie ein Betrag mit Komma-Punkt-Verwechslung —
+     genau der Fall, den repairDigits eigentlich reparieren soll —
+     und „MO.-SA. 8.00 UHR" wird zum Produktnamen. Das Wortende „uhr"
+     als eigenständiges Wort kommt in keinem Produktnamen vor; die
+     Wortgrenze davor lässt „Kuckucksuhr" unangetastet. Gefunden an
+     einem echten ALDI-Bon (Hesel, 2019), dessen Öffnungszeiten-Zeile
+     sonst zu einer 20-Euro-Fantasieposition geworden wäre. */
+  if (/\buhr\b/i.test(l)) return true;
   // Reine Großbuchstaben-Adresse ohne Betrag ist ein Kopf.
   if (!RE_AMOUNT.test(line) && l.length > 24) { RE_AMOUNT.lastIndex = 0; return true; }
   RE_AMOUNT.lastIndex = 0;

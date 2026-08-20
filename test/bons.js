@@ -1,7 +1,7 @@
 /**
  * bons.js — Tests gegen ECHTE Bons, Zeile für Zeile
  * ================================================================
- * Sieben abgetippte Dateien von vier Ketten. Kein einziger Bon in
+ * Acht abgetippte Dateien von fünf Ketten. Kein einziger Bon in
  * diesem Test ist erfunden.
  *
  * Der Vorgänger dieses Parsers war an genau EINEM Bon kalibriert
@@ -14,10 +14,11 @@
  *   Netto: 16 x 0,89                 Menge in der Zeile DARÜBER
  *          Name       14,24
  *   EDEKA: Name        0,59          gar keine Mengenzeile
+ *   ALDI:  Name        0,59          Zwischensumme MITTENDRIN
  *
  * WAS DIESER TEST ANDERS MACHT ALS EIN ZEILENTEST:
  *
- * Drei der Bons nennen ihre eigene Endsumme. Damit ist jede
+ * Vier der Bons nennen ihre eigene Endsumme. Damit ist jede
  * Behauptung des Parsers gegen den Bon selbst prüfbar — nicht
  * gegen das, was ich beim Abtippen für richtig hielt. Wenn 27,10
  * herauskommt und 27,10 aufgedruckt ist, dann stimmen Preise,
@@ -33,7 +34,7 @@
 const fs = require("fs");
 const path = require("path");
 const { parseReceipt } = require("../src/algo/receiptParser");
-const { readReceiptImage, ocrStore } = require("../src/algo/receiptOcr");
+const { readReceiptImage, ocrStore, alignLine } = require("../src/algo/receiptOcr");
 
 let pass = 0, fail = 0;
 const problems = [];
@@ -70,7 +71,8 @@ section("A: Die Gegenprobe — der Bon prüft sich selbst");
 const MIT_SUMME = [
   ["rewe-2026-05-30", 27.10, 10, 2],
   ["rewe-2026-07-07", 23.80, 11, 0],
-  ["edeka-schweinfurt", 14.84, 8, 0]
+  ["edeka-schweinfurt", 14.84, 8, 0],
+  ["aldi-hesel-2019", 25.74, 30, 0]
 ];
 
 MIT_SUMME.forEach(([datei, summe, waren, pfand]) => {
@@ -323,7 +325,7 @@ section("G: Der Weg über die Texterkennung");
    erkannte Text wird ausgerichtet und dann geparst. Wenn schon
    der abgetippte Bon durch die Ausrichtung geht, liegt ein
    späterer Fehler an der Erkennung und nicht an uns. */
-["rewe-2026-05-30", "rewe-2026-07-07", "edeka-schweinfurt"].forEach((datei) => {
+["rewe-2026-05-30", "rewe-2026-07-07", "edeka-schweinfurt", "aldi-hesel-2019"].forEach((datei) => {
   t(`${datei}: übersteht den Umweg über die Ausrichtung`, () => {
     const gelesen = readReceiptImage(bon(datei), { today: "2026-08-19" });
     const p = parseReceipt(gelesen.text);
@@ -397,14 +399,63 @@ t("Ein zwanzig Jahre altes Datum wird verworfen", () => {
 
 t("Die Qualität aller echten Bons gilt als gut", () => {
   const schlecht = ["rewe-2026-05-30", "rewe-2026-07-07", "edeka-schweinfurt",
-    "netto-2026-teil-1", "netto-2026-teil-3", "lidl-2026-07-22"]
+    "netto-2026-teil-1", "netto-2026-teil-3", "lidl-2026-07-22", "aldi-hesel-2019"]
     .map((d) => [d, readReceiptImage(bon(d), { today: "2026-08-19" }).quality])
     .filter(([, q]) => !q.ok);
   return schlecht.length === 0 ? true : JSON.stringify(schlecht.map(([d, q]) => [d, q.level]));
 });
 
 // ================================================================
-section("H: Nichts erfinden, auch unter Beschuss");
+section("H: ALDI — die Zwischensumme mittendrin");
+
+/* Fünfte Kette, und der bisher schärfste Fund: ALDI druckt eine
+   Zwischensumme NICHT nur am Ende, sondern auch mittendrin — nach
+   den ersten drei von dreißig Positionen. Beide Fixture-Prüfungen
+   (Abschnitt A) laufen für diesen Bon automatisch mit; hier stehen
+   die beiden Fehler, die er zusätzlich aufgedeckt hat. */
+const aldi = parseReceipt(bon("aldi-hesel-2019"));
+
+t("Die mittlere Zwischensumme wird keine Position", () =>
+  aldi.items.every((i) => !/zwi/i.test(i.raw)) ? true : aldi.items.map((i) => i.raw).join(" | "));
+
+t("Die Liste geht nach der Zwischensumme normal weiter", () => {
+  const nachher = aldi.items.find((i) => /SB-MARGARINE/.test(i.raw));
+  return nachher && cent(nachher.paid) === 75 ? true : JSON.stringify(nachher);
+});
+
+t("Die Zwischensumme am Ende zählt den letzten Einkauf nicht doppelt", () =>
+  aldi.items.filter((i) => /CREME DESSERT/.test(i.raw)).length === 10
+    ? true : aldi.items.filter((i) => /CREME DESSERT/.test(i.raw)).length);
+
+t("Steuerkennzeichen C/D werden gelesen wie A/B — der Buchstabe ist beliebig", () =>
+  aldi.items.every((i) => i.taxClass === "C" || i.taxClass === "D")
+    ? true : [...new Set(aldi.items.map((i) => i.taxClass))].join(", "));
+
+t("Der Weg über die Texterkennung findet dieselben 30 Positionen", () => {
+  const gelesen = readReceiptImage(bon("aldi-hesel-2019"), { today: "2026-08-19" });
+  const p = parseReceipt(gelesen.text);
+  return p.items.length === 30 && cent(p.sum) === cent(25.74) && p.totalOk === true
+    ? true : `${p.items.length} Waren, Summe ${p.sum}, Probe ${p.totalOk}`;
+});
+
+/* Der zweite, unabhängige Fund an demselben Bon: die
+   Öffnungszeiten-Zeile „MO.-SA. 8.00 UHR - 20.00 UHR" enthält zwei
+   Punkt-Dezimalzahlen und wurde vor der Korrektur zu einer Position
+   „MO.-SA. 8.00 UHR" für 20,00 €. */
+t("Öffnungszeiten mit Punkt-Uhrzeit werden keine Position", () => {
+  const a = alignLine("MO.-SA. 8.00 UHR - 20.00 UHR");
+  return a === null ? true : `wurde zu „${a}“`;
+});
+
+t("„Kuckucksuhr“ als Produktname bleibt unangetastet", () => {
+  // Die Wortgrenze vor „uhr“ darf nicht mitten in ein zusammen-
+  // gesetztes Wort greifen.
+  const a = alignLine("Kuckucksuhr Deko  12,99");
+  return /Kuckucksuhr/.test(a || "") ? true : `wurde zu „${a}“`;
+});
+
+// ================================================================
+section("I: Nichts erfinden, auch unter Beschuss");
 
 /* Der Grundsatz aus receiptOcr.js: lieber eine Zeile zu wenig. Eine
    übersehene Position merkt der Nutzer sofort, eine erfundene
@@ -414,7 +465,7 @@ const rnd = () => ((rng = (rng * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)
 
 t("Zufällig verstümmelte echte Bons erfinden keine Positionen", () => {
   const quellen = ["rewe-2026-05-30", "netto-2026-teil-1", "lidl-2026-07-22",
-    "edeka-schweinfurt"].map(bon);
+    "edeka-schweinfurt", "aldi-hesel-2019"].map(bon);
   for (let i = 0; i < 3000; i++) {
     const zeilen = quellen[Math.floor(rnd() * quellen.length)].split("\n");
     // Zeichen kippen, Zeilen umstellen, Zeilen wegwerfen — alles,

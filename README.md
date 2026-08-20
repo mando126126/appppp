@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1500 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1594 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -1663,13 +1663,68 @@ erst zwanzig Zeilen später in der Firmierung. Der Kopf hat weiter
 Vorrang — aber wenn dort nichts steht, wird jetzt der Rest gelesen
 statt aufgegeben.
 
+### Die fünfte Kette: ALDI und die Zwischensumme mittendrin
+
+Ein echter ALDI-Bon aus Hesel (Ostfriesland, 2019, unter CC BY-SA 4.0
+auf Wikimedia Commons) brachte einen Fehler mit, den keine der vier
+anderen Ketten gezeigt hatte: **eine Zwischensumme, die nicht am Ende
+steht, sondern mittendrin.**
+
+```
+GESCHIRRSPÜLTABS          2,85 D
+TOILETTENPAPIER 4-LAGIG   3,25 D
+BLUMENKOHL                 1,39 C
+ZWI.SUMME                  7,49    ← nach drei von dreißig Positionen
+SB-MARGARINE                0,75 C
+…
+CREME DESSERT MIT SCHOKOR    0,55 C
+ZWI.SUMME                   25,74    ← am Ende, deckungsgleich mit der Summe
+ZU ZAHLEN EURO               25,74
+```
+
+„ZWI.SUMME 7,49" sieht aus wie eine Position — Name, zwei
+Leerzeichen, Betrag — und wäre auch eine geworden. Beide Ebenen
+kannten das Wort nicht: `receiptOcr.js` filterte „Zwischensumme"
+ausgeschrieben, aber ALDI druckt die Abkürzung; `receiptParser.js`
+hatte für Kontrollpunkte mitten in der Liste noch gar keine
+Zeilenart. Jetzt gibt es eine — `RE_SUBTOTAL` —, die übersprungen
+wird, ohne die Liste zu beenden. Das ist der Unterschied zur Endsumme:
+die geht weiter, hier hört nichts auf.
+
+Ein zweiter, unabhängiger Fund auf demselben Bon: die
+Öffnungszeiten-Zeile „MO.-SA. 8.00 UHR - 20.00 UHR" enthält zwei
+Punkt-Dezimalzahlen und wurde beim Weg über die Texterkennung zu einer
+Position „MO.-SA. 8.00 UHR" für 20,00 €. Der Filter dafür ist gezielt:
+das eigenständige Wort „Uhr" kommt in keinem Produktnamen vor, die
+Wortgrenze davor lässt zusammengesetzte Wörter wie „Kuckucksuhr"
+unangetastet.
+
+Beide Fehler zusammen hätten aus einem 25,74-€-Einkauf einen für
+70,74 € gemacht — 20 € durch die Öffnungszeiten, 25,74 € durch die
+doppelt gezählte Zwischensumme am Ende. Danach: dreißig Positionen,
+null Warnungen, Summe auf den Cent. Auch die Steuerkennzeichen sind
+hier C und D statt A und B wie bei Lidl und REWE — ein weiterer Beleg,
+dass die Buchstaben Kassenkonfiguration sind, keine feste Bedeutung,
+und der Parser sie zu Recht nie ausgewertet hat.
+
+Das Originalfoto selbst ist ein Grenzfall: ungleichmäßig beleuchtet,
+mit Grünstich und einem harten Schattenverlauf über die ganze Länge.
+Tesseract liest davon nur einen Teil der dreißig Zeilen — auch nach
+Kontrastanhebung. Das ist kein Parser-Fehler, sondern der schon
+bekannte Befund von REWE und EDEKA bestätigt: **Foto-Qualität
+entscheidet mehr als der Parser.** Wo Tesseract liest, was auf dem
+Papier steht, liest der Parser es jetzt auch bei ALDI richtig — belegt
+über den abgetippten Text, der bei jedem `npm test` mitläuft.
+
 ### Was weiterhin offen ist
 
-Kaufland, Aldi und Penny sind ungeprüft. Die Bilderkennung selbst
-bleibt der schwächste Punkt der Kette: sie hat auf einem gut
-belichteten Foto eine von acht Zeilen verloren. Neu ist nur, dass die
-App das jetzt **merkt und sagt**, statt sieben Positionen für
-vollständig zu halten.
+Kaufland und Penny sind ungeprüft — für beide fand sich keine echte,
+frei lizenzierte Bon-Aufnahme. Die Bilderkennung selbst bleibt der
+schwächste Punkt der Kette: sie hat auf einem gut belichteten
+EDEKA-Foto eine von acht Zeilen verloren, auf dem ALDI-Foto deutlich
+mehr. Neu ist nur, dass die App das jetzt **merkt und sagt** (die
+Gegenprobe), statt eine unvollständige Liste für vollständig zu
+halten.
 
 ---
 
@@ -1735,8 +1790,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1581
-npm run test:algo # 1036 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1594
+npm run test:algo # 1049 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
@@ -1745,12 +1800,13 @@ npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
 `test/bons.js` prüft gegen **echte Bons**, nicht gegen erfundene:
-sieben abgetippte Dateien von vier Ketten in `test/fixtures/`. Drei
+acht abgetippte Dateien von fünf Ketten in `test/fixtures/`. Vier
 davon nennen ihre eigene Endsumme — damit ist jede Behauptung des
 Parsers gegen den Bon selbst prüfbar statt gegen meine Erwartung. Er
-hat zwei Fehler gefunden, die kein Zeilentest gestellt hätte: eine
-Steuertabellenzeile, die zur Position wurde, und eine Marktsuche ohne
-Wortgrenzen.
+hat vier Fehler gefunden, die kein Zeilentest gestellt hätte: eine
+Steuertabellenzeile, die zur Position wurde, eine Marktsuche ohne
+Wortgrenzen, eine mittendrin gedruckte Zwischensumme (ALDI) und eine
+Öffnungszeiten-Zeile, die als 20-€-Position gebucht wurde.
 
 `test/longterm.js` ist der aufwendigste: drei Jahre Haushalt durch die
 **gebaute** App, mit gestellter Uhr und im Vergleich gegen zwei
@@ -1785,9 +1841,10 @@ erledigt:
    naheliegende Ausgangspunkt. Der Bericht dazu steht ungeschönt in der
    App unter *Mehr → Rechenweg*.
 2. ~~**Der Bon-Parser ist an einem einzigen echten Bon kalibriert.**~~
-   *Erledigt* — der Parser ist jetzt an sieben echten Bons von vier
-   Ketten geprüft (Lidl, REWE ×2, Netto ×3, EDEKA), siehe unten. Offen
-   bleibt: Kaufland, Aldi und Penny sind weiter ungeprüft, und die
+   *Erledigt* — der Parser ist jetzt an acht echten Bons von fünf
+   Ketten geprüft (Lidl, REWE ×2, Netto ×3, EDEKA, ALDI), siehe unten.
+   Offen bleibt: Kaufland und Penny sind weiter ungeprüft (für beide
+   fand sich keine echte, frei lizenzierte Bon-Aufnahme), und die
    Mengenangabe im Artikelnamen („20WL", „75ML") wird nach wie vor nur
    aus dem Namen gelesen — fehlt sie, greift der Katalogwert,
    gekennzeichnet als Referenz, aber eben nicht gemessen.
@@ -1845,6 +1902,6 @@ Aus den Vorlagen-Archiven blieben draußen:
   gibt es dort keine.
 - Der ursprüngliche, an keiner echten Datei geprüfte Bon-Parser. Er
   wich erst `lidlParser.js` (an einem echten Lidl-Bon kalibriert) und
-  dann dem heutigen `receiptParser.js`, der an sieben echten Bons von
-  vier Ketten geprüft ist.
+  dann dem heutigen `receiptParser.js`, der an acht echten Bons von
+  fünf Ketten geprüft ist.
 - `demo*.js` — die Vorführskripte aus dem Node-Paket.

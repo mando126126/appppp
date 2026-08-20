@@ -111,6 +111,18 @@ const RE_NEGATIVE_LINE = new RegExp(String.raw`^\s*(\S.*?)\s+(-\d+[.,]\d{2})` + 
    noch in die Kilogrammrechnung. */
 const RE_DEPOSIT = /^\s*(?:einweg|mehrweg|ew|mw)?[-\s]?(?:pfand|leergut)/i;
 
+/* Die Zwischensumme — bei ALDI mittendrin, nicht nur am Ende.
+   „ZWI.SUMME 7,49" steht nach den ersten drei Positionen eines
+   30-Positionen-Bons, dann noch einmal „ZWI.SUMME 25,74" nach der
+   letzten. Beide sehen aus wie eine Position (Name, zwei Leerzeichen,
+   Betrag) und wären es beinahe geworden — der Fund kam nicht aus
+   einer Überlegung, sondern aus einem echten ALDI-Bon aus Hesel.
+
+   Anders als die Endsumme ist das KEIN Abbruch: die Liste geht nach
+   der mittleren Zwischensumme weiter. Die Zeile wird übersprungen,
+   nicht als Ende gewertet. */
+const RE_SUBTOTAL = /^\s*Zwi\.?[-\s]?Summe\b/i;
+
 /* Die aufgedruckte Endsumme. */
 const RE_TOTAL = /^\s*(?:SUMME|Summe|GESAMT|Gesamtbetrag|Gesamtsumme|zu zahlen|Zu zahlen)\b/i;
 
@@ -193,6 +205,10 @@ function parseReceipt(text, opts = {}) {
     if (!raw.trim()) continue;
     if (/^\s*[-=]{5,}/.test(raw)) break;           // Trennlinie = Ende der Positionen
     if (RE_STOP.test(raw)) break;
+
+    // (0) Zwischensumme — übersprungen, nicht als Ende gewertet.
+    // Die Liste geht danach weiter, im Unterschied zur Endsumme.
+    if (RE_SUBTOTAL.test(raw)) continue;
 
     // (a) Gewichtszeile — gehört zur Position darüber
     const w = raw.match(RE_WEIGHT);
@@ -372,5 +388,5 @@ function parseReceipt(text, opts = {}) {
 
 module.exports = {
   parseReceipt, findPrintedTotal,
-  RE_QTY, RE_SIMPLE, RE_WEIGHT, RE_QTY_LINE, RE_DEPOSIT, DISCOUNT_WORDS
+  RE_QTY, RE_SIMPLE, RE_WEIGHT, RE_QTY_LINE, RE_DEPOSIT, RE_SUBTOTAL, DISCOUNT_WORDS
 };
