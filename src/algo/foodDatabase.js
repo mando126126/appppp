@@ -1758,7 +1758,11 @@ group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
   ["off_heinz_worcester_sauce","Heinz Worcester Sauce",M,540,90,EST,2,150,["HEINZ WORCESTER SAUCE"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Trocken/Vorrat-Produkte), nicht einzeln geprüft."}],
   ["off_heinz_zero_tomaten_ketchup","Heinz Zero Tomaten Ketchup",M,540,90,EST,2,425,["HEINZ ZERO TOMATEN KETCHUP"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Trocken/Vorrat-Produkte), nicht einzeln geprüft."}],
   ["off_pasta_sauce_arrabbiata","Pasta Sauce Arrabbiata",M,540,90,EST,2,400,["PASTA SAUCE ARRABBIATA"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Trocken/Vorrat-Produkte), nicht einzeln geprüft."}],
-  ["off_alpen_jod_salz","Alpen Jod Salz",M,540,90,EST,2,500,["ALPEN JOD SALZ"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Trocken/Vorrat-Produkte), nicht einzeln geprüft."}],
+  // "Alpen Jod Salz" (off_alpen_jod_salz) entfernt: reine Dublette zu
+  // dieser Zeile, nur der Wortabstand unterschied sich ("Jod Salz" vs
+  // "JodSalz") -- unsichtbar für die Dublettenprüfung beim Import
+  // (die nur Satzzeichen normalisiert hat), sichtbar geworden erst
+  // durch das neue Trennen zusammengeklebter Wörter.
   ["off_alpen_jodsalz","Alpen JodSalz",M,540,90,EST,2,250,["ALPEN JODSALZ"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Trocken/Vorrat-Produkte), nicht einzeln geprüft."}],
   ["off_pesto_rustico_verdure_mediterrane","Pesto Rustico Verdure Mediterrane",M,540,90,EST,2,200,["PESTO RUSTICO VERDURE MEDITERRANE"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Trocken/Vorrat-Produkte), nicht einzeln geprüft."}],
   ["off_alpro_sojadessert_vanille_geschmack","Alpro Sojadessert, Vanille-Geschmack",M,540,90,EST,2,525,["ALPRO SOJADESSERT, VANILLE-GESCHMACK"],{note:"Aus Open Food Facts übernommen, Haltbarkeit ist ein Kategorie-Schätzwert (Median bestehender Trocken/Vorrat-Produkte), nicht einzeln geprüft."}],

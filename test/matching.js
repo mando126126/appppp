@@ -45,7 +45,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { matchProduct, parseProductName, truncationSimilarity } = require("../src/algo/productMatcher2");
+const { matchProduct, parseProductName, truncationSimilarity, splitGlued } = require("../src/algo/productMatcher2");
 const { parseReceipt } = require("../src/algo/receiptParser");
 const { FOOD_DATABASE } = require("../src/algo/foodDatabase");
 
@@ -371,6 +371,58 @@ t("Über alle echten Bons hinweg: keine Verschlechterung durch diese Korrektur",
   });
   const quote = (ok + unsicher) / geprueft139.length;
   return quote >= 0.50 ? true : `${Math.round(quote * 100)}%`;
+});
+
+// ================================================================
+section("H: Zusammengeklebte Wörter trennen, ohne einen Treffer zu gefährden");
+
+/* Manche Kassen (v. a. Netto) drucken mehrere echte Wörter ohne
+   jedes Leerzeichen als EIN Druckwort -- "GLGouda" ist "GL" + "Gouda".
+   splitGlued fügt an Groß-/Kleinschreibungs- und Ziffern-Grenzen
+   Leerzeichen ein, rein additiv, nie Zeichen entfernend. */
+t("Groß-/Kleinschreibungs-Grenze wird erkannt", () => {
+  return splitGlued("GLGouda") === "GL Gouda" ? true : splitGlued("GLGouda");
+});
+
+t("Ziffern-Grenzen werden in beide Richtungen erkannt", () => {
+  return splitGlued("HF3ger") === "HF 3 ger" ? true : splitGlued("HF3ger");
+});
+
+t("Bereits getrennter Text bleibt unverändert", () => {
+  return splitGlued("Vollmilch 3,5%") === "Vollmilch 3,5%" ? true : splitGlued("Vollmilch 3,5%");
+});
+
+t("„GLGouda leichtHF3ger.250g VLOG“ findet jetzt Gouda", () => {
+  const m = matchProduct("GLGouda leichtHF3ger.250g VLOG");
+  return m.productId === "kaese_gouda" ? true : JSON.stringify(m);
+});
+
+/* Der Fund, der die Erweiterung erst absichern musste: eine Kürzung
+   kann SELBST das passende Alias-Wort sein ("IronMa" -> Alias
+   "IRONMA"). Trennt man sie blind in "Iron"+"Ma", geht genau dieses
+   Signal verloren -- ohne das Zwei-Lesarten-Verfahren unten wäre das
+   eine stille Verschlechterung gewesen, gefunden erst durch die volle
+   Korpus-Messung, nicht durch Überlegung vorher. */
+t("Eine Kürzung, die selbst ein Alias-Wort ist, verliert ihren Treffer NICHT", () => {
+  const m = matchProduct("IronMa.100% Sahne P.");
+  return m.productId === "proteinpulver" && m.needsConfirmation
+    ? true : JSON.stringify(m);
+});
+
+t("Über alle echten Bons hinweg: die getrennte Lesart macht nichts schlechter, nur zusätzlich möglich besser", () => {
+  const geprueft139 = fs.readdirSync(path.join(__dirname, "fixtures"))
+    .filter((f) => f.endsWith(".txt"))
+    .flatMap((f) => parseReceipt(bon(f.replace(/\.txt$/, ""))).items);
+  let ok = 0, unsicher = 0, kein = 0;
+  geprueft139.forEach((it) => {
+    const m = matchProduct(it.raw);
+    if (!m.productId) kein++;
+    else if (m.needsConfirmation) unsicher++;
+    else ok++;
+  });
+  // Vor dieser Erweiterung: 72 sicher, 64 unsicher, 3 kein Treffer.
+  return (ok + unsicher) >= 136 && kein <= 3
+    ? true : `${ok} sicher, ${unsicher} unsicher, ${kein} kein Treffer`;
 });
 
 // ================================================================

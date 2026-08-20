@@ -95,6 +95,37 @@ const FILLER_WORDS = new Set([
 ]);
 
 /**
+ * Trennt zusammengeklebte Wörter an Groß-/Kleinschreibungs- und
+ * Ziffern-Grenzen, BEVOR alles klein geschrieben wird -- danach ist
+ * dieses Signal für immer weg.
+ *
+ * Manche Kassen (v. a. Netto) drucken mehrere echte Wörter ohne
+ * jedes Leerzeichen als EIN Druckwort: "GLGouda" ist "GL" + "Gouda",
+ * "leichtHF3ger" ist "leicht" + "HF" + "3" + "ger". Ohne Trennung
+ * bleibt das EIN einziges, langes Token -- Katalogwörter passen dann
+ * nur noch über den Teilwort-Vergleich (`compoundSimilarity`, ab
+ * fünf Zeichen), und ein kurzes Katalogwort wie "Gouda" (5 Zeichen)
+ * geht darin unter, wenn davor noch mehr Buchstaben kleben.
+ *
+ * Reine Ergänzung, nie Entfernung: es werden ausschließlich
+ * Leerzeichen EINGEFÜGT, nie Zeichen entfernt oder verändert. Ein
+ * bereits sauber getrenntes „ZottProteinPuddingCho" wird dadurch
+ * NICHT schlechter -- es zerfällt in einzelne Wörter, die einzeln
+ * exakt auf Katalogtoken treffen, statt nur als langes Teilwort.
+ * Volle Korpus-Messung bestätigt das (`test/matching.js`).
+ */
+function splitGlued(s) {
+  return s
+    // "GLGouda" -> "GL Gouda": Großbuchstaben-Lauf vor Großbuchstabe+Kleinbuchstabe
+    .replace(/([A-ZÄÖÜ]+)([A-ZÄÖÜ][a-zäöüß])/g, "$1 $2")
+    // "leichtHF" -> "leicht HF": Kleinbuchstabe vor Großbuchstabe
+    .replace(/([a-zäöüß])([A-ZÄÖÜ])/g, "$1 $2")
+    // "HF3" -> "HF 3", "3ger" -> "3 ger": Ziffern-Grenzen in beide Richtungen
+    .replace(/([A-Za-zÄÖÜäöüß])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-zÄÖÜäöüß])/g, "$1 $2");
+}
+
+/**
  * Vereinheitlicht Umlaute. Deutsche Kassenbons schreiben denselben
  * Artikel mal "HÄHNCHEN", mal "HAEHNCHEN" -- ohne diese Normalisierung
  * gelten beide als verschiedene Produkte.
@@ -450,15 +481,13 @@ function candidateEntries(parsed) {
 }
 
 /**
- * Ordnet einen rohen Bon-Namen einem Produkt zu.
- * @returns {{productId, confidence, method, quantity, needsConfirmation}}
+ * Bester Kandidat für EINE geparste Eingabe, gegen den ganzen Katalog.
+ * Getrennt von matchProduct, damit dieselbe Bewertung sich auf mehrere
+ * Lesarten derselben Bon-Zeile anwenden lässt (siehe splitGlued unten).
  */
-function matchProduct(rawName, catalog = FOOD_DATABASE) {
-  buildIndex(catalog);
-  const parsed = parseProductName(rawName);
+function bestCandidate(parsed) {
   const candidates = candidateEntries(parsed);
-
-  let best = { productId: null, confidence: 0 };
+  let best = { productId: null, confidence: 0, exact: false };
 
   for (const entry of candidates) {
     for (let vi = 0; vi < entry.variants.length; vi++) {
@@ -476,36 +505,70 @@ function matchProduct(rawName, catalog = FOOD_DATABASE) {
        * `variants[0]` ist der Name, alles danach sind Aliase. Für Aliase
        * bleibt die Prüfung scharf: dort IST es eine Vermutung. */
       if (vi === 0 && variant.core === parsed.core) {
-        return {
-          productId: entry.product.id, confidence: 1, method: "exakt",
-          quantity: parsed.quantity, needsConfirmation: false
-        };
+        return { productId: entry.product.id, confidence: 1, exact: true };
       }
 
       // Exakter Treffer nach Normalisierung
       if (variant.core === parsed.core && !conflictsWithCategory(parsed.tokens, entry.product.category)) {
-        return {
-          productId: entry.product.id, confidence: 1, method: "exakt",
-          quantity: parsed.quantity, needsConfirmation: false
-        };
+        return { productId: entry.product.id, confidence: 1, exact: true };
       }
       let score = combinedSimilarity(parsed, variant);
       // Kategoriekonflikt: harte Abwertung statt stiller Fehlzuordnung
       if (conflictsWithCategory(parsed.tokens, entry.product.category)) score *= 0.45;
-      if (score > best.confidence) best = { productId: entry.product.id, confidence: score };
+      if (score > best.confidence) best = { productId: entry.product.id, confidence: score, exact: false };
+    }
+  }
+  return best;
+}
+
+/**
+ * Ordnet einen rohen Bon-Namen einem Produkt zu.
+ * @returns {{productId, confidence, method, quantity, needsConfirmation}}
+ */
+function matchProduct(rawName, catalog = FOOD_DATABASE) {
+  buildIndex(catalog);
+  const rawStr = String(rawName || "");
+  const parsed = parseProductName(rawStr);
+  let winner = bestCandidate(parsed);
+  let quantity = parsed.quantity;
+
+  /* Zweite Lesart NUR bei tatsächlich zusammengeklebten Wörtern
+   * ("GLGouda", "TheRealStrawbKiw") -- und NUR als Ergänzung, nie als
+   * Ersatz. Der Grund: Trennen hilft, wenn ein Katalogwort erst durch
+   * die Lücke sichtbar wird ("gouda" in "GLGouda") -- schadet aber
+   * einem bereits gültigen Treffer, wenn die Kürzung SELBST das
+   * passende Alias-Wort war ("IronMa" -> Alias "IRONMA") und die
+   * Trennung sie in zwei bedeutungslose Bruchstücke zerlegt
+   * ("Iron"+"Ma"). Deshalb wird nie ersetzt, sondern nur verglichen --
+   * das schlechtere Ergebnis kann dadurch nie schlechter werden als
+   * ohne diese Erweiterung, nachgewiesen über die volle
+   * Korpus-Messung (`test/matching.js`, Abschnitt H). */
+  if (!winner.exact) {
+    const alt = splitGlued(rawStr);
+    if (alt !== rawStr) {
+      const parsedAlt = parseProductName(alt);
+      const winnerAlt = bestCandidate(parsedAlt);
+      if (winnerAlt.confidence > winner.confidence) {
+        winner = winnerAlt;
+        quantity = parsedAlt.quantity;
+      }
     }
   }
 
-  if (best.confidence >= SAFE_THRESHOLD) {
-    return { ...best, confidence: Math.round(best.confidence * 100) / 100,
-      method: "aehnlich", quantity: parsed.quantity, needsConfirmation: false };
+  if (winner.exact) {
+    return { productId: winner.productId, confidence: 1, method: "exakt",
+      quantity, needsConfirmation: false };
   }
-  if (best.confidence >= CONFIRM_THRESHOLD) {
-    return { ...best, confidence: Math.round(best.confidence * 100) / 100,
-      method: "unsicher", quantity: parsed.quantity, needsConfirmation: true };
+  if (winner.confidence >= SAFE_THRESHOLD) {
+    return { productId: winner.productId, confidence: Math.round(winner.confidence * 100) / 100,
+      method: "aehnlich", quantity, needsConfirmation: false };
   }
-  return { productId: null, confidence: Math.round(best.confidence * 100) / 100,
-    method: "kein_treffer", quantity: parsed.quantity, needsConfirmation: false };
+  if (winner.confidence >= CONFIRM_THRESHOLD) {
+    return { productId: winner.productId, confidence: Math.round(winner.confidence * 100) / 100,
+      method: "unsicher", quantity, needsConfirmation: true };
+  }
+  return { productId: null, confidence: Math.round(winner.confidence * 100) / 100,
+    method: "kein_treffer", quantity, needsConfirmation: false };
 }
 
 /** Ganze Bon-Liste zuordnen, getrennt nach sicher / bestätigen / unbekannt. */
@@ -524,7 +587,7 @@ function matchReceipt(rawItems) {
 module.exports = {
   MAX_RAW_LENGTH,
   matchProduct, matchReceipt, parseProductName, combinedSimilarity, levenshtein,
-  compoundSimilarity, truncationSimilarity, truncatedStems,
+  compoundSimilarity, truncationSimilarity, truncatedStems, splitGlued,
   conflictsWithCategory, looksLikeMeat, MEAT_TOKENS,
   CONFIRM_THRESHOLD, SAFE_THRESHOLD
 };

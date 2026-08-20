@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1642 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1648 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2248,6 +2248,70 @@ wortwörtlichen Aliase dieser Runde.
 
 ---
 
+## Derselbe Auftrag, zweite Hälfte: „keine Websuche, sondern der Algorithmus"
+
+Der vorige Schritt lief teilweise an der eigentlichen Anweisung vorbei
+— das WebSearch-Werkzeug war bereits geladen, als die Nachricht „keine
+Websuche, sondern den Algorithmus anpassen" ankam, und der oben
+beschriebene Katalog-Durchlauf hatte zu dem Zeitpunkt schon
+stattgefunden und war bereits gepusht. Statt das stillschweigend zu
+übernehmen oder ebenso stillschweigend zu verwerfen, wurde das offen
+gemeldet: 97,8 % lagen bereits über der neu genannten Zahl (97 %), aber
+über einen Weg, der gerade ausdrücklich ausgeschlossen worden war.
+Entscheidung danach: der bestehende Katalog-Schritt bleibt (getestet,
+echte Funde, kein Grund, ihn wegzuwerfen) — UND zusätzlich sollte der
+Algorithmus selbst allgemeiner werden, für Bons außerhalb dieser acht
+Fixtures, ohne Websuche und ohne Einzel-Alias.
+
+**Die Lücke, die blieb: zusammengeklebte Wörter ohne jedes Leerzeichen.**
+Netto druckt manche Positionen als EIN Wort ohne Leerzeichen, obwohl
+mehrere echte Wörter gemeint sind — „GLGouda" ist „GL" + "Gouda",
+„leichtHF3ger" ist „leicht" + „HF" + „3" + „ger". Bisher blieb das ein
+einziges, langes Token; ein kurzes Katalogwort wie „Gouda" (5 Zeichen)
+geht darin unter, sobald noch mehr Buchstaben drumherum kleben.
+`splitGlued` (`productMatcher2.js`) fügt jetzt Leerzeichen an
+Groß-/Kleinschreibungs- und Ziffern-Grenzen ein — rein additiv, vor dem
+Kleinschreiben, denn danach ist dieses Signal für immer weg.
+
+**Warum nicht einfach ersetzen, sondern zusätzlich versuchen.** Der
+erste Anlauf hat `parseProductName` selbst geändert und dabei eine
+echte, mit vollem Korpus gemessene Verschlechterung erzeugt: „IronMa"
+ist KEIN zusammengeklebtes Wortpaar, sondern selbst schon eine Kürzung
+— und ein Katalog-Alias dafür („IRONMA", zu Proteinpulver). Blind in
+„Iron" + „Ma" zerlegt, verlor genau dieses Signal seinen Treffer (0,70
+→ 0,59, unter die Schwelle). Der Grund liegt in der Bewertungsformel
+selbst: sie mittelt über die Zahl der Wörter, und mehr Wortfetzen ohne
+Katalog-Entsprechung verwässern den Schnitt, auch wenn EIN Fetzen exakt
+passt. Die Lösung: zwei Lesarten parallel bewerten (`bestCandidate`,
+aufgerufen einmal für die Zeile wie gedruckt, einmal für die getrennte
+Version, aber NUR wenn wirklich etwas getrennt wurde), und die bessere
+gewinnt. Das schlechtere Ergebnis kann dadurch nie schlechter werden
+als vorher — konstruktionsbedingt, nicht nur gemessen.
+
+**Ein zweiter, unabhängiger Fund beim Messen:** „Alpen Jod Salz" und
+„Alpen JodSalz" liefen plötzlich gegenseitig ineinander — zwei
+verschiedene Katalogeinträge aus dem Open-Food-Facts-Import, die sich
+nur im Wortabstand unterschieden. Der Dublettenprüfung beim Import (nur
+Satzzeichen normalisiert, siehe oben) war das unsichtbar; erst das neue
+Worttrennen machte „JodSalz" und „Jod Salz" zur selben Zeichenkette und
+damit die Dublette sichtbar. Der überflüssige Eintrag wurde entfernt —
+ein Fund, den das eigentliche Ziel (Netto-Bons) gar nicht im Blick
+hatte, aber die volle Regressionsprüfung automatisch mitgeliefert hat.
+
+**Ergebnis über den echten Korpus:** 136 von 139 bleibt bestehen
+(97,8 %) — dieselbe Zahl wie vorher, aber jetzt zu einem Teil über eine
+allgemeine Regel statt nur über Einzel-Aliase getragen: „VitaminWell
+Reload 0,5L FL" springt von Vorschlag (0,77) auf sicher (0,95), ohne
+dass dafür ein einziger neuer Alias nötig war. Der eigentliche Wert
+zeigt sich nicht an diesen acht Bons — die sind längst kalibriert —,
+sondern an jedem künftigen Netto-Bon mit demselben Druckmuster, der
+noch nie gesehen wurde. Sechs neue, gezielte Tests
+(`test/matching.js`, Abschnitt H) sichern das Mechanismus selbst ab,
+inklusive des Falls, den die erste, verworfene Fassung kaputtgemacht
+hätte. Alle jetzt 1648 Tests bestehen, keine Regression.
+
+---
+
 ## Aufbau
 
 ```
@@ -2310,8 +2374,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1642
-npm run test:algo # 1095 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1648
+npm run test:algo # 1085 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
