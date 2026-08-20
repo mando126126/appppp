@@ -1893,7 +1893,22 @@ const FILLER_WORDS = new Set([
   "iglo", "alnatura", "landliebe", "ehrmann", "zott", "bauer", "hochland",
   // Verpackungsformen ohne Produktbedeutung
   "schale", "beutel", "netz", "tuete", "packung", "pack", "becher",
-  "bund", "kiste", "korb", "portion", "familienpackung"
+  "bund", "kiste", "korb", "portion", "familienpackung",
+  /* Verpackungs- UND Sortierungs-Kürzel, wie sie auf echten Bons von
+     Netto, REWE und ALDI stehen — bei Lidl kaum, deshalb fielen sie
+     bei der Kalibrierung an einem einzigen Bon nicht auf. „ST"
+     (Stück), „FL" (Flasche), „DS" (Dose), „EW" (Einweg) sind reine
+     Verpackungscodes, keine Produktnamen — anders als das AUSGE-
+     SCHRIEBENE Wort „dose", das bewusst NICHT hier steht, weil
+     „Dosentomaten" etwas anderes ist als „Tomaten". Die Abkürzung
+     „ds" trifft als eigenes Token aber nie ein zusammengesetztes
+     Wort wie „dosentomaten" — die Unterscheidung bleibt intakt.
+     „sort." (sortiert) hängt an gefühlt jeder zweiten Netto-Zeile
+     und trägt nichts zur Identität bei: "GL Proteinjogh.sort.200g"
+     verlor allein durch dieses eine Wort mehr Punkte als durch die
+     Markenkürzel davor. Geprüft: keines der vier kollidiert mit
+     einem echten Katalog-Token (test/matching.js). */
+  "st", "fl", "ds", "ew", "sort", "sortiert"
 ]);
 
 /**

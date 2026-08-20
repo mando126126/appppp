@@ -7,7 +7,7 @@ Textabgleich und Tabellen, gerechnet im Browser.
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1594 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1610 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -1728,6 +1728,77 @@ halten.
 
 ---
 
+## „Unsere Datenbank ist viel zu gering" — war sie nicht
+
+Ein echter Testlauf auf einem iPhone (Netto-Bon, über GitHub Pages)
+brachte diesen Satz zurück. Die Beobachtung war richtig — die meisten
+Zeilen landeten auf „nicht zugeordnet" —, die Diagnose dahinter nicht
+ganz: nachgemessen ist es kein Katalogproblem. Eine Stichprobe der
+Kategorien, die angeblich fehlten, zeigt sie alle längst im Katalog:
+„Eier" → Eier, Bio-Eier; „Pudding" → Pudding, Protein-Pudding; „Wein"
+→ Rotwein, Weißwein, Roséwein. Alles längst unter den 846
+Katalogprodukten. Was fehlte, war Toleranz im **Abgleich**, nicht
+Breite im **Katalog**: er war an einem einzigen Lidl-Bon kalibriert,
+und Lidl schreibt vergleichsweise saubere Namen. Nachgemessen über
+alle acht echten Bons dieses Projekts:
+
+| Kette | sicher + Vorschlag | kein Treffer |
+|---|---|---|
+| Lidl (kalibriert) | 96 % | 4 % |
+| ALDI | 63 % | 37 % |
+| REWE | 40–55 % | 45–60 % |
+| EDEKA | 38 % | 63 % |
+| Netto | 35–57 % | ~50 % |
+
+„VL Eier FH 10ST" **enthält** „Eier" — verliert aber gegen zwei
+Verpackungscodes, die keine der 846 Katalogzeilen kennt. Die
+Rauschwortliste (`FILLER_WORDS` in `productMatcher2.js`), die „bio",
+„frisch" oder „ja!" schon herausfiltert, kannte „ST" (Stück), „FL"
+(Flasche), „DS" (Dose), „EW" (Einweg) und „sort." (sortiert) nicht —
+bei Lidl kommen sie kaum vor, bei Netto an fast jeder zweiten Zeile.
+Nachdem sie ergänzt sind:
+
+- „M.I Grana Padano St. 200g": 0,81 (Vorschlag) → 0,92 (**sicher**)
+- „Layenb.HP Skyr sort. 200g": 0,59 (kein Treffer) → 0,70 (Vorschlag)
+- „Zott Jogobella sort. 150g": 0,81 (Vorschlag) → 0,92 (**sicher**)
+
+Trefferquote insgesamt: von 51 % auf 56 % der 139 echten Positionen.
+Ein echter, aber bewusst kleiner Schritt — die größeren Ursachen
+liegen woanders und wurden **nicht** blind mitkorrigiert.
+
+**Was probiert und wieder verworfen wurde:** „mit" sah aus wie der
+nächste offensichtliche Kandidat — es steht auf halb den Netto-Zeilen
+und trägt scheinbar nichts zur Identität bei. Der Katalog widerspricht:
+„Skyr" und „Skyr mit Frucht" sind zwei Einträge, und „mit" ist der
+einzige Unterschied zwischen ihren Namen. Als Rauschwort hätte es beide
+zu einem Produkt verschmolzen — eine stille Fehlzuordnung, die erst als
+falscher Rhythmus wieder auftaucht, Monate später und ohne erkennbare
+Ursache. Genau die Gefahr, vor der der Kommentar über `FILLER_WORDS`
+schon vorher warnte. Ein Test hält das jetzt offen (`test/matching.js`,
+Abschnitt B), damit niemand „mit" beim nächsten Aufräumen doch einträgt.
+
+**Was bewusst ungelöst bleibt:** „VL" und „FH" auf „VL Eier FH 10ST"
+kommen auf allen drei Netto-Bons kein einziges Mal sonst vor — zu wenig,
+um zu wissen, was sie bedeuten, geschweige denn, um es zu erraten. Dafür
+gibt es das Lernen aus Aliasen: wählt ein Nutzer hier einmal „Eier" aus
+der Liste, merkt sich die App genau diese Schreibweise dauerhaft — ohne
+eine Vermutung, die anderswo eine echte Bedeutung zerstören könnte.
+
+**Der eigentliche Befund:** ein statischer, globaler Katalog wird nie
+jede Eigenmarken-Abkürzung von fünf Handelsketten kennen — die
+Schreibweisen ändern sich mit jeder Sortimentsumstellung, und was bei
+Netto „VL" heißt, bedeutet bei Kaufland etwas anderes oder gar nichts.
+Die tragfähige Antwort ist nicht ein größerer Katalog, sondern dass die
+App aus JEDEM Haushalt lernt, was seine eigenen Bons wirklich meinen —
+genau das leistet `learnAlias` schon heute, nur einmal pro Zeile pro
+Haushalt, nicht einmal für alle.
+
+`test/matching.js` hält die gemessene Trefferquote als Zahl fest, nicht
+als Eindruck — jede künftige Änderung am Abgleich muss sich daran messen
+lassen, in beide Richtungen.
+
+---
+
 ## Aufbau
 
 ```
@@ -1790,9 +1861,9 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1594
-npm run test:algo # 1049 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
-                  #   Texterkennung, echte Bons, Sicherheit, Sicherung, Verschwendung,
+npm test          # alle 1610
+npm run test:algo # 1065 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+                  #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
 npm run test:ui   # 509 Oberflächentests in jsdom
