@@ -95,7 +95,7 @@ try {
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
-    " kategorieVerlust, kategorieMonatsverlauf };"
+    " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -1559,6 +1559,41 @@ console.log("\n--- Wo dein Geld hingeht ---");
   const verlauf = T.kategorieMonatsverlauf(App.ctx, 6);
   ok("kategorieMonatsverlauf() liefert genau 6 Monatswerte je Kategorie",
     [...verlauf.values()].every((arr) => arr.length === 6));
+
+  // --- "Immer wieder gekauft": dieselbe Rangliste je Produkt ---
+  App.goto("zahlen");
+  const produktSection = [...$("main").querySelectorAll(".moneySection")]
+    .find((s) => s.textContent === "Immer wieder gekauft");
+  ok("Zeigt einen eigenen Bereich für regelmäßig gekaufte Produkte", !!produktSection);
+  ok("Hähnchenbrust (die Demo-Verschwendung) taucht darin auf",
+    /Hähnchenbrust/.test($("main").textContent));
+
+  const produktZeilen = produktSection
+    ? [...produktSection.parentElement.children].slice([...produktSection.parentElement.children].indexOf(produktSection))
+    : [];
+  const produktRows = produktZeilen.filter((el) => el.classList && el.classList.contains("moneyBarRow"));
+  ok("Zeigt mindestens eine Produktzeile", produktRows.length > 0, produktRows.length);
+  ok("Mindestens eine Produktzeile trägt eine Verlaufslinie",
+    produktRows.some((r) => r.querySelector(".moneySparklineWrap svg")));
+
+  const rang = T.produktRang(App.ctx, App.ctx.history);
+  ok("produktRang() nimmt NUR Produkte mit gelerntem Rhythmus",
+    [...rang.keys()].every((name) => [...App.ctx.rhythms.keys()].some((pid) => (T.byId(pid) || {}).name === name)));
+
+  const pVerlust = T.produktVerlust(App.ctx);
+  ok("produktVerlust() liefert einen Anteil zwischen 0 und 1 je Produkt",
+    [...pVerlust.values()].every((v) => v >= 0 && v <= 1));
+
+  const pVerlauf = T.produktMonatsverlauf(App.ctx, 6);
+  ok("produktMonatsverlauf() liefert genau 6 Monatswerte je Produkt",
+    [...pVerlauf.values()].every((arr) => arr.length === 6));
+  ok("Ein einmalig gekauftes Produkt (kein Rhythmus) taucht NICHT im Produkt-Verlauf auf", (() => {
+    // Irgendein Produkt aus der Historie suchen, das KEINEN Rhythmus hat.
+    const einmalig = App.ctx.history.find((h) => h.productId && !App.ctx.rhythms.has(h.productId));
+    if (!einmalig) return true; // Demo hat evtl. keinen solchen Fall -- kein Widerspruch
+    const p = T.byId(einmalig.productId);
+    return !p || !pVerlauf.has(p.name);
+  })());
 }
 
 console.log("\n--- Die Übersicht ---");

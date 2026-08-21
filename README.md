@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1710 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1718 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2599,6 +2599,36 @@ Alle jetzt 1710 Tests bestehen.
 
 ---
 
+## „Sowas brauchen wir auch für Produkte, die immer wieder gekauft werden"
+
+Dieselbe Rangliste, Verlaufslinie und Verlust-Hinweis wie bei
+Kategorien und Märkten — nur eine Ebene tiefer, je einzelnem Produkt.
+Neuer Abschnitt „Immer wieder gekauft" direkt unter Märkte, dieselbe
+Karte, dieselben Bausteine.
+
+**Die Abgrenzung ist die eigentliche Arbeit.** Nicht jedes gekaufte
+Produkt gehört hier rein — ein einmaliger Kauf hat kein „mehr oder
+weniger als sonst", nur einen einzigen Punkt. `produktRang()` und
+`produktMonatsverlauf()` nehmen deshalb ausschließlich Produkte mit
+einem gelernten Rhythmus (`ctx.rhythms`) — genau die Definition, die
+der Abschnitt „Rhythmen" weiter unten in derselben Ansicht schon
+verwendet. Zwei Bausteine dafür wiederverwendet statt verdoppelt:
+`kategorieMonatsverlauf` und die neue `produktMonatsverlauf` sind jetzt
+beide dünne Hüllen um eine gemeinsame `monatsverlaufNach(ctx, n,
+gruppe)` — nur die Gruppierungsfunktion unterscheidet sich.
+
+**Ein Praxisfall, den die Demo selbst geliefert hat, nicht erfunden:**
+„Hähnchenbrust" steht mit 67,41 € und einer fallenden Verlaufslinie
+ganz oben in der neuen Liste, mit demselben roten 85-%-Verlust-Hinweis
+wie schon bei den Kategorien — genau der Fall, den dieser Abschnitt
+sichtbar machen sollte: ein einzelnes, regelmäßig gekauftes Produkt,
+bei dem sich ein genauerer Blick lohnt, nicht erst die ganze Kategorie
+Fleisch/Fisch.
+
+Acht neue Tests. Alle jetzt 1718 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2661,7 +2691,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1710
+npm test          # alle 1718
 npm run test:algo # 1093 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

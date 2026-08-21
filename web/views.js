@@ -3262,13 +3262,15 @@ function moneyBarRow(label, amount, share, frac, muted, wasteFrac, verlauf) {
 }
 
 /**
- * Monatsbeträge je Kategorie für die letzten `n` echten Kalendermonate
- * (nicht 30-Tage-Schritte, die gegen Monatsenden verrutschen). Immer
- * über die VOLLE Historie, unabhängig vom Zeitraum-Filter oben — aus
- * demselben Grund wie bei `kategorieVerlust`: ein Verlauf über vier
- * gefilterte Wochen wäre kein Verlauf, sondern ein einzelner Punkt.
+ * Monatsbeträge für die letzten `n` echten Kalendermonate (nicht
+ * 30-Tage-Schritte, die gegen Monatsenden verrutschen), gruppiert
+ * über `gruppe(h)` — liefert einen Schlüssel oder `null`, um eine
+ * Zeile auszuschließen. Immer über die VOLLE Historie, unabhängig vom
+ * Zeitraum-Filter oben — aus demselben Grund wie bei `kategorieVerlust`:
+ * ein Verlauf über vier gefilterte Wochen wäre kein Verlauf, sondern
+ * ein einzelner Punkt.
  */
-function kategorieMonatsverlauf(ctx, n) {
+function monatsverlaufNach(ctx, n, gruppe) {
   const [jahr, monat] = Data.today().slice(0, 7).split("-").map(Number);
   const monate = [];
   for (let i = n - 1; i >= 0; i--) {
@@ -3278,16 +3280,37 @@ function kategorieMonatsverlauf(ctx, n) {
   }
   const monatsIndex = new Map(monate.map((m, i) => [m, i]));
 
-  const byCat = new Map();
+  const byGruppe = new Map();
   ctx.history.forEach((h) => {
     const idx = monatsIndex.get(h.date.slice(0, 7));
     if (idx === undefined) return;
-    const p = h.productId ? byId(h.productId) : null;
-    const cat = p ? p.category : "Ohne Kategorie";
-    if (!byCat.has(cat)) byCat.set(cat, new Array(n).fill(0));
-    byCat.get(cat)[idx] += h.unitPrice * h.quantity;
+    const key = gruppe(h);
+    if (key === null) return;
+    if (!byGruppe.has(key)) byGruppe.set(key, new Array(n).fill(0));
+    byGruppe.get(key)[idx] += h.unitPrice * h.quantity;
   });
-  return byCat;
+  return byGruppe;
+}
+
+function kategorieMonatsverlauf(ctx, n) {
+  return monatsverlaufNach(ctx, n, (h) => {
+    const p = h.productId ? byId(h.productId) : null;
+    return p ? p.category : "Ohne Kategorie";
+  });
+}
+
+/**
+ * Nur Produkte mit einem gelernten Rhythmus (`ctx.rhythms`) — das ist
+ * die Definition dieser App für "wird immer wieder gekauft", dieselbe
+ * wie im Abschnitt „Rhythmen" weiter unten. Ein einmaliger Kauf hat
+ * keinen Verlauf, den man als "mehr oder weniger" lesen könnte.
+ */
+function produktMonatsverlauf(ctx, n) {
+  return monatsverlaufNach(ctx, n, (h) => {
+    if (!h.productId || !ctx.rhythms.has(h.productId)) return null;
+    const p = byId(h.productId);
+    return p ? p.name : null;
+  });
 }
 
 /**
@@ -3357,6 +3380,34 @@ function kategorieVerlust(ctx) {
   return share;
 }
 
+/** Wie `kategorieVerlust`, nur ohne Umweg über eine Summe: `wasteStats`
+ *  ist bereits je Produkt, hier nur auf den Produktnamen umgeschlüsselt. */
+function produktVerlust(ctx) {
+  const share = new Map();
+  ctx.wasteStats.forEach((st, pid) => {
+    const p = byId(pid);
+    if (p && st.spent > 0) share.set(p.name, st.wastedEuros / st.spent);
+  });
+  return share;
+}
+
+/**
+ * Ausgaben je Produkt im gewählten Zeitraum — nur Produkte mit einem
+ * gelernten Rhythmus (siehe `produktMonatsverlauf`): ein Produkt, das
+ * genau einmal gekauft wurde, kann man nicht als "mehr oder weniger
+ * als sonst" lesen, es gibt kein "sonst".
+ */
+function produktRang(ctx, rows) {
+  const byProdukt = new Map();
+  rows.forEach((x) => {
+    if (!x.productId || !ctx.rhythms.has(x.productId)) return;
+    const p = byId(x.productId);
+    if (!p) return;
+    byProdukt.set(p.name, (byProdukt.get(p.name) || 0) + x.unitPrice * x.quantity);
+  });
+  return byProdukt;
+}
+
 /**
  * Direkt vorangehender Zeitraum GLEICHER LÄNGE — die einzige faire
  * Vergleichsbasis für "mehr oder weniger als sonst". Für "Gesamt"
@@ -3396,7 +3447,9 @@ function moneyFlowCard(ctx, app) {
     "zusammengefasst — deine erfassten Bons bleiben unverändert.\n\n" +
     "Der rote Verlust-Hinweis unter einer Kategorie rechnet über deinen GESAMTEN Kauf-Verlauf, " +
     "unabhängig vom Zeitraum oben: chronische Verschwendung braucht genug Käufe, um erkennbar zu " +
-    "sein — ein kurzes Zeitfenster hätte oft nur einen einzigen Kauf, keine tragfähige Grundlage."));
+    "sein — ein kurzes Zeitfenster hätte oft nur einen einzigen Kauf, keine tragfähige Grundlage.\n\n" +
+    "„Immer wieder gekauft“ zeigt nur Produkte mit einem gelernten Rhythmus (derselbe Rhythmus wie " +
+    "weiter unten in der Ansicht) — ein einmaliger Kauf hat kein „mehr oder weniger als sonst“."));
   head.append(infoBtn);
   h.append(head);
 
@@ -3479,6 +3532,22 @@ function moneyFlowCard(ctx, app) {
   h.append(el("div", "moneySection", "Märkte"));
   maerkte.forEach(([label, amount, sonstige]) =>
     h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxStore > 0 ? amount / maxStore : 0, sonstige)));
+
+  /* Produkte, die immer wieder gekauft werden: dieselbe Rangliste wie
+     oben, nur je Produkt statt je Kategorie/Markt — damit sichtbar
+     wird, ob ein einzelnes, regelmäßig gekauftes Produkt über die Zeit
+     mehr oder weniger kostet, nicht nur die ganze Kategorie drumherum. */
+  const byProdukt = produktRang(ctx, rows);
+  if (byProdukt.size) {
+    const produkte = topNMitSonstige(byProdukt, 7);
+    const maxProdukt = Math.max(...produkte.map((x) => x[1]));
+    const produktVerlustAnteil = produktVerlust(ctx);
+    const produktVerlauf = produktMonatsverlauf(ctx, 6);
+    h.append(el("div", "moneySection", "Immer wieder gekauft"));
+    produkte.forEach(([label, amount, sonstige]) =>
+      h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxProdukt > 0 ? amount / maxProdukt : 0,
+        sonstige, sonstige ? 0 : (produktVerlustAnteil.get(label) || 0), sonstige ? null : produktVerlauf.get(label))));
+  }
 
   return h;
 }
