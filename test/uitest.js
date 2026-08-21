@@ -94,7 +94,7 @@ try {
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
-    " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen };"
+    " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -1467,6 +1467,66 @@ console.log("\n--- Wo dein Geld hingeht ---");
   }
 
   App.zahlenFilter = { range: "12w", from: null, to: null };
+  App.render();
+
+  // --- Nachschärfung nach dem Nutzungs-Feedback ---
+
+  ok("Positionen statt des mehrdeutigen „Käufe“", /Positionen/.test($("main").textContent),
+    "erwartet z. B. „189 Positionen“, nicht „189 Käufe“ — das klang nach Einkaufsfahrten, meint aber Bon-Zeilen");
+
+  ok("Die Kachel oben nennt den Zeitraum „gesamt“, damit sie sich vom Filter unten unterscheidet",
+    /Ø\/Woche gesamt/.test($("main").textContent));
+
+  /* Die Demo hat mehr als sieben Kategorien (siehe README) -- "Sonstige"
+     muss auftauchen und die Prozente müssen sich wieder zu ~100 % summieren,
+     statt eine stille Lücke zu lassen. */
+  const sonstZeile = [...$("main").querySelectorAll(".moneyBarRow")].find((r) => /Sonstige/.test(r.textContent));
+  ok("„Sonstige“ fasst den Rest zusammen, statt ihn kommentarlos zu kappen", !!sonstZeile);
+  if (sonstZeile) {
+    ok("„Sonstige“ ist optisch gedämpft, keine echte Kategorie", sonstZeile.classList.contains("muted"));
+  }
+  const prozente = [...$("main").querySelectorAll(".moneyBarRow")]
+    .filter((r) => r.closest(".moneyHero") && r.textContent.includes("%"))
+    .map((r) => parseInt((r.textContent.match(/(\d+) %/) || [])[1], 10))
+    .filter((n) => Number.isFinite(n));
+  const kategorieSumme = prozente.slice(0, 8).reduce((a, b) => a + b, 0);
+  ok("Kategorien-Prozente summieren sich auf ~100 %, keine stille Lücke mehr",
+    kategorieSumme >= 96 && kategorieSumme <= 104, kategorieSumme);
+
+  /* Vorperiode: für einen echten Zeitraum (nicht "Gesamt") mit Daten
+     davor muss ein Vergleich erscheinen -- für "Gesamt" darf keiner
+     erfunden werden, weil es keine Vorperiode gibt. */
+  ok("Ein begrenzter Zeitraum zeigt einen Vergleich zur Vorperiode",
+    /ggü\. Vorperiode/.test($("main").querySelector(".moneyTotal").textContent));
+  const chipsJetzt = () => [...$("main").querySelectorAll(".segmented button")];
+  const chipGesamt = chipsJetzt().find((b) => b.textContent === "Gesamt");
+  click(chipGesamt);
+  ok("„Gesamt“ erfindet KEINEN Vergleich (keine Vorperiode existiert)",
+    !/ggü\. Vorperiode/.test($("main").querySelector(".moneyTotal").textContent));
+  App.zahlenFilter = { range: "12w", from: null, to: null };
+
+  /* Marktnamen: Groß-/Kleinschreibung und Leerraum werden nur für DIESE
+     Ansicht zusammengefasst, die gespeicherten Bons bleiben unverändert. */
+  const testRows = [
+    { store: "REWE", unitPrice: 10, quantity: 1 },
+    { store: "Rewe", unitPrice: 5, quantity: 1 },
+    { store: "  rewe  ", unitPrice: 3, quantity: 1 },
+    { store: "Lidl", unitPrice: 7, quantity: 1 }
+  ];
+  const gruppiert = T.marktGruppen(testRows);
+  ok("Groß-/klein- und leerraum-verschiedene Marktnamen werden zu einer Zeile zusammengefasst",
+    gruppiert.size === 2, [...gruppiert.entries()]);
+  ok("Der Betrag der zusammengefassten Zeile stimmt", gruppiert.get("REWE") === 18, gruppiert.get("REWE"));
+
+  // Die antippbare Erklärung ersetzt den vorher dauerhaft sichtbaren Text.
+  App.goto("zahlen");
+  const infoBtn = $("main").querySelector(".moneyHeroHead .infoBtn");
+  ok("Die Erklärung ist antippbar statt dauerhaft im Weg", !!infoBtn);
+  if (infoBtn) {
+    click(infoBtn);
+    ok("Öffnet ein Blatt mit der Erklärung", /Sonstige.*sieben|sieben.*Sonstige/s.test($("sheetOpts").textContent));
+    App.closeSheet();
+  }
 }
 
 console.log("\n--- Die Übersicht ---");

@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1684 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1695 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2467,6 +2467,66 @@ bestehen.
 
 ---
 
+## „Bewerte das nach Nutzererfahrung" — eine ehrliche Selbstprüfung, dann behoben
+
+Auf Wunsch nicht weitergebaut, sondern erst geprüft: was kann eine
+Nutzerin aus dem neuen Bereich wirklich ABLEITEN, nicht nur ansehen?
+Mit echten Werten aus dem Browser nachgemessen, nicht behauptet — drei
+Funde, alle mit konkreten Zahlen belegt und dann behoben.
+
+**1. Die Top-8-Grenze ließ Geld unsichtbar verschwinden.** Die
+Demo-Daten haben elf Kategorien, gezeigt wurden nur acht — drei fielen
+kommentarlos raus (52,80 € von 1.166,59 €, rund 4,5 %), die gezeigten
+Prozente summierten sich nie auf 100 %. Behoben mit `topNMitSonstige`:
+die Top 7 plus EINE „Sonstige"-Zeile für den Rest, optisch gedämpft
+(graue statt Akzentfarbe im Balken, kursive Schrift) — sie ist keine
+echte Kategorie und soll sich nicht wie eine anfühlen. Ein Test
+addiert die gezeigten Prozente und verlangt ~100 %.
+
+**2. Zwei fast identische „Ø pro Woche"-Zahlen auf demselben
+Bildschirm.** Die Kachel oben (Lebenszeit-Durchschnitt) und die neue
+Karte darunter (gewählter Zeitraum) nannten fast denselben Wortlaut
+für unterschiedliche Zeiträume — das las sich wie ein Rechenfehler.
+Die Kachel heißt jetzt „Ø/Woche gesamt", unmissverständlich getrennt
+von der Zahl direkt darunter.
+
+**3. „189 Käufe" war mehrdeutig** — gemeint waren Bon-Positionen, die
+Kachel daneben nennt für denselben Zeitraum „57 Bons". Umbenannt in
+„Positionen", dieselbe Bezeichnung, die der Buchen-Knopf beim Erfassen
+schon verwendet.
+
+**Zwei weitere, weniger dringende Lücken, ebenfalls behoben:**
+
+- **Kein Vorher/Nachher.** 547,26 € über 12 Wochen — ist das viel? Ein
+  Vergleich zur direkt vorangehenden Periode GLEICHER LÄNGE
+  (`zahlenVorperiode`) beantwortet das jetzt: „↑ 4 % ggü. Vorperiode".
+  Bewusst OHNE Ampelfarbe — mehr ausgegeben ist nicht automatisch
+  schlecht (Vorräte, ein Fest, ein teurerer Laden aus gutem Grund),
+  die Pfeilrichtung informiert, ohne ein Urteil zu behaupten, das die
+  Zahl allein nicht hergibt. Für „Gesamt" erscheint bewusst KEIN
+  Vergleich — vor dem Anfang der eigenen Geschichte liegt nichts, eine
+  erfundene Vorperiode wäre keine ehrliche Zahl. Ein Test prüft beide
+  Fälle: Vergleich erscheint bei einem begrenzten Zeitraum, bleibt bei
+  „Gesamt" aus.
+- **Marktname ist Freitext.** Bei jeder Erfassung neu eingetippt, ohne
+  Abgleich gegen frühere Schreibweisen — „REWE", „Rewe" und „ rewe "
+  wären sonst drei Balken statt einer gewesen. `marktGruppen` fasst
+  nur für DIESE Anzeige nach Groß-/Kleinschreibung und Leerraum
+  zusammen (die gespeicherten Bons bleiben unverändert) und zeigt die
+  Schreibweise, die am häufigsten vorkam. Getestet mit drei
+  Schreibweisen desselben Marktes, die sich zu einer Zeile summieren
+  müssen.
+
+**Nebenbei:** die vorher dauerhaft sichtbare Erklärung wich einem
+antippbaren „i"-Knopf — demselben Muster wie bei jeder anderen Karte
+in der App (`uiGroup`s `infoBtn`), nur von Hand nachgebaut, weil dieser
+Bereich kein `uiGroup` ist. Nimmt dauerhaft keinen Platz mehr weg,
+bleibt aber einen Fingertipp entfernt.
+
+Elf neue Tests. Alle jetzt 1695 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2529,7 +2589,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1684
+npm test          # alle 1695
 npm run test:algo # 1090 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

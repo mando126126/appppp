@@ -2978,7 +2978,12 @@ function viewZahlen(ctx, app) {
   const s = el("div", "scroller");
   s.append(tile("Am Stück", `${ctx.streak.weeks}`,
     ctx.streak.weeks === 1 ? "Woche" : "Wochen", ctx.streak.weeks > 0 ? "good" : null));
-  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), zahlwort(t.receipts, "Bon", "Bons")));
+  // "gesamt" im Namen, nicht nur im Kopf: direkt darunter zeigt "Wo
+  // dein Geld hingeht" einen ZWEITEN Wochendurchschnitt für den dort
+  // gewählten Zeitraum -- ohne die Unterscheidung im Wortlaut selbst
+  // sehen zwei fast gleiche Zahlen wie ein Rechenfehler aus, sind aber
+  // nur zwei verschiedene Zeiträume (Lebenszeit hier, frei wählbar dort).
+  s.append(tile("Ø/Woche gesamt", eur(t.spendPerWeek), zahlwort(t.receipts, "Bon", "Bons")));
   s.append(tile("zu holen", eur(savingsTotal), "ohne Verzicht", "good"));
   s.append(tile("Verlust", eur(t.wastedPerWeek), `${de(ctx.impact.kg)} kg gesamt`, "warn"));
   s.append(tile("Rhythmen", String([...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length),
@@ -3200,24 +3205,80 @@ function zahlenSpanne(filter, ref) {
  * Rangfolge. Der Anteil an der Gesamtsumme steht daneben als Zahl,
  * unabhängig von der Balkenlänge.
  */
-function moneyBarSvg(frac) {
+function moneyBarSvg(frac, muted) {
   const W = 300, PAD = 4.5, SW = 9;
   const bar = (to, stroke) =>
     `<line x1="${PAD}" y1="${SW / 2}" x2="${to.toFixed(1)}" y2="${SW / 2}" stroke="${stroke}" ` +
     `stroke-width="${SW}" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
   const x1 = PAD + Math.max(0, Math.min(1, frac)) * (W - PAD * 2);
   return `<svg class="moneyBarSvg" viewBox="0 0 ${W} ${SW}" preserveAspectRatio="none" aria-hidden="true">` +
-    bar(W - PAD, "var(--fill-2)") + (frac > 0 ? bar(x1, "var(--accent)") : "") + `</svg>`;
+    bar(W - PAD, "var(--fill-2)") + (frac > 0 ? bar(x1, muted ? "var(--ink-3)" : "var(--accent)") : "") + `</svg>`;
 }
 
-/** Eine Rangzeile: Name und Betrag/Anteil oben, Balken darunter. */
-function moneyBarRow(label, amount, share, frac) {
-  const r = el("div", "moneyBarRow");
+/** Eine Rangzeile: Name und Betrag/Anteil oben, Balken darunter.
+ *  `muted` markiert "Sonstige" — eine Sammelzeile ist keine echte
+ *  Kategorie und soll sich nicht wie eine anfühlen (Emphasis-Prinzip:
+ *  die echten Zeilen tragen die Akzentfarbe, der Rest tritt zurück). */
+function moneyBarRow(label, amount, share, frac, muted) {
+  const r = el("div", "moneyBarRow" + (muted ? " muted" : ""));
   r.innerHTML =
     `<div class="moneyBarHead"><span class="moneyBarLabel">${esc(label)}</span>` +
     `<span class="moneyBarValue">${eur(amount)}<small>${pct(share)}</small></span></div>` +
-    moneyBarSvg(frac);
+    moneyBarSvg(frac, muted);
   return r;
+}
+
+/**
+ * Top-`n` einer Betrags-Map, der Rest als EINE "Sonstige"-Zeile
+ * zusammengefasst statt kommentarlos abgeschnitten. Ohne das ergäben
+ * die gezeigten Prozente nie 100 % — bei einem Haushalt mit vielen
+ * Kategorien eine stille, wachsende Lücke (siehe README).
+ */
+function topNMitSonstige(map, n) {
+  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, n);
+  const rest = sorted.slice(n).reduce((a, [, v]) => a + v, 0);
+  if (rest > 0) top.push(["Sonstige", rest, true]);
+  return top;
+}
+
+/**
+ * Markt-Namen werden bei jeder Erfassung neu eingetippt, ohne Abgleich
+ * gegen frühere Schreibweisen — "REWE", "Rewe City" und "rewe" wären
+ * sonst drei Balken statt einer. Hier wird nur für die ANZEIGE nach
+ * Groß-/Kleinschreibung und Leerraum zusammengefasst (nicht in den
+ * gespeicherten Daten verändert); angezeigt wird die Schreibweise, die
+ * am häufigsten vorkam.
+ */
+function marktGruppen(rows) {
+  const buckets = new Map(); // normalisiert -> { total, formen: Map<original, count> }
+  rows.forEach((x) => {
+    const roh = (x.store || "Unbekannt").trim() || "Unbekannt";
+    const key = roh.toLowerCase();
+    if (!buckets.has(key)) buckets.set(key, { total: 0, formen: new Map() });
+    const b = buckets.get(key);
+    b.total += x.unitPrice * x.quantity;
+    b.formen.set(roh, (b.formen.get(roh) || 0) + 1);
+  });
+  const byStore = new Map();
+  buckets.forEach((b) => {
+    const label = [...b.formen.entries()].sort((a, b2) => b2[1] - a[1])[0][0];
+    byStore.set(label, b.total);
+  });
+  return byStore;
+}
+
+/**
+ * Direkt vorangehender Zeitraum GLEICHER LÄNGE — die einzige faire
+ * Vergleichsbasis für "mehr oder weniger als sonst". Für "Gesamt"
+ * gibt es keine sinnvolle Vorperiode (nichts liegt vor dem Anfang der
+ * eigenen Geschichte), dafür wird bewusst nichts erfunden.
+ */
+function zahlenVorperiode(filter, from, to) {
+  if (filter.range === "all") return null;
+  const tage = daysBetween(from, to) + 1;
+  const prevTo = Data.plusDays(from, -1);
+  return { from: Data.plusDays(prevTo, -(tage - 1)), to: prevTo };
 }
 
 /**
@@ -3231,10 +3292,21 @@ function moneyBarRow(label, amount, share, frac) {
  */
 function moneyFlowCard(ctx, app) {
   const h = el("div", "moneyHero");
-  h.append(el("div", "moneyHeroHead", "Wo dein Geld hingeht"));
-  h.append(el("p", "moneyHeroInfo",
+  const head = el("div", "moneyHeroHead");
+  head.append(el("span", null, "Wo dein Geld hingeht"));
+  // Erklärung antippbar statt dauerhaft im Weg -- dasselbe Muster wie
+  // bei jeder anderen Karte (`uiGroup`s `infoBtn`), nicht neu erfunden,
+  // nur hier von Hand nachgebaut, weil dieser Bereich kein `uiGroup` ist.
+  const infoBtn = el("button", "infoBtn", "i");
+  infoBtn.setAttribute("aria-label", "Erklärung: Wo dein Geld hingeht");
+  infoBtn.addEventListener("click", () => app.notice("Wo dein Geld hingeht",
     "Aus deinen eigenen Bons, nach Kategorie und Markt aufgeteilt, für den gewählten Zeitraum. " +
-    "Frei erfasste Zeilen ohne Produkt zählen unter „Ohne Kategorie“."));
+    "Frei erfasste Zeilen ohne Produkt zählen unter „Ohne Kategorie“. " +
+    "„Sonstige“ fasst alles jenseits der sieben größten Zeilen zusammen, damit die Prozente " +
+    "immer auf 100 % kommen. Marktnamen werden nur für diese Ansicht nach Groß-/Kleinschreibung " +
+    "zusammengefasst — deine erfassten Bons bleiben unverändert."));
+  head.append(infoBtn);
+  h.append(head);
 
   const filter = App.zahlenFilter;
   const ref = Data.today();
@@ -3273,31 +3345,45 @@ function moneyFlowCard(ctx, app) {
   const total = rows.reduce((a, x) => a + x.unitPrice * x.quantity, 0);
   const tage = Math.max(1, daysBetween(from || rows[0].date, to) + 1);
   const proWoche = total / (tage / 7);
+
+  /* Vorperiode gleicher Länge: die einzige ehrliche Antwort auf "ist
+     das viel?". Nur gezeigt, wenn davor überhaupt etwas liegt — sonst
+     wäre "+100 %" gegen eine leere Vorperiode eine erfundene Zahl. */
+  let deltaHtml = "";
+  const vor = zahlenVorperiode(filter, from || rows[0].date, to);
+  if (vor) {
+    const vorRows = ctx.history.filter((x) => x.date >= vor.from && x.date <= vor.to);
+    const vorTotal = vorRows.reduce((a, x) => a + x.unitPrice * x.quantity, 0);
+    if (vorRows.length && vorTotal > 0) {
+      const deltaFrac = (total - vorTotal) / vorTotal;
+      const pfeil = deltaFrac > 0.005 ? "↑" : deltaFrac < -0.005 ? "↓" : "→";
+      deltaHtml = ` <span class="moneyDelta">${pfeil} ${Math.round(Math.abs(deltaFrac) * 100)} % ggü. Vorperiode</span>`;
+    }
+  }
+
   h.append(el("div", "moneyTotal",
     `<span class="n">${eur(total)}</span>` +
-    `<span class="sub">Ø ${eur(proWoche)}/Woche · ${zahlwort(rows.length, "Kauf", "Käufe")}</span>`));
+    `<span class="sub">Ø ${eur(proWoche)}/Woche · ${zahlwort(rows.length, "Position", "Positionen")}${deltaHtml}</span>`));
 
-  const byCat = new Map(), byStore = new Map();
+  const byCat = new Map();
   rows.forEach((x) => {
     const p = x.productId ? byId(x.productId) : null;
     const cat = p ? p.category : "Ohne Kategorie";
     byCat.set(cat, (byCat.get(cat) || 0) + x.unitPrice * x.quantity);
-    const store = x.store || "Unbekannt";
-    byStore.set(store, (byStore.get(store) || 0) + x.unitPrice * x.quantity);
   });
+  const byStore = marktGruppen(rows);
 
-  const ranked = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const kategorien = ranked(byCat), maerkte = ranked(byStore);
-  const maxCat = kategorien.length ? kategorien[0][1] : 0;
-  const maxStore = maerkte.length ? maerkte[0][1] : 0;
+  const kategorien = topNMitSonstige(byCat, 7), maerkte = topNMitSonstige(byStore, 7);
+  const maxCat = kategorien.length ? Math.max(...kategorien.map((x) => x[1])) : 0;
+  const maxStore = maerkte.length ? Math.max(...maerkte.map((x) => x[1])) : 0;
 
   h.append(el("div", "moneySection", "Kategorien"));
-  kategorien.forEach(([label, amount]) =>
-    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxCat > 0 ? amount / maxCat : 0)));
+  kategorien.forEach(([label, amount, sonstige]) =>
+    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxCat > 0 ? amount / maxCat : 0, sonstige)));
 
   h.append(el("div", "moneySection", "Märkte"));
-  maerkte.forEach(([label, amount]) =>
-    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxStore > 0 ? amount / maxStore : 0)));
+  maerkte.forEach(([label, amount, sonstige]) =>
+    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxStore > 0 ? amount / maxStore : 0, sonstige)));
 
   return h;
 }
