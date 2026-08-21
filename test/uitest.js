@@ -1378,12 +1378,22 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
   D.reset();
   D.loadDemo("full");
   App.goto("zahlen");
-  const txt = $("main").textContent;
-  ok("Zahlen zeigt den Rückblick", /Rückblick/.test(txt));
-  ok("Zahlen zeigt die Meilensteine", /Erreicht/.test(txt));
-  ok("Zahlen zeigt den Streak", /Am Stück/.test(txt));
+  ok("Zahlen zeigt den Streak", /Am Stück/.test($("main").textContent));
+
+  // Rückblick und Meilensteine stehen im Unterbereich "Bilanz", nicht im
+  // vorausgewählten "Ausgaben" -- die drei Unterbereiche existieren genau
+  // deshalb, damit nicht alles gleichzeitig auf einer Seite steht.
+  App.zahlenTab = "bilanz";
+  App.render();
+  const txtBilanz = $("main").textContent;
+  ok("Zahlen zeigt den Rückblick", /Rückblick/.test(txtBilanz));
+  ok("Zahlen zeigt die Meilensteine", /Erreicht/.test(txtBilanz));
+
+  App.zahlenTab = "ausgaben";
+  App.render();
 
   /* --- Marke gegen Eigenmarke --- */
+  const txt = $("main").textContent;
   ok("Zahlen zeigt den Eigenmarken-Vergleich", /Marke oder Eigenmarke/.test(txt));
   const b = App.ctx.brands;
   ok("Die Demo liefert einen belegten Fall", b.belegt.length > 0,
@@ -1707,7 +1717,9 @@ console.log("\n--- Die Startseite bleibt aufgeräumt ---");
 
   ok("Die Liste ist da", !!main.querySelector(".items"));
   ok("Der Weg in die Gangansicht ist da",
-    [...main.querySelectorAll("button")].some((b) => b.textContent === "Nach Gängen"));
+    [...$("appbar").querySelectorAll("button")].some((b) => b.textContent === "Nach Gängen"));
+  ok("Und steht nur dort, nicht ein zweites Mal unten in der Liste",
+    ![...main.querySelectorAll("button")].some((b) => b.textContent === "Nach Gängen"));
   ok("Und das Hinzufügen", !!main.querySelector(".addRow"));
 
   /* Was umgezogen ist, ist NICHT verschwunden. */

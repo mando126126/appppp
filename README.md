@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1722 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1723 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2662,6 +2662,64 @@ bestehen.
 
 ---
 
+## „Überarbeite mal alle Aspekte der App für eine cleanere Nutzererfahrung"
+
+Vor jeder Änderung ein Rundgang durch alle sechs Reiter mit echten
+Screenshots (Playwright, Beispieldaten) — nicht geraten, was schlecht
+aussieht, sondern nachgesehen. Start, Liste, Bestand und Erfassen waren
+sauber: klare Hierarchie, konsistente Karten, Farbdisziplin eingehalten.
+Zwei echte Befunde, ein dritter kleiner:
+
+**Zahlen war eine einzige Karte mit über 20 Abschnitten** — Kacheln,
+Geldaufteilung, Rückblick, Meilensteine, Marke/Eigenmarke,
+Einkaufsrhythmus, Monatschart, Inflation, Preise, Rhythmen, Sparen,
+Günstig eingekauft, Packungsgrößen, Wirkung, nur durch Überschriften
+getrennt. Selbst eine gezielte Frage wie „was gebe ich für Fleisch aus"
+verlangte, durch alles zu scrollen. Jetzt gliedert ein dreiteiliger
+Regler (**Ausgaben** / **Verhalten** / **Bilanz**) den Bereich unterhalb
+der Kachelzeile und der Geld-Karte — die beiden bleiben, weil sie für
+sich schon einen vollständigen Überblick geben. Die Aufteilung folgt der
+Frage, mit der man herkommt, nicht der Reihenfolge, in der die
+Abschnitte historisch entstanden sind: Ausgaben (Marke/Eigenmarke,
+Monatschart, Günstig eingekauft, Packungsgrößen), Verhalten
+(Einkaufsrhythmus, Rhythmen, Inflation, Preise), Bilanz (Rückblick,
+Meilensteine, Sparen, Wirkung).
+
+**Mehr mischte 13 Karten aus völlig verschiedenen Registern** —
+Wasserhärte der Spülmaschine neben Pfand-Bilanz neben „Alles löschen".
+Jede Karte für sich war korrekt gestylt (extra geprüft, bevor daraus ein
+Befund wurde: ein erster Blick auf ein verkleinertes Vollbild-Screenshot
+ließ die vier Aktionsknöpfe unten wie unstylte Links aussehen, der
+Quellcode und ein Nahaufnahme-Screenshot zeigten dann echte `.row`-
+Elemente in einer echten Karte). Das eigentliche Problem war die
+Ordnung, nicht die Optik. Jetzt zwei Bereiche: **Einstellungen** (Dinge,
+die man einmal anfasst und dann monatelang nicht wieder — Darstellung,
+Wochenrückblick, Haushalt, Gangreihenfolge, Deine Liste, Sicherung,
+Daten, Gefahrenzone) und **Auswertungen** (Dinge, die man nachschlägt —
+Saison, Pfand, Märkte, Rechenweg). Die Gefahrenzone bleibt konsequent bei
+den Einstellungen.
+
+**Auf der Liste stand „Nach Gängen" zweimal gleichzeitig im Bild** —
+einmal als Kachel oben im Kopfbereich (`renderBar` in app.js, bleibt
+beim Scrollen erreichbar), einmal als Knopf unten am Ende der Liste,
+beide mit identischem Text und identischer Aktion. Der Kopfbereich-Knopf
+bleibt, der untere ist raus; „Teilen" steht jetzt allein in der Zeile.
+
+Beide neuen Regler sind dieselbe `segmented()`-Komponente, die schon den
+Bon/Von-Hand-Umschalter beim Erfassen und die Zeitraum-Chips bei der
+Geld-Karte trägt — keine neue Komponente für ein altbekanntes Muster.
+Welcher Unterbereich offen ist, ist reine Anzeige-Einstellung
+(`app.zahlenTab`, `app.mehrTab`) nach demselben Muster wie
+`zahlenFilter`: kein Haushaltsdatum, kein `Data.update()`, geht bei
+einem Neuladen verloren, das ist kein Verlust.
+
+Ein Test verschob sich inhaltlich (Rückblick/Meilensteine jetzt im
+Unterbereich „Bilanz" statt direkt sichtbar, im Test entsprechend per
+Regler-Wechsel geprüft), einer kam neu dazu (der doppelte „Nach Gängen"-
+Knopf darf nicht mehr auftauchen). Alle jetzt 1723 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2724,12 +2782,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1722
+npm test          # alle 1723
 npm run test:algo # 1093 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 509 Oberflächentests in jsdom
+npm run test:ui   # 594 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

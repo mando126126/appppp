@@ -75,6 +75,10 @@ const App = {
   // landet nicht in der Sicherung. Ein Neuladen setzt sie zurück,
   // das ist hier kein Verlust.
   zahlenFilter: { range: "12w", from: null, to: null },
+  // Gleicher Grund wie bei zahlenFilter: reine Anzeige-Einstellung, welcher
+  // Unterbereich gerade offen ist -- kein Haushaltsdatum, kein Data.update().
+  zahlenTab: "ausgaben",
+  mehrTab: "einstellungen",
 
   /* ---------- Zustand ändern ---------- */
   set(fn) { Data.update(fn); },

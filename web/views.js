@@ -1202,16 +1202,14 @@ function finishListe(c, ctx, app, on, sumOn, hinweise, dringend) {
 
   /* --- Losgehen --- */
   const actions = el("div", "ctaRow");
-  /* Kein zweiter Modus, eine andere Sicht: derselbe Wagen, nach
-     Gängen sortiert und mit großen Zielen. Deshalb auch nicht mehr
-     der auffälligste Knopf der Seite — das ist jetzt das Buchen. */
-  const go = el("button", "cta light", "Nach Gängen");
-  go.disabled = !on.length;
-  go.addEventListener("click", () => app.openStore());
+  // "Nach Gängen" stand hier zusätzlich zum immer sichtbaren Knopf
+  // oben im Kopfbereich (renderBar in app.js) -- derselbe Text, dieselbe
+  // Aktion, zweimal im selben Bild. Der Kopfbereich-Knopf bleibt beim
+  // Scrollen erreichbar, deshalb reicht der eine.
   const share = el("button", "cta light", "Teilen");
   share.disabled = !on.length;
   share.addEventListener("click", () => app.shareList());
-  actions.append(go, share);
+  actions.append(share);
   c.append(actions);
 
   /* Ohne jede Historie bleibt der Weg zu den Beispieldaten stehen —
@@ -2992,6 +2990,28 @@ function viewZahlen(ctx, app) {
 
   c.append(moneyFlowCard(ctx, app));
 
+  // Drei Unterbereiche statt eines endlosen Scrolls: hier standen über
+  // 20 Abschnitte hintereinander, nur durch Überschriften getrennt. Die
+  // Aufteilung folgt der Frage, mit der man herkommt -- "wofür gebe ich
+  // aus", "wie kaufe ich ein", "was bringt mir das" -- statt der
+  // Reihenfolge, in der die Abschnitte entstanden sind. Die Kachelzeile
+  // und "Wo dein Geld hingeht" bleiben oben immer sichtbar, weil sie
+  // schon für sich einen vollständigen Überblick geben.
+  const nav = el("div", "group");
+  nav.append(segmented(
+    [["ausgaben", "Ausgaben"], ["verhalten", "Verhalten"], ["bilanz", "Bilanz"]],
+    app.zahlenTab, (k) => { app.zahlenTab = k; app.render(); }, "Bereich"));
+  c.append(nav);
+
+  if (app.zahlenTab === "bilanz") renderZahlenBilanz(c, ctx, app);
+  else if (app.zahlenTab === "verhalten") renderZahlenVerhalten(c, ctx, app);
+  else renderZahlenAusgaben(c, ctx, app);
+
+  return c;
+}
+
+/** Unterbereich "Bilanz": was das bisherige Verhalten gebracht hat. */
+function renderZahlenBilanz(c, ctx, app) {
   /* --- Wochenrückblick: immer abrufbar, nicht nur sonntags --- */
   const rv = uiGroup("Rückblick",
     "Fasst zusammen, was im Zeitraum tatsächlich passiert ist — aus dem Ereignis-Protokoll, nicht aus einer " +
@@ -3026,6 +3046,106 @@ function viewZahlen(ctx, app) {
   }
   c.append(ms);
 
+  /* --- Sparen --- */
+  const sc = uiGroup("Sparen", "Aus deinen eigenen Zahlen abgeleitet, nicht aus allgemeinen Tipps.");
+  if (!ctx.savings.length) sc.body.append(el("p", "empty", "Noch keine Vorschläge."));
+  ctx.savings.forEach((x) => {
+    const d = el("div", "save",
+      `<div class="amt">${eur(x.estimatedWeeklySaving)}</div><div class="txt"><b>${esc(x.title)}</b></div>`);
+    const b = el("button", "pillBtn" + (x.on ? " on" : ""), x.on ? "✓" : "nehmen");
+    b.setAttribute("aria-pressed", x.on ? "true" : "false");
+    b.setAttribute("aria-label", x.title);
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      app.set((st) => {
+        st.savingsAccepted = x.on ? st.savingsAccepted.filter((y) => y !== x.id) : [...st.savingsAccepted, x.id];
+      });
+    });
+    d.addEventListener("click", () => app.notice(x.title, x.detail));
+    d.append(b);
+    sc.body.append(d);
+  });
+  const wk = ctx.savings.filter((x) => x.on).reduce((a, x) => a + x.estimatedWeeklySaving, 0);
+  sc.body.append(el("div", "strip",
+    `<div><div class="big">${eur(wk)}</div><div class="l">pro Woche</div></div>` +
+    `<div style="text-align:right"><div class="big">${Math.round(wk * 52)} €</div><div class="l">im Jahr</div></div>`));
+  c.append(sc);
+
+  /* --- Wirkung --- */
+  const cmp = compareToReference(ctx.impact.kg, Data.get().settings.household);
+  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note +
+    "\n\nJede dieser Zahlen ist abgeleitet, keine ist gewogen. Ein Tippen auf ein Produkt zeigt die " +
+    "einzelnen Verdachtsfälle — und lässt dich widersprechen, wo du es besser weißt.");
+  ig.body.append(uiRow("Geschätzter Verlust", null, null, { value: de(ctx.impact.kg) + " kg" }));
+  ctx.impact.byProduct.slice(0, 5).forEach((x) => {
+    // Antippbar: von der Gesamtzahl zu den Fällen, aus denen sie besteht.
+    const pid = (FOOD_DATABASE.find((f) => f.name === x.name) || {}).id;
+    ig.body.append(uiRow(x.name, null, null, {
+      value: de(x.kg) + " kg",
+      onClick: pid ? () => productSheet(pid, ctx) : undefined
+    }));
+  });
+  c.append(ig);
+}
+
+/** Unterbereich "Verhalten": wie und wann eingekauft wird. */
+function renderZahlenVerhalten(c, ctx, app) {
+  /* --- Einkaufsmuster --- */
+  if (ctx.pattern) {
+    const g = uiGroup("Dein Einkaufsrhythmus",
+      "Ausgezählt über die Bontage. Ohne erkennbaren Lieblingstag nennt die App nur die Häufigkeit.");
+    g.body.append(uiRow(ctx.pattern.dayName || "kein fester Tag",
+      ctx.pattern.dayName ? `${pct(ctx.pattern.share)} deiner Einkäufe` : null,
+      null, { value: `${de(ctx.pattern.perWeek)}×/Woche` }));
+    g.body.append(uiRow("Ø Korb", null, null, { value: eur(ctx.pattern.avgBasket) }));
+    const suggested = suggestedLookahead(ctx.pattern);
+    const cur = Data.get().settings.lookaheadDays;
+    if (suggested && suggested !== cur) {
+      g.body.append(uiRow(`Vorausschau auf ${tage(suggested)}`, `aktuell ${cur}`, null, {
+        onClick: () => { app.set((st) => { st.settings.lookaheadDays = suggested; }); app.toast("Übernommen"); }
+      }));
+    }
+    c.append(g);
+  }
+
+  /* --- Rhythmen --- */
+  const rg = uiGroup("Rhythmen",
+    "Median der Kaufabstände je Einheit. Pausen über dem Dreifachen werden ausgeschlossen statt weggemittelt.");
+  [...ctx.rhythms.entries()].sort((a, b) => b[1].confidence - a[1].confidence).slice(0, 12).forEach(([pid, r]) => {
+    const p = byId(pid);
+    if (!p) return;
+    rg.body.append(uiRow(p.name, `Vertrauen ${pct(r.confidence)}`, null, {
+      value: r.rhythmDays ? `${r.rhythmDays} T` : "–",
+      onClick: () => productSheet(pid, ctx)
+    }));
+  });
+  c.append(rg);
+
+  /* --- Inflation --- */
+  if (ctx.inflation && ctx.inflation.productsCompared) {
+    const inf = ctx.inflation;
+    const g = uiGroup("Persönliche Inflation", inf.caveat);
+    g.body.append(uiRow("Dein Warenkorb", `${zahlwort(inf.productsCompared, "Produkt", "Produkte")} verglichen`,
+      null, { value: sign(inf.changePercent) + " %" }));
+    inf.biggestIncreases.slice(0, 5).forEach((i) => g.body.append(
+      uiRow(i.name, `${eur(i.basePrice)} → ${eur(i.currentPrice)}`, null, { value: sign(i.changePercent) + " %" })));
+    c.append(g);
+  }
+
+  /* --- Preis-Gedächtnis --- */
+  const notable = [...ctx.prices.values()]
+    .filter((m) => m.verdict !== "üblich")
+    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+  if (notable.length) {
+    const g = uiGroup("Preise", "Median der eigenen Kaufpreise. Kein Vergleich zwischen Händlern — dafür fehlen die Daten.");
+    notable.slice(0, 8).forEach((m) => g.body.append(uiRow(m.name, `üblich ${eur(m.usual)}`, null,
+      { value: eur(m.last), onClick: () => productSheet(m.productId, ctx) })));
+    c.append(g);
+  }
+}
+
+/** Unterbereich "Ausgaben": wofür das Geld weggeht, jenseits der Geld-Karte oben. */
+function renderZahlenAusgaben(c, ctx, app) {
   /* --- Marke oder Eigenmarke --- */
   if (ctx.brandHeadline) {
     const h = ctx.brandHeadline;
@@ -3059,85 +3179,7 @@ function viewZahlen(ctx, app) {
     c.append(g);
   }
 
-  /* --- Einkaufsmuster --- */
-  if (ctx.pattern) {
-    const g = uiGroup("Dein Einkaufsrhythmus",
-      "Ausgezählt über die Bontage. Ohne erkennbaren Lieblingstag nennt die App nur die Häufigkeit.");
-    g.body.append(uiRow(ctx.pattern.dayName || "kein fester Tag",
-      ctx.pattern.dayName ? `${pct(ctx.pattern.share)} deiner Einkäufe` : null,
-      null, { value: `${de(ctx.pattern.perWeek)}×/Woche` }));
-    g.body.append(uiRow("Ø Korb", null, null, { value: eur(ctx.pattern.avgBasket) }));
-    const suggested = suggestedLookahead(ctx.pattern);
-    const cur = Data.get().settings.lookaheadDays;
-    if (suggested && suggested !== cur) {
-      g.body.append(uiRow(`Vorausschau auf ${tage(suggested)}`, `aktuell ${cur}`, null, {
-        onClick: () => { app.set((st) => { st.settings.lookaheadDays = suggested; }); app.toast("Übernommen"); }
-      }));
-    }
-    c.append(g);
-  }
-
   c.append(chartCard(ctx));
-
-  /* --- Inflation --- */
-  if (ctx.inflation && ctx.inflation.productsCompared) {
-    const inf = ctx.inflation;
-    const g = uiGroup("Persönliche Inflation", inf.caveat);
-    g.body.append(uiRow("Dein Warenkorb", `${zahlwort(inf.productsCompared, "Produkt", "Produkte")} verglichen`,
-      null, { value: sign(inf.changePercent) + " %" }));
-    inf.biggestIncreases.slice(0, 5).forEach((i) => g.body.append(
-      uiRow(i.name, `${eur(i.basePrice)} → ${eur(i.currentPrice)}`, null, { value: sign(i.changePercent) + " %" })));
-    c.append(g);
-  }
-
-  /* --- Preis-Gedächtnis --- */
-  const notable = [...ctx.prices.values()]
-    .filter((m) => m.verdict !== "üblich")
-    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
-  if (notable.length) {
-    const g = uiGroup("Preise", "Median der eigenen Kaufpreise. Kein Vergleich zwischen Händlern — dafür fehlen die Daten.");
-    notable.slice(0, 8).forEach((m) => g.body.append(uiRow(m.name, `üblich ${eur(m.usual)}`, null,
-      { value: eur(m.last), onClick: () => productSheet(m.productId, ctx) })));
-    c.append(g);
-  }
-
-  /* --- Rhythmen --- */
-  const rg = uiGroup("Rhythmen",
-    "Median der Kaufabstände je Einheit. Pausen über dem Dreifachen werden ausgeschlossen statt weggemittelt.");
-  [...ctx.rhythms.entries()].sort((a, b) => b[1].confidence - a[1].confidence).slice(0, 12).forEach(([pid, r]) => {
-    const p = byId(pid);
-    if (!p) return;
-    rg.body.append(uiRow(p.name, `Vertrauen ${pct(r.confidence)}`, null, {
-      value: r.rhythmDays ? `${r.rhythmDays} T` : "–",
-      onClick: () => productSheet(pid, ctx)
-    }));
-  });
-  c.append(rg);
-
-  /* --- Sparen --- */
-  const sc = uiGroup("Sparen", "Aus deinen eigenen Zahlen abgeleitet, nicht aus allgemeinen Tipps.");
-  if (!ctx.savings.length) sc.body.append(el("p", "empty", "Noch keine Vorschläge."));
-  ctx.savings.forEach((x) => {
-    const d = el("div", "save",
-      `<div class="amt">${eur(x.estimatedWeeklySaving)}</div><div class="txt"><b>${esc(x.title)}</b></div>`);
-    const b = el("button", "pillBtn" + (x.on ? " on" : ""), x.on ? "✓" : "nehmen");
-    b.setAttribute("aria-pressed", x.on ? "true" : "false");
-    b.setAttribute("aria-label", x.title);
-    b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      app.set((st) => {
-        st.savingsAccepted = x.on ? st.savingsAccepted.filter((y) => y !== x.id) : [...st.savingsAccepted, x.id];
-      });
-    });
-    d.addEventListener("click", () => app.notice(x.title, x.detail));
-    d.append(b);
-    sc.body.append(d);
-  });
-  const wk = ctx.savings.filter((x) => x.on).reduce((a, x) => a + x.estimatedWeeklySaving, 0);
-  sc.body.append(el("div", "strip",
-    `<div><div class="big">${eur(wk)}</div><div class="l">pro Woche</div></div>` +
-    `<div style="text-align:right"><div class="big">${Math.round(wk * 52)} €</div><div class="l">im Jahr</div></div>`));
-  c.append(sc);
 
   /* --- Ersparnis bei Haushaltsprodukten: getrennt ausweisen --- */
   if (ctx.nonFoodSaved.total > 0) {
@@ -3160,24 +3202,6 @@ function viewZahlen(ctx, app) {
       { onClick: () => app.notice("Packungsgröße", x.recommendation) })));
     c.append(g);
   }
-
-  /* --- Wirkung --- */
-  const cmp = compareToReference(ctx.impact.kg, Data.get().settings.household);
-  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note +
-    "\n\nJede dieser Zahlen ist abgeleitet, keine ist gewogen. Ein Tippen auf ein Produkt zeigt die " +
-    "einzelnen Verdachtsfälle — und lässt dich widersprechen, wo du es besser weißt.");
-  ig.body.append(uiRow("Geschätzter Verlust", null, null, { value: de(ctx.impact.kg) + " kg" }));
-  ctx.impact.byProduct.slice(0, 5).forEach((x) => {
-    // Antippbar: von der Gesamtzahl zu den Fällen, aus denen sie besteht.
-    const pid = (FOOD_DATABASE.find((f) => f.name === x.name) || {}).id;
-    ig.body.append(uiRow(x.name, null, null, {
-      value: de(x.kg) + " kg",
-      onClick: pid ? () => productSheet(pid, ctx) : undefined
-    }));
-  });
-  c.append(ig);
-
-  return c;
 }
 
 /**
@@ -3610,6 +3634,25 @@ function chartCard(ctx) {
 function viewMehr(ctx, app) {
   const c = frag();
   if (ctx.backup.urgent) c.append(backupGroup(ctx, app));
+
+  // Zwei Bereiche statt 13 Karten in einem Scroll: "Einstellungen" für
+  // alles, was man einmal anfasst und dann lange nicht wieder, und
+  // "Auswertungen" für alles, was man nachschlägt. Die Gefahrenzone
+  // bleibt bei den Einstellungen, nie bei den Auswertungen.
+  const nav = el("div", "group");
+  nav.append(segmented(
+    [["einstellungen", "Einstellungen"], ["auswertungen", "Auswertungen"]],
+    app.mehrTab, (k) => { app.mehrTab = k; app.render(); }, "Bereich"));
+  c.append(nav);
+
+  if (app.mehrTab === "auswertungen") renderMehrAuswertungen(c, ctx, app);
+  else renderMehrEinstellungen(c, ctx, app);
+
+  return c;
+}
+
+/** Unterbereich "Einstellungen": Dinge, die man selten anfasst. */
+function renderMehrEinstellungen(c, ctx, app) {
   const S = Data.get();
 
   /* --- Darstellung --- */
@@ -3678,86 +3721,6 @@ function viewMehr(ctx, app) {
     });
     c.append(g);
   }
-
-  /* --- Saison --- */
-  if (ctx.seasonNow.length) {
-    const g = uiGroup("Jetzt Saison", "Saisonkalender des BZfE. Anregung, kein Vorschlag.");
-    g.body.append(uiRow(ctx.seasonNow.map((x) => x.name).join(", ")));
-    c.append(g);
-  }
-
-  /* --- Pfand --- */
-  const d = ctx.deposit;
-  const pg = uiGroup("Pfand",
-    "Einwegpfand 0,25 € ist gesetzlich einheitlich. Mehrwegsätze sind herstellerabhängig — die Beträge sind übliche Sätze, keine Zusicherung.");
-  if (!d.byType.length) {
-    pg.body.append(uiRow("Nichts offen", null, null, { value: "0,00 €" }));
-  } else {
-    d.byType.forEach((t) => pg.body.append(uiRow(t.label, `${t.count} Gebinde`, null, { value: eur(t.amount) })));
-    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${tagen(d.daysOpen)}`, null, {
-      onClick: () => {
-        app.set((s) => {
-          s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
-        });
-        app.toast("Notiert");
-      }
-    }));
-  }
-  c.append(pg);
-
-  /* --- Archiv --- */
-  const st = archiveStats(ctx.archive);
-  const ag = uiGroup("Märkte",
-    "Die App speichert und erinnert. Sie gibt keine Rechtsauskunft — Fristen und Kulanz hängen vom Einzelfall ab.");
-  st.stores.forEach((x) => ag.body.append(uiRow(x.name, `${x.visits} Besuche · Ø ${eur(x.avgBasket)}`,
-    null, { value: eur(x.spend) })));
-  if (!st.stores.length) ag.body.append(el("p", "empty", "Noch keine Bons."));
-  const fr = expiringWarranties(ctx.archive, ctx.ref, 800);
-  if (fr.length) {
-    ag.body.append(uiRow(`${fr.length} Gewährleistungsfrist(en)`, fr[0].message, null,
-      { onClick: () => app.notice("Gewährleistung", fr.slice(0, 8).map((f) => f.message).join("\n\n")) }));
-  }
-  c.append(ag);
-
-  /* --- Rechenweg --- */
-  const m = uiGroup("Rechenweg");
-  m.body.append(uiRow("Wie die App rechnet", "kein KI-Modell", null, {
-    onClick: () => app.notice("Rechenweg", [
-      "Bonzeile → Produkt: Alias-Tabelle, sonst Token- und Levenshtein-Vergleich. 65–85 % werden gefragt statt geraten. Der Steuersatz auf dem Bon ist ein Vorfilter (7 % meist Lebensmittel, 19 % meist Haushalt), kein Ersatz für den Abgleich.",
-      "Rhythmus: Median der Kaufabstände je Einheit. Pausen über dem Dreifachen ausgeschlossen.",
-      "Vertrauen: Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung.",
-      "Bestand: gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit).",
-      "Reichweite: kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit.",
-      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2. Geschätzt heißt: die App sieht, dass wieder gekauft wurde, bevor die Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank geschaut.",
-      "Budget: erst Verschwender halbieren, dann Süßes und Alkohol. Grundnahrung nie.",
-      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet. Der Median statt des Durchschnitts, damit ein einzelnes Angebot den Bezugswert nicht verschiebt. Kein Vergleich zwischen Märkten — dafür fehlen die Daten, und fremde Preise wären erfunden.",
-      "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen.",
-      "Haushaltsprodukte rechnen anders: sie verderben nicht, also entspricht die gekaufte Menge der verbrauchten. Statt eines Kaufrhythmus gilt eine Verbrauchsrate, skaliert mit der Haushaltsgröße hoch einem Exponenten je Produkt — Zahnpasta linear, Waschmittel degressiv, Allzweckreiniger gar nicht.",
-      "Rate: Referenzwert als Prior, Beobachtung über ein 180-Tage-Fenster als Posterior, gewichtet mit min(Käufe, 6) gegen 2. Nach sechs Käufen bestimmt die Beobachtung drei Viertel.",
-      "Austausch: Kaufdatum plus Intervall, ohne Verbrauchsmodell. Bei unregelmäßigem Kauf (Variationskoeffizient ab 0,35) sagt die App gar nichts statt etwas Falsches."
-    ].join("\n\n"))
-  }));
-
-  const q = databaseQualityReport();
-  m.body.append(uiRow("Datenbasis", `${zahlwort(q.total, "Produkt", "Produkte")} · ${q.anteilGeschaetzt} % geschätzt`, null, {
-    onClick: () => app.notice("Datenbasis, ungeschönt",
-      `${zahlwort(q.total, "Produkt", "Produkte")}, ${zahlwort(q.kategorien, "Kategorie", "Kategorien")}, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
-      `rechtlich definiert: ${q.regulatorisch}\n` +
-      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE, BMEL)\n` +
-      `Schätzwert: ${q.schaetzwert} — ohne amtliche Quelle, vor Produktivbetrieb prüfen\n\n` +
-      `${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen. Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten.\n\n` +
-      `${zahlwort(q.safetyCritical, "Produkt", "Produkte")} tragen ein Verbrauchsdatum. Für sie schlägt die App nie eine Weiterverwendung vor — und ihre Tageszahlen ` +
-      `stehen ausdrücklich NICHT als „rechtlich definiert“ da: geregelt sind die Pflicht zum Verbrauchsdatum (LMIV Art. 24) und die ` +
-      `Höchsttemperatur (Tier-LMHV Anlage 5), nicht die Anzahl der Tage. Die Tage sind Lagerempfehlungen, jeweils an der unteren Grenze. ` +
-      `Es gilt immer das aufgedruckte Datum.`)
-  }));
-  m.body.append(uiRow("Über", `Bauversion ${window.__BUILD__ || "dev"}`, null, {
-    onClick: () => app.notice("Einkaufs-Anker",
-      "Alle Zahlen werden im Browser gerechnet. Kein Server, kein Konto, keine Übertragung.\n\n" +
-      "Quellen: BZfE/BLE „Haltbarkeit von Lebensmitteln\“ und „Lebensmittel richtig lagern\“ (20.02.2025), " +
-      "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\“.")
-  }));
-  c.append(m);
 
   /* --- Sicherung ---
      Steht normalerweise hier unten bei den Daten, wo man sie sucht.
@@ -3873,6 +3836,87 @@ function viewMehr(ctx, app) {
     () => { Data.reset(); app.toast("Gelöscht"); app.goto("liste"); }));
   actions.body.append(del);
   c.append(actions);
+}
 
-  return c;
+/** Unterbereich "Auswertungen": Dinge, die man nachschlägt statt anfasst. */
+function renderMehrAuswertungen(c, ctx, app) {
+  /* --- Saison --- */
+  if (ctx.seasonNow.length) {
+    const g = uiGroup("Jetzt Saison", "Saisonkalender des BZfE. Anregung, kein Vorschlag.");
+    g.body.append(uiRow(ctx.seasonNow.map((x) => x.name).join(", ")));
+    c.append(g);
+  }
+
+  /* --- Pfand --- */
+  const d = ctx.deposit;
+  const pg = uiGroup("Pfand",
+    "Einwegpfand 0,25 € ist gesetzlich einheitlich. Mehrwegsätze sind herstellerabhängig — die Beträge sind übliche Sätze, keine Zusicherung.");
+  if (!d.byType.length) {
+    pg.body.append(uiRow("Nichts offen", null, null, { value: "0,00 €" }));
+  } else {
+    d.byType.forEach((t) => pg.body.append(uiRow(t.label, `${t.count} Gebinde`, null, { value: eur(t.amount) })));
+    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${tagen(d.daysOpen)}`, null, {
+      onClick: () => {
+        app.set((s) => {
+          s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
+        });
+        app.toast("Notiert");
+      }
+    }));
+  }
+  c.append(pg);
+
+  /* --- Archiv --- */
+  const st = archiveStats(ctx.archive);
+  const ag = uiGroup("Märkte",
+    "Die App speichert und erinnert. Sie gibt keine Rechtsauskunft — Fristen und Kulanz hängen vom Einzelfall ab.");
+  st.stores.forEach((x) => ag.body.append(uiRow(x.name, `${x.visits} Besuche · Ø ${eur(x.avgBasket)}`,
+    null, { value: eur(x.spend) })));
+  if (!st.stores.length) ag.body.append(el("p", "empty", "Noch keine Bons."));
+  const fr = expiringWarranties(ctx.archive, ctx.ref, 800);
+  if (fr.length) {
+    ag.body.append(uiRow(`${fr.length} Gewährleistungsfrist(en)`, fr[0].message, null,
+      { onClick: () => app.notice("Gewährleistung", fr.slice(0, 8).map((f) => f.message).join("\n\n")) }));
+  }
+  c.append(ag);
+
+  /* --- Rechenweg --- */
+  const m = uiGroup("Rechenweg");
+  m.body.append(uiRow("Wie die App rechnet", "kein KI-Modell", null, {
+    onClick: () => app.notice("Rechenweg", [
+      "Bonzeile → Produkt: Alias-Tabelle, sonst Token- und Levenshtein-Vergleich. 65–85 % werden gefragt statt geraten. Der Steuersatz auf dem Bon ist ein Vorfilter (7 % meist Lebensmittel, 19 % meist Haushalt), kein Ersatz für den Abgleich.",
+      "Rhythmus: Median der Kaufabstände je Einheit. Pausen über dem Dreifachen ausgeschlossen.",
+      "Vertrauen: Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung.",
+      "Bestand: gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit).",
+      "Reichweite: kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit.",
+      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2. Geschätzt heißt: die App sieht, dass wieder gekauft wurde, bevor die Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank geschaut.",
+      "Budget: erst Verschwender halbieren, dann Süßes und Alkohol. Grundnahrung nie.",
+      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet. Der Median statt des Durchschnitts, damit ein einzelnes Angebot den Bezugswert nicht verschiebt. Kein Vergleich zwischen Märkten — dafür fehlen die Daten, und fremde Preise wären erfunden.",
+      "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen.",
+      "Haushaltsprodukte rechnen anders: sie verderben nicht, also entspricht die gekaufte Menge der verbrauchten. Statt eines Kaufrhythmus gilt eine Verbrauchsrate, skaliert mit der Haushaltsgröße hoch einem Exponenten je Produkt — Zahnpasta linear, Waschmittel degressiv, Allzweckreiniger gar nicht.",
+      "Rate: Referenzwert als Prior, Beobachtung über ein 180-Tage-Fenster als Posterior, gewichtet mit min(Käufe, 6) gegen 2. Nach sechs Käufen bestimmt die Beobachtung drei Viertel.",
+      "Austausch: Kaufdatum plus Intervall, ohne Verbrauchsmodell. Bei unregelmäßigem Kauf (Variationskoeffizient ab 0,35) sagt die App gar nichts statt etwas Falsches."
+    ].join("\n\n"))
+  }));
+
+  const q = databaseQualityReport();
+  m.body.append(uiRow("Datenbasis", `${zahlwort(q.total, "Produkt", "Produkte")} · ${q.anteilGeschaetzt} % geschätzt`, null, {
+    onClick: () => app.notice("Datenbasis, ungeschönt",
+      `${zahlwort(q.total, "Produkt", "Produkte")}, ${zahlwort(q.kategorien, "Kategorie", "Kategorien")}, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
+      `rechtlich definiert: ${q.regulatorisch}\n` +
+      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE, BMEL)\n` +
+      `Schätzwert: ${q.schaetzwert} — ohne amtliche Quelle, vor Produktivbetrieb prüfen\n\n` +
+      `${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen. Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten.\n\n` +
+      `${zahlwort(q.safetyCritical, "Produkt", "Produkte")} tragen ein Verbrauchsdatum. Für sie schlägt die App nie eine Weiterverwendung vor — und ihre Tageszahlen ` +
+      `stehen ausdrücklich NICHT als „rechtlich definiert“ da: geregelt sind die Pflicht zum Verbrauchsdatum (LMIV Art. 24) und die ` +
+      `Höchsttemperatur (Tier-LMHV Anlage 5), nicht die Anzahl der Tage. Die Tage sind Lagerempfehlungen, jeweils an der unteren Grenze. ` +
+      `Es gilt immer das aufgedruckte Datum.`)
+  }));
+  m.body.append(uiRow("Über", `Bauversion ${window.__BUILD__ || "dev"}`, null, {
+    onClick: () => app.notice("Einkaufs-Anker",
+      "Alle Zahlen werden im Browser gerechnet. Kein Server, kein Konto, keine Übertragung.\n\n" +
+      "Quellen: BZfE/BLE „Haltbarkeit von Lebensmitteln\“ und „Lebensmittel richtig lagern\“ (20.02.2025), " +
+      "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\“.")
+  }));
+  c.append(m);
 }
