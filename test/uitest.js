@@ -1594,6 +1594,23 @@ console.log("\n--- Wo dein Geld hingeht ---");
     const p = T.byId(einmalig.productId);
     return !p || !pVerlauf.has(p.name);
   })());
+
+  // --- Antippen öffnet dasselbe Detail-Blatt wie "Preise"/"Rhythmen" ---
+  const produktRow = produktRows[0];
+  ok("Eine Produktzeile ist ein Knopf (Kategorien/Märkte sind es nicht)",
+    produktRow && produktRow.tagName === "BUTTON", produktRow && produktRow.tagName);
+  const kategorieRow = $("main").querySelector(".moneyBarRow");
+  ok("Eine Kategorie-Zeile bleibt ein unklickbares div", kategorieRow && kategorieRow.tagName === "DIV",
+    kategorieRow && kategorieRow.tagName);
+  if (produktRow) {
+    const name = produktRow.querySelector(".moneyBarLabel").textContent;
+    click(produktRow);
+    ok("Öffnet das Detail-Blatt des angetippten Produkts",
+      $("sheetTitle").textContent === name, `${name} -> ${$("sheetTitle").textContent}`);
+    ok("Das Blatt zeigt echte Fakten (Rhythmus, Preis, …), nicht nur den Namen",
+      $("sheetOpts").querySelectorAll(".facts dt").length > 3);
+    App.closeSheet();
+  }
 }
 
 console.log("\n--- Die Übersicht ---");

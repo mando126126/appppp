@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1718 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1722 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2629,6 +2629,39 @@ Acht neue Tests. Alle jetzt 1718 Tests bestehen.
 
 ---
 
+## „Wenn man auf ein Produkt klickt, was sieht man dann?"
+
+Die ehrliche Antwort im ersten Moment: nichts, die Zeile war ein
+`<div>`, kein Knopf. Nachgeholt statt nur beschrieben.
+
+**Kein neues Blatt gebaut — das vorhandene wiederverwendet.**
+`productSheet` existiert schon lange und zeigt genau das, was diese
+Frage erwartet: Rhythmus, letzter Kauf, Haltbarkeit, Lagerort, Preis
+(zuletzt/üblich/Spanne), Bestand, Reichweite, Verlust in Euro und
+Prozent, Datenqualität, bei sicherheitskritischen Produkten das
+Verbrauchsdatum — dieselbe Ansicht, die „Preise" und „Rhythmen" weiter
+unten in derselben Liste schon länger öffnen. Ein zweites, verkürztes
+Blatt nur für diesen neuen Bereich zu bauen hätte dieselben Zahlen an
+zwei Stellen unterschiedlich genau gezeigt.
+
+**Nur Produktzeilen sind jetzt Knöpfe — Kategorien und Märkte bleiben
+`<div>`.** Für sie gibt es kein Detail-Blatt, ein Antippen ohne Wirkung
+wäre schlechter als gar keine Reaktion. `moneyBarRow` entscheidet das
+über ein optionales `onClick`, nicht über eine zweite Funktion.
+
+**Der Name allein reicht nicht zum Öffnen.** `produktRang` bleibt
+namensbasiert (wie die Kategorie- und Markt-Listen), gebraucht wird
+aber die Produkt-ID. Eine kleine Name-zu-ID-Zuordnung nur für den
+Klick-Aufruf, aus `ctx.rhythms` aufgebaut — dieselbe Menge Produkte,
+die ohnehin schon in der Liste steht.
+
+Vier neue Tests, darunter der Praxisfall selbst: „Hähnchenbrust"
+antippen öffnet ein Blatt mit demselben Namen im Titel und echten
+Fakten darunter, nicht nur eine leere Hülle. Alle jetzt 1722 Tests
+bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2691,7 +2724,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1718
+npm test          # alle 1722
 npm run test:algo # 1093 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

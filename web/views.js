@@ -3246,9 +3246,12 @@ function moneySparklineSvg(values) {
  *  die echten Zeilen tragen die Akzentfarbe, der Rest tritt zurück).
  *  `wasteFrac` (0..1, optional) blendet einen roten Verlust-Hinweis
  *  unter dem Balken ein. `verlauf` (Array Monatsbeträge, optional)
- *  wird zur kleinen Trendlinie neben dem Betrag. */
-function moneyBarRow(label, amount, share, frac, muted, wasteFrac, verlauf) {
-  const r = el("div", "moneyBarRow" + (muted ? " muted" : ""));
+ *  wird zur kleinen Trendlinie neben dem Betrag. `onClick` (optional)
+ *  macht die Zeile zum Knopf — bei Produkten öffnet das dasselbe
+ *  Detail-Blatt wie bei „Preise“ und „Rhythmen“ weiter unten, statt
+ *  eine zweite, verkürzte Ansicht für dieselben Fakten zu bauen. */
+function moneyBarRow(label, amount, share, frac, muted, wasteFrac, verlauf, onClick) {
+  const r = el(onClick ? "button" : "div", "moneyBarRow" + (muted ? " muted" : ""));
   const spark = verlauf ? moneySparklineSvg(verlauf) : "";
   r.innerHTML =
     `<div class="moneyBarHead"><span class="moneyBarLabel">${esc(label)}</span>` +
@@ -3258,6 +3261,7 @@ function moneyBarRow(label, amount, share, frac, muted, wasteFrac, verlauf) {
     (wasteFrac >= 0.05
       ? `<div class="moneyWaste">${Math.round(wasteFrac * 100)} % davon meist verschwendet, laut deinem Kauf-Verlauf</div>`
       : "");
+  if (onClick) r.addEventListener("click", onClick);
   return r;
 }
 
@@ -3539,14 +3543,23 @@ function moneyFlowCard(ctx, app) {
      mehr oder weniger kostet, nicht nur die ganze Kategorie drumherum. */
   const byProdukt = produktRang(ctx, rows);
   if (byProdukt.size) {
+    // Name -> ID, nur für den Antipp-Aufruf unten. produktRang() bleibt
+    // namensbasiert wie byCat/byStore, damit topNMitSonstige unverändert
+    // auf allen drei Listen funktioniert.
+    const idByName = new Map();
+    ctx.rhythms.forEach((r, pid) => { const p = byId(pid); if (p) idByName.set(p.name, pid); });
+
     const produkte = topNMitSonstige(byProdukt, 7);
     const maxProdukt = Math.max(...produkte.map((x) => x[1]));
     const produktVerlustAnteil = produktVerlust(ctx);
     const produktVerlauf = produktMonatsverlauf(ctx, 6);
     h.append(el("div", "moneySection", "Immer wieder gekauft"));
-    produkte.forEach(([label, amount, sonstige]) =>
+    produkte.forEach(([label, amount, sonstige]) => {
+      const pid = idByName.get(label);
       h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxProdukt > 0 ? amount / maxProdukt : 0,
-        sonstige, sonstige ? 0 : (produktVerlustAnteil.get(label) || 0), sonstige ? null : produktVerlauf.get(label))));
+        sonstige, sonstige ? 0 : (produktVerlustAnteil.get(label) || 0), sonstige ? null : produktVerlauf.get(label),
+        pid ? () => productSheet(pid, ctx) : null));
+    });
   }
 
   return h;
