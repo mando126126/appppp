@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1683 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1684 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2415,6 +2415,58 @@ Prozentanteil). Alle jetzt 1683 Tests bestehen.
 
 ---
 
+## Nachtrag: ein eigener Bereich, schönere Balken
+
+„Viel schönere Charts, ein eigener Bereich, die Optik gefällt mir noch
+nicht" — berechtigt: Die erste Fassung war nur eine weitere `.group`-
+Karte in der langen Liste, die Balken ein CSS-Hintergrund über die
+gesamte Zeile. Vor der Überarbeitung geladen: die `dataviz`-Skill-
+Anleitung dieser Umgebung — Form vor Farbe, ein fester Vergleich am
+Ende statt geschätzter Werte.
+
+**Die Form geprüft.** Kategorien und Märkte sind ein Rang-nach-
+Betrag-Vergleich, keine Aufteilung, die man als Ganzes lesen muss —
+laut Anleitung also ein **Balkendiagramm mit EINEM Farbton**, kein
+Kreis- oder Ringdiagramm (das eine Skala-Regel dieser Anleitung für
+„Vergleich naher Werte" ausdrücklich ausschließt) und keine
+Farbskala je Kategorie (Kategorien haben keine Rangfolge mit
+Eigenbedeutung — Milchprodukte sind nicht „mehr" als Frischware —,
+eine dunkler-bei-höherem-Wert-Färbung würde die Balkenlänge nur ein
+zweites Mal verschlüsseln).
+
+**Eigener Bereich, ohne die Farbregel der App zu brechen.** Die
+Rückblick-Karte trägt im Code den Kommentar „die einzige farbige
+Karte der App" — ein bewusstes Zwei-Zeilen-Gesetz, das nicht für eine
+zweite Sonderfarbe gebrochen werden sollte. Abhebung kommt hier
+stattdessen über Fläche, Schatten und Zahlengröße: derselbe erhöhte
+Karten-Stil wie beim Vorrats-Bereich (`.hero`), direkt unter den
+Kennzahlen-Kacheln statt am Ende der Liste, mit einer großen
+547,26-€-Zahl.
+
+**Die Balken selbst kopieren eine bereits bewährte Form** — den
+Vorrats-Balken (`rangeHero`): eine SVG-Linie mit rundem Kappenende
+(`stroke-linecap="round"`, `vector-effect="non-scaling-stroke"` gegen
+Verzerrung beim Strecken), nicht ein `<div>` mit `border-radius`. Es
+ist die einzige runde Form auf einer sonst komplett rechtwinkligen
+Oberfläche (`--r-lg/-md/-sm` stehen app-weit auf `0px`) — Rundung ist
+hier reserviert für Mengen und Anteile, kein Zufall. Die Balkenlänge
+bemisst sich am GRÖSSTEN Wert der Liste, nicht an der Gesamtsumme:
+die stärkste Zeile füllt den Balken ganz aus, das liest sich als
+Rangfolge; der Anteil an der Gesamtsumme steht daneben als eigene
+Zahl.
+
+Fünf Zeitraum-Chips passen nicht mehr in eine Zeile wie die
+zwei-/dreistufigen Regler sonst in der App (Erscheinungsbild,
+Schriftgröße) — dafür bricht die Zeile jetzt sauber in zwei um, nur
+innerhalb dieses einen Bereichs, ohne die geteilte Regler-Komponente
+für ihre anderen Einsatzstellen zu verändern.
+
+Ein neuer Test prüft die Kappenform direkt
+(`stroke-linecap="round"` an jedem Balken). Alle jetzt 1684 Tests
+bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2477,7 +2529,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1683
+npm test          # alle 1684
 npm run test:algo # 1090 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

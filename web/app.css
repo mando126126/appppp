@@ -433,18 +433,47 @@ button.row:active,label.row:active{background:var(--fill)}
 .srcnote{font-size:0.73rem;color:var(--ink-3);margin-top:13px;line-height:1.45}
 .empty{font-size:0.9rem;color:var(--ink-2);padding:26px 0;text-align:center}
 
-/* "Wo dein Geld hingeht": Balken im Hintergrund, Text obenauf. Der
-   Anteil bemisst die Breite, keine gesonderte Skala -- die längste
-   Zeile ist ohnehin die auffälligste, sie braucht keinen Vergleichswert. */
-.moneyRow{position:relative;display:flex;align-items:center;justify-content:space-between;
-  padding:11px 16px;gap:10px;overflow:hidden}
-.moneyRow + .moneyRow::before{content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline)}
-.moneyBar{position:absolute;left:0;top:0;bottom:0;background:var(--accent-soft);
-  border-radius:0 var(--r-sm) var(--r-sm) 0;transition:width .3s var(--spring)}
-.moneyLabel{position:relative;font-size:0.94rem;z-index:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.moneyAmt{position:relative;font-size:0.9rem;font-variant-numeric:tabular-nums;text-align:right;
-  z-index:1;flex:0 0 auto;color:var(--ink)}
-.moneyAmt small{display:block;font-size:0.72rem;color:var(--ink-3);font-weight:400}
+/* ---------------- Wo dein Geld hingeht: eigener Bereich -----------
+   Ein eigenständiger, erhöhter Bereich wie `.hero` (Vorrat) -- weiße
+   Fläche, kräftiger Schatten, GROSSE Zahl -- statt einer weiteren
+   Karte in der Liste. Farbe bleibt bewusst der Rückblick-Karte
+   vorbehalten ("die einzige farbige Karte der App", siehe oben);
+   diese Fläche hebt sich stattdessen über Fläche, Schatten und
+   Zahlengröße ab, nicht über Farbe.
+
+   Die Balken sind dieselbe Form wie beim Vorrat-Balken: eine SVG-Linie
+   mit rundem Kappenende (`stroke-linecap="round"`), nicht ein Rechteck
+   mit `border-radius` -- die einzige runde Form dieser sonst kantigen
+   Oberfläche (`--r-*` steht überall sonst auf 0), reserviert für
+   Mengen und Anteile. Eine Kategorie ist keine Rangfolge mit
+   Eigenbedeutung (anders als z. B. Ampelstufen), deshalb EIN Farbton
+   für jeden Balken -- eine Skala von hell zu dunkel würde die
+   Balkenlänge ein zweites Mal verschlüsseln, ohne dass „dunkler"
+   irgendetwas Eigenes bedeutet. */
+.moneyHero{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--lift);
+  padding:18px 18px 8px;margin-top:14px}
+.moneyHeroHead{display:flex;align-items:center;gap:6px;font-size:1.02rem;font-weight:650;letter-spacing:-.0075em}
+.moneyHeroInfo{font-size:0.83rem;color:var(--ink-2);line-height:1.42;margin:5px 0 0}
+.moneyTotal{margin-top:16px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.moneyTotal .n{font-size:2.15rem;font-weight:750;letter-spacing:-.02em;line-height:1}
+.moneyTotal .sub{font-size:0.82rem;color:var(--ink-2)}
+.moneySection{font-size:0.76rem;font-weight:650;color:var(--ink-2);text-transform:uppercase;
+  letter-spacing:.03em;margin:22px 0 2px}
+.moneyBarRow{padding:11px 0;position:relative}
+.moneyBarRow + .moneyBarRow::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--hairline)}
+.moneyBarHead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px}
+.moneyBarLabel{font-size:0.92rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.moneyBarValue{font-size:0.88rem;font-variant-numeric:tabular-nums;flex:0 0 auto;color:var(--ink)}
+.moneyBarValue small{margin-left:5px;font-size:0.78rem;color:var(--ink-3);font-variant-numeric:normal}
+.moneyBarSvg{width:100%;height:9px;display:block;overflow:visible}
+.moneyEmpty{padding:16px 0 20px;font-size:0.9rem;color:var(--ink-2)}
+/* Fünf Chips passen nicht mehr in eine Zeile wie die sonst nur
+   zwei-/dreistufigen `.segmented`-Regler (Erscheinungsbild,
+   Schriftgröße) -- hier wird umgebrochen statt gequetscht oder
+   abgeschnitten, ohne die geteilte Komponente für ihre anderen
+   Einsatzstellen zu verändern. */
+.moneyHero .segmented{flex-wrap:wrap}
+.moneyHero .segmented button{flex:1 1 30%}
 
 .infoBtn{
   width:17px;height:17px;flex:0 0 auto;border-radius:99px;

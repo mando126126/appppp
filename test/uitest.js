@@ -1437,14 +1437,16 @@ console.log("\n--- Wo dein Geld hingeht ---");
   ok("Zahlen zeigt die Geldaufteilung", /Wo dein Geld hingeht/.test(txt));
   ok("Mit Kategorien und Märkten", /Kategorien/.test(txt) && /Märkte/.test(txt));
 
-  const rows = $("main").querySelectorAll(".moneyRow");
+  const rows = $("main").querySelectorAll(".moneyBarRow");
   ok("Zeigt mindestens eine Zeile", rows.length > 0, rows.length);
   ok("Jede Zeile nennt einen Anteil in Prozent",
     [...rows].every((r) => /\d+ %/.test(r.textContent)), rows[0] && rows[0].textContent);
+  ok("Jede Zeile zeichnet einen Balken mit rundem Kappenende",
+    [...rows].every((r) => r.querySelector(".moneyBarSvg line[stroke-linecap='round']")));
 
-  const woReihe = () => [...$("main").querySelectorAll(".row")].find((r) => /Ø .*\/Woche/.test(r.textContent));
+  const woReihe = () => $("main").querySelector(".moneyTotal .sub");
   const vorher = woReihe() ? woReihe().textContent : null;
-  ok("Zeigt den Wochendurchschnitt für den gewählten Zeitraum", !!vorher);
+  ok("Zeigt den Wochendurchschnitt für den gewählten Zeitraum", !!vorher && /Ø .*\/Woche/.test(vorher), vorher);
 
   const chips = () => [...$("main").querySelectorAll(".segmented button")];
   const chip4w = chips().find((b) => b.textContent === "4 Wochen");

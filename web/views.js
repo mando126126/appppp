@@ -2985,6 +2985,8 @@ function viewZahlen(ctx, app) {
     `von ${ctx.rhythms.size}`));
   c.append(s);
 
+  c.append(moneyFlowCard(ctx, app));
+
   /* --- Wochenrückblick: immer abrufbar, nicht nur sonntags --- */
   const rv = uiGroup("Rückblick",
     "Fasst zusammen, was im Zeitraum tatsächlich passiert ist — aus dem Ereignis-Protokoll, nicht aus einer " +
@@ -3070,7 +3072,6 @@ function viewZahlen(ctx, app) {
     c.append(g);
   }
 
-  c.append(moneyFlowCard(ctx, app));
   c.append(chartCard(ctx));
 
   /* --- Inflation --- */
@@ -3187,38 +3188,65 @@ function zahlenSpanne(filter, ref) {
   return { from: Data.plusDays(ref, -wochen * 7), to: ref };
 }
 
-/** Eine Zeile der Geld-Aufteilung: Balken im Hintergrund, Betrag und Anteil rechts. */
-function moneyRow(label, amount, share) {
-  const r = el("div", "moneyRow");
+/**
+ * Balken mit rundem Kappenende, dieselbe Form wie beim Vorrats-Balken
+ * (`rangeHero`): Track in `--fill-2`, Füllung in Akzentfarbe, gezeichnet
+ * als `<line>` mit `stroke-linecap="round"` und `non-scaling-stroke`,
+ * damit die Rundung rund bleibt, wenn die Fläche in die Breite gezogen
+ * wird — ein Rechteck mit `border-radius` würde bei Streckung oval.
+ *
+ * `frac` bemisst sich am GRÖSSTEN Wert der Liste, nicht am Gesamtbetrag:
+ * die längste Zeile füllt den Balken voll aus, das liest sich als
+ * Rangfolge. Der Anteil an der Gesamtsumme steht daneben als Zahl,
+ * unabhängig von der Balkenlänge.
+ */
+function moneyBarSvg(frac) {
+  const W = 300, PAD = 4.5, SW = 9;
+  const bar = (to, stroke) =>
+    `<line x1="${PAD}" y1="${SW / 2}" x2="${to.toFixed(1)}" y2="${SW / 2}" stroke="${stroke}" ` +
+    `stroke-width="${SW}" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+  const x1 = PAD + Math.max(0, Math.min(1, frac)) * (W - PAD * 2);
+  return `<svg class="moneyBarSvg" viewBox="0 0 ${W} ${SW}" preserveAspectRatio="none" aria-hidden="true">` +
+    bar(W - PAD, "var(--fill-2)") + (frac > 0 ? bar(x1, "var(--accent)") : "") + `</svg>`;
+}
+
+/** Eine Rangzeile: Name und Betrag/Anteil oben, Balken darunter. */
+function moneyBarRow(label, amount, share, frac) {
+  const r = el("div", "moneyBarRow");
   r.innerHTML =
-    `<div class="moneyBar" style="width:${Math.max(2, Math.round(share * 100))}%"></div>` +
-    `<div class="moneyLabel">${esc(label)}</div>` +
-    `<div class="moneyAmt">${eur(amount)}<small>${pct(share)}</small></div>`;
+    `<div class="moneyBarHead"><span class="moneyBarLabel">${esc(label)}</span>` +
+    `<span class="moneyBarValue">${eur(amount)}<small>${pct(share)}</small></span></div>` +
+    moneyBarSvg(frac);
   return r;
 }
 
 /**
- * „Wo dein Geld hingeht“ — Kategorien und Märkte für einen frei
- * wählbaren Zeitraum, mit vorgeschlagenen Zeiträumen als Chips und
- * einem eigenen Zeitraum als Ausweg. Rein additive Anzeige: nichts
- * hier verändert Rhythmen, Rückblick oder eine andere Auswertung —
- * nur `ctx.history`, gefiltert nach Datum.
+ * „Wo dein Geld hingeht“ — ein eigener, erhöhter Bereich (siehe
+ * `.moneyHero` in app.css), nicht nur eine weitere Karte in der Liste.
+ * Kategorien und Märkte für einen frei wählbaren Zeitraum, mit
+ * vorgeschlagenen Zeiträumen als Chips und einem eigenen Zeitraum als
+ * Ausweg. Rein additive Anzeige: nichts hier verändert Rhythmen,
+ * Rückblick oder eine andere Auswertung — nur `ctx.history`, gefiltert
+ * nach Datum.
  */
 function moneyFlowCard(ctx, app) {
-  const g = uiGroup("Wo dein Geld hingeht",
+  const h = el("div", "moneyHero");
+  h.append(el("div", "moneyHeroHead", "Wo dein Geld hingeht"));
+  h.append(el("p", "moneyHeroInfo",
     "Aus deinen eigenen Bons, nach Kategorie und Markt aufgeteilt, für den gewählten Zeitraum. " +
-    "Frei erfasste Zeilen ohne Produkt zählen unter „Ohne Kategorie“, weil ihnen keine Kategorie zugeordnet ist.");
+    "Frei erfasste Zeilen ohne Produkt zählen unter „Ohne Kategorie“."));
 
   const filter = App.zahlenFilter;
   const ref = Data.today();
 
-  g.body.append(uiRow("Zeitraum", null,
-    segmented(
-      [["4w", "4 Wochen"], ["12w", "12 Wochen"], ["year", "Jahr"], ["all", "Gesamt"], ["custom", "eigener"]],
-      filter.range,
-      (v) => { filter.range = v; app.render(); },
-      "Zeitraum für Geldaufteilung"
-    ), { stacked: true }));
+  const chipRow = el("div", "row stacked");
+  chipRow.append(segmented(
+    [["4w", "4 Wochen"], ["12w", "12 Wochen"], ["year", "Jahr"], ["all", "Gesamt"], ["custom", "eigener"]],
+    filter.range,
+    (v) => { filter.range = v; app.render(); },
+    "Zeitraum für Geldaufteilung"
+  ));
+  h.append(chipRow);
 
   if (filter.range === "custom") {
     const row = el("div", "row2");
@@ -3231,41 +3259,47 @@ function moneyFlowCard(ctx, app) {
     ti.addEventListener("change", () => { filter.to = ti.value; app.render(); });
     tf.append(ti);
     row.append(ff, tf);
-    g.body.append(row);
+    h.append(row);
   }
 
   const { from, to } = zahlenSpanne(filter, ref);
-  const rows = ctx.history.filter((h) => (!from || h.date >= from) && h.date <= to);
+  const rows = ctx.history.filter((x) => (!from || x.date >= from) && x.date <= to);
 
   if (!rows.length) {
-    g.body.append(el("p", "empty", "Keine Käufe in diesem Zeitraum."));
-    return g;
+    h.append(el("p", "moneyEmpty", "Keine Käufe in diesem Zeitraum."));
+    return h;
   }
 
-  const total = rows.reduce((a, h) => a + h.unitPrice * h.quantity, 0);
+  const total = rows.reduce((a, x) => a + x.unitPrice * x.quantity, 0);
   const tage = Math.max(1, daysBetween(from || rows[0].date, to) + 1);
   const proWoche = total / (tage / 7);
-  g.body.append(uiRow(eur(total), `${zahlwort(rows.length, "Kauf", "Käufe")} in diesem Zeitraum`, null,
-    { value: `Ø ${eur(proWoche)}/Woche` }));
+  h.append(el("div", "moneyTotal",
+    `<span class="n">${eur(total)}</span>` +
+    `<span class="sub">Ø ${eur(proWoche)}/Woche · ${zahlwort(rows.length, "Kauf", "Käufe")}</span>`));
 
   const byCat = new Map(), byStore = new Map();
-  rows.forEach((h) => {
-    const p = h.productId ? byId(h.productId) : null;
+  rows.forEach((x) => {
+    const p = x.productId ? byId(x.productId) : null;
     const cat = p ? p.category : "Ohne Kategorie";
-    byCat.set(cat, (byCat.get(cat) || 0) + h.unitPrice * h.quantity);
-    const store = h.store || "Unbekannt";
-    byStore.set(store, (byStore.get(store) || 0) + h.unitPrice * h.quantity);
+    byCat.set(cat, (byCat.get(cat) || 0) + x.unitPrice * x.quantity);
+    const store = x.store || "Unbekannt";
+    byStore.set(store, (byStore.get(store) || 0) + x.unitPrice * x.quantity);
   });
 
-  g.body.append(uiRow("Kategorien", null));
-  [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
-    .forEach(([label, amount]) => g.body.append(moneyRow(label, amount, total > 0 ? amount / total : 0)));
+  const ranked = (map) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const kategorien = ranked(byCat), maerkte = ranked(byStore);
+  const maxCat = kategorien.length ? kategorien[0][1] : 0;
+  const maxStore = maerkte.length ? maerkte[0][1] : 0;
 
-  g.body.append(uiRow("Märkte", null));
-  [...byStore.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
-    .forEach(([label, amount]) => g.body.append(moneyRow(label, amount, total > 0 ? amount / total : 0)));
+  h.append(el("div", "moneySection", "Kategorien"));
+  kategorien.forEach(([label, amount]) =>
+    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxCat > 0 ? amount / maxCat : 0)));
 
-  return g;
+  h.append(el("div", "moneySection", "Märkte"));
+  maerkte.forEach(([label, amount]) =>
+    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxStore > 0 ? amount / maxStore : 0)));
+
+  return h;
 }
 
 /** Balken je Monat, mit geschätztem Verderb-Anteil obenauf. */
