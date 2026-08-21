@@ -45,7 +45,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { matchProduct, parseProductName, truncationSimilarity, splitGlued, topMatches } = require("../src/algo/productMatcher2");
+const { matchProduct, parseProductName, truncationSimilarity, splitGlued, topMatches, SAFE_THRESHOLD, combinedSimilarity } = require("../src/algo/productMatcher2");
 const { parseReceipt } = require("../src/algo/receiptParser");
 const { FOOD_DATABASE } = require("../src/algo/foodDatabase");
 
@@ -458,6 +458,118 @@ t("Nutzt dieselbe Zwei-Lesarten-Erweiterung wie matchProduct (zusammengeklebte W
 t("Kein Treffer im Katalog liefert eine leere Liste, keinen Absturz", () => {
   const liste = topMatches("");
   return Array.isArray(liste) ? true : JSON.stringify(liste);
+});
+
+// ================================================================
+section("J: Drei weitere Rauschwörter — aus der Auswertung nicht zugeordneter Zeilen");
+
+/* "HP" (High Protein) steht auf drei echten Bon-Zeilen aus zwei Ketten
+   vor dem eigentlichen Produktnamen — dieselbe Blockade wie GL/VL/AS/KM.
+   "HP TRIPLE DESS." ist bereits ein exakter Katalogtreffer und
+   bestätigt die Bedeutung; die anderen beiden bleiben absichtlich
+   unsicher (verschiedene Sorten existieren), werden aber eindeutiger. */
+t("„Layenb.HP Skyr sort. 200g“ wird ohne „HP“ eindeutiger (0.70 -> 0.81), bleibt unsicher", () => {
+  const m = matchProduct("Layenb.HP Skyr sort. 200g");
+  return m.productId === "skyr" && m.needsConfirmation && m.confidence === 0.81
+    ? true : JSON.stringify(m);
+});
+
+t("„GL HP Drink sort. 330ml“ wird ohne „HP“ eindeutiger (0.69 -> 0.81), bleibt unsicher", () => {
+  const m = matchProduct("GL HP Drink sort. 330ml");
+  return m.productId === "proteindrink" && m.needsConfirmation && m.confidence === 0.81
+    ? true : JSON.stringify(m);
+});
+
+/* "VKE" (Verkaufseinheit) und "QS" (Fleisch-Prüfsiegel „Qualität und
+   Sicherheit") sind Aufdrucke ohne Produktbedeutung. Bei VKE reicht
+   die Verbesserung diesmal über die „sicher"-Schwelle -- ein Beleg
+   dafür, dass die Erweiterung wirklich etwas bewirkt, nicht nur
+   kosmetisch die Zahl verschiebt. */
+t("„Champignon braun 400g VKE“ wird durch „VKE“ SICHER statt bestätigungspflichtig", () => {
+  const m = matchProduct("Champignon braun 400g VKE");
+  return m.productId === "champignons_braun" && !m.needsConfirmation && m.confidence >= SAFE_THRESHOLD
+    ? true : JSON.stringify(m);
+});
+
+t("„TK CHICKEN NUGGETS-QS“ wird ohne „QS“ eindeutiger (0.70 -> 0.81), bleibt unsicher", () => {
+  const m = matchProduct("TK CHICKEN NUGGETS-QS");
+  return m.productId === "haehnchen_nuggets" && m.needsConfirmation && m.confidence === 0.81
+    ? true : JSON.stringify(m);
+});
+
+t("Keines der drei neuen Rauschwörter kollidiert mit einem echten Katalog-Token", () => {
+  // parseProductName() selbst filtert FILLER_WORDS aus `tokens` heraus
+  // (siehe productMatcher2.js) -- eine Kollision hieße hier: das
+  // Rauschwort steckt in `tokens` trotzdem noch drin. "HP TRIPLE
+  // DESS." bleibt über den exakten Treffer erreichbar, weil DER
+  // `core` vergleicht (behält Füllwörter), nicht `tokens`.
+  const kollision = ["hp", "vke", "qs"].filter((w) =>
+    FOOD_DATABASE.some((p) => [p.name, ...p.aliases].some((n) => parseProductName(n).tokens.includes(w))));
+  return kollision.length === 0 ? true : kollision.join(", ");
+});
+
+t("Trefferquote über die echten Bons steigt durch die drei neuen Rauschwörter (73/63/3 -> 74/62/3)", () => {
+  const ALLE = fs.readdirSync(path.join(__dirname, "fixtures")).filter((f) => f.endsWith(".txt"));
+  let ok = 0, unsicher = 0, keins = 0;
+  ALLE.forEach((datei) => {
+    const p = parseReceipt(bon(datei.replace(/\.txt$/, "")));
+    p.items.forEach((it) => {
+      const m = matchProduct(it.raw);
+      if (!m.productId) keins++; else if (m.needsConfirmation) unsicher++; else ok++;
+    });
+  });
+  return ok === 74 && unsicher === 62 && keins === 3
+    ? true : `${ok} sicher, ${unsicher} unsicher, ${keins} kein Treffer`;
+});
+
+// ================================================================
+section("K: Eine echte, nicht auflösbare Zweideutigkeit — dokumentiert, nicht versteckt");
+
+/* „SAHNEKEFIR A. FRUCHT“ (Aldi) ist der genaue Fall, den die
+   Bestätigungspflicht auffangen soll: „sahnekefir“ enthält sowohl
+   „sahne“ als auch „kefir“ vollständig (je 50 % des zusammengesetzten
+   Worts), „frucht“ ist außerdem Präfix von gleich drei Katalog-
+   Aliasen (Fruchtgummi, Fruchtquark, Fruchtzwerge). Alle Kandidaten
+   liegen bei 0.70-0.72 -- keiner sticht heraus, weil keiner
+   heraussticht. Der Katalog hat keinen Sahnekefir-Eintrag mit
+   Fruchtgeschmack; das eigentlich richtige „Kefir“ landet dadurch
+   erst gar nicht unter den Vorschlägen -- nicht weil sein
+   Ähnlichkeitswert zu niedrig wäre (0.71 im direkten Vergleich, ein
+   Bindeschritt mit den anderen), sondern weil der Kandidaten-Index
+   (`candidateEntries`, reine Geschwindigkeitsoptimierung) das Wort
+   „kefir" nie nachschlägt: er indiziert bei langen Wörtern nur den
+   WORTANFANG („sahne…"), „kefir" steht aber am WORTENDE.
+
+   Versucht und wieder verworfen: denselben Index zusätzlich für
+   Wortenden aufzubauen. Über den vollen Bon-Korpus gemessen kostete
+   das mehr, als es brachte -- drei echte Zeilen wurden schlechter, um
+   diese eine eventuell sichtbarer zu machen: „RouOfenkaesGyrosStyle
+   180g" verlor seinen einzigen Vorschlag komplett (0.66 -> kein
+   Treffer, weil ein neuer, falscher Wortenden-Treffer den bisherigen
+   Rückfall auf den vollen Katalogvergleich verhinderte), „GL HP Drink
+   sort. 330ml" sprang von „Proteindrink" (richtig) auf „Sojamilch"
+   (falsch), „Romatomaten" verlor seine spezifischere Zuordnung an die
+   generische „Tomaten". Der Code-Kommentar bei `buildIndex` in
+   productMatcher2.js hält das fest.
+
+   Das ist am Ende derselbe Fall wie „Kaes." in Abschnitt G: eine
+   echte Zweideutigkeit, die man nicht mit einer weiteren Sonderregel
+   „reparieren" sollte, ohne an anderer Stelle mehr kaputtzumachen als
+   man gewinnt. Wichtig ist nur, dass die Zeile ehrlich als „unsicher"
+   markiert bleibt (bucht NICHTS automatisch) und die freie Eingabe in
+   der Bestätigungskarte den Ausweg bietet. Dieser Test hält das
+   heutige, GEMESSENE Verhalten fest, damit eine künftige Änderung es
+   bewusst verbessert statt es unbemerkt zu verschlechtern. */
+t("„SAHNEKEFIR A. FRUCHT“ bleibt unsicher -- niemals ein stiller Fehltreffer", () => {
+  const m = matchProduct("SAHNEKEFIR A. FRUCHT");
+  return m.productId && m.needsConfirmation && m.method === "unsicher"
+    ? true : JSON.stringify(m);
+});
+
+t("„Kefir“ direkt verglichen liegt gleichauf mit den sichtbaren Vorschlägen (0.71) -- an der Bewertung liegt es nicht", () => {
+  const bonParsed = parseProductName("SAHNEKEFIR A. FRUCHT");
+  const kefirScore = combinedSimilarity(bonParsed, parseProductName("Kefir"));
+  return Math.round(kefirScore * 100) / 100 === 0.71 ? true : kefirScore;
 });
 
 // ================================================================

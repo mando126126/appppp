@@ -2894,7 +2894,31 @@ const FILLER_WORDS = new Set([
      "AS Sandwich Vollkorn 750g" (kein Treffer) wird ohne "AS" zu
      "Sandwich Vollkorn 750g" (Vorschlag, 0.81). Geprüft: keine
      Kollision mit einem echten Katalog-Token (test/matching.js). */
-  "as", "km"
+  "as", "km",
+  /* "HP" (High Protein) steht bei Netto und REWE vor drei
+     verschiedenen Produkten aus zwei Ketten — "Layenb.HP Skyr",
+     "GL HP Drink" und "HP TRIPLE DESS." (letzteres bereits ein
+     exakter Katalogtreffer, der die Bedeutung bestätigt). Dasselbe
+     Muster wie GL/VL/AS/KM: ein Kürzel vor dem eigentlichen Namen,
+     das nur den Vergleich verwässert. "Layenb.HP Skyr sort. 200g"
+     geht von 0.70 auf 0.81, "GL HP Drink sort. 330ml" von 0.69 auf
+     0.81 — beide bleiben bewusst unter der „sicher"-Schwelle (Skyr-
+     und Drink-Sorten unterscheiden sich, Bestätigung bleibt richtig),
+     aber der Vorschlag wird eindeutiger. Der Katalog selbst enthält
+     "hp" als Token nur in "HP TRIPLE DESS." (Alias) — das exakte
+     Treffer-Alias vergleicht `core`, nicht `tokens`, bleibt also von
+     dieser Änderung unberührt (test/matching.js). */
+  "hp",
+  /* "VKE" (Verkaufseinheit) und "QS" (Qualität und Sicherheit, das
+     deutsche Fleisch-Prüfsiegel) sind Aufdrucke, keine Produktnamen —
+     stehen aber genau dort, wo sie den Vergleich verwässern:
+     "Champignon braun 400g VKE" springt ohne "VKE" von 0.78
+     (unsicher) auf 0.89 — jetzt SICHER statt bestätigungspflichtig.
+     "TK CHICKEN NUGGETS-QS" geht von 0.70 auf 0.81, bleibt bewusst
+     unsicher (Fleisch/Fisch bekommt nie einen automatischen Treffer
+     durch dieses Kürzel allein). Geprüft: keine Kollision mit einem
+     echten Katalog-Token (test/matching.js). */
+  "vke", "qs"
 ]);
 
 /**
@@ -3251,6 +3275,23 @@ function buildIndex(catalog = FOOD_DATABASE) {
       tokens.add(t);
       // Wortanfänge mitindizieren, damit Komposita gefunden werden
       // ("haehnchenbrustfilet" findet "haehnchenbrust")
+      //
+      // Versucht und wieder verworfen: dieselbe Indizierung zusätzlich
+      // für WORTENDEN ("kefir" in "sahnekefir" finden, nicht nur
+      // "sahne"). Gemessen über den vollen Bon-Korpus verschlechterte
+      // das drei echte Zeilen, um eine einzige zu verbessern —
+      // "RouOfenkaesGyrosStyle180g" verlor seinen einzigen Vorschlag
+      // komplett (0.66 -> kein Treffer), "GL HP Drink sort. 330ml"
+      // sprang auf "Sojamilch" statt "Proteindrink" (falscher Treffer
+      // statt richtigem), "Romatomaten" verlor seine spezifischere
+      // Zuordnung an die generische "Tomaten". Grund: ein Bon-Token
+      // ohne jeden Index-Treffer fällt sonst auf den VOLLEN
+      // Katalogvergleich zurück (der eigentlich beste Fall) — ein
+      // zusätzlicher, aber falscher Wortenden-Treffer verhindert genau
+      // diesen Rückfall. Drei echte Verschlechterungen für einen
+      // Einzelfall, der ohnehin nur eine Randnennung geblieben wäre
+      // (siehe test/matching.js, Abschnitt K), war der Handel nicht
+      // wert.
       if (t.length >= 5) tokens.add(t.slice(0, 5));
     }));
     tokens.forEach((tok) => {

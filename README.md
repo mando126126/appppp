@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1723 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1731 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2720,6 +2720,68 @@ Knopf darf nicht mehr auftauchen). Alle jetzt 1723 Tests bestehen.
 
 ---
 
+## „Arbeite am Algo, mehr Härtefälle testen und entsprechend verbessern"
+
+Ausgangspunkt war nicht Theorie, sondern eine sortierte Liste: jede der
+139 Waren aus den acht echten Bons, nach Vertrauenswert. Am unteren Ende
+lagen die tatsächlich harten Fälle — nicht erfunden, sondern die
+schlechtesten Zeilen, die es gab.
+
+**Drei neue Rauschwörter, aus derselben Auswertung wie GL/VL/AS/KM
+zuvor.** "HP" (High Protein) steht bei Netto und REWE vor drei
+verschiedenen Produkten aus zwei Ketten — "HP TRIPLE DESS." ist dabei
+bereits ein exakter Katalogtreffer, der die Bedeutung selbst bestätigt.
+"VKE" (Verkaufseinheit) und "QS" (das Fleisch-Prüfsiegel "Qualität und
+Sicherheit") sind Aufdrucke, keine Produktnamen. Alle drei geprüft: keine
+Kollision mit einem echten Katalog-Token. Die Wirkung, vorher/nachher
+gemessen:
+
+- "Champignon braun 400g VKE": 0,78 (unsicher) → 0,89 — springt über
+  die "sicher"-Schwelle, braucht keine Bestätigung mehr.
+- "Layenb.HP Skyr sort. 200g": 0,70 → 0,81, "GL HP Drink sort. 330ml":
+  0,69 → 0,81, "TK CHICKEN NUGGETS-QS": 0,70 → 0,81 — alle drei bleiben
+  bewusst unsicher (echte Sortenvielfalt bzw. Fleisch/Fisch), aber der
+  Vorschlag wird eindeutiger.
+
+**Ein Fix versucht, gemessen — und wieder verworfen, weil er mehr
+kaputtmachte als er reparierte.** "SAHNEKEFIR A. FRUCHT" (Aldi) matcht
+keinem der drei Vorschläge richtig; das eigentlich passende "Kefir"
+taucht gar nicht erst auf, obwohl sein direkter Ähnlichkeitswert (0,71)
+mit den sichtbaren Kandidaten gleichauf liegt. Der Grund: der
+Kandidaten-Index (eine reine Geschwindigkeitsoptimierung) indiziert bei
+langen Wörtern nur den WORTANFANG, damit nicht jede Bon-Zeile gegen den
+ganzen Katalog läuft. "Kefir" steckt aber am WORTENDE von "sahnekefir" —
+deutsche Komposita hängen das bestimmende Wort meist ans Ende, nicht an
+den Anfang. Naheliegender Fix: Wortenden zusätzlich indizieren. Über den
+vollen Bon-Korpus gemessen kostete das mehr, als es brachte — drei echte
+Zeilen wurden schlechter, um eine einzige eventuell sichtbarer zu
+machen: "RouOfenkaesGyrosStyle180g" verlor seinen einzigen Vorschlag
+komplett, "GL HP Drink sort. 330ml" sprang von "Proteindrink" (richtig)
+auf "Sojamilch" (falsch), "Romatomaten" verlor seine spezifischere
+Zuordnung an die generische "Tomaten". Verworfen, mit Begründung im
+Code-Kommentar (`buildIndex` in productMatcher2.js) — derselbe Maßstab
+wie überall in diesem Projekt: eine Idee, die einleuchtend klingt, zählt
+erst, wenn sie am ganzen Korpus gemessen besser abschneidet, nicht
+schlechter woanders.
+
+**Was bewusst so bleibt, wie es ist, und jetzt auch als Test festgehalten
+ist:** "SAHNEKEFIR A. FRUCHT" bleibt "unsicher" — niemals ein stiller
+Fehltreffer, die freie Eingabe in der Bestätigungskarte bleibt der
+Ausweg. Derselbe Grundsatz wie beim "Kaes."-Fall aus einer früheren
+Runde: eine echte Zweideutigkeit ehrlich als Zweideutigkeit stehen
+lassen, statt sie mit einer Sonderregel zu verdecken, die an anderer
+Stelle mehr zerstört als sie hier hilft.
+
+Acht neue Tests (drei für die neuen Rauschwörter, eine Korpus-Zahl, drei
+für den dokumentierten Grenzfall, eine Kollisionsprüfung). Die
+Gesamt-Trefferquote (sicher + unsicher zusammen) bleibt bei 97,8 % — die
+Verbesserung liegt nicht in mehr Treffern, sondern in eindeutigeren:
+136 von 139 Waren waren schon vorher zuordenbar, nach dieser Runde ist
+eine weitere davon sicher statt bestätigungspflichtig, drei weitere
+haben einen klareren Vorschlag. Alle jetzt 1731 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2782,8 +2844,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1723
-npm run test:algo # 1093 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1731
+npm run test:algo # 1101 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
