@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1695 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1710 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2527,6 +2527,78 @@ Elf neue Tests. Alle jetzt 1695 Tests bestehen.
 
 ---
 
+## Drei der sieben vorgeschlagenen nächsten Schritte umgesetzt
+
+Aus der eigenen Liste möglicher nächster Schritte wurden drei
+ausgewählt und umgesetzt — nicht die einfachsten, sondern die, die
+schon vorhandene Daten neu verknüpfen statt neue zu erfinden.
+
+### Ausgaben mit Verschwendung verbunden
+
+„Wo dein Geld hingeht" und die Verlust-Erkennung (Verlust-Kachel,
+roter Anteil im Monats-Chart) liefen bisher nebeneinander her, ohne
+sich je zu berühren. `kategorieVerlust()` summiert `ctx.wasteStats` —
+das für jedes Produkt schon zwischen chronischer Verschwendung und
+Ausreißern unterscheidet (`wasteInference2.js`) — nach Kategorie und
+zeigt bei ≥ 5 % Verlust einen roten Hinweis direkt unter dem
+Kategorie-Balken: „12 % davon meist verschwendet, laut deinem
+Kauf-Verlauf".
+
+**Bewusst unabhängig vom Zeitraum-Filter oben.** `wasteStats` rechnet
+über den GESAMTEN Kauf-Verlauf je Produkt — ein chronisches Muster
+braucht genug Käufe, um überhaupt erkennbar zu sein, ein 4-Wochen-
+Fenster hätte oft nur einen einzigen Kauf. Eine auf den Filter
+zurechtgerechnete Verlustquote wäre keine ehrlichere Zahl, nur eine
+erfundene — deshalb bewusst als eigener, klar erklärter Zeitbezug
+stehen gelassen, nicht stillschweigend vermischt.
+
+Die eingebaute Demo enthält einen extremen, bewusst gescripteten Fall
+(Hähnchenbrust, 85 % chronischer Verlust) — beim ersten Anblick sah
+das nach einem Rechenfehler aus, war aber nachgewiesen echt:
+`ctx.wasteStats` selbst weist für dieses Demo-Produkt `chronicShare:
+0,8` aus. Der neue Code deckt damit korrekt auf, was vorher nur pro
+Produkt sichtbar war, jetzt auch auf Kategorie-Ebene.
+
+### Verlaufslinie je Kategorie
+
+Der Vorperioden-Vergleich beim Gesamtbetrag beantwortet „mehr oder
+weniger als sonst", aber nicht „kriecht diese eine Kategorie über
+Monate nach oben". `kategorieMonatsverlauf()` bildet die letzten
+sechs echten Kalendermonate (nicht 30-Tage-Schritte, die gegen
+Monatsenden verrutschen) je Kategorie ab; `moneySparklineSvg()`
+zeichnet daraus eine kleine Linie neben dem Betrag — Linie in
+De-Emphasis-Grau, aktueller Monat als Punkt in Akzentfarbe, exakt der
+„trend"-Baustein einer Kennzahl aus der Dataviz-Anleitung dieser
+Umgebung, nur inline statt in einer eigenen Kachel.
+
+**Unter drei Datenpunkten oder lauter Nullen erscheint keine Linie.**
+Eine „Verlaufslinie" durch zwei Punkte oder durch nichts wäre keine
+Trendaussage, nur eine geometrische Behauptung — die Funktion
+verweigert sich in dem Fall, statt eine bedeutungslose Linie zu
+zeichnen.
+
+### Sparvorschläge gegen den gewachsenen Katalog geprüft
+
+Die Sorge: „Sparen" wurde entworfen, als der Katalog bei 273–846
+Produkten lag — trifft die Logik mit 1682 Produkten heute noch
+zuverlässig zu? Nachgeprüft statt vermutet: `buildSavingsSuggestions()`
+liest ausschließlich ECHT BEOBACHTETES Verhalten — `wasteRate` und
+`rhythmDays` aus den eigenen Käufen —, nie catalog-abgeleitete Felder
+wie `shelfLifeDays` oder `quality`. Ob ein Produkt handkuratiert oder
+per Open Food Facts importiert ist, kann die Funktion strukturell gar
+nicht sehen. Ein Test bestätigt das an einem echten importierten
+Produkt (schaetzwert-Qualität): sauberer Vorschlagstext, plausible
+Ersparnis, kein Unterschied zu einem handkuratierten Produkt. Ein
+zweiter Test sperrt die Fleisch/Fisch-Regel dauerhaft gegen jeden
+künftigen Import ab — 0 der 836 importierten Produkte sind
+Fleisch/Fisch oder sicherheitskritisch, dieselbe Grenze wie beim
+Import selbst.
+
+Fünfzehn neue Tests (drei in `test/waste.js`, zwölf in `test/uitest.js`).
+Alle jetzt 1710 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2589,8 +2661,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1695
-npm run test:algo # 1090 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1710
+npm run test:algo # 1093 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

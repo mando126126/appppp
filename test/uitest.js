@@ -94,7 +94,8 @@ try {
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
-    " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen };"
+    " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
+    " kategorieVerlust, kategorieMonatsverlauf };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -1525,8 +1526,39 @@ console.log("\n--- Wo dein Geld hingeht ---");
   if (infoBtn) {
     click(infoBtn);
     ok("Öffnet ein Blatt mit der Erklärung", /Sonstige.*sieben|sieben.*Sonstige/s.test($("sheetOpts").textContent));
+    ok("Erklärt auch den Verlust-Hinweis als zeitraum-unabhängig",
+      /Verlust.*GESAMTEN|GESAMTEN.*Verlust/s.test($("sheetOpts").textContent));
     App.closeSheet();
   }
+
+  // --- Ausgaben mit Verschwendung verbunden (Punkt 4) ---
+  const wasteRows = [...$("main").querySelectorAll(".moneyWaste")];
+  ok("Mindestens eine Kategorie zeigt einen Verlust-Hinweis (Demo enthält chronische Verschwendung)",
+    wasteRows.length > 0, wasteRows.length);
+  ok("Der Hinweis nennt einen Prozentsatz", wasteRows.every((r) => /\d+ %/.test(r.textContent)));
+  ok("„Sonstige“ bekommt nie einen Verlust-Hinweis (keine echte Kategorie)",
+    !$("main").querySelector(".moneyBarRow.muted .moneyWaste"));
+
+  const verlust = T.kategorieVerlust(App.ctx);
+  ok("kategorieVerlust() liefert einen Anteil zwischen 0 und 1 für jede Kategorie",
+    [...verlust.values()].every((v) => v >= 0 && v <= 1), [...verlust.entries()]);
+
+  // --- Verlaufslinie je Kategorie (Punkt 5) ---
+  const sparklines = $("main").querySelectorAll(".moneySparklineWrap svg");
+  ok("Kategorien mit genug Monaten zeigen eine Verlaufslinie", sparklines.length > 0, sparklines.length);
+  ok("Verlaufslinien haben einen betonten letzten Punkt in Akzentfarbe",
+    [...sparklines].every((s) => !!s.querySelector("circle")));
+  ok("„Sonstige“ bekommt keine Verlaufslinie (keine echte Kategorie)",
+    !$("main").querySelector(".moneyBarRow.muted .moneySparklineWrap"));
+
+  ok("Zu wenige Datenpunkte (< 3) liefern keine Linie, statt eine bedeutungslose zu zeichnen",
+    T.moneySparklineSvg([5, 8]) === "");
+  ok("Lauter Nullen liefern ebenfalls keine Linie", T.moneySparklineSvg([0, 0, 0, 0]) === "");
+  ok("Genug echte Punkte liefern eine Linie", T.moneySparklineSvg([1, 5, 3, 8, 2, 9]).includes("<svg"));
+
+  const verlauf = T.kategorieMonatsverlauf(App.ctx, 6);
+  ok("kategorieMonatsverlauf() liefert genau 6 Monatswerte je Kategorie",
+    [...verlauf.values()].every((arr) => arr.length === 6));
 }
 
 console.log("\n--- Die Übersicht ---");

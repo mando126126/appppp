@@ -3215,17 +3215,79 @@ function moneyBarSvg(frac, muted) {
     bar(W - PAD, "var(--fill-2)") + (frac > 0 ? bar(x1, muted ? "var(--ink-3)" : "var(--accent)") : "") + `</svg>`;
 }
 
-/** Eine Rangzeile: Name und Betrag/Anteil oben, Balken darunter.
+/**
+ * Kleine Verlaufslinie: mehrere Monatswerte, letzter Punkt betont.
+ * Entspricht dem "trend"-Baustein einer Kennzahl-Kachel — eine
+ * de-emphasis-farbene Linie, der aktuelle Wert als Punkt in
+ * Akzentfarbe. Zu wenig Datenpunkte (< 3, sonst ist "Verlauf" nur
+ * geraten) liefern kein Ergebnis, statt eine bedeutungslose Linie
+ * durch zwei Punkte zu ziehen.
+ */
+function moneySparklineSvg(values) {
+  if (values.length < 3 || values.every((v) => v === 0)) return "";
+  const W = 56, H = 20, PAD = 2.5;
+  const max = Math.max(...values, 0.01);
+  const step = (W - PAD * 2) / (values.length - 1);
+  const punkte = values.map((v, i) => [
+    PAD + i * step,
+    H - PAD - (v / max) * (H - PAD * 2)
+  ]);
+  const pfad = punkte.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const [lx, ly] = punkte[punkte.length - 1];
+  return `<svg class="moneySparkline" viewBox="0 0 ${W} ${H}" aria-hidden="true">` +
+    `<path d="${pfad}" fill="none" stroke="var(--ink-3)" stroke-width="1.6" ` +
+    `stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` +
+    `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="2.4" fill="var(--accent)"/></svg>`;
+}
+
+/** Eine Rangzeile: Name, Verlauf und Betrag/Anteil oben, Balken darunter.
  *  `muted` markiert "Sonstige" — eine Sammelzeile ist keine echte
  *  Kategorie und soll sich nicht wie eine anfühlen (Emphasis-Prinzip:
- *  die echten Zeilen tragen die Akzentfarbe, der Rest tritt zurück). */
-function moneyBarRow(label, amount, share, frac, muted) {
+ *  die echten Zeilen tragen die Akzentfarbe, der Rest tritt zurück).
+ *  `wasteFrac` (0..1, optional) blendet einen roten Verlust-Hinweis
+ *  unter dem Balken ein. `verlauf` (Array Monatsbeträge, optional)
+ *  wird zur kleinen Trendlinie neben dem Betrag. */
+function moneyBarRow(label, amount, share, frac, muted, wasteFrac, verlauf) {
   const r = el("div", "moneyBarRow" + (muted ? " muted" : ""));
+  const spark = verlauf ? moneySparklineSvg(verlauf) : "";
   r.innerHTML =
     `<div class="moneyBarHead"><span class="moneyBarLabel">${esc(label)}</span>` +
+    (spark ? `<span class="moneySparklineWrap" title="Verlauf der letzten Monate">${spark}</span>` : "") +
     `<span class="moneyBarValue">${eur(amount)}<small>${pct(share)}</small></span></div>` +
-    moneyBarSvg(frac, muted);
+    moneyBarSvg(frac, muted) +
+    (wasteFrac >= 0.05
+      ? `<div class="moneyWaste">${Math.round(wasteFrac * 100)} % davon meist verschwendet, laut deinem Kauf-Verlauf</div>`
+      : "");
   return r;
+}
+
+/**
+ * Monatsbeträge je Kategorie für die letzten `n` echten Kalendermonate
+ * (nicht 30-Tage-Schritte, die gegen Monatsenden verrutschen). Immer
+ * über die VOLLE Historie, unabhängig vom Zeitraum-Filter oben — aus
+ * demselben Grund wie bei `kategorieVerlust`: ein Verlauf über vier
+ * gefilterte Wochen wäre kein Verlauf, sondern ein einzelner Punkt.
+ */
+function kategorieMonatsverlauf(ctx, n) {
+  const [jahr, monat] = Data.today().slice(0, 7).split("-").map(Number);
+  const monate = [];
+  for (let i = n - 1; i >= 0; i--) {
+    let m = monat - i, j = jahr;
+    while (m <= 0) { m += 12; j -= 1; }
+    monate.push(`${j}-${String(m).padStart(2, "0")}`);
+  }
+  const monatsIndex = new Map(monate.map((m, i) => [m, i]));
+
+  const byCat = new Map();
+  ctx.history.forEach((h) => {
+    const idx = monatsIndex.get(h.date.slice(0, 7));
+    if (idx === undefined) return;
+    const p = h.productId ? byId(h.productId) : null;
+    const cat = p ? p.category : "Ohne Kategorie";
+    if (!byCat.has(cat)) byCat.set(cat, new Array(n).fill(0));
+    byCat.get(cat)[idx] += h.unitPrice * h.quantity;
+  });
+  return byCat;
 }
 
 /**
@@ -3269,6 +3331,33 @@ function marktGruppen(rows) {
 }
 
 /**
+ * Verlustanteil je Kategorie — aus `ctx.wasteStats`, das schon jedes
+ * Produkt einzeln nach chronischer Verschwendung und Ausreißern
+ * auswertet (siehe `wasteInference2.js`). Hier nur nach Kategorie
+ * aufsummiert, nicht neu geschätzt.
+ *
+ * BEWUSST unabhängig vom oben gewählten Zeitraum-Filter: `wasteStats`
+ * rechnet über den GESAMTEN Kauf-Verlauf je Produkt (chronische Muster
+ * brauchen genug Käufe, um erkennbar zu sein — ein 4-Wochen-Fenster
+ * hätte oft nur einen einzigen Kauf, keine Grundlage für „chronisch").
+ * Eine erfundene 4-Wochen-Verlustquote wäre keine ehrlichere Zahl als
+ * gar keine. Deshalb ausdrücklich im Infotext erklärt, nicht verschwiegen.
+ */
+function kategorieVerlust(ctx) {
+  const spent = new Map(), wasted = new Map();
+  ctx.wasteStats.forEach((st, pid) => {
+    const p = byId(pid);
+    if (!p || !st.spent) return;
+    const cat = p.category;
+    spent.set(cat, (spent.get(cat) || 0) + st.spent);
+    wasted.set(cat, (wasted.get(cat) || 0) + st.wastedEuros);
+  });
+  const share = new Map();
+  spent.forEach((s, cat) => { if (s > 0) share.set(cat, (wasted.get(cat) || 0) / s); });
+  return share;
+}
+
+/**
  * Direkt vorangehender Zeitraum GLEICHER LÄNGE — die einzige faire
  * Vergleichsbasis für "mehr oder weniger als sonst". Für "Gesamt"
  * gibt es keine sinnvolle Vorperiode (nichts liegt vor dem Anfang der
@@ -3304,7 +3393,10 @@ function moneyFlowCard(ctx, app) {
     "Frei erfasste Zeilen ohne Produkt zählen unter „Ohne Kategorie“. " +
     "„Sonstige“ fasst alles jenseits der sieben größten Zeilen zusammen, damit die Prozente " +
     "immer auf 100 % kommen. Marktnamen werden nur für diese Ansicht nach Groß-/Kleinschreibung " +
-    "zusammengefasst — deine erfassten Bons bleiben unverändert."));
+    "zusammengefasst — deine erfassten Bons bleiben unverändert.\n\n" +
+    "Der rote Verlust-Hinweis unter einer Kategorie rechnet über deinen GESAMTEN Kauf-Verlauf, " +
+    "unabhängig vom Zeitraum oben: chronische Verschwendung braucht genug Käufe, um erkennbar zu " +
+    "sein — ein kurzes Zeitfenster hätte oft nur einen einzigen Kauf, keine tragfähige Grundlage."));
   head.append(infoBtn);
   h.append(head);
 
@@ -3377,9 +3469,12 @@ function moneyFlowCard(ctx, app) {
   const maxCat = kategorien.length ? Math.max(...kategorien.map((x) => x[1])) : 0;
   const maxStore = maerkte.length ? Math.max(...maerkte.map((x) => x[1])) : 0;
 
+  const verlustAnteil = kategorieVerlust(ctx);
+  const monatsverlauf = kategorieMonatsverlauf(ctx, 6);
   h.append(el("div", "moneySection", "Kategorien"));
   kategorien.forEach(([label, amount, sonstige]) =>
-    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxCat > 0 ? amount / maxCat : 0, sonstige)));
+    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxCat > 0 ? amount / maxCat : 0,
+      sonstige, sonstige ? 0 : (verlustAnteil.get(label) || 0), sonstige ? null : monatsverlauf.get(label))));
 
   h.append(el("div", "moneySection", "Märkte"));
   maerkte.forEach(([label, amount, sonstige]) =>

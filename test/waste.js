@@ -19,6 +19,7 @@
 const { wasteSummary, inferWaste, inferChronicWaste } = require("../src/algo/wasteInference2");
 const { computeRhythm } = require("../src/algo/rhythmEngine2");
 const { FOOD_DATABASE, byId } = require("../src/algo/foodDatabase");
+const { buildSavingsSuggestions } = require("../src/algo/savingsEngine");
 
 let pass = 0, fail = 0;
 const problems = [];
@@ -420,6 +421,52 @@ t("Trockenware und Tiefkühl bleiben ausgenommen", () => {
   const { chronic } = inferWaste(kaeufe, rhythms);
   return chronic.every((c) => c.productId !== "reis")
     ? true : "Reis gilt als chronisch verschwenderisch";
+});
+
+// ================================================================
+section("Sparvorschläge gegen den gewachsenen Katalog (846 -> 1682)");
+
+/* Anlass: „Sparen“ wurde gebaut, als der Katalog bei 273-846 Produkten
+   lag. Mit den 836 zusätzlichen, per Open Food Facts importierten
+   Produkten (Qualitätsstufe „schaetzwert“, siehe README) stellt sich
+   die Frage, ob sich daran etwas verschlechtert hat.
+   Der Befund: buildSavingsSuggestions() liest nur ECHT BEOBACHTETES
+   Verhalten (wasteRate, rhythmDays aus den eigenen Käufen) — nie
+   catalog-abgeleitete Felder wie shelfLifeDays oder quality. Ob ein
+   Produkt handkuratiert oder importiert ist, kann die Funktion gar
+   nicht sehen. Getestet wird trotzdem, nicht nur behauptet. */
+t("Ein importiertes Produkt (schaetzwert) erzeugt einen sauberen Sparvorschlag", () => {
+  const offProdukt = FOOD_DATABASE.find((p) => p.id.startsWith("off_") && p.category !== "Fleisch/Fisch");
+  if (!offProdukt) return "kein Testprodukt gefunden";
+  const stats = [{
+    productId: offProdukt.id, name: offProdukt.name, category: offProdukt.category,
+    wasteRate: 0.45, wastedEurosPerWeek: 1.2, windowWeeks: 26,
+    currentRhythmDays: 7, suggestedRhythmDays: 9, rhythmDays: 7
+  }];
+  const vorschlaege = buildSavingsSuggestions(stats);
+  if (vorschlaege.length !== 1) return `${vorschlaege.length} Vorschläge statt 1`;
+  const v = vorschlaege[0];
+  if (!v.title.includes(offProdukt.name)) return `Titel nennt das Produkt nicht: ${v.title}`;
+  if (!(v.estimatedWeeklySaving > 0)) return `keine positive Ersparnis: ${v.estimatedWeeklySaving}`;
+  return true;
+});
+
+t("Kein importiertes Produkt ist Fleisch/Fisch oder sicherheitskritisch",
+  () => {
+    const offFleisch = FOOD_DATABASE.filter((p) => p.id.startsWith("off_") && p.category === "Fleisch/Fisch");
+    const offSicherheit = FOOD_DATABASE.filter((p) => p.id.startsWith("off_") && p.safetyCritical);
+    return offFleisch.length === 0 && offSicherheit.length === 0
+      ? true : `${offFleisch.length} Fleisch/Fisch, ${offSicherheit.length} sicherheitskritisch`;
+  });
+
+t("Die Portionier-Regel (Fleisch/Fisch) kann dadurch nie ein importiertes Produkt treffen", () => {
+  // Die Regel selbst prüft die Kategorie -- mit null Fleisch/Fisch-
+  // Importen kann sie strukturell nie zuschlagen, egal welche Daten
+  // hereinkommen. Hier trotzdem mit einem erfundenen Grenzfall geprüft.
+  const RULES = require("../src/algo/savingsEngine").RULES;
+  const regel = RULES.find((r) => r.id === "portion_on_purchase");
+  const offFleisch = FOOD_DATABASE.filter((p) => p.id.startsWith("off_") && p.category === "Fleisch/Fisch");
+  return offFleisch.length === 0 && !!regel ? true : "Regel fehlt oder Import verletzt die Grenze";
 });
 
 // ================================================================

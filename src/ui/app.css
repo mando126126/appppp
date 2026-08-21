@@ -465,11 +465,23 @@ button.row:active,label.row:active{background:var(--fill)}
   letter-spacing:.03em;margin:22px 0 2px}
 .moneyBarRow{padding:11px 0;position:relative}
 .moneyBarRow + .moneyBarRow::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--hairline)}
-.moneyBarHead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:7px}
-.moneyBarLabel{font-size:0.92rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.moneyBarHead{display:flex;align-items:baseline;gap:9px;margin-bottom:7px}
+.moneyBarLabel{flex:1 1 auto;font-size:0.92rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Kleine Verlaufslinie der letzten sechs Monate -- "trend"-Baustein
+   einer Kennzahl, hier neben statt in einer eigenen Kachel, damit die
+   Rangliste nicht in zwei Bereiche zerfällt. Feste Breite, damit die
+   Spalte bei wechselnden Kategorien nicht springt. */
+.moneySparklineWrap{flex:0 0 auto;display:flex;align-items:center}
+.moneySparkline{width:44px;height:16px;display:block;overflow:visible}
 .moneyBarValue{font-size:0.88rem;font-variant-numeric:tabular-nums;flex:0 0 auto;color:var(--ink)}
 .moneyBarValue small{margin-left:5px;font-size:0.78rem;color:var(--ink-3);font-variant-numeric:normal}
 .moneyBarSvg{width:100%;height:9px;display:block;overflow:visible}
+/* Verbindet Ausgabe und Verlust: dieselbe Ampelfarbe wie die
+   "Verlust"-Kachel ganz oben, damit "rot = verdorben" app-weit
+   dasselbe bedeutet -- anders als der neutrale Vorperioden-Vergleich
+   oben, der bewusst KEINE Ampelfarbe trägt (mehr ausgegeben ist kein
+   Fehlverhalten, Lebensmittel wegwerfen schon eher). */
+.moneyWaste{margin-top:6px;font-size:0.78rem;color:var(--red)}
 /* "Sonstige" ist keine echte Kategorie, sondern eine Sammelzeile für
    alles jenseits der Top 7 -- tritt bewusst zurück (graue statt
    Akzentfarbe im Balken, siehe moneyBarSvg, und hier gedämpfter Text),
