@@ -1,0 +1,614 @@
+[
+ {
+  "productId": "hafermilch",
+  "catalogName": "Haferdrink",
+  "offName": "Haferdrink ungesüßt",
+  "line": "Haferd. unges."
+ },
+ {
+  "productId": "joghurt_natur",
+  "catalogName": "Naturjoghurt",
+  "offName": "Joghurt Natur 3,5 % Fett",
+  "line": "Joghurt Natur 3,5 % Fett 200g"
+ },
+ {
+  "productId": "schmand",
+  "catalogName": "Schmand",
+  "offName": "Frischer Schmand",
+  "line": "Frischer Schmand 500g"
+ },
+ {
+  "productId": "margarine",
+  "catalogName": "Margarine",
+  "offName": "Margarine",
+  "line": "Margarine 1L"
+ },
+ {
+  "productId": "kaese_butterkaese",
+  "catalogName": "Butterkäse",
+  "offName": "Butterkäse in Scheiben",
+  "line": "Butterkäse in Scheiben 250g"
+ },
+ {
+  "productId": "parmesan",
+  "catalogName": "Parmesan",
+  "offName": "parmesan",
+  "line": "parmes.."
+ },
+ {
+  "productId": "mozzarella",
+  "catalogName": "Mozzarella",
+  "offName": "Mozzarella",
+  "line": "MOZZARELLA SORT."
+ },
+ {
+  "productId": "mascarpone",
+  "catalogName": "Mascarpone",
+  "offName": "Mascarpone",
+  "line": "Mascar."
+ },
+ {
+  "productId": "pudding",
+  "catalogName": "Pudding",
+  "offName": "Choco Pudding",
+  "line": "Ch.Pud.1L"
+ },
+ {
+  "productId": "skyr_frucht",
+  "catalogName": "Skyr mit Frucht",
+  "offName": "Skyr Frucht & Kerne",
+  "line": "Skyr Frucht. & Kerne."
+ },
+ {
+  "productId": "buttermilch",
+  "catalogName": "Buttermilch",
+  "offName": "Buttermilch",
+  "line": "Butt."
+ },
+ {
+  "productId": "kaese_ziegen",
+  "catalogName": "Ziegenkäse",
+  "offName": "Ziegencreme",
+  "line": "ZIEGENCREME"
+ },
+ {
+  "productId": "kaese_burrata",
+  "catalogName": "Burrata",
+  "offName": "Burrata",
+  "line": "Burrata 200g"
+ },
+ {
+  "productId": "kaese_tilsiter",
+  "catalogName": "Tilsiter",
+  "offName": "Tilsiter in Scheiben",
+  "line": "Til.in.S.250g"
+ },
+ {
+  "productId": "kraeuterquark",
+  "catalogName": "Kräuterquark",
+  "offName": "Kräuterquark",
+  "line": "KRÄUTERQUARK EW"
+ },
+ {
+  "productId": "eier_wachtel",
+  "catalogName": "Wachteleier",
+  "offName": "Wachteleier",
+  "line": "WACHTELEIER"
+ },
+ {
+  "productId": "bratwurst",
+  "catalogName": "Bratwurst",
+  "offName": "Bratwurst Thüringer gebrüht",
+  "line": "Bratwurst Thüringer gebrüht 400g"
+ },
+ {
+  "productId": "garnelen",
+  "catalogName": "Garnelen",
+  "offName": "Garnelen - Party-Garnelen",
+  "line": "Gar.-.P.300g"
+ },
+ {
+  "productId": "lammkeule",
+  "catalogName": "Lammkeule",
+  "offName": "Lammkeule",
+  "line": "LAMMKEULE QS"
+ },
+ {
+  "productId": "currywurst",
+  "catalogName": "Currywurst",
+  "offName": "Curryking fix & fertig",
+  "line": "Cur.fix.fe.500g"
+ },
+ {
+  "productId": "schinkenwuerfel",
+  "catalogName": "Schinkenwürfel",
+  "offName": "Vegane Schinkenwürfel",
+  "line": "Vegane Schinkenwürfel 500g"
+ },
+ {
+  "productId": "wolfsbarsch",
+  "catalogName": "Wolfsbarsch",
+  "offName": "Wolfsbarsch",
+  "line": "Wolfs."
+ },
+ {
+  "productId": "salami",
+  "catalogName": "Salami",
+  "offName": "Fuetec Salamie",
+  "line": "FUETEC SALAMIE FL"
+ },
+ {
+  "productId": "schinken_gekocht",
+  "catalogName": "Kochschinken",
+  "offName": "Veganer Kochschinken",
+  "line": "Veganer Kochschinken 150g"
+ },
+ {
+  "productId": "leberwurst",
+  "catalogName": "Leberwurst",
+  "offName": "Leberwurst fein",
+  "line": "Leberwurst fein 100g"
+ },
+ {
+  "productId": "teewurst",
+  "catalogName": "Teewurst",
+  "offName": "Vegane Teewurst Fein",
+  "line": "Vegane Teewurst Fein 200g"
+ },
+ {
+  "productId": "wiener",
+  "catalogName": "Wiener Würstchen",
+  "offName": "Wiener Würstchen",
+  "line": "Wiener Würstchen 200g"
+ },
+ {
+  "productId": "fleischwurst",
+  "catalogName": "Fleischwurst",
+  "offName": "Wie Fleischwurst",
+  "line": "Wie.F.150g"
+ },
+ {
+  "productId": "stickado",
+  "catalogName": "Stickado Salami-Sticks",
+  "offName": "Stickado Salami-Sticks High-Protein",
+  "line": "S.Sa.Hig.100g"
+ },
+ {
+  "productId": "aepfel",
+  "catalogName": "Äpfel",
+  "offName": "Gala Äpfel",
+  "line": "GALA ÄPFEL VKE"
+ },
+ {
+  "productId": "kirschen",
+  "catalogName": "Kirschen",
+  "offName": "Likör Kirschen",
+  "line": "KM LikörKirschen1kg"
+ },
+ {
+  "productId": "limetten",
+  "catalogName": "Limetten",
+  "offName": "Limetten Saft",
+  "line": "Limet. Saft"
+ },
+ {
+  "productId": "aubergine",
+  "catalogName": "Aubergine",
+  "offName": "Auberginen in Tomatensauce",
+  "line": "A.in.Tom.1kg"
+ },
+ {
+  "productId": "zwiebeln",
+  "catalogName": "Zwiebeln",
+  "offName": "Zwiebeln gelb",
+  "line": "HP Zwiebelngelb300g"
+ },
+ {
+  "productId": "sellerie",
+  "catalogName": "Sellerie",
+  "offName": "Sellerie Salat",
+  "line": "Sellerie Salat 1kg"
+ },
+ {
+  "productId": "radieschen",
+  "catalogName": "Radieschen",
+  "offName": "Radieschen aus Italien",
+  "line": "AS Radieschenaus Italien500g"
+ },
+ {
+  "productId": "aepfel_gala",
+  "catalogName": "Äpfel Gala",
+  "offName": "Gala Äpfel",
+  "line": "Gala Äpfel 500g"
+ },
+ {
+  "productId": "stachelbeeren",
+  "catalogName": "Stachelbeeren",
+  "offName": "Stachelbeeren im Glas",
+  "line": "Stac. im Glas"
+ },
+ {
+  "productId": "maracuja",
+  "catalogName": "Maracuja",
+  "offName": "skyr Maracuja High Protein",
+  "line": "skyr Maracu. High Prot.."
+ },
+ {
+  "productId": "paprika_gruen",
+  "catalogName": "Paprika grün",
+  "offName": "Paprika Mix Rot Gelb Grün",
+  "line": "Paprika Mix Rot Gelb Grün 500g"
+ },
+ {
+  "productId": "petersilienwurzel",
+  "catalogName": "Petersilienwurzel",
+  "offName": "Deutsche Petersilienwurzel",
+  "line": "Deutsche Petersilienwurzel 1kg"
+ },
+ {
+  "productId": "chinakohl",
+  "catalogName": "Chinakohl",
+  "offName": "Chinakohl",
+  "line": "GL Chinakohl300g"
+ },
+ {
+  "productId": "artischocke",
+  "catalogName": "Artischocken",
+  "offName": "Artischockenherzen",
+  "line": "AS Artischockenherzen300g"
+ },
+ {
+  "productId": "brot_vollkorn",
+  "catalogName": "Vollkornbrot",
+  "offName": "Vollkornbrot",
+  "line": "Voll.250g"
+ },
+ {
+  "productId": "brot_mischbrot",
+  "catalogName": "Mischbrot",
+  "offName": "Mischbrot Anno 1688 Klassisch, Harry",
+  "line": "Mischbrot Anno 1688 Klassisch, Harry 250g"
+ },
+ {
+  "productId": "wraps",
+  "catalogName": "Wraps",
+  "offName": "Tortilla Wraps Vollkorn",
+  "line": "Tort. Wraps Vollko."
+ },
+ {
+  "productId": "fladenbrot",
+  "catalogName": "Fladenbrot",
+  "offName": "Fladenbrot Arabischer Art",
+  "line": "FLADENBROT ARABISCHER ART ST"
+ },
+ {
+  "productId": "naan",
+  "catalogName": "Naan-Brot",
+  "offName": "Naan-Brot - Knoblauch & Koriander",
+  "line": "N.-.Kno.K.500g"
+ },
+ {
+  "productId": "wraps_vollkorn",
+  "catalogName": "Vollkorn-Wraps",
+  "offName": "Tortilla Vollkorn-Wraps",
+  "line": "TORTILLA VOLLKORN-WRAPS DS"
+ },
+ {
+  "productId": "pita",
+  "catalogName": "Pitabrot",
+  "offName": "Pitabrot",
+  "line": "Pitabrot 400g"
+ },
+ {
+  "productId": "laugenbrezel",
+  "catalogName": "Laugenbrezel",
+  "offName": "Laugenbrezel",
+  "line": "LAUGENBREZEL"
+ },
+ {
+  "productId": "laugenstange",
+  "catalogName": "Laugenstange",
+  "offName": "Laugenstange",
+  "line": "L.500g"
+ },
+ {
+  "productId": "schokobroetchen",
+  "catalogName": "Schokobrötchen",
+  "offName": "Französische Schokobrötchen",
+  "line": "KM FranzösischeSchokobrötchen400g"
+ },
+ {
+  "productId": "franzbroetchen",
+  "catalogName": "Franzbrötchen",
+  "offName": "Franzbrötchen Likör",
+  "line": "GL FranzbrötchenLikör250g"
+ },
+ {
+  "productId": "koernerbroetchen",
+  "catalogName": "Körnerbrötchen",
+  "offName": "Körnerbrötchen",
+  "line": "Körnerbrötchen 250g"
+ },
+ {
+  "productId": "donut",
+  "catalogName": "Donut",
+  "offName": "Nutella Donut",
+  "line": "Nut.Donu.500g"
+ },
+ {
+  "productId": "muffin",
+  "catalogName": "Muffin",
+  "offName": "Blueberry Muffin Myrtilles",
+  "line": "Blueberry Muffin Myrtilles 400g"
+ },
+ {
+  "productId": "baguettebroetchen",
+  "catalogName": "Aufbackbrötchen",
+  "offName": "Aufbackbrötchen",
+  "line": "Aufbac."
+ },
+ {
+  "productId": "haferflocken",
+  "catalogName": "Haferflocken",
+  "offName": "Haferflocken",
+  "line": "Haferflocken 500g"
+ },
+ {
+  "productId": "muesli_basis",
+  "catalogName": "Basismüsli",
+  "offName": "Basismüsli ohne Rosinen",
+  "line": "BASISMÜSLI OHNE ROSINEN"
+ },
+ {
+  "productId": "semmelbroesel",
+  "catalogName": "Semmelbrösel",
+  "offName": "Semmelbrösel",
+  "line": "Semmel."
+ },
+ {
+  "productId": "champignons_dose",
+  "catalogName": "Champignons Dose",
+  "offName": "Champignons - Geschnitten 3. Wahl",
+  "line": "KM Champignons- Geschnitten3. Wahl250g"
+ },
+ {
+  "productId": "fischsauce",
+  "catalogName": "Fischsauce",
+  "offName": "Fischsauce",
+  "line": "F.400g"
+ },
+ {
+  "productId": "pesto_gruen",
+  "catalogName": "Pesto Genovese",
+  "offName": "Pesto Basilico con Rucula",
+  "line": "KM PestoBasilico con Rucula1kg"
+ },
+ {
+  "productId": "ahornsirup",
+  "catalogName": "Ahornsirup",
+  "offName": "Ahornsirup Grad A",
+  "line": "Ahor.G.A.400g"
+ },
+ {
+  "productId": "paprikapulver",
+  "catalogName": "Paprikapulver",
+  "offName": "Paprika edelsüß",
+  "line": "Paprika edelsüß 1kg"
+ },
+ {
+  "productId": "zimt",
+  "catalogName": "Zimt",
+  "offName": "High-Protein-Grießpudding Zimt",
+  "line": "High-. Zimt"
+ },
+ {
+  "productId": "hefe_frisch",
+  "catalogName": "Frischhefe",
+  "offName": "Backhefe Frischhefe",
+  "line": "Backh. Fris."
+ },
+ {
+  "productId": "feigen_getrocknet",
+  "catalogName": "Getrocknete Feigen",
+  "offName": "Feigen getrocknet",
+  "line": "Feigen getrocknet 250g"
+ },
+ {
+  "productId": "pistazien",
+  "catalogName": "Pistazien",
+  "offName": "Kalifornische Pistazien geröstet",
+  "line": "Kalifornische Pistazien geröstet 250g"
+ },
+ {
+  "productId": "limonade",
+  "catalogName": "Limonade",
+  "offName": "Paulaner Limo Zitrone",
+  "line": "Paulan. Limo Zitr."
+ },
+ {
+  "productId": "sekt",
+  "catalogName": "Sekt",
+  "offName": "Sekt halbtrocken",
+  "line": "Sekt.h.0,33L"
+ },
+ {
+  "productId": "cola_zero",
+  "catalogName": "Cola zuckerfrei",
+  "offName": "Cola Vanille Zero",
+  "line": "Cola Vanille Zero 1L"
+ },
+ {
+  "productId": "eistee_pfirsich",
+  "catalogName": "Eistee Pfirsich",
+  "offName": "Eistee Pfirsich",
+  "line": "E.Pf.1,5L"
+ },
+ {
+  "productId": "kakao_trinken",
+  "catalogName": "Trinkschokolade",
+  "offName": "Marzipan Trinkschokolade",
+  "line": "Ma.Tri.1,5L"
+ },
+ {
+  "productId": "tee_kamille",
+  "catalogName": "Kamillentee",
+  "offName": "Kamillentee",
+  "line": "AS Kamillentee0,5L"
+ },
+ {
+  "productId": "bier_hell",
+  "catalogName": "Helles",
+  "offName": "Helles Brot",
+  "line": "H.Br.0,5L"
+ },
+ {
+  "productId": "gin",
+  "catalogName": "Gin",
+  "offName": "Hendrick’s Gin",
+  "line": "AS Hendrick’sGin0,5L"
+ },
+ {
+  "productId": "active_o2_cherry",
+  "catalogName": "Active O2 Cherry",
+  "offName": "Active O2 Cherry",
+  "line": "Act. O2 Cherr."
+ },
+ {
+  "productId": "schokolade",
+  "catalogName": "Schokolade",
+  "offName": "Dunkle Schokolade mit ganzen Haselnüssen",
+  "line": "Dunkle Schokolade mit ganzen Haselnüssen 200g"
+ },
+ {
+  "productId": "popcorn",
+  "catalogName": "Popcorn",
+  "offName": "Popcorn süss",
+  "line": "POPCORN SÜSS SORTIERT"
+ },
+ {
+  "productId": "schokolade_zart",
+  "catalogName": "Zartbitterschokolade",
+  "offName": "Zartbitter Schokolade",
+  "line": "Zart.S.100g"
+ },
+ {
+  "productId": "schokolade_nuss",
+  "catalogName": "Nussschokolade",
+  "offName": "Weiße Nussschokolade",
+  "line": "Weiße Nus.."
+ },
+ {
+  "productId": "riegel_schoko",
+  "catalogName": "Schokoriegel",
+  "offName": "Dunkle Schokolade mit ganzen Haselnüssen",
+  "line": "Dunkl. Scho. mit ganzen. Hasel.."
+ },
+ {
+  "productId": "reiswaffeln",
+  "catalogName": "Reiswaffeln",
+  "offName": "Bio Reiswaffeln mit Salz",
+  "line": "AS Bio Reiswaffelnmit Salz200g"
+ },
+ {
+  "productId": "tortillachips",
+  "catalogName": "Tortillachips",
+  "offName": "Tortillachips mit Salz",
+  "line": "TORTILLACHIPS MIT SALZ"
+ },
+ {
+  "productId": "erdnussflips",
+  "catalogName": "Erdnussflips",
+  "offName": "Erdnussflips Classic",
+  "line": "E.Cl.200g"
+ },
+ {
+  "productId": "studentenfutter",
+  "catalogName": "Studentenfutter",
+  "offName": "Studentenfutter",
+  "line": "Studentenfutter 100g"
+ },
+ {
+  "productId": "lakritz",
+  "catalogName": "Lakritz",
+  "offName": "Lakritz Schnecken",
+  "line": "Lakrit. Schne.."
+ },
+ {
+  "productId": "adventskalender",
+  "catalogName": "Adventskalender",
+  "offName": "Adventskalender",
+  "line": "ADVENTSKALENDER VKE"
+ },
+ {
+  "productId": "pudding_pulver",
+  "catalogName": "Puddingpulver",
+  "offName": "Vanille Pudding",
+  "line": "Vanille Pudding 200g"
+ },
+ {
+  "productId": "backmischung",
+  "catalogName": "Backmischung",
+  "offName": "Backmischung Brownies classic",
+  "line": "Back. Bro. classi.."
+ },
+ {
+  "productId": "kartoffelpueree_pulver",
+  "catalogName": "Kartoffelpüree Pulver",
+  "offName": "DS Kartoffelpüree Pulver, Stocki",
+  "line": "DS KARTOFFELPÜREE PULVER, STOCKI ST"
+ },
+ {
+  "productId": "sossenbinder",
+  "catalogName": "Soßenbinder",
+  "offName": "Soßenbinder hell",
+  "line": "Soßenb. hell."
+ },
+ {
+  "productId": "sushi_fertig",
+  "catalogName": "Sushi Box",
+  "offName": "Sushi Box",
+  "line": "AS SushiBox300g"
+ },
+ {
+  "productId": "mie_nudeln",
+  "catalogName": "Mie-Nudeln",
+  "offName": "Bio Mie-Nudeln mit Ei",
+  "line": "B.Mi.mit.Ei.300g"
+ },
+ {
+  "productId": "wasabi",
+  "catalogName": "Wasabipaste",
+  "offName": "Wasabipaste",
+  "line": "WASABIPASTE QS"
+ },
+ {
+  "productId": "misopaste",
+  "catalogName": "Misopaste",
+  "offName": "Misopaste dunkel",
+  "line": "Miso.d.400g"
+ },
+ {
+  "productId": "kimchi",
+  "catalogName": "Kimchi",
+  "offName": "Kimchi",
+  "line": "Ki.300g"
+ },
+ {
+  "productId": "harissa",
+  "catalogName": "Harissa",
+  "offName": "Harissa du Cap-Bon",
+  "line": "Harissa du Cap-Bon 300g"
+ },
+ {
+  "productId": "garam_masala",
+  "catalogName": "Garam Masala",
+  "offName": "Garam Masala",
+  "line": "Garam Masala 300g"
+ },
+ {
+  "productId": "falafelmischung",
+  "catalogName": "Falafelmischung",
+  "offName": "Falafelmischung bio",
+  "line": "GL Falafelmischungbio400g"
+ }
+]

@@ -3225,6 +3225,19 @@ function conflictsWithCategory(parsedTokens, candidateCategory) {
 }
 
 /**
+ * true, wenn JEDES identitätstragende Token der Bon-Zeile eine vom
+ * Drucker selbst markierte Kürzung ist ("Semmel." aus "Semmelbrösel",
+ * "Mascar." aus "Mascarpone") -- die Zeile besteht dann komplett aus
+ * unvollständigen Fragmenten, nicht aus vollständig geschriebenen
+ * Wörtern. Ausgelagert, weil sowohl der exakte Treffer in
+ * `bestCandidate` als auch `combinedSimilarity` dieselbe Vorsicht
+ * brauchen (siehe test/matching.js, Abschnitt L/M für beide Funde).
+ */
+function nurKuerzungen(parsed) {
+  return parsed.tokens.length > 0 && parsed.tokens.every((t) => parsed.truncated.has(t));
+}
+
+/**
  * Kombinierter Ähnlichkeitswert.
  * Nimmt bewusst das MAXIMUM mehrerer Sichtweisen, statt zu mitteln:
  * Ein Verfahren darf das andere nicht nach unten ziehen, wenn es
@@ -3250,7 +3263,21 @@ function combinedSimilarity(parsedA, parsedB) {
      deshalb ein Vorschlag zum Bestätigen — dieselbe Regel, die auch
      für den Umweg über Open Food Facts gilt (siehe offLookup.js). */
   const truncCapped = Math.min(trunc * 0.9, SAFE_THRESHOLD - 0.01);
-  return Math.max(weighted, lev * 0.95, tok * 0.9, overlap * 0.92, truncCapped);
+  const raw = Math.max(weighted, lev * 0.95, tok * 0.9, overlap * 0.92, truncCapped);
+
+  /* Dieselbe Grenze gilt nicht nur für den eigens dafür gebauten
+     Kürzungs-Pfad (`truncCapped`), sondern für JEDEN Weg, der zu ihr
+     führt. Gefunden an einem echten, aus Open-Food-Facts-Namen
+     erzeugten Härtefall: „Mascar." (Kürzung von „Mascarpone") traf
+     „Mascara" mit 0.93 -- SICHER, automatisch gebucht -- nicht über
+     `truncationSimilarity`, sondern über die gewöhnliche Kompositum-
+     und Levenshtein-Bewertung, die den Kürzungspunkt gar nicht sieht
+     und „mascar" wie ein vollständiges, sicher geschriebenes Wort
+     behandelt. Betroffen ist das nur, wenn ALLE identitätstragenden
+     Token der Bon-Zeile selbst gekürzt sind (bei „M.I Grana Padano
+     St. 200g" trägt „st" die Kürzung, nicht „grana"/„padano" -- die
+     bestehen den Vergleich unverändert als vollständige Wörter). */
+  return nurKuerzungen(parsedA) ? Math.min(raw, SAFE_THRESHOLD - 0.01) : raw;
 }
 
 let CACHE = null;
@@ -3347,14 +3374,22 @@ function bestCandidate(parsed) {
        * Vermutung mehr, die abgesichert werden müsste.
        *
        * `variants[0]` ist der Name, alles danach sind Aliase. Für Aliase
-       * bleibt die Prüfung scharf: dort IST es eine Vermutung. */
-      if (vi === 0 && variant.core === parsed.core) {
-        return { productId: entry.product.id, confidence: 1, exact: true };
-      }
-
-      // Exakter Treffer nach Normalisierung
-      if (variant.core === parsed.core && !conflictsWithCategory(parsed.tokens, entry.product.category)) {
-        return { productId: entry.product.id, confidence: 1, exact: true };
+       * bleibt die Prüfung scharf: dort IST es eine Vermutung.
+       *
+       * AUSNAHME: besteht die Bon-Zeile NUR aus Kürzungen, ist „exakt"
+       * kein Beweis mehr, nur ein kurzer Zufallstreffer. Gefunden im
+       * synthetischen Härtefall-Korpus: „Semmel." (Kürzung von
+       * „Semmelbrösel") trifft `core`-gleich auf „SEMMEL", ein echtes
+       * Alias für „Brötchen" — Brösel und Brötchen sind aber zwei
+       * verschiedene Produkte. Ohne die Ausnahme hätte das mit
+       * Konfidenz 1 automatisch gebucht, ganz ohne die Schwellen, die
+       * für jeden anderen unsicheren Fall gelten (siehe Abschnitt L
+       * für den verwandten Fund am gewöhnlichen Bewertungspfad). */
+      if (variant.core === parsed.core && !nurKuerzungen(parsed)) {
+        if (vi === 0) return { productId: entry.product.id, confidence: 1, exact: true };
+        if (!conflictsWithCategory(parsed.tokens, entry.product.category)) {
+          return { productId: entry.product.id, confidence: 1, exact: true };
+        }
       }
       let score = combinedSimilarity(parsed, variant);
       // Kategoriekonflikt: harte Abwertung statt stiller Fehlzuordnung
@@ -3379,7 +3414,10 @@ function topCandidates(parsed, n) {
   for (const entry of candidates) {
     for (let vi = 0; vi < entry.variants.length; vi++) {
       const variant = entry.variants[vi];
-      let score = variant.core === parsed.core ? 1 : combinedSimilarity(parsed, variant);
+      // Dieselbe Ausnahme wie in bestCandidate: eine reine Kürzung darf
+      // sich in der Vorschlagsliste nicht als "100 %" ausgeben.
+      let score = (variant.core === parsed.core && !nurKuerzungen(parsed))
+        ? 1 : combinedSimilarity(parsed, variant);
       if (conflictsWithCategory(parsed.tokens, entry.product.category)) score *= 0.45;
       const prev = bestPerProduct.get(entry.product.id) || 0;
       if (score > prev) bestPerProduct.set(entry.product.id, score);

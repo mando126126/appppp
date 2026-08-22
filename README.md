@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1731 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1740 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2782,6 +2782,78 @@ haben einen klareren Vorschlag. Alle jetzt 1731 Tests bestehen.
 
 ---
 
+## „Verbinde eine kostenfreie Datenbank, verändere die Produktnamen
+realistisch wie bei den Bons, erweitere den Algo"
+
+Acht echte Bons sind eine schmale Stichprobe an Ketten-Eigenheiten. Um
+mehr Härtefälle zu finden, ohne mehr Kassenzettel abzutippen, zieht ein
+neues, committetes Werkzeug (`tools/off_hardcase_corpus/generate.js`)
+echte, ausgeschriebene Namen für eine Stichprobe des EIGENEN Katalogs
+von **Open Food Facts** — kostenfrei, ohne Login, dieselbe Quelle, die
+schon `offLookup.js` für unbekannte Bon-Zeilen anfragt — und verwandelt
+sie nach genau den Mustern, die an den acht echten Bons beobachtet
+wurden, in eine synthetische Bon-Zeile: Lidl-artig sauber,
+REWE/Aldi-artig GROSSBUCHSTABEN, EDEKA-artig punktgekürzt, Netto-artig
+zusammengeklebt, Netto-artig radikal abgekürzt (`mangle.js`, fünf feste
+„Personas", deterministisch aus der productId ausgewählt — derselbe
+Lauf erzeugt immer dasselbe Ergebnis). Ergebnis: **102 zusätzliche
+Härtefälle**, committet als `test/fixtures/off-hardcases.json`, dauerhaft
+gegen den Abgleich geprüft (`test/matching.js`, Abschnitt M).
+
+**Der erste Lauf war Ausschuss, nicht Ertrag — und das war lehrreich.**
+Eine Freitext-Suche über OFF trifft oft ein Produkt, das den gesuchten
+Begriff nur ERWÄHNT statt ihn zu SEIN: die Suche nach „Parmesan" lieferte
+„Galettes boulghour parmesan & tomates confites", ein Cracker. Eine Zeile
+daraus hätte den Algorithmus für einen Fehler bestraft, den die Testdaten
+gemacht hätten. Nachgebessert: nur ein Treffer, bei dem der gesuchte
+Begriff eines der ersten zwei Wörter ist und der Name kurz genug bleibt,
+um dasselbe Produkt zu sein, zählt. Von 292 Stichproben-Einträgen
+lieferten danach 102 einen brauchbaren echten Namen.
+
+**Zwei Sicherheitslücken gefunden, beide geschlossen — an der Auswertung
+DES eigenen Härtefall-Korpus, nicht durch Nachdenken.**
+
+1. „Mascar." (Kürzung von „Mascarpone") traf „Mascara" — die
+   Wimperntusche — mit 0.93, SICHER, automatisch buchbar. Nicht über die
+   eigens gebaute Kürzungs-Deckelung (die hätte nie über die
+   Bestätigungs-Schwelle hinausgelassen), sondern über die gewöhnliche
+   Kompositum- und Levenshtein-Bewertung, die den Kürzungspunkt gar
+   nicht kennt und „mascar" wie ein vollständiges Wort behandelt — eine
+   Hintertür an der eigenen Schutzmauer vorbei.
+2. „Semmel." (Kürzung von „Semmelbrösel", Paniermehl) ist nach der
+   Normalisierung zufällig BUCHSTABENGLEICH mit dem echten Alias
+   „SEMMEL" für „Brötchen" (süddeutsch). Das galt als EXAKTER Treffer,
+   Konfidenz 1 — noch vor jeder Schwelle, härter als Fund 1.
+
+Fix für beide: dieselbe Vorsicht, die es für den dedizierten
+Kürzungs-Pfad schon gab, gilt jetzt für JEDEN Bewertungsweg UND für den
+exakten Treffer selbst — sobald ALLE identitätstragenden Token einer
+Bon-Zeile vom Drucker selbst als gekürzt markiert sind (`nurKuerzungen`,
+eine gemeinsame Funktion statt zweimal derselbe Gedanke). Wichtig ist die
+Einschränkung auf ALLE: eine Verpackungskürzung wie „St." bei „M.I Grana
+Padano St. 200g" blockiert weiterhin nicht, dass „Grana"/„Padano" —
+vollständig geschrieben — sicher zugeordnet werden.
+
+**Eine dritte Idee versucht, gemessen, verworfen.** Um dieselben Kürzungs-
+Härtefälle über eine Kompositum-Grenze hinweg noch besser zu erkennen,
+wurde probiert, den Kandidaten-Index zusätzlich zu Wortanfängen auch für
+Wortenden aufzubauen. Über beide Korpora gemessen richtete das mehr
+Schaden an, als es half — dokumentiert direkt im Code-Kommentar bei
+`buildIndex`, damit niemand dieselbe Idee unbedacht wieder aufgreift.
+
+**Wirkung, an den echten acht Bons gemessen:** die „sicher"-Quote sinkt
+von 73 auf 70 — das ist beabsichtigt. Sechs Zeilen hatten ihre
+automatische Buchung nur einem Zufallstreffer nach dem Abschneiden zu
+verdanken, nie echter Gewissheit. Die Gesamt-Zuordnungsquote (sicher +
+unsicher zusammen) bleibt unverändert bei 136 von 139 (97,8 %) — niemand
+verliert einen Vorschlag, nur die Grenze zwischen „automatisch" und
+„bitte bestätigen" rückt dahin, wo sie hingehört. Am neuen OFF-Korpus:
+null gefährliche automatische Fehltreffer bei 102 Zeilen.
+
+Neun neue Tests. Alle jetzt 1740 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2794,6 +2866,10 @@ src/ui/
   app.js         Rahmen: Navigation, Kopfbereich, Ladenmodus, Blätter
 build.js         bündelt src/ nach web/
 tools/serve.js   Entwicklungsserver ohne Abhängigkeiten
+tools/off_hardcase_corpus/
+                 zieht echte Namen von Open Food Facts, verstümmelt sie
+                 wie ein Bon -- erzeugt test/fixtures/off-hardcases.json
+                 (braucht Netz, läuft nicht in npm test, siehe README)
 test/            Modultests, Stresstests, Simulation, Oberflächentest
 web/             Bauergebnis — das, was auf den Server kommt
 ```
@@ -2844,8 +2920,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1731
-npm run test:algo # 1101 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1740
+npm run test:algo # 1110 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

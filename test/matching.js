@@ -508,19 +508,10 @@ t("Keines der drei neuen Rauschwörter kollidiert mit einem echten Katalog-Token
   return kollision.length === 0 ? true : kollision.join(", ");
 });
 
-t("Trefferquote über die echten Bons steigt durch die drei neuen Rauschwörter (73/63/3 -> 74/62/3)", () => {
-  const ALLE = fs.readdirSync(path.join(__dirname, "fixtures")).filter((f) => f.endsWith(".txt"));
-  let ok = 0, unsicher = 0, keins = 0;
-  ALLE.forEach((datei) => {
-    const p = parseReceipt(bon(datei.replace(/\.txt$/, "")));
-    p.items.forEach((it) => {
-      const m = matchProduct(it.raw);
-      if (!m.productId) keins++; else if (m.needsConfirmation) unsicher++; else ok++;
-    });
-  });
-  return ok === 74 && unsicher === 62 && keins === 3
-    ? true : `${ok} sicher, ${unsicher} unsicher, ${keins} kein Treffer`;
-});
+// Die Trefferquote insgesamt wandert erst am Ende dieser Datei
+// (Abschnitt N) in eine Zahl -- an dieser Stelle greift Abschnitt L
+// noch ein zweites Mal ein und würde eine Zwischenzahl hier sofort
+// wieder veralten lassen.
 
 // ================================================================
 section("K: Eine echte, nicht auflösbare Zweideutigkeit — dokumentiert, nicht versteckt");
@@ -570,6 +561,197 @@ t("„Kefir“ direkt verglichen liegt gleichauf mit den sichtbaren Vorschlägen
   const bonParsed = parseProductName("SAHNEKEFIR A. FRUCHT");
   const kefirScore = combinedSimilarity(bonParsed, parseProductName("Kefir"));
   return Math.round(kefirScore * 100) / 100 === 0.71 ? true : kefirScore;
+});
+
+// ================================================================
+section("L: Die Kürzungs-Schwelle hatte eine Hintertür — jetzt zu");
+
+/* Gefunden nicht an einem der acht echten Bons, sondern an einem
+   zweiten, synthetischen Korpus: echte Open-Food-Facts-Namen für eine
+   Stichprobe des eigenen Katalogs, dann nach denselben Mustern wie
+   die echten Bons verstümmelt (Skript nicht Teil des Repos, siehe
+   README-Eintrag zu dieser Runde).
+
+   „Mascar." (Kürzung von „Mascarpone") traf „Mascara" -- die
+   Wimperntusche -- mit 0.93, SICHER, automatisch buchbar. Nicht über
+   `truncationSimilarity`: DIE hat ihre eigene Deckelung (siehe oben,
+   Abschnitt F) und hätte hier nie über die Bestätigungs-Schwelle
+   hinausgelassen. Der Treffer kam über die GEWÖHNLICHE Kompositum-
+   und Levenshtein-Bewertung, die den Kürzungspunkt gar nicht kennt
+   und „mascar" wie ein vollständig geschriebenes Wort behandelt --
+   eine Hintertür an der eigens gebauten Schutzmauer vorbei.
+
+   Der Fix: `combinedSimilarity` deckelt jetzt JEDEN Ergebnisweg (nicht
+   nur den Kürzungs-Pfad selbst) auf dieselbe Bestätigungs-Schwelle,
+   sobald ALLE identitätstragenden Token der Bon-Zeile gekürzt sind.
+   Wichtig ist die Einschränkung auf ALLE: eine Verpackungskürzung wie
+   „St." bei „M.I Grana Padano St. 200g" darf weiterhin nicht
+   verhindern, dass „Grana"/„Padano" -- vollständig geschriebene Wörter
+   -- sicher zugeordnet werden (Abschnitt D). Nur wenn die Zeile NUR
+   aus Kürzungen besteht, gilt die Vorsicht. */
+t("„Mascar.“ wird durch die neue Deckelung wieder unsicher (0.93 -> 0.84), bucht nichts automatisch", () => {
+  const m = matchProduct("Mascar.");
+  return m.productId === "mascara" && m.needsConfirmation && m.confidence === 0.84
+    ? true : JSON.stringify(m);
+});
+
+t("„M.I Grana Padano St. 200g“ bleibt sicher -- die Deckelung trifft nur Zeilen, die NUR aus Kürzungen bestehen", () => {
+  const m = matchProduct("M.I Grana Padano St. 200g");
+  return m.productId === "parmesan" && !m.needsConfirmation && m.confidence === 0.92
+    ? true : JSON.stringify(m);
+});
+
+t("Dieselbe Lücke traf auch einen echten Bon: „KM Mueslirieg.sort.200g“ war 0.88 SICHER, jetzt 0.84 unsicher", () => {
+  const m = matchProduct("KM Mueslirieg.sort.200g");
+  return m.productId === "riegel" && m.needsConfirmation && m.confidence === 0.84
+    ? true : JSON.stringify(m);
+});
+
+/* Eine ZWEITE, schärfere Hintertür am selben Ort gefunden -- diesmal
+   nicht am gewöhnlichen Bewertungspfad, sondern am EXAKTEN Treffer
+   selbst. „Semmel." (Kürzung von „Semmelbrösel", Paniermehl) ist nach
+   der Normalisierung `core`-GLEICH mit dem echten Alias „SEMMEL" für
+   „Brötchen" -- ein süddeutsches Wort für Brötchen, kein Zufall im
+   Katalog, sondern absichtlich dort eingetragen. Ein `core`-Vergleich
+   kennt aber keinen Unterschied zwischen „zufällig identisch nach dem
+   Kürzen" und „wirklich derselbe Name" -- die Zeile bekam Konfidenz 1,
+   „exakt", ohne jede der Schwellen, die für jeden anderen unsicheren
+   Fall gelten. Härter als der „Mascar."-Fund: dort blieb wenigstens
+   die 0.85-Grenze in Kraft, hier lag die Zeile VOR der Bestätigungs-
+   frage komplett draußen.
+
+   Derselbe Wächter wie oben (`nurKuerzungen`, jetzt eine eigene
+   Funktion statt an zwei Stellen dupliziert) verhindert jetzt auch
+   diesen exakten Kurzschluss: besteht die Bon-Zeile nur aus Kürzungen,
+   zählt eine `core`-Gleichheit nicht mehr automatisch als Beweis,
+   sondern läuft durch dieselbe (gedeckelte) Bewertung wie jeder andere
+   Vorschlag. Betroffen war nicht nur `bestCandidate` (der automatische
+   Abgleich), sondern auch `topCandidates` (die Drei-Vorschläge-Liste)
+   -- sie hätte sonst weiterhin „100 %" neben einem Zufallstreffer
+   angezeigt, obwohl der automatische Abgleich selbst längst vorsichtig
+   geworden wäre. */
+t("„Semmel.“ traf zufällig exakt auf das Alias „SEMMEL“ (Brötchen) -- bucht jetzt nicht mehr blind", () => {
+  const m = matchProduct("Semmel.");
+  return m.productId === "broetchen" && m.needsConfirmation && m.confidence === 0.84
+    ? true : JSON.stringify(m);
+});
+
+t("Der wirklich richtige Vorschlag („Semmelbrösel“) steht als Alternative in der Vorschlagsliste", () => {
+  const liste = topMatches("Semmel.", undefined, 3);
+  return liste.some((x) => x.productId === "semmelbroesel") ? true : JSON.stringify(liste);
+});
+
+t("Die Vorschlagsliste zeigt für „Semmel.“ keine erfundenen 100 % mehr -- dieselbe Deckelung wie beim automatischen Abgleich", () => {
+  const liste = topMatches("Semmel.", undefined, 3);
+  const broetchen = liste.find((x) => x.productId === "broetchen");
+  return broetchen && broetchen.confidence === 0.84 ? true : JSON.stringify(liste);
+});
+
+// ================================================================
+section("M: Ein zweiter Korpus — echte Namen von Open Food Facts, verstümmelt wie ein Bon");
+
+/* Acht echte Bons sind eine schmale Stichprobe von Ketten-Eigenheiten.
+   Um mehr Härtefälle zu finden, ohne mehr Bons abzutippen, zieht
+   `tools/off_hardcase_corpus/generate.js` echte, ausgeschriebene
+   Namen für eine Stichprobe des EIGENEN Katalogs von Open Food Facts
+   (kostenfrei, ohne Login) und verwandelt sie nach denselben Mustern
+   wie die echten Bons (`mangle.js`, fünf Ketten-Personas: Lidl-artig
+   sauber, REWE/Aldi-artig GROSSBUCHSTABEN, EDEKA-artig punktgekürzt,
+   Netto-artig zusammengeklebt, Netto-artig radikal abgekürzt) in eine
+   Bon-Zeile. Deterministisch (Seed aus der productId), damit derselbe
+   Lauf reproduzierbar bleibt; nur die von OFF gelieferten Namen selbst
+   können sich mit der Zeit ändern.
+
+   Der Korpus (`test/fixtures/off-hardcases.json`) ist NICHT
+   fehlerfrei zu erwarten -- anders als bei den acht echten Bons kennt
+   dieser Test die „richtige" productId nur ungefähr: die Stichprobe
+   sucht nach der GENERISCHEN eigenen Katalogware ("Parmesan"), OFF
+   liefert aber manchmal eine SPEZIFISCHERE reale Variante zurück, die
+   der eigene Katalog längst als eigenen (meist „off_"-)Eintrag kennt
+   ("Grana Padano DOP"). Ein Treffer auf die spezifischere, aber
+   inhaltlich näher verwandte Ware ist dann kein Fehler des Abgleichs,
+   sondern eine bessere Antwort, als die Stichprobe erwartet hat.
+   Deshalb zählt ein SICHERER (automatisch buchbarer) Treffer nur dann
+   als Gefahr, wenn er weder dieselbe productId noch dieselbe Kategorie
+   noch ein gemeinsames Namens-Token mit der erwarteten Ware teilt --
+   also wirklich etwas anderes ist, nicht nur genauer. */
+
+const OFF_CORPUS = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "off-hardcases.json"), "utf8"));
+const catalogById = new Map(FOOD_DATABASE.map((p) => [p.id, p]));
+
+function teiltNamensToken(a, b) {
+  const ta = new Set(parseProductName(a).tokens);
+  return parseProductName(b).tokens.some((t) => ta.has(t));
+}
+
+let mCorpusSicherRichtig = 0, mCorpusSicherVertretbar = 0, mCorpusSicherGefaehrlich = 0,
+  mCorpusUnsicher = 0, mCorpusKein = 0;
+const mCorpusGefahren = [];
+OFF_CORPUS.forEach((c) => {
+  const m = matchProduct(c.line);
+  if (!m.productId) { mCorpusKein++; return; }
+  if (m.needsConfirmation) { mCorpusUnsicher++; return; }
+  if (m.productId === c.productId) { mCorpusSicherRichtig++; return; }
+  const erwartet = catalogById.get(c.productId), erhalten = catalogById.get(m.productId);
+  const vertretbar = erwartet && erhalten &&
+    (erwartet.category === erhalten.category || teiltNamensToken(erwartet.name, erhalten.name));
+  if (vertretbar) { mCorpusSicherVertretbar++; return; }
+  mCorpusSicherGefaehrlich++;
+  mCorpusGefahren.push({ line: c.line, erwartet: c.productId, erhalten: m.productId, confidence: m.confidence });
+});
+
+t(`Der OFF-Korpus deckt mindestens 90 Bon-Zeilen ab (gemessen: ${OFF_CORPUS.length})`,
+  () => OFF_CORPUS.length >= 90 ? true : OFF_CORPUS.length);
+
+t("Kein automatischer (sicherer) Treffer landet bei einer wirklich unverwandten Ware -- weder dieselbe Kategorie noch ein gemeinsames Namens-Token", () =>
+  mCorpusSicherGefaehrlich === 0 ? true : JSON.stringify(mCorpusGefahren, null, 1));
+
+t(`Mindestens ein Drittel der Zeilen wird zugeordnet, sicher oder unsicher (gemessen: ${
+    Math.round(100 * (mCorpusSicherRichtig + mCorpusSicherVertretbar + mCorpusUnsicher) / OFF_CORPUS.length)}%)`, () => {
+  const quote = (mCorpusSicherRichtig + mCorpusSicherVertretbar + mCorpusUnsicher) / OFF_CORPUS.length;
+  return quote >= 0.33 ? true : Math.round(quote * 100);
+});
+
+console.log(`\nOFF-Korpus: ${OFF_CORPUS.length} Zeilen -- ${mCorpusSicherRichtig} sicher-richtig, ` +
+  `${mCorpusSicherVertretbar} sicher-vertretbar (spezifischere Ware), ${mCorpusSicherGefaehrlich} sicher-gefährlich, ` +
+  `${mCorpusUnsicher} unsicher, ${mCorpusKein} kein Treffer.`);
+
+// ================================================================
+section("N: Die Trefferquote über die echten Bons, nach allen Änderungen dieser Runde");
+
+/* Die einzige Zahl, die am Ende zählt -- nach den drei neuen
+   Rauschwörtern (Abschnitt J) UND den beiden geschlossenen
+   Kürzungs-Hintertüren (Abschnitt L). Gegenüber dem Stand vor dieser
+   Runde (73 sicher, 63 unsicher, 3 kein Treffer) sinkt „sicher" auf
+   den ersten Blick -- das ist beabsichtigt: sechs Zeilen bekamen ihre
+   automatische Buchung nur durch einen Zufallstreffer nach dem
+   Abschneiden, nie durch echte Gewissheit. Die Gesamt-Zuordnungsquote
+   (sicher + unsicher zusammen) bleibt unverändert bei 136 von 139 --
+   niemand verliert einen Vorschlag, nur die Grenze zwischen „automatisch"
+   und „bitte bestätigen" rückt dahin, wo sie hingehört. */
+t(`Trefferquote (sicher + unsicher) bleibt bei mindestens 95 % -- gemessen: ${(() => {
+    const ALLE = fs.readdirSync(path.join(__dirname, "fixtures")).filter((f) => f.endsWith(".txt"));
+    let ok = 0, unsicher = 0;
+    ALLE.forEach((datei) => {
+      const p = parseReceipt(bon(datei.replace(/\.txt$/, "")));
+      p.items.forEach((it) => {
+        const m = matchProduct(it.raw);
+        if (m.productId && m.needsConfirmation) unsicher++; else if (m.productId) ok++;
+      });
+    });
+    return Math.round(100 * (ok + unsicher) / 139);
+  })()}%`, () => {
+  const ALLE = fs.readdirSync(path.join(__dirname, "fixtures")).filter((f) => f.endsWith(".txt"));
+  let ok = 0, unsicher = 0, keins = 0;
+  ALLE.forEach((datei) => {
+    const p = parseReceipt(bon(datei.replace(/\.txt$/, "")));
+    p.items.forEach((it) => {
+      const m = matchProduct(it.raw);
+      if (!m.productId) keins++; else if (m.needsConfirmation) unsicher++; else ok++;
+    });
+  });
+  return ok === 70 && unsicher === 66 && keins === 3
+    ? true : `${ok} sicher, ${unsicher} unsicher, ${keins} kein Treffer`;
 });
 
 // ================================================================
