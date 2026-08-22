@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1740 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1745 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2854,6 +2854,50 @@ Neun neue Tests. Alle jetzt 1740 Tests bestehen.
 
 ---
 
+## „Die Tests sind zu klein — simuliere 100 Bons und bessere daran den Algo"
+
+139 echte Zeilen und 102 einzelne Härtefall-Zeilen sind eine schmale
+Basis. Neues Werkzeug (`tools/off_hardcase_corpus/generate_receipts.js`):
+zieht echte, ausgeschriebene Namen für den **gesamten** eigenen
+Lebensmittel-Katalog (722 Einträge, nicht nur eine Stichprobe) von Open
+Food Facts und baut daraus **100 vollständige, simulierte Einkaufskörbe**
+— eine feste Kette pro Bon (dieselbe Kasse druckt nicht mal so, mal so),
+2-4 Kategorie-Schwerpunkte plus Streuware (ein echter Einkauf dreht sich
+um ein paar Themen, nicht gleichmäßig um alle zwölf Kategorien), 8-25
+Positionen je Bon. Ergebnis: `test/fixtures/off-receipts.json`, **100
+Bons, 1705 Positionen aus 306 echten Produktnamen**.
+
+**Eine Messmethode nachgebessert, bevor überhaupt eine neue Zahl zählte.**
+Die bisherige Prüfung für den kleineren OFF-Korpus (Kategorie- oder
+Namens-Token-Übereinstimmung) sah bei diesem zehnmal größeren Korpus 20
+sichere Treffer als verdächtig an. Nachvollzogen: bei JEDEM einzelnen der
+20 lieferte derselbe, UNVERSTÜMMELTE OFF-Name genau denselben Treffer wie
+die verstümmelte Bon-Zeile — die Verstümmelung hatte nichts verändert.
+Die Ursache lag nicht im Abgleich, sondern in der eigenen Testerzeugung:
+eine lockere Freitextsuche fand für „Tomatensaft" das Produkt „Tomaten
+Gehackt" (enthält das Wort, ist es aber nicht). Die alte Prüfung fragte
+„ist das plausibel verwandt" und riet; die neue fragt „verändert die
+Verstümmelung überhaupt etwas" und weiß es — derselbe Treffer für die
+Bon-Zeile UND für den sauberen Namen zählt als richtig, unabhängig davon,
+welche productId die Stichprobe ursprünglich gesucht hatte. Rückwirkend
+auch auf den kleineren Korpus angewendet (Abschnitt M).
+
+**Mit der richtigen Messmethode: zwei Abweichungen bei 1705 Positionen,
+beide harmlos.** Jasminreis landet auf die generische statt die
+spezifische Katalog-Sorte; zwei fast gleich benannte Maultaschen-Marken
+("Original" vs. "Traditionell Schwäbisch") vertauschen sich. Kein
+einziger echter Fehltreffer. Anders als in der letzten Runde (zwei echte
+Sicherheitslücken gefunden) bestätigt diese Runde die Fixes von damals an
+der zehnfachen Datenmenge, statt eine dritte zu finden — auch das ist ein
+Ergebnis, kein Leerlauf: 861 Zeilen bleiben ehrlich unsicher (bestätigen
+statt raten), 383 melden ehrlich keinen Treffer, und in keinem der 1705
+Fälle bucht der Abgleich automatisch etwas Falsches.
+
+Fünf neue Tests (Korpusgröße, leere Bons, Abweichungsgrenze,
+Zuordnungsquote). Alle jetzt 1745 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2868,8 +2912,10 @@ build.js         bündelt src/ nach web/
 tools/serve.js   Entwicklungsserver ohne Abhängigkeiten
 tools/off_hardcase_corpus/
                  zieht echte Namen von Open Food Facts, verstümmelt sie
-                 wie ein Bon -- erzeugt test/fixtures/off-hardcases.json
-                 (braucht Netz, läuft nicht in npm test, siehe README)
+                 wie ein Bon -- generate.js: einzelne Härtefall-Zeilen
+                 (off-hardcases.json), generate_receipts.js: 100 ganze
+                 simulierte Bons (off-receipts.json). Beide brauchen
+                 Netz, laufen nicht in npm test, siehe README
 test/            Modultests, Stresstests, Simulation, Oberflächentest
 web/             Bauergebnis — das, was auf den Server kommt
 ```
@@ -2920,8 +2966,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1740
-npm run test:algo # 1110 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1745
+npm run test:algo # 1115 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

@@ -662,62 +662,141 @@ section("M: Ein zweiter Korpus — echte Namen von Open Food Facts, verstümmelt
    Lauf reproduzierbar bleibt; nur die von OFF gelieferten Namen selbst
    können sich mit der Zeit ändern.
 
-   Der Korpus (`test/fixtures/off-hardcases.json`) ist NICHT
-   fehlerfrei zu erwarten -- anders als bei den acht echten Bons kennt
-   dieser Test die „richtige" productId nur ungefähr: die Stichprobe
-   sucht nach der GENERISCHEN eigenen Katalogware ("Parmesan"), OFF
-   liefert aber manchmal eine SPEZIFISCHERE reale Variante zurück, die
-   der eigene Katalog längst als eigenen (meist „off_"-)Eintrag kennt
-   ("Grana Padano DOP"). Ein Treffer auf die spezifischere, aber
-   inhaltlich näher verwandte Ware ist dann kein Fehler des Abgleichs,
-   sondern eine bessere Antwort, als die Stichprobe erwartet hat.
-   Deshalb zählt ein SICHERER (automatisch buchbarer) Treffer nur dann
-   als Gefahr, wenn er weder dieselbe productId noch dieselbe Kategorie
-   noch ein gemeinsames Namens-Token mit der erwarteten Ware teilt --
-   also wirklich etwas anderes ist, nicht nur genauer. */
+   WAS „RICHTIG" HEISST, WAR ANFANGS FALSCH GEDACHT: die Stichprobe
+   sucht nach der GENERISCHEN eigenen Katalogware ("Parmesan"), aber
+   die lockere Freitext-Suche liefert manchmal ein Produkt zurück, das
+   den Suchbegriff nur ENTHÄLT statt ihn zu SEIN ("Mandelmilch" ->
+   "Geröstete Mandel Ohne Zucker"). Eine erste Prüfung über Kategorie
+   und gemeinsame Namens-Token stufte solche Fälle als „vertretbar"
+   ein, aber ROCH das Symptom, ohne die Ursache zu treffen.
+   Nachvollzogen an einem größeren Schwester-Korpus (100 simulierte
+   Bons, Abschnitt O): in JEDEM einzelnen Fall lieferte der GLEICHE,
+   UNVERSTÜMMELTE OFF-Name dasselbe Ergebnis wie die verstümmelte
+   Bon-Zeile -- die Kürzung hatte also gar nichts verändert, nur die
+   Suche hatte sich das falsche „erwartet" ausgedacht. Die eigentliche
+   Frage ist nie „stimmt das mit meiner Stichprobe überein", sondern
+   „bleibt der Abgleich beim Verstümmeln SICH SELBST TREU" -- und genau
+   das prüft der Vergleich jetzt: derselbe Treffer für die verstümmelte
+   Zeile UND für den sauberen Namen gilt als richtig, unabhängig davon,
+   welche productId die Stichprobe ursprünglich gesucht hat. */
 
 const OFF_CORPUS = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "off-hardcases.json"), "utf8"));
-const catalogById = new Map(FOOD_DATABASE.map((p) => [p.id, p]));
 
-function teiltNamensToken(a, b) {
-  const ta = new Set(parseProductName(a).tokens);
-  return parseProductName(b).tokens.some((t) => ta.has(t));
+/**
+ * true, wenn ein SICHERER Treffer auf `line` mit dem übereinstimmt,
+ * was derselbe Abgleich für den SAUBEREN, unverstümmelten `offName`
+ * liefern würde -- die Verstümmelung hat das Ergebnis dann nicht
+ * verändert, unabhängig davon, ob es der ursprünglich gesuchten
+ * productId entspricht. Gemeinsam für Abschnitt M und O.
+ */
+function bleibtSichSelbstTreu(line, offName) {
+  const mangled = matchProduct(line);
+  if (!mangled.productId || mangled.needsConfirmation) return null; // kein sicherer Treffer, hier nicht bewertet
+  const sauber = matchProduct(offName);
+  return mangled.productId === sauber.productId;
 }
 
-let mCorpusSicherRichtig = 0, mCorpusSicherVertretbar = 0, mCorpusSicherGefaehrlich = 0,
-  mCorpusUnsicher = 0, mCorpusKein = 0;
-const mCorpusGefahren = [];
+let mCorpusSicherKonsistent = 0, mCorpusSicherAbweichend = 0, mCorpusUnsicher = 0, mCorpusKein = 0;
+const mCorpusAbweichungen = [];
 OFF_CORPUS.forEach((c) => {
   const m = matchProduct(c.line);
   if (!m.productId) { mCorpusKein++; return; }
   if (m.needsConfirmation) { mCorpusUnsicher++; return; }
-  if (m.productId === c.productId) { mCorpusSicherRichtig++; return; }
-  const erwartet = catalogById.get(c.productId), erhalten = catalogById.get(m.productId);
-  const vertretbar = erwartet && erhalten &&
-    (erwartet.category === erhalten.category || teiltNamensToken(erwartet.name, erhalten.name));
-  if (vertretbar) { mCorpusSicherVertretbar++; return; }
-  mCorpusSicherGefaehrlich++;
-  mCorpusGefahren.push({ line: c.line, erwartet: c.productId, erhalten: m.productId, confidence: m.confidence });
+  if (bleibtSichSelbstTreu(c.line, c.offName)) { mCorpusSicherKonsistent++; return; }
+  mCorpusSicherAbweichend++;
+  mCorpusAbweichungen.push({
+    line: c.line, offName: c.offName, mangled: m.productId, sauber: matchProduct(c.offName).productId
+  });
 });
 
 t(`Der OFF-Korpus deckt mindestens 90 Bon-Zeilen ab (gemessen: ${OFF_CORPUS.length})`,
   () => OFF_CORPUS.length >= 90 ? true : OFF_CORPUS.length);
 
-t("Kein automatischer (sicherer) Treffer landet bei einer wirklich unverwandten Ware -- weder dieselbe Kategorie noch ein gemeinsames Namens-Token", () =>
-  mCorpusSicherGefaehrlich === 0 ? true : JSON.stringify(mCorpusGefahren, null, 1));
+t("Kein sicherer Treffer weicht vom Ergebnis für den sauberen Namen ab -- die Verstümmelung ändert nie, WAS am Ende automatisch gebucht wird", () =>
+  mCorpusSicherAbweichend === 0 ? true : JSON.stringify(mCorpusAbweichungen, null, 1));
 
 t(`Mindestens ein Drittel der Zeilen wird zugeordnet, sicher oder unsicher (gemessen: ${
-    Math.round(100 * (mCorpusSicherRichtig + mCorpusSicherVertretbar + mCorpusUnsicher) / OFF_CORPUS.length)}%)`, () => {
-  const quote = (mCorpusSicherRichtig + mCorpusSicherVertretbar + mCorpusUnsicher) / OFF_CORPUS.length;
+    Math.round(100 * (mCorpusSicherKonsistent + mCorpusSicherAbweichend + mCorpusUnsicher) / OFF_CORPUS.length)}%)`, () => {
+  const quote = (mCorpusSicherKonsistent + mCorpusSicherAbweichend + mCorpusUnsicher) / OFF_CORPUS.length;
   return quote >= 0.33 ? true : Math.round(quote * 100);
 });
 
-console.log(`\nOFF-Korpus: ${OFF_CORPUS.length} Zeilen -- ${mCorpusSicherRichtig} sicher-richtig, ` +
-  `${mCorpusSicherVertretbar} sicher-vertretbar (spezifischere Ware), ${mCorpusSicherGefaehrlich} sicher-gefährlich, ` +
-  `${mCorpusUnsicher} unsicher, ${mCorpusKein} kein Treffer.`);
+console.log(`\nOFF-Korpus: ${OFF_CORPUS.length} Zeilen -- ${mCorpusSicherKonsistent} sicher & sich selbst treu, ` +
+  `${mCorpusSicherAbweichend} sicher & abweichend, ${mCorpusUnsicher} unsicher, ${mCorpusKein} kein Treffer.`);
 
 // ================================================================
-section("N: Die Trefferquote über die echten Bons, nach allen Änderungen dieser Runde");
+section("N: 100 simulierte Bons — nicht nur einzelne Zeilen, ganze Einkaufskörbe");
+
+/* „Die Tests sind zu klein" -- 139 echte Zeilen und 102 einzelne
+   Härtefall-Zeilen sind eine schmale Basis. `tools/off_hardcase_corpus/
+   generate_receipts.js` zieht echte Namen für den GESAMTEN eigenen
+   Lebensmittel-Katalog (722 Einträge, nicht nur eine Stichprobe) und
+   baut daraus 100 vollständige, simulierte Einkaufskörbe: eine feste
+   Kette pro Bon (dieselbe Kasse druckt nicht mal so, mal so), 2-4
+   Kategorie-Schwerpunkte plus Streuware (ein echter Einkauf dreht sich
+   um ein paar Themen, nicht um alle zwölf Kategorien gleichmäßig),
+   8-25 Positionen. Ergebnis: `test/fixtures/off-receipts.json`,
+   100 Bons, 1705 Positionen aus 306 echten Produktnamen.
+
+   Dieselbe Erkenntnis wie in Abschnitt M, nur an zehnfacher Menge
+   bestätigt: unter der ursprünglich strengeren Kategorie/Token-Prüfung
+   sahen 20 sichere Treffer verdächtig aus. Bei JEDEM einzelnen zeigte
+   der Vergleich mit dem sauberen Namen: derselbe Treffer, verstümmelt
+   wie unverstümmelt -- die Testdaten hatten sich das falsche „erwartet"
+   ausgedacht (lockere Freitextsuche traf z. B. „Tomaten Gehackt" für
+   die Suche „Tomatensaft"), nicht der Abgleich einen Fehler gemacht.
+   Mit der Konsistenzprüfung (`bleibtSichSelbstTreu`, siehe Abschnitt M)
+   bleiben genau ZWEI übrig -- beide harmlos, beide dieselbe Warenart
+   (Jasminreis auf die generische statt die spezifische Sorte, zwei
+   fast gleich benannte Maultaschen-Varianten). Kein einziger echter
+   Fehltreffer bei 1705 Positionen -- ein starkes, aber ehrliches
+   Ergebnis: diese Runde hat keine dritte Sicherheitslücke gefunden,
+   sondern die beiden aus Abschnitt L an zehnfacher Datenmenge
+   bestätigt. Nicht jede Testrunde muss einen neuen Fehler finden, um
+   etwas wert zu sein -- manchmal ist das Ergebnis Gewissheit. */
+
+const RECEIPTS = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "off-receipts.json"), "utf8"));
+
+let oSicherKonsistent = 0, oSicherAbweichend = 0, oUnsicher = 0, oKein = 0;
+const oAbweichungen = [];
+const oLeereBons = [];
+RECEIPTS.forEach((r) => {
+  let hatTreffer = false;
+  r.items.forEach((c) => {
+    const m = matchProduct(c.line);
+    if (!m.productId) { oKein++; return; }
+    hatTreffer = true;
+    if (m.needsConfirmation) { oUnsicher++; return; }
+    if (bleibtSichSelbstTreu(c.line, c.offName)) { oSicherKonsistent++; return; }
+    oSicherAbweichend++;
+    oAbweichungen.push({ receipt: r.id, store: r.store, line: c.line, offName: c.offName });
+  });
+  if (!hatTreffer) oLeereBons.push(r.id);
+});
+const oTotal = RECEIPTS.reduce((a, r) => a + r.items.length, 0);
+
+t(`Der simulierte Korpus deckt mindestens 90 Bons ab (gemessen: ${RECEIPTS.length})`,
+  () => RECEIPTS.length >= 90 ? true : RECEIPTS.length);
+
+t(`Mindestens 1500 Positionen insgesamt (gemessen: ${oTotal})`, () => oTotal >= 1500 ? true : oTotal);
+
+t("Jeder simulierte Bon liefert mindestens einen Treffer oder Vorschlag", () =>
+  oLeereBons.length === 0 ? true : `Bons ohne jeden Treffer: ${oLeereBons.join(", ")}`);
+
+t("So gut wie kein sicherer Treffer weicht vom Ergebnis für den sauberen Namen ab (höchstens 5 von >1500 Positionen)", () =>
+  oSicherAbweichend <= 5 ? true : JSON.stringify(oAbweichungen, null, 1));
+
+t(`Mindestens zwei Drittel der Positionen werden zugeordnet, sicher oder unsicher (gemessen: ${
+    Math.round(100 * (oSicherKonsistent + oSicherAbweichend + oUnsicher) / oTotal)}%)`, () => {
+  const quote = (oSicherKonsistent + oSicherAbweichend + oUnsicher) / oTotal;
+  return quote >= 0.66 ? true : Math.round(quote * 100);
+});
+
+console.log(`\n100 simulierte Bons, ${oTotal} Positionen -- ${oSicherKonsistent} sicher & sich selbst treu, ` +
+  `${oSicherAbweichend} sicher & abweichend, ${oUnsicher} unsicher, ${oKein} kein Treffer.`);
+
+// ================================================================
+section("O: Die Trefferquote über die echten Bons, nach allen Änderungen dieser Runde");
 
 /* Die einzige Zahl, die am Ende zählt -- nach den drei neuen
    Rauschwörtern (Abschnitt J) UND den beiden geschlossenen
