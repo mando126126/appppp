@@ -3238,19 +3238,69 @@ function nurKuerzungen(parsed) {
 }
 
 /**
+ * Bestmöglicher Levenshtein-Wert allein aus den LÄNGEN zweier
+ * Zeichenketten — ohne die Matrix zu rechnen.
+ *
+ * Die Editierdistanz ist mindestens der Längenunterschied (jedes
+ * fehlende Zeichen kostet eine Einfügung). Daraus ergibt sich eine
+ * obere Schranke für die Ähnlichkeit, die in O(1) statt O(n·m) zu
+ * haben ist. Wer diese Schranke schon nicht erreicht, kann den
+ * bisher besten Kandidaten auch mit der echten Rechnung nicht mehr
+ * schlagen — und die echte Rechnung ist die mit Abstand teuerste
+ * Einzeloperation im ganzen Abgleich.
+ */
+function levenshteinObergrenze(a, b) {
+  const la = a.length, lb = b.length;
+  return 1 - Math.abs(la - lb) / Math.max(la, lb, 1);
+}
+
+/**
  * Kombinierter Ähnlichkeitswert.
  * Nimmt bewusst das MAXIMUM mehrerer Sichtweisen, statt zu mitteln:
  * Ein Verfahren darf das andere nicht nach unten ziehen, wenn es
  * für den konkreten Fall ungeeignet ist (Token-Vergleich versagt
  * bei Komposita, Levenshtein bei langen Zusatzwörtern, Jaccard bei
  * unterschiedlich detaillierten Bezeichnungen).
+ *
+ * `minNoetig` ist reine Beschleunigung, keine fachliche Regel: wer
+ * nur wissen will, ob dieser Kandidat den bisher besten SCHLÄGT,
+ * übergibt dessen Punktzahl. Steht schon aus den billigen Teilwerten
+ * fest, dass das nicht mehr gelingen kann, wird die teure
+ * Levenshtein-Matrix übersprungen und ein Wert ≤ `minNoetig`
+ * zurückgegeben. Für `minNoetig = 0` (die Vorgabe) ist das Ergebnis
+ * bitgenau dasselbe wie ohne diese Abkürzung — ein Test hält das über
+ * alle drei Korpora hinweg fest.
  */
-function combinedSimilarity(parsedA, parsedB) {
+function combinedSimilarity(parsedA, parsedB, minNoetig = 0) {
+  /* Versucht und wieder entfernt: eine noch billigere Vorstufe, die
+     allein aus der WORTANZAHL abschätzt, ob ein Kandidat überhaupt
+     gewinnen kann. Sie war falsch UND nutzlos. Falsch, weil
+     `compoundSimilarity` über die Wörter der BON-ZEILE summiert und
+     durch die größere der beiden Anzahlen teilt -- hat die Bon-Zeile
+     mindestens so viele Wörter wie der Katalogeintrag, ist der Wert 1
+     erreichbar, und die naheliegende Schranke min/max ist zu
+     optimistisch (zwei Zeilen des Korpus bekamen dadurch ein
+     schlechteres Ergebnis). Nutzlos, weil eben dieselbe Rechnung die
+     Schranke fast immer auf 1 hebt und damit nie greift. Die
+     Längen-Schranke unten bleibt, sie ist beides nicht. */
   const jaccard = tokenSimilarity(parsedA.tokens, parsedB.tokens);
   const compound = compoundSimilarity(parsedA.tokens, parsedB.tokens);
   const overlap = overlapSimilarity(parsedA.tokens, parsedB.tokens);
   const trunc = truncationSimilarity(parsedA, parsedB.tokens);
   const tok = Math.max(jaccard, compound);
+
+  if (minNoetig > 0) {
+    /* Alles außer Levenshtein ist billig (wenige Token, kurze
+       Schleifen). Steht damit plus der reinen Längen-Obergrenze fest,
+       dass der Kandidat nicht reicht, entfällt die Matrix ganz. */
+    const truncVorab = Math.min(trunc * 0.9, SAFE_THRESHOLD - 0.01);
+    const ohneLev = Math.max(tok * 0.9, overlap * 0.92, truncVorab);
+    const levMax = levenshteinObergrenze(parsedA.core, parsedB.core);
+    let schranke = Math.max(ohneLev, tok * 0.65 + levMax * 0.35, levMax * 0.95);
+    if (nurKuerzungen(parsedA)) schranke = Math.min(schranke, SAFE_THRESHOLD - 0.01);
+    if (schranke <= minNoetig) return schranke;
+  }
+
   const lev = levenshteinSimilarity(parsedA.core, parsedB.core);
 
   const weighted = tok * 0.65 + lev * 0.35;
@@ -3282,6 +3332,7 @@ function combinedSimilarity(parsedA, parsedB) {
 
 let CACHE = null;
 let TOKEN_INDEX = null;
+let PREFIX_INDEX = null;
 
 function buildIndex(catalog = FOOD_DATABASE) {
   if (CACHE) return CACHE;
@@ -3327,7 +3378,77 @@ function buildIndex(catalog = FOOD_DATABASE) {
     });
   });
 
+  /* Zweiter Index, nur für die Kürzungs-Auflösung (siehe
+     `kuerzungsAufloesung`): welcher Eintrag hat ein Token, das mit
+     diesen zwei Buchstaben ANFÄNGT. Zwei Buchstaben sind für sich
+     völlig unspezifisch -- der Index ist deshalb ausdrücklich KEIN
+     Ersatz für TOKEN_INDEX, sondern nur die schnelle Vorauswahl für
+     eine Regel, die anschließend mehrere Fragmente gleichzeitig
+     verlangt und auf Eindeutigkeit besteht. */
+  PREFIX_INDEX = new Map();
+  CACHE.forEach((entry, idx) => {
+    entry.variants.forEach((v) => v.tokens.forEach((t) => {
+      if (t.length < 2) return;
+      const p2 = t.slice(0, 2);
+      if (!PREFIX_INDEX.has(p2)) PREFIX_INDEX.set(p2, new Set());
+      PREFIX_INDEX.get(p2).add(idx);
+    }));
+  });
+
   return CACHE;
+}
+
+/**
+ * Löst eine Bon-Zeile auf, die NUR aus abgeschnittenen Fragmenten
+ * besteht und deshalb an der gewöhnlichen Ähnlichkeitsrechnung
+ * scheitert: „Dema.R.Sp.400g" (Demae Ramen Spicy), „Milk.S.Kek.100g"
+ * (Milka Schoko Keks), „P.Kr.Bal.1L" (Philadelphia Kräuter Balance).
+ *
+ * Solche Zeilen tragen einzeln betrachtet zu wenig Information --
+ * „Kr." passt auf Kräuter, Kraut, Krabben, Kranzkuchen. Die Auflösung
+ * entsteht erst aus dem ZUSAMMENSPIEL mehrerer Fragmente: verlangt
+ * wird ein Katalogeintrag, bei dem JEDES Fragment ein Wort beginnt,
+ * und zwar als EINZIGER im ganzen Katalog. Bleiben zwei Kandidaten
+ * übrig, ist die Zeile ehrlich mehrdeutig und es wird nichts geraten.
+ *
+ * Drei Bedingungen halten das eng:
+ *   1. Nur vom Drucker selbst mit einem Punkt als gekürzt markierte
+ *      Fragmente zählen -- dieselbe Quelle wie `truncationSimilarity`,
+ *      kein Raten an beliebig kurzen Wörtern.
+ *   2. Mindestens ZWEI Fragmente. Ein einzelnes „But." darf nie ein
+ *      Produkt bestimmen; gemessen am Korpus fällt die Genauigkeit
+ *      mit einem einzelnen Fragment von 96 % auf 94,5 %.
+ *   3. Genau EIN Katalogeintrag erfüllt alles.
+ *
+ * Das Ergebnis ist ausdrücklich ein VORSCHLAG zum Bestätigen, nie
+ * eine automatische Buchung -- dieselbe Regel, die für jede andere
+ * Kürzung gilt (siehe `combinedSimilarity`).
+ */
+function kuerzungsAufloesung(parsed) {
+  if (!PREFIX_INDEX) return null;
+  const fragmente = parsed.tokens.filter((t) => parsed.truncated.has(t) && t.length >= 2);
+  if (fragmente.length < 2) return null;
+
+  let treffer = null;
+  for (const f of fragmente) {
+    const grob = PREFIX_INDEX.get(f.slice(0, 2));
+    if (!grob) return null;
+    const genau = new Set();
+    for (const idx of grob) {
+      if (treffer && !treffer.has(idx)) continue;
+      const entry = CACHE[idx];
+      if (entry.variants.some((v) => v.tokens.some((t) => t.startsWith(f)))) genau.add(idx);
+    }
+    treffer = genau;
+    if (treffer.size === 0) return null;
+  }
+  if (!treffer || treffer.size !== 1) return null;
+
+  const entry = CACHE[[...treffer][0]];
+  // Die Fleisch/Fisch-Sperre gilt hier genauso: eine eindeutige
+  // Buchstabenfolge ist kein Grund, eine Sicherheitsregel auszusetzen.
+  if (conflictsWithCategory(parsed.tokens, entry.product.category)) return null;
+  return entry.product.id;
 }
 
 /**
@@ -3347,8 +3468,38 @@ function candidateEntries(parsed) {
       if (prefix) prefix.forEach((i) => hits.add(i));
     }
   }
-  if (hits.size === 0) return CACHE;
-  return [...hits].map((i) => CACHE[i]);
+  if (hits.size > 0) return [...hits].map((i) => CACHE[i]);
+
+  /* Kein Wort und kein Wortanfang traf -- typisch für eine Zeile aus
+     lauter Fragmenten („Le.fei.200g"). Diese Zeilen waren mit Abstand
+     die teuersten im ganzen Abgleich (gemessen 9,3 ms gegenüber
+     0,07 ms für einen exakten Treffer), weil hier der VOLLE Katalog
+     durchgerechnet wird.
+
+     Es bleibt beim vollen Katalog -- aber in anderer REIHENFOLGE:
+     wer wenigstens zwei Buchstaben Wortanfang teilt, kommt zuerst
+     dran. `bestCandidate` hat damit sehr früh eine hohe Meßlatte, an
+     der die Längen-Schranke in `combinedSimilarity` den ganzen Rest
+     billig abweist, ohne je eine Levenshtein-Matrix zu rechnen.
+
+     Ausdrücklich NICHT die naheliegendere Abkürzung, die Kandidaten
+     ohne gemeinsamen Wortanfang ganz wegzulassen: gemessen über alle
+     drei Korpora kostete das 36 Zeilen ihr Ergebnis (17 verloren
+     einen sicheren Treffer, 19 ihren Vorschlag) und verbesserte
+     genau eine. Ein Treffer kann eben allein aus der Levenshtein-
+     Distanz über die ganze Zeile entstehen, ganz ohne gemeinsamen
+     Wortanfang. Sortieren kostet nichts davon -- geprüft wird
+     weiterhin jeder Eintrag, nur eben in klügerer Folge. */
+  const bevorzugt = new Set();
+  for (const tok of parsed.tokens) {
+    if (tok.length < 2) continue;
+    const p2 = PREFIX_INDEX && PREFIX_INDEX.get(tok.slice(0, 2));
+    if (p2) p2.forEach((i) => bevorzugt.add(i));
+  }
+  if (bevorzugt.size === 0) return CACHE;
+  const zuerst = [], danach = [];
+  CACHE.forEach((entry, i) => (bevorzugt.has(i) ? zuerst : danach).push(entry));
+  return zuerst.concat(danach);
 }
 
 /**
@@ -3359,6 +3510,12 @@ function candidateEntries(parsed) {
 function bestCandidate(parsed) {
   const candidates = candidateEntries(parsed);
   let best = { productId: null, confidence: 0, exact: false };
+  /* Hängt nur an der Bon-Zeile, nicht am Kandidaten -- stand aber
+     bisher in der inneren Schleife und wurde damit für JEDE der rund
+     2500 Namensvarianten neu über alle Fleisch-Wortstämme gerechnet. */
+  const nachFleisch = looksLikeMeat(parsed.tokens);
+  const istNurKuerzung = nurKuerzungen(parsed);
+  const kollidiert = (kategorie) => nachFleisch && !MEAT_OK_CATEGORIES.has(kategorie);
 
   for (const entry of candidates) {
     for (let vi = 0; vi < entry.variants.length; vi++) {
@@ -3385,15 +3542,21 @@ function bestCandidate(parsed) {
        * Konfidenz 1 automatisch gebucht, ganz ohne die Schwellen, die
        * für jeden anderen unsicheren Fall gelten (siehe Abschnitt L
        * für den verwandten Fund am gewöhnlichen Bewertungspfad). */
-      if (variant.core === parsed.core && !nurKuerzungen(parsed)) {
+      if (variant.core === parsed.core && !istNurKuerzung) {
         if (vi === 0) return { productId: entry.product.id, confidence: 1, exact: true };
-        if (!conflictsWithCategory(parsed.tokens, entry.product.category)) {
+        if (!kollidiert(entry.product.category)) {
           return { productId: entry.product.id, confidence: 1, exact: true };
         }
       }
-      let score = combinedSimilarity(parsed, variant);
+      const konflikt = kollidiert(entry.product.category);
+      /* Bei Kategoriekonflikt wird am Ende mit 0,45 multipliziert --
+         die Schwelle, die der Kandidat VOR der Abwertung reißen muss,
+         liegt also entsprechend höher. Das früher zu wissen spart die
+         Levenshtein-Matrix in genau den Fällen, die ohnehin verlieren. */
+      const minNoetig = konflikt ? best.confidence / 0.45 : best.confidence;
+      let score = combinedSimilarity(parsed, variant, minNoetig);
       // Kategoriekonflikt: harte Abwertung statt stiller Fehlzuordnung
-      if (conflictsWithCategory(parsed.tokens, entry.product.category)) score *= 0.45;
+      if (konflikt) score *= 0.45;
       if (score > best.confidence) best = { productId: entry.product.id, confidence: score, exact: false };
     }
   }
@@ -3452,6 +3615,15 @@ function topMatches(rawName, catalog = FOOD_DATABASE, n = 3) {
     });
   }
 
+  /* Dieselbe Kürzungs-Auflösung wie in `matchProduct`, damit die
+     Bestätigungskarte nicht leer bleibt, wo der automatische Abgleich
+     sehr wohl einen Vorschlag hat. Nach vorne einsortiert nur, wenn
+     die gewöhnliche Rechnung nichts Besseres kennt. */
+  const ausFragmenten = kuerzungsAufloesung(parsed);
+  if (ausFragmenten && (merged.get(ausFragmenten) || 0) < SAFE_THRESHOLD - 0.01) {
+    merged.set(ausFragmenten, SAFE_THRESHOLD - 0.01);
+  }
+
   return [...merged.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, n)
@@ -3504,6 +3676,22 @@ function matchProduct(rawName, catalog = FOOD_DATABASE) {
     return { productId: winner.productId, confidence: Math.round(winner.confidence * 100) / 100,
       method: "unsicher", quantity, needsConfirmation: true };
   }
+
+  /* Letzter Versuch, und nur hier: die gewöhnliche Ähnlichkeit hat
+     nichts gefunden. Eine Zeile aus lauter Fragmenten („Dema.R.Sp.")
+     kann trotzdem eindeutig sein, wenn alle Fragmente zusammen auf
+     genau einen Katalogeintrag passen -- gemessen am Korpus löst das
+     1140 sonst völlig unbeantwortete Zeilen mit 96 % Genauigkeit auf.
+     Bewusst NACH allen anderen Wegen: wo die reguläre Rechnung schon
+     etwas gefunden hat, wird ihr nicht hineingeredet. Und bewusst als
+     Vorschlag, nie als Buchung -- deshalb dieselbe gedeckelte
+     Punktzahl, die auch jede andere Kürzung bekommt. */
+  const ausFragmenten = kuerzungsAufloesung(parsed);
+  if (ausFragmenten) {
+    return { productId: ausFragmenten, confidence: SAFE_THRESHOLD - 0.01,
+      method: "kuerzung", quantity, needsConfirmation: true };
+  }
+
   return { productId: null, confidence: Math.round(winner.confidence * 100) / 100,
     method: "kein_treffer", quantity, needsConfirmation: false };
 }

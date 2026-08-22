@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1749 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1759 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2950,6 +2950,104 @@ Acht neue Tests. Alle jetzt 1749 Tests bestehen.
 
 ---
 
+## „Mache ihn effizienter und bessere Quote"
+
+Der 1000-Bon-Korpus hat zum ersten Mal genug Masse, um zu MESSEN statt
+zu vermuten — und die Messung zeigte, dass beide Aufgaben dieselbe
+Ursache haben.
+
+**Die Messung zuerst.** Zeit je Bon-Zeile nach Ergebnisart aufgeschlüsselt:
+
+| Ergebnis | Zeilen | Zeit je Zeile |
+|---|---|---|
+| exakter Treffer | 991 | 0,07 ms |
+| ähnlicher Treffer | 999 | 1,05 ms |
+| unsicher | 1185 | 2,72 ms |
+| **kein Treffer** | **825** | **9,31 ms** |
+
+Ausgerechnet die Zeilen, die nichts liefern, kosten 133-mal so viel wie
+ein exakter Treffer. Der Grund ist derselbe für beide Probleme: findet
+der Wortindex nichts, wird gegen den **ganzen** Katalog gerechnet — teuer,
+und am Ende doch ohne Ergebnis.
+
+### Trefferquote: 79,6 % → 86,4 %
+
+Die 3427 Zeilen ohne Treffer (20 % des Korpus) sind fast alle Zeilen aus
+lauter abgeschnittenen Fragmenten: `Dema.R.Sp.400g`, `Milk.S.Kek.100g`,
+`P.Kr.Bal.1L`. Für die gewöhnliche Ähnlichkeitsrechnung ist da nichts zu
+holen — `Kr.` ist zu kurz für den Kompositum-Vergleich (ab fünf Zeichen)
+und zu unspezifisch für alles andere.
+
+Die Auflösung entsteht erst aus dem **Zusammenspiel** der Fragmente:
+gesucht wird ein Katalogeintrag, bei dem *jedes* Fragment ein Wort
+beginnt — und zwar als *einziger* im ganzen Katalog. Vor dem Bauen
+nachgemessen, wie die Mindestzahl der Fragmente Menge gegen Genauigkeit
+tauscht:
+
+| mindestens | aufgelöste Zeilen | Genauigkeit |
+|---|---|---|
+| 1 Fragment | 1191 | 94,5 % |
+| **2 Fragmente** | **1140** | **96,0 %** |
+| 3 Fragmente | 611 | 98,9 % |
+
+Gewählt wurden zwei: der Schritt von eins auf zwei kostet 51 Zeilen und
+kauft 1,5 Punkte, der Schritt von zwei auf drei kostet 529 Zeilen für
+2,9 Punkte. Am vollen Korpus gemessen ergibt das **1140 zusätzliche
+Vorschläge mit 97,7 % Genauigkeit**, die Zuordnungsquote steigt von
+79,6 % auf 86,4 %, und **kein einziger der 1000 Bons bleibt noch ganz
+ohne Treffer** (vorher sieben).
+
+Nicht verhandelbar und im Test festgehalten: das Ergebnis ist ein
+**Vorschlag**. Die Regel greift ausschließlich dort, wo sonst nichts
+stünde, überschreibt nie eine bestehende Zuordnung, und **bucht in
+keinem einzigen der 1140 Fälle automatisch**. Die Fleisch/Fisch-Sperre
+gilt unverändert — Eindeutigkeit hebt keine Sicherheitsregel auf.
+
+### Effizienz: 2,80 ms → 1,16 ms je Zeile
+
+Zwei Beschleunigungen, beide ohne jede fachliche Wirkung:
+
+1. **Längen-Schranke.** Die Editierdistanz ist mindestens der
+   Längenunterschied zweier Zeichenketten. Daraus folgt in O(1) eine
+   obere Schranke für die Levenshtein-Ähnlichkeit. Wer sie schon nicht
+   erreicht, kann den bisher besten Kandidaten auch mit der echten
+   Matrix nicht mehr schlagen — und die Matrix ist die mit Abstand
+   teuerste Einzeloperation im Abgleich.
+2. **Reihenfolge statt Auswahl.** Bei einer Zeile ohne Index-Treffer
+   kommen Einträge mit gemeinsamem Wortanfang zuerst dran. Die Meßlatte
+   liegt damit früh hoch, und Schranke 1 weist den Rest billig ab.
+
+Dazu eine Kleinigkeit mit großer Wirkung: die Fleisch/Fisch-Prüfung hing
+nur an der Bon-Zeile, stand aber in der inneren Schleife und wurde für
+jede der rund 2500 Namensvarianten neu gerechnet.
+
+**Zwei Ideen wurden gemessen und wieder verworfen** — beide klangen
+richtig und waren es nicht:
+
+- *Kandidaten ohne gemeinsamen Wortanfang ganz weglassen* wäre mit
+  0,21 ms fünfmal schneller gewesen. Es kostete aber 36 Zeilen ihr
+  Ergebnis (17 verloren einen sicheren Treffer, 19 ihren Vorschlag) und
+  verbesserte genau eine. Ein Treffer kann eben allein aus der
+  Levenshtein-Distanz über die ganze Zeile entstehen. Sortieren statt
+  Aussortieren kostet nichts davon.
+- *Eine noch billigere Schranke allein aus der Wortanzahl* war falsch
+  **und** nutzlos: `compoundSimilarity` summiert über die Wörter der
+  Bon-Zeile und teilt durch die größere der beiden Anzahlen — hat die
+  Bon-Zeile mindestens so viele Wörter wie der Katalogeintrag, ist der
+  Wert 1 erreichbar. Die naheliegende Schranke `min/max` ist damit zu
+  optimistisch (zwei Korpus-Zeilen bekamen ein schlechteres Ergebnis),
+  und dieselbe Rechnung hebt die Schranke fast immer auf 1, sodass sie
+  ohnehin nie greift.
+
+Der Beweis, dass die Beschleunigung zulässig ist, ist selbst ein Test:
+über alle drei Korpora hinweg (17036 Zeilen) liefert die abgekürzte
+Rechnung **Zeichen für Zeichen dasselbe** wie die ungekürzte. Geprüft
+wird die Gleichheit, nicht die Laufzeit — die schwankt je nach Maschine.
+
+Zehn neue Tests. Alle jetzt 1759 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3018,8 +3116,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1749
-npm run test:algo # 1119 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1759
+npm run test:algo # 1129 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

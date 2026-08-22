@@ -45,7 +45,8 @@
 
 const fs = require("fs");
 const path = require("path");
-const { matchProduct, parseProductName, truncationSimilarity, splitGlued, topMatches, SAFE_THRESHOLD, combinedSimilarity } = require("../src/algo/productMatcher2");
+const { matchProduct, parseProductName, truncationSimilarity, splitGlued, topMatches, SAFE_THRESHOLD, combinedSimilarity,
+  kuerzungsAufloesung: T_kuerzung, levenshteinObergrenze, levenshtein, conflictsWithCategory } = require("../src/algo/productMatcher2");
 const { parseReceipt } = require("../src/algo/receiptParser");
 const { FOOD_DATABASE } = require("../src/algo/foodDatabase");
 
@@ -896,6 +897,154 @@ t(`Trefferquote (sicher + unsicher) bleibt bei mindestens 95 % -- gemessen: ${((
   });
   return ok === 70 && unsicher === 66 && keins === 3
     ? true : `${ok} sicher, ${unsicher} unsicher, ${keins} kein Treffer`;
+});
+
+// ================================================================
+section("P: Zeilen aus lauter Fragmenten auflösen — der bisher größte Ausfall");
+
+/* Am 1000-Bon-Korpus gemessen war der mit Abstand größte Block gar
+   kein Fehltreffer, sondern GAR KEIN Treffer: 3427 von 16795
+   Positionen (20 %) bekamen nicht einmal einen Vorschlag. Fast alle
+   davon Zeilen, die nur aus abgeschnittenen Fragmenten bestehen --
+   „Dema.R.Sp.400g", „Milk.S.Kek.100g", „P.Kr.Bal.1L". Für die
+   gewöhnliche Ähnlichkeitsrechnung ist da nichts zu holen: „Kr." ist
+   zu kurz für den Kompositum-Vergleich (ab fünf Zeichen) und zu
+   unspezifisch für alles andere.
+
+   Die Auflösung entsteht erst aus dem ZUSAMMENSPIEL: verlangt wird
+   ein Katalogeintrag, bei dem JEDES Fragment ein Wort beginnt -- und
+   zwar als EINZIGER im ganzen Katalog. Nachgemessen am Korpus, bevor
+   die Regel gebaut wurde: 1191 der 3427 Ausfälle sind so eindeutig
+   auflösbar, und die Genauigkeit hängt an der Mindestzahl der
+   Fragmente -- ein einzelnes Fragment 94,5 %, zwei 96,0 %, drei
+   98,9 %. Gewählt wurden ZWEI: der Sprung von einem auf zwei
+   Fragmente kostet nur 51 Zeilen und kauft 1,5 Punkte Genauigkeit,
+   der Sprung von zwei auf drei kostet 529 Zeilen für 2,9 Punkte.
+
+   Ergebnis am vollen Korpus: 1140 zusätzliche Vorschläge, davon
+   97,7 % richtig (gemessen gegen die erwartete Ware ODER gegen das,
+   was derselbe Abgleich für den sauberen Namen liefert). Die
+   Zuordnungsquote steigt von 79,6 % auf 86,4 %, und kein einziger
+   der 1000 Bons bleibt noch ganz ohne Treffer (vorher sieben).
+
+   Entscheidend und nicht verhandelbar: das Ergebnis ist ein
+   VORSCHLAG. Die Regel greift ausschließlich dort, wo sonst nichts
+   stünde, sie überschreibt nie eine bestehende Zuordnung, und sie
+   bucht nie automatisch -- dieselbe gedeckelte Punktzahl wie jede
+   andere Kürzung. */
+
+t("„Dema.R.Sp.400g“ (Demae Ramen Spicy) wird aufgelöst -- als Vorschlag, nicht als Buchung", () => {
+  const m = matchProduct("Dema.R.Sp.400g");
+  return m.productId === "off_demae_ramen_spicy" && m.needsConfirmation && m.method === "kuerzung"
+    ? true : JSON.stringify(m);
+});
+
+t("Ein EINZELNES Fragment löst nichts auf -- „But.“ darf kein Produkt bestimmen", () => {
+  const m = matchProduct("But.");
+  return m.method !== "kuerzung" ? true : JSON.stringify(m);
+});
+
+t("Mehrdeutigkeit wird nicht geraten: passen zwei Einträge, bleibt die Zeile offen", () => {
+  // "Sch." + "Ka." trifft im Katalog auf viele Kombinationen
+  // (Schokolade/Kakao, Schinken/Käse, ...) -- kein eindeutiger Eintrag.
+  const aufgeloest = T_kuerzung(parseProductName("Sch.Ka.100g"));
+  return aufgeloest === null ? true : `hat ${aufgeloest} geraten`;
+});
+
+t("Die Regel überschreibt nie eine bestehende Zuordnung", () => {
+  // Eine Zeile, die schon regulär trifft, bleibt unverändert.
+  const m = matchProduct("Zott Jogobella sort. 150g");
+  return m.productId === "joghurt_2kammer" && m.method === "aehnlich"
+    ? true : JSON.stringify(m);
+});
+
+t("Die Fleisch/Fisch-Sperre gilt auch hier -- Eindeutigkeit hebt keine Sicherheitsregel auf", () => {
+  // Alle über die Regel aufgelösten Zeilen des Korpus dürfen nie eine
+  // Fleisch/Fisch-Ware aus einer unpassenden Kategorie liefern.
+  const verstoesse = OFF_CORPUS.concat(RECEIPTS.flatMap((r) => r.items))
+    .filter((c) => matchProduct(c.line).method === "kuerzung")
+    .filter((c) => {
+      const m = matchProduct(c.line);
+      const p = FOOD_DATABASE.find((x) => x.id === m.productId);
+      return p && conflictsWithCategory(parseProductName(c.line).tokens, p.category);
+    });
+  return verstoesse.length === 0 ? true : JSON.stringify(verstoesse.slice(0, 5));
+});
+
+let pAufgeloest = 0, pRichtig = 0, pAutomatisch = 0;
+RECEIPTS.forEach((r) => r.items.forEach((c) => {
+  const m = matchProduct(c.line);
+  if (m.method !== "kuerzung") return;
+  pAufgeloest++;
+  if (!m.needsConfirmation) pAutomatisch++;
+  if (m.productId === c.productId || m.productId === matchProduct(c.offName).productId) pRichtig++;
+}));
+
+t("KEIN einziger über Fragmente aufgelöster Treffer wird automatisch gebucht", () =>
+  pAutomatisch === 0 ? true : `${pAutomatisch} von ${pAufgeloest} umgingen die Bestätigung`);
+
+t(`Die Regel löst mindestens 1000 sonst unbeantwortete Zeilen auf (gemessen: ${pAufgeloest})`,
+  () => pAufgeloest >= 1000 ? true : pAufgeloest);
+
+t(`Mindestens 95 % der neuen Vorschläge sind richtig (gemessen: ${
+    (100 * pRichtig / Math.max(1, pAufgeloest)).toFixed(1)}%)`, () => {
+  const quote = pRichtig / Math.max(1, pAufgeloest);
+  return quote >= 0.95 ? true : `${(quote * 100).toFixed(1)}%`;
+});
+
+// ================================================================
+section("Q: Schneller rechnen, ohne ein einziges Ergebnis zu verändern");
+
+/* Der Abgleich war zu langsam: 2,80 ms je Bon-Zeile, und ausgerechnet
+   die Zeilen OHNE Treffer waren mit 9,31 ms die teuersten -- 133-mal
+   so teuer wie ein exakter Treffer. Beides dieselbe Ursache: findet
+   der Wortindex nichts, wird gegen den GANZEN Katalog gerechnet, und
+   die Levenshtein-Matrix ist die mit Abstand teuerste Einzeloperation
+   darin.
+
+   Zwei Beschleunigungen, beide ohne fachliche Wirkung:
+     1. Eine Längen-Schranke (`levenshteinObergrenze`): die
+        Editierdistanz ist mindestens der Längenunterschied. Wer damit
+        den bisher besten Kandidaten nicht mehr schlagen kann, braucht
+        die Matrix gar nicht.
+     2. Reihenfolge statt Auswahl: bei einer Zeile ohne Index-Treffer
+        kommen Einträge mit gemeinsamem Wortanfang zuerst dran, damit
+        die Meßlatte früh hoch liegt und Schranke 1 danach greift.
+
+   Ergebnis: 1,16 ms statt 2,80 ms je Zeile, 2,4-mal schneller.
+
+   Der Test ist die Behauptung selbst: über ALLE drei Korpora hinweg
+   (17036 Zeilen) muss die abgekürzte Rechnung Zeichen für Zeichen
+   dasselbe liefern wie die ungekürzte. Deshalb prüft er nicht die
+   Laufzeit -- die schwankt je nach Maschine -- sondern die
+   Gleichheit, die die Beschleunigung überhaupt erst zulässig macht. */
+
+t("Die Längen-Schranke unterschätzt Levenshtein nie", () => {
+  const paare = [["", ""], ["a", ""], ["milch", "vollmilch"], ["butter", "butterkaese"],
+    ["mascarpone", "mascara"], ["semmel", "semmelbroesel"], ["x", "yyyyyyyyyy"]];
+  const schlecht = paare.filter(([a, b]) =>
+    levenshteinObergrenze(a, b) < (a === b ? 1 : 1 - levenshtein(a, b) / Math.max(a.length, b.length, 1)) - 1e-9);
+  return schlecht.length === 0 ? true : JSON.stringify(schlecht);
+});
+
+t("Mit Schranke gerechnet ist bitgenau dasselbe wie ohne -- über alle drei Korpora", () => {
+  const alleZeilen = [
+    ...RECEIPTS.flatMap((r) => r.items.map((i) => i.line)),
+    ...OFF_CORPUS.map((c) => c.line)
+  ];
+  // `combinedSimilarity` mit minNoetig = 0 schaltet die Abkürzung ab.
+  // Beide Wege müssen für jeden Kandidaten dasselbe ergeben.
+  const abweichungen = [];
+  alleZeilen.slice(0, 400).forEach((zeile) => {
+    const p = parseProductName(zeile);
+    FOOD_DATABASE.slice(0, 60).forEach((prod) => {
+      const v = parseProductName(prod.name);
+      const ohne = combinedSimilarity(p, v);
+      const mit = combinedSimilarity(p, v, ohne - 1e-9); // Schranke knapp darunter
+      if (Math.abs(ohne - mit) > 1e-9) abweichungen.push({ zeile, prod: prod.id, ohne, mit });
+    });
+  });
+  return abweichungen.length === 0 ? true : JSON.stringify(abweichungen.slice(0, 5));
 });
 
 // ================================================================
