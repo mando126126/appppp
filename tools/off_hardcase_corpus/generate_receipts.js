@@ -1,15 +1,27 @@
 /**
- * generate_receipts.js — simuliert 100 vollständige Bons, nicht nur
+ * generate_receipts.js — simuliert 1000 vollständige Bons, nicht nur
  * einzelne Zeilen. Zieht dafür echte, ausgeschriebene Namen für den
- * GESAMTEN eigenen Lebensmittel-Katalog (nicht nur eine Stichprobe)
- * von Open Food Facts, baut daraus 100 realistische Einkaufskörbe
- * (8-25 Positionen, mehrere Kategorien gemischt, wie ein echter
- * Einkauf) und verstümmelt jede Zeile nach dem Muster EINER Kette pro
- * Bon (dieselbe Kasse druckt nicht mal so, mal so).
+ * GESAMTEN eigenen Katalog (alle 19 Kategorien, nicht nur eine
+ * Stichprobe und nicht nur Lebensmittel) und baut daraus realistische
+ * Einkaufskörbe (8-25 Positionen, mehrere Kategorien gemischt, wie
+ * ein echter Einkauf), jede Zeile verstümmelt nach dem Muster EINER
+ * Kette pro Bon (dieselbe Kasse druckt nicht mal so, mal so).
+ *
+ * ZWEI QUELLEN FÜR DEN PRODUKT-POOL:
+ * 1. Die rund 835 "off_"-Produkte im eigenen Katalog stammen selbst
+ *    schon wortwörtlich von Open Food Facts (frühere Bulk-Import-
+ *    Runde) -- ihr Katalogname IST bereits ein echter OFF-Name, eine
+ *    erneute Anfrage würde nur denselben Namen zurückbringen. Sie
+ *    gehen deshalb OHNE Netzanfrage direkt in den Pool.
+ * 2. Für die rund 860 übrigen (nicht aus OFF importierten) Einträge
+ *    wird wie bisher eine echte Anfrage gestellt.
+ * Ergebnis: ein deutlich größerer, aber trotzdem höflicher Pool --
+ * nur gut 860 statt 1700 echte Netzanfragen für über 1000 mögliche
+ * Pool-Einträge.
  *
  * BRAUCHT NETZZUGANG, läuft NICHT als Teil von `npm test`. Erzeugt
  * test/fixtures/off-receipts.json, gegen den test/matching.js
- * (Abschnitt O) dauerhaft misst.
+ * (Abschnitt N) dauerhaft misst.
  *
  *   node tools/off_hardcase_corpus/generate_receipts.js
  *
@@ -21,14 +33,8 @@ const { FOOD_DATABASE } = require("../../src/algo/foodDatabase");
 const { mangleLine, hash } = require("./mangle");
 
 const OUT_FILE = path.join(__dirname, "..", "..", "test", "fixtures", "off-receipts.json");
-const RECEIPT_COUNT = 100;
+const RECEIPT_COUNT = 1000;
 const STORES = ["Lidl-artig", "REWE/Aldi-artig", "EDEKA-artig", "Netto-artig (mittel)", "Netto-artig (hart)"];
-
-const FOOD_CATEGORIES = new Set([
-  "Milchprodukte", "Fleisch/Fisch", "Wurstwaren", "Frischware", "Backwaren",
-  "Trocken/Vorrat", "Getränke", "Tiefkühl", "Süßes/Snacks", "Protein/Sport",
-  "Fertiggerichte", "International"
-]);
 
 function passtWirklich(suchbegriff, offName) {
   const woerter = offName.toLowerCase().split(/\s+/).filter(Boolean);
@@ -114,9 +120,12 @@ function buildReceipt(index, pool) {
 }
 
 (async () => {
-  const kandidaten = FOOD_DATABASE.filter((p) => FOOD_CATEGORIES.has(p.category) && !p.id.startsWith("off_"));
-  console.log(`Ziehe echte Namen für den GESAMTEN Lebensmittel-Katalog (${kandidaten.length} Einträge) von Open Food Facts...`);
-  const pool = [];
+  const bereitsAusOff = FOOD_DATABASE.filter((p) => p.id.startsWith("off_"));
+  const pool = bereitsAusOff.map((p) => ({ productId: p.id, catalogName: p.name, category: p.category, offName: p.name }));
+  console.log(`${pool.length} Katalogeinträge stammen schon von OFF -- direkt in den Pool, keine Anfrage nötig.`);
+
+  const kandidaten = FOOD_DATABASE.filter((p) => !p.id.startsWith("off_"));
+  console.log(`Ziehe echte Namen für den GESAMTEN übrigen Katalog (${kandidaten.length} Einträge, alle Kategorien) von Open Food Facts...`);
   for (let i = 0; i < kandidaten.length; i++) {
     const p = kandidaten[i];
     const offName = await offSearch(p.name);
@@ -129,7 +138,7 @@ function buildReceipt(index, pool) {
     if (i % 100 === 99) process.stdout.write(` [${i + 1}/${kandidaten.length}]\n`);
     await new Promise((r) => setTimeout(r, 220)); // höflich zum kostenfreien Dienst
   }
-  console.log(`\n${pool.length} von ${kandidaten.length} lieferten einen echten Namen -- Grundlage für ${RECEIPT_COUNT} simulierte Bons.`);
+  console.log(`\nPool insgesamt: ${pool.length} Einträge (${bereitsAusOff.length} direkt + ${pool.length - bereitsAusOff.length} von ${kandidaten.length} echten Anfragen) -- Grundlage für ${RECEIPT_COUNT} simulierte Bons.`);
 
   const receipts = [];
   for (let i = 0; i < RECEIPT_COUNT; i++) receipts.push(buildReceipt(i, pool));

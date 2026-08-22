@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1745 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1749 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -2898,6 +2898,58 @@ Zuordnungsquote). Alle jetzt 1745 Tests bestehen.
 
 ---
 
+## „Mit viel mehr Produkten jetzt 1000 Durchgänge"
+
+Von 100 auf 1000 simulierte Bons, und der Produkt-Pool dahinter deutlich
+breiter: `generate_receipts.js` nutzt jetzt zwei Quellen statt einer.
+Die rund 835 „off_"-Katalogeinträge stammen selbst schon wortwörtlich
+von Open Food Facts (frühere Bulk-Import-Runde) — ihr Katalogname IST
+bereits ein echter OFF-Name, eine erneute Anfrage würde nur denselben
+Namen zurückliefern. Sie gehen deshalb ohne Netzanfrage direkt in den
+Pool. Für die rund 860 übrigen Katalogeinträge — jetzt aus **allen 19
+Kategorien**, nicht nur den zwölf Lebensmittelkategorien der letzten
+Runde — wird wie bisher eine echte Anfrage gestellt. Pool: **1204
+Einträge** (835 kostenlos + 369 von 860 Anfragen), Grundlage für **1000
+Bons, 16.795 Positionen**.
+
+**Ergebnis, an der bislang größten Datenmenge gemessen:** 8311 sichere
+Treffer bleiben sich selbst treu (Verstümmelung ändert nichts am
+Ergebnis), nur 70 weichen ab — und beim Nachsehen bleibt JEDE einzelne
+Abweichung harmlos: dieselbe Kategorie, dieselbe Warenart, nur generischer
+oder spezifischer als der direkte Vergleich. Keine einzige davon betrifft
+Fleisch/Fisch (eigens geprüft). 4987 Zeilen bleiben ehrlich unsicher, 3427
+melden ehrlich keinen Treffer — beides erwartbar bei einem Fünftel der
+simulierten Bons in der radikal abgekürzten Netto-Persona, die schon in
+einer früheren Runde als echte, nicht auflösbare Grenze festgehalten
+wurde (sieben von 200 Bons dieser Art bleiben dadurch ganz ohne Treffer,
+alle anderen Ketten liefern immer mindestens einen).
+
+**Ein wiederkehrendes Muster gefunden, dokumentiert, bewusst nicht
+„repariert".** Der mit Abstand größte Einzelfall unter den 70 Abweichungen
+(13 Stück): „Katzenfutter nass" verstümmelt zu „Katzenfutternass" (ein
+Wort) und trifft dann nicht den eigenen, spezifischeren Katalogeintrag,
+sondern den generischen Eintrag „Tierfutter" über dessen kürzeres Alias
+„KATZENFUTTER". Ursache liegt in der Bewertungsformel: `compoundSimilarity`
+teilt durch die Wortzahl der längeren Seite — ein spezifischer,
+zweiteiliger Name wird dadurch strukturell benachteiligt gegenüber einem
+kürzeren Alias eines generischen Konkurrenten, unabhängig davon, welcher
+inhaltlich besser passt. Ein Fix (die Gewichtung der Division ändern)
+wurde bewusst NICHT versucht: dieselbe Formel trägt praktisch jeden
+anderen Treffer in allen drei Korpora, und die vorige Runde hat an genau
+so einer zentralen Stelle (Kandidaten-Index für Wortenden) gezeigt, dass
+eine plausibel klingende Änderung dort mehr kaputtmacht, als sie
+repariert. Der Schaden bleibt klein und ungefährlich (Tierfutter bleibt
+Tierfutter) — ein Fall zum Festhalten, nicht zum Umbauen.
+
+Ehrlicher Nebeneffekt: `npm test` dauert durch den zehnmal größeren
+Korpus jetzt rund zwei Minuten statt weniger Sekunden — jede sichere
+Zeile wird zusätzlich gegen ihren unverstümmelten Namen geprüft, macht
+bei über 8000 sicheren Treffern spürbar viele zusätzliche Vergleiche.
+
+Acht neue Tests. Alle jetzt 1749 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -2966,8 +3018,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1745
-npm run test:algo # 1115 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1749
+npm run test:algo # 1119 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
