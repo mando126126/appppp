@@ -1701,6 +1701,103 @@ console.log("\n--- Die Übersicht ---");
   ok("Nachts nicht mit „Morgen“", !/Morgen/.test(App.greeting(2)), App.greeting(2));
 }
 
+console.log("\n--- Das Produkt-Blatt: ein Leitwert, dann Gruppen ---");
+{
+  /* Das Blatt war eine flache Liste aus zehn gleich aussehenden
+     Zeilen -- „Kategorie: Fleisch/Fisch" so groß wie „Verbrauchs-
+     datum: höchstens 2 Tage". Alles gleich gewichtet heißt nichts
+     gewichtet. Diese Prüfungen halten die neue Rangfolge fest, damit
+     das Blatt nicht wieder zuwächst. */
+  D.reset();
+  D.loadDemo("full");
+  App.goto("bestand");
+
+  productSheetFor("haehnchen");
+  const blatt = $("sheetOpts");
+
+  ok("Das Blatt führt mit genau EINEM Leitwert",
+    blatt.querySelectorAll(".pLead").length === 1,
+    blatt.querySelectorAll(".pLead").length);
+
+  /* Die Rangfolge ist eine Rangfolge der FOLGEN, nicht der
+     Reihenfolge im Datensatz: ein Verbrauchsdatum kann krank machen
+     und schlägt deshalb alles andere. */
+  ok("Bei einem Verbrauchsdatum-Produkt führt das Verbrauchsdatum",
+    /Verbrauchsdatum/.test(blatt.querySelector(".pLead").textContent),
+    blatt.querySelector(".pLead").textContent.slice(0, 60));
+  ok("Und ist als dringend gekennzeichnet, nicht nur größer gesetzt",
+    blatt.querySelector(".pLead").classList.contains("red"));
+
+  /* Der Leitwert kann nur EINE Sache zeigen -- die zweitwichtigste
+     darf dadurch nicht verschwinden. Genau das war beim Umbau
+     zuerst passiert: Hähnchenbrust verlor Rhythmus UND Verlustquote,
+     weil das Verbrauchsdatum den Platz bekam. */
+  const kennzahlen = blatt.querySelector(".pStats");
+  ok("Die zweitwichtigsten Zahlen stehen daneben, nicht im Nichts", !!kennzahlen);
+  if (kennzahlen) {
+    ok("Der Rhythmus bleibt sichtbar, obwohl er nicht der Leitwert ist",
+      /Rhythmus/.test(kennzahlen.textContent), kennzahlen.textContent);
+    ok("Die Verlustquote ebenso",
+      /Verlust/.test(kennzahlen.textContent), kennzahlen.textContent);
+    ok("Höchstens drei Kennzahlen — sonst ist es wieder eine Liste",
+      kennzahlen.querySelectorAll(".pStat").length <= 3);
+  }
+
+  /* Der Preis war ein Satz: „zuletzt 7,49 € · üblich 7,24 € · Spanne
+     6,99 €–7,49 €" -- auf schmalen Geräten mit Umbruch mitten in der
+     Zahl. Drei Werte nebeneinander lassen sich vergleichen. */
+  const preis = blatt.querySelector(".pPrice");
+  ok("Der Preis steht als drei vergleichbare Werte, nicht als Satz",
+    preis && preis.querySelectorAll(".pPriceCell").length === 3,
+    preis && preis.querySelectorAll(".pPriceCell").length);
+  ok("Die Spanne trägt nur EIN Eurozeichen (sonst bricht sie um)",
+    preis && !/€\s*–/.test(preis.textContent), preis && preis.textContent);
+
+  /* Herkunft und Datenqualität sind der Kern des Vertrauens-
+     versprechens und dürfen nicht verschwinden -- aber sie müssen
+     beim Öffnen nicht im Weg stehen. */
+  const herkunft = [...blatt.querySelectorAll("details")]
+    .find((d) => /Wie die App darauf kommt/.test(d.textContent));
+  ok("Die Herkunft der Zahlen ist eingeklappt erreichbar", !!herkunft);
+  if (herkunft) {
+    ok("Und beim Öffnen des Blattes zugeklappt", !herkunft.open);
+    ok("Der Inhalt bleibt trotzdem im Dokument (Suche, Vorlesehilfe)",
+      /Datenqualität/.test(herkunft.textContent));
+  }
+
+  /* Kein Abschnitt, der nur mitteilt, dass nichts bekannt ist.
+     „Bestand: nicht schätzbar" stand vorher als eigene Zeile ganz
+     oben zwischen den echten Angaben. */
+  const ueberschriften = [...blatt.querySelectorAll(".sheetGroupTitle")].map((x) => x.textContent);
+  ok("Kein leerer Abschnitt mehr im sichtbaren Teil",
+    !ueberschriften.includes("Vorrat") || /Bestand|Reichweite/.test(blatt.textContent));
+  ok("Die Auskunft „nicht schätzbar“ ist trotzdem noch da, nur weiter unten",
+    !herkunft || /nicht schätzbar|Bestand/.test(blatt.textContent));
+
+  App.closeSheet();
+
+  /* Ohne Verbrauchsdatum und ohne hohen Verlust führt der Rhythmus. */
+  productSheetFor("milch_vollmilch");
+  const b2 = $("sheetOpts");
+  ok("Ohne Dringlichkeit führt der Rhythmus das Blatt an",
+    /Tage/.test(b2.querySelector(".pLead").textContent),
+    b2.querySelector(".pLead").textContent.slice(0, 40));
+  ok("Und ohne rote Kennzeichnung",
+    !b2.querySelector(".pLead").classList.contains("red"));
+  ok("Das Wort „Rhythmus“ bleibt im Blatt, auch wenn der Leitwert es umschreibt",
+    /Rhythmus/.test(b2.textContent));
+  App.closeSheet();
+
+  /* Ein Haushaltsprodukt rechnet anders und zeigt deshalb andere
+     Gruppen -- aber denselben Aufbau. */
+  productSheetFor("waschmittel");
+  const b3 = $("sheetOpts");
+  ok("Auch ein Haushaltsprodukt bekommt einen Leitwert", !!b3.querySelector(".pLead"));
+  ok("Und seine eigenen Gruppen statt der Lebensmittel-Gruppen",
+    /Verbrauch/.test(b3.textContent) && !/Frische & Lagerung/.test(b3.textContent));
+  App.closeSheet();
+}
+
 console.log("\n--- Die Startseite bleibt aufgeräumt ---");
 {
   D.reset();

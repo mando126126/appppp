@@ -970,6 +970,69 @@ button.row.action,label.row.action{cursor:pointer}
 .facts dt{font-size:0.79rem;color:var(--ink-2);padding:10px 14px 10px 0;border-top:1px solid var(--hairline);white-space:nowrap}
 .facts dd{margin:0;font-size:0.9rem;padding:10px 0;text-align:right;border-top:1px solid var(--hairline)}
 .facts dt:first-of-type,.facts dd:first-of-type{border-top:none}
+/* Lange Werte dürfen umbrechen statt über den Rand zu laufen; der
+   Wortumbruch bleibt an sinnvollen Stellen, deshalb kein break-all. */
+.facts dd{overflow-wrap:anywhere}
+
+/* ---------------- Produkt-Blatt ----------------
+   Der Leitwert: EINE Aussage, groß, ganz oben. Kein Kasten mit
+   Rahmen -- das Blatt hat schon einen. Die Farbe trägt hier
+   ausnahmsweise Bedeutung (rot = Verbrauchsdatum oder hoher
+   Verlust), deshalb nur als Textfarbe und dünner Trennstrich,
+   nicht als Fläche: eine rote Fläche direkt unter der Überschrift
+   erschlägt das ganze Blatt. */
+.pLead{padding:2px 0 16px;border-bottom:1px solid var(--hairline);margin-bottom:4px}
+.pLeadVal{
+  font-size:2.15rem;font-weight:750;letter-spacing:-.025em;line-height:1.02;
+  font-variant-numeric:tabular-nums;
+}
+.pLeadWhat{font-size:0.97rem;font-weight:600;color:var(--ink);margin-top:5px}
+.pLeadSub{font-size:0.82rem;color:var(--ink-2);margin-top:5px;line-height:1.45}
+.pLead.red .pLeadVal{color:var(--red-ink)}
+.pLead.red .pLeadWhat{color:var(--red-ink)}
+
+/* Kennzahlen unter dem Leitwert: die zweit- und drittwichtigste
+   Aussage, die der Leitwert nicht schon trägt. Bewusst kleiner als
+   er -- eine Rangfolge, keine zweite Kopfzeile. */
+.pStats{display:flex;gap:1px;background:var(--hairline);margin:0 0 14px}
+.pStat{flex:1 1 0;min-width:0;background:var(--surface);padding:10px 12px 11px}
+.pStat .v{
+  font-size:1.02rem;font-weight:700;letter-spacing:-.012em;
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
+}
+.pStat .l{font-size:0.72rem;color:var(--ink-2);margin-top:3px}
+.pStat.warn .v{color:var(--red-ink)}
+
+/* Preis: drei Zahlen nebeneinander statt ein Satz mit Punkten
+   dazwischen. Nebeneinander lassen sie sich vergleichen -- genau
+   das ist die Frage, mit der man auf den Preis schaut. */
+.pPrice{display:flex;gap:1px;background:var(--hairline);margin-bottom:14px}
+.pPriceCell{flex:1 1 0;min-width:0;background:var(--surface);padding:11px 12px 12px}
+.pPriceCell .v{
+  font-size:1.02rem;font-weight:700;letter-spacing:-.012em;
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
+}
+.pPriceCell .l{font-size:0.72rem;color:var(--ink-2);margin-top:3px}
+.pPriceCell.warn .v{color:var(--red-ink)}
+.pPriceCell.good .v{color:var(--accent-ink)}
+
+/* Herkunft der Zahlen: eingeklappt, aber im Dokument. `details`
+   bringt Tastaturbedienung und Vorlesehilfe von sich aus mit. */
+.pMore{margin-top:18px;border-top:1px solid var(--hairline);padding-top:4px}
+.pMore > summary{
+  list-style:none;cursor:pointer;padding:11px 0;
+  font-size:0.79rem;font-weight:600;color:var(--ink-2);
+  display:flex;align-items:center;gap:7px;
+}
+.pMore > summary::-webkit-details-marker{display:none}
+.pMore > summary::before{
+  content:"";width:7px;height:7px;flex:0 0 auto;
+  border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;
+  transform:rotate(-45deg);transition:transform .18s var(--ease);
+}
+.pMore[open] > summary::before{transform:rotate(45deg)}
+.pMore > summary:active{opacity:.55}
+.pMore .facts{margin-top:2px}
 
 /* ---------------- Bestätigung ---------------- */
 .toast{

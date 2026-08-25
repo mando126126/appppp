@@ -442,6 +442,16 @@ function wasteSheetGroup(productId, st, ctx) {
     "Es wird nichts gutgeschrieben: eine Schätzung zurückzunehmen ist kein Erfolg, es war nur nie ein " +
     "Verlust. Rückgängig geht beides jederzeit.");
 
+  /* Die Summe, um die es geht -- vorher stand sie als Zeile
+     „Verlust: 123,03 € über 20 Käufe (85 %)" in der allgemeinen
+     Faktenliste, also weit weg von den Fällen, aus denen sie besteht.
+     Hier oben steht sie da, wo man ihr auch widersprechen kann. */
+  if (st.wastedEuros > 0) {
+    g.body.append(uiRow("Geschätzter Verlust",
+      `über ${zahlwort(st.purchased, "Kauf", "Käufe")} · ${pct(st.wasteRate)} der Menge`,
+      null, { value: eur(st.wastedEuros) }));
+  }
+
   /* Der laufende Anteil: EIN Schalter, nicht einer je Kauf. */
   if (st.chronicShare > 0) {
     const r = el("div", "row");
@@ -463,8 +473,22 @@ function wasteSheetGroup(productId, st, ctx) {
   }
 
   /* Die einzelnen Ausreißer: je einer eine eigene Zeile, weil jeder
-     ein eigenes Ereignis behauptet. */
-  st.details.slice(0, 12).forEach((d) => {
+     ein eigenes Ereignis behauptet.
+     Sichtbar sind die drei jüngsten -- bei Hähnchenbrust standen hier
+     zwölf gleich aussehende Zeilen mit je einem Knopf und schoben
+     alles darunter aus dem Blick. Wer widersprechen will, meint fast
+     immer den letzten Kauf; die älteren bleiben erreichbar, nur
+     eingeklappt. */
+  const OFFEN = 3;
+  const spaeter = st.details.length > OFFEN
+    ? el("details", "pMore") : null;
+  if (spaeter) {
+    spaeter.append(el("summary", null,
+      `${st.details.length - OFFEN} ältere ${st.details.length - OFFEN === 1 ? "Fall" : "Fälle"}`));
+  }
+  st.details.slice(0, 12).forEach((d, i) => {
+    const ziel = i < OFFEN ? g.body : spaeter;
+    if (!ziel) return;
     const r = el("div", "row");
     r.append(el("div", "rowMain",
       `<div class="rowTitle">${esc(deDate(d.date))}</div>` +
@@ -483,8 +507,9 @@ function wasteSheetGroup(productId, st, ctx) {
       App.closeSheet();
     });
     r.append(b);
-    g.body.append(r);
+    ziel.append(r);
   });
+  if (spaeter) g.body.append(spaeter);
 
   if (st.details.length > 12) {
     g.body.append(el("p", "srcnote", `${st.details.length - 12} ältere Fälle nicht gezeigt.`));
@@ -497,6 +522,32 @@ function wasteSheetGroup(productId, st, ctx) {
   return g;
 }
 
+/**
+ * Ein Leitwert, dann Gruppen, dann die Herkunft — in dieser Reihenfolge.
+ *
+ * Vorher war dieses Blatt EINE flache Liste aus zehn gleich
+ * aussehenden Zeilen: „Kategorie: Fleisch/Fisch" stand da genauso
+ * groß wie „Verbrauchsdatum: höchstens 2 Tage · max. 4 °C". Alles
+ * gleich gewichtet heißt: nichts gewichtet. Wer das Blatt öffnete,
+ * musste zehn Zeilen lesen, um die eine zu finden, die zählt — und
+ * bei Hähnchenbrust waren das 85 % Verlust und ein Verbrauchsdatum,
+ * versteckt auf Position acht und zehn.
+ *
+ * Jetzt beantwortet das Blatt drei Fragen in fester Reihenfolge:
+ *
+ *   1. WAS IST MIT DIESEM PRODUKT LOS?  — ein Leitwert, groß, oben.
+ *      Welcher das ist, entscheidet die Dringlichkeit, nicht die
+ *      Reihenfolge im Datensatz: Verbrauchsdatum schlägt Verlust,
+ *      Verlust schlägt Rhythmus, Rhythmus schlägt den Preis.
+ *   2. WAS MUSS ICH WISSEN?             — wenige Kacheln, dann
+ *      Gruppen mit Überschrift, jede nur wenn sie Inhalt hat.
+ *   3. WO KOMMT DAS HER?                — eingeklappt. Herkunft,
+ *      Datenqualität, Rückmeldungen: wichtig für das Vertrauen,
+ *      aber nicht beim Öffnen.
+ *
+ * Nichts ist weggefallen. Jede Angabe der alten Liste steht weiter
+ * im Blatt, nur an einem Ort, der ihrer Bedeutung entspricht.
+ */
 function productSheet(productId, ctx) {
   const p = byId(productId);
   if (!p) return;
@@ -508,78 +559,204 @@ function productSheet(productId, ctx) {
   const range = ctx.range.byProduct.find((x) => x.productId === productId);
   const season = seasonFor(productId, ctx.ref);
   const isOpen = Data.get().opened.some((o) => o.productId === productId);
+  const nf = nonFoodFor(productId);
+  const chg = ctx.changes && ctx.changes.get(productId);
+  const sicherheit = p.safetyCritical ? safetyFacts(productId) : null;
 
   const body = el("div");
 
-  /* Die Wochenentscheidung steht ganz oben, vor allen Fakten.
-     Sie ist der Grund, aus dem dieses Blatt in der Liste geöffnet
-     wird — Rhythmus, Preisverlauf und Datenqualität sind Nachschlag.
-     Nur wenn das Produkt diese Woche überhaupt ansteht: im Bestand
-     oder im Wochenstreifen wäre die Frage gegenstandslos. */
+  /* ---------- 1. Der Leitwert ---------- */
+  /* Genau EINE Aussage, und zwar die dringendste. Die Reihenfolge
+     ist eine Rangfolge der Folgen, nicht der Verfügbarkeit: ein
+     Verbrauchsdatum kann krank machen, ein hoher Verlust kostet
+     Geld, ein Rhythmus ist nützlich, ein Preis ist Beiwerk. */
+  const leit = (() => {
+    if (sicherheit) {
+      return { ton: "red", wert: "max. " + tage(sicherheit.maxDays), was: "Verbrauchsdatum",
+        dazu: `bei höchstens ${de(sicherheit.maxTempC)} °C · das aufgedruckte Datum gilt immer` };
+    }
+    if (st && st.wasteRate >= 0.25 && st.wastedEuros > 0) {
+      return { ton: "red", wert: pct(st.wasteRate), was: "landen im Müll",
+        dazu: `${eur(st.wastedEuros)} über ${zahlwort(st.purchased, "Kauf", "Käufe")} — geschätzt, nicht gemessen` };
+    }
+    if (!nf && r && r.rhythmDays) {
+      return { ton: null, wert: alleTage(r.rhythmDays), was: "kaufst du das",
+        dazu: (r.lastPurchaseDate ? `zuletzt am ${deDate(r.lastPurchaseDate)}` : "") +
+          ` · Vertrauen ${pct(r.confidence)}` };
+    }
+    if (nf) {
+      const sup = ctx.supplies.find((x) => x.productId === productId);
+      if (sup && sup.daysOfSupply !== null && sup.confidence !== "UNSICHER") {
+        return { ton: null, wert: tage(sup.daysOfSupply), was: "reicht der Vorrat noch",
+          dazu: `${de(nf.package.value)} ${nf.package.unit} je Packung` };
+      }
+    }
+    return { ton: null, wert: eur(pm ? pm.usual : p.typicalPrice), was: "üblicher Preis",
+      dazu: p.category + (r && r.lastPurchaseDate ? ` · zuletzt am ${deDate(r.lastPurchaseDate)}` : "") };
+  })();
+
+  const kopf = el("div", "pLead" + (leit.ton ? " " + leit.ton : ""));
+  kopf.append(el("div", "pLeadVal", esc(leit.wert)));
+  kopf.append(el("div", "pLeadWhat", esc(leit.was)));
+  if (leit.dazu) kopf.append(el("div", "pLeadSub", esc(leit.dazu.trim().replace(/^· /, ""))));
+  body.append(kopf);
+
+  /* ---------- 1b. Die Kennzahlen, die NICHT der Leitwert sind ----------
+     Der Leitwert kann immer nur eine Sache zeigen. Ohne diese Zeile
+     verschwand die zweitwichtigste komplett: bei Hähnchenbrust nannte
+     das Blatt das Verbrauchsdatum und verlor dabei den Rhythmus
+     (alle 10 Tage) UND die Verlustquote (85 %, 123,03 €) -- beides
+     stand in der alten flachen Liste noch da. Gemessen an einem
+     Alt-gegen-Neu-Abgleich über alle Produkte der Beispieldaten, nicht
+     im Nachhinein bemerkt. Gezeigt wird nur, was der Leitwert nicht
+     schon sagt, höchstens drei Werte. */
+  const kennzahlen = [];
+  const schonImLeit = leit.was;
+  if (!nf && r && r.rhythmDays && schonImLeit !== "kaufst du das") {
+    kennzahlen.push({ v: alleTage(r.rhythmDays), l: "Rhythmus" });
+  }
+  if (st && st.wastedEuros > 0 && schonImLeit !== "landen im Müll") {
+    kennzahlen.push({ v: pct(st.wasteRate), l: "Verlust", ton: st.wasteRate >= 0.25 ? "warn" : null });
+  }
+  if (!nf && range && kennzahlen.length < 3) {
+    kennzahlen.push({ v: tage(range.days), l: "reicht noch" });
+  }
+  if (kennzahlen.length) {
+    const kz = el("div", "pStats");
+    kennzahlen.slice(0, 3).forEach((k) => kz.append(el("div", "pStat" + (k.ton ? " " + k.ton : ""),
+      `<div class="v">${esc(k.v)}</div><div class="l">${esc(k.l)}</div>`)));
+    body.append(kz);
+  }
+
+  /* ---------- 2. Die Wochenentscheidung ---------- */
+  /* Bleibt direkt unter dem Leitwert: sie ist der Grund, aus dem
+     dieses Blatt aus der Liste heraus geöffnet wird. */
   const aufDerListe = (ctx.items || []).find((i) => i.productId === productId && i.basis !== "manuell");
   if (aufDerListe) body.append(weekChoice(aufDerListe, ctx, App, () => App.closeSheet()));
 
-  const facts = el("dl", "facts");
-  const fact = (k, v) => {
-    if (v === null || v === undefined || v === "") return;
-    facts.append(el("dt", null, esc(k)), el("dd", null, esc(v)));
+  /* ---------- Bausteine für die Abschnitte ---------- */
+  const abschnitt = (titel) => {
+    const t = el("div", "sheetGroupTitle", esc(titel));
+    const dl = el("dl", "facts");
+    let leer = true;
+    return {
+      zeile(k, v) { if (v === null || v === undefined || v === "") return;
+        dl.append(el("dt", null, esc(k)), el("dd", null, esc(v))); leer = false; },
+      anhaengen(node) { if (node) { body.append(t); body.append(dl); body.append(node); leer = false; } },
+      fertig() { if (!leer) { body.append(t); body.append(dl); } }
+    };
   };
 
-  // Haushaltsprodukte rechnen anders — und zeigen deshalb andere
-  // Fakten. Ein Kaufrhythmus wäre dort irreführend (die Menge zählt,
-  // nicht der Abstand), und die Lebensmittel-Bestandsschätzung liefert
-  // bei einer Haltbarkeit von zehn Jahren „noch 3633 Tage“.
-  const nf = nonFoodFor(productId);
+  /* ---------- 3. Preis: drei Zahlen, nicht ein Satz ---------- */
+  /* „zuletzt 7,49 € · üblich 7,24 € · Spanne 6,99 €–7,49 €" war eine
+     einzige Zeile, die auf einem schmalen Bildschirm umbrach und
+     dabei drei verschiedene Aussagen ineinanderschob. Drei Zahlen
+     nebeneinander lassen sich vergleichen — genau das will man hier. */
+  if (pm) {
+    body.append(el("div", "sheetGroupTitle", "Preis"));
+    const pr = el("div", "pPrice");
+    const feld = (l, v, cls) => el("div", "pPriceCell" + (cls ? " " + cls : ""),
+      `<div class="v">${esc(v)}</div><div class="l">${esc(l)}</div>`);
+    const teurer = pm.last > pm.usual * 1.08, guenstiger = pm.last < pm.usual * 0.92;
+    pr.append(feld("zuletzt", eur(pm.last), teurer ? "warn" : guenstiger ? "good" : null));
+    pr.append(feld("üblich", eur(pm.usual)));
+    // Nur EIN Eurozeichen: „6,99 €–7,49 €" brach auf schmalen
+    // Geräten hinter dem zweiten € um und ließ das Zeichen allein in
+    // der nächsten Zeile stehen. „6,99–7,49 €" ist zudem die übliche
+    // deutsche Schreibweise für eine Spanne.
+    pr.append(feld("Spanne", `${de(pm.lowest.toFixed(2))}–${eur(pm.highest)}`));
+    body.append(pr);
+  } else {
+    body.append(el("div", "sheetGroupTitle", "Preis"));
+    const pr = el("div", "pPrice");
+    pr.append(el("div", "pPriceCell",
+      `<div class="v">${esc(eur(p.typicalPrice))}</div><div class="l">üblich, noch ohne eigenen Kauf</div>`));
+    body.append(pr);
+  }
 
-  fact("Kategorie", p.category);
+  /* ---------- 4. Frische und Lagerung ---------- */
   if (!nf) {
-    fact("Rhythmus", r && r.rhythmDays ? `${alleTage(r.rhythmDays)} · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
-    // Was der rohe Median sagte, bevor Bruch, Saison und Rückmeldungen
-    // darauf gewirkt haben. Ohne diese Zeile wäre die Zahl oben eine
-    // Behauptung ohne Herkunft.
-    if (r && r.baseRhythmDays && r.baseRhythmDays !== r.rhythmDays) {
-      fact("davor gelernt", alleTage(r.baseRhythmDays));
-    }
-    if (r && r.feedback && r.feedback.signals) {
-      fact("Rückmeldungen", `${r.feedback.signals} · ${r.feedback.applied ? "wirken auf den Rhythmus" : "noch ohne Wirkung"}`);
-    }
-    if (r && r.season && r.season.applied) fact("Saison", r.season.message);
-    const chg = ctx.changes && ctx.changes.get(productId);
-    if (chg && chg.found) fact("Verhalten geändert", chg.message);
-  }
-  fact("Zuletzt", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
-  if (!nf) {
-    fact("Haltbarkeit", p.isFood
-      ? `${tage(p.shelfLifeDays)}${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
+    const a = abschnitt("Frische & Lagerung");
+    a.zeile("Haltbarkeit", p.isFood
+      ? `${tage(p.shelfLifeDays)}${p.shelfLifeOpenedDays ? `, offen ${tage(p.shelfLifeOpenedDays)}` : ""}`
       : null);
-  }
-  fact("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
-  fact("Preis", pm
-    ? `zuletzt ${eur(pm.last)} · üblich ${eur(pm.usual)} · Spanne ${eur(pm.lowest)}–${eur(pm.highest)}`
-    : `üblich ${eur(p.typicalPrice)}`);
-  if (!nf) {
-    fact("Bestand", inv
-      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${tage(inv.daysLeft)} · Sicherheit ${pct(inv.confidence)}`
-      : "nicht schätzbar");
-    fact("Reichweite", range ? `${tage(range.days)} · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
-    fact("Verlust", st && st.wastedEuros > 0
-      ? `${eur(st.wastedEuros)} über ${zahlwort(st.purchased, "Kauf", "Käufe")} (${pct(st.wasteRate)})`
-      : "keiner erkannt");
-    fact("Datenqualität", {
-      regulatorisch: "rechtlich definiert",
-      leitlinie: "behördliche Lagerempfehlung",
-      schaetzwert: "Schätzwert ohne amtliche Quelle"
-    }[p.quality]);
-    // Bei sicherheitskritischen Produkten reicht die Stufe nicht: dort
-    // steht die Rechtsgrundlage daneben, und der wichtigste Satz ist,
-    // dass das aufgedruckte Datum jede Schätzung schlägt.
-    if (p.safetyCritical) {
-      const f = safetyFacts(productId);
-      if (f) {
-        fact("Verbrauchsdatum", `höchstens ${tage(f.maxDays)} · max. ${de(f.maxTempC)} °C`);
-      }
+    a.zeile("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
+    /* Das Verbrauchsdatum steht NICHT noch einmal als Faktenzeile:
+       es ist bereits der Leitwert ganz oben und wird gleich darunter
+       im roten Hinweis erklärt. Dreimal dasselbe auf einem Bildschirm
+       macht es nicht wichtiger, nur unübersichtlicher. */
+    a.fertig();
+
+    if (sicherheit) {
+      const note = el("div", "note red");
+      note.innerHTML = "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. " +
+        "Die App verlängert diese Frist nie.";
+      body.append(note);
+      const q = el("button", "linkBtn", "Worauf beruht das?");
+      q.addEventListener("click", () => App.notice(p.name,
+        `Gruppe: ${sicherheit.label}.\n\n` +
+        `RECHTLICH GEREGELT ist zweierlei:\n${sicherheit.legal.join("\n\n")}\n\n` +
+        `NICHT geregelt ist die Anzahl der Tage. Dafür gibt es keine amtliche Zahl. ` +
+        `Die App rechnet mit höchstens ${tagen(sicherheit.maxDays)} — das ist die untere Grenze ` +
+        `dieser Lagerempfehlung:\n\n${sicherheit.guide}\n\n${sicherheit.printedWins}`));
+      body.append(q);
+    }
+    if (season && season.status === "importware") body.append(el("div", "note gold", esc(season.message)));
+
+    // Angebrochen: ein Tippen, mehr Pflege darf es nicht kosten.
+    if (p.isFood && p.shelfLifeOpenedDays && p.shelfLifeOpenedDays < p.shelfLifeDays) {
+      const b = el("button", "cta light", isOpen ? "✓ angebrochen" : "Als angebrochen markieren");
+      b.addEventListener("click", () => {
+        Data.toggleOpened(productId);
+        App.closeSheet();
+        App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${tage(p.shelfLifeOpenedDays)}`);
+      });
+      body.append(b);
+    }
+
+    /* Das aufgedruckte Datum eintragen. Für sicherheitskritische
+       Produkte ist das die einzige belastbare Angabe, die es gibt —
+       und sie steht auf der Packung, die gerade in der Hand liegt. */
+    if (p.isFood && ctx.history.some((h) => h.productId === productId)) {
+      const gesetzt = (Data.get().useBy || {})[productId] || "";
+      const wrap = el("label", "field");
+      wrap.append(el("span", "lbl", p.safetyCritical
+        ? "Aufgedrucktes Verbrauchsdatum"
+        : "Aufgedrucktes Mindesthaltbarkeitsdatum"));
+      const inp = el("input");
+      inp.type = "date";
+      inp.value = gesetzt;
+      inp.setAttribute("aria-label", `Aufgedrucktes Datum für ${p.name}`);
+      inp.addEventListener("change", () => {
+        const ok = Data.setUseBy(productId, inp.value || null);
+        if (!ok) { App.toast("Das Datum liegt vor dem Kauf"); inp.value = gesetzt; return; }
+        App.closeSheet();
+        App.toast(inp.value ? "Es gilt jetzt dein Datum" : "Wieder geschätzt");
+      });
+      wrap.append(inp);
+      body.append(wrap);
+      body.append(el("p", "srcnote", gesetzt
+        ? "Die Bestandsanzeige rechnet mit diesem Datum, nicht mehr mit der Schätzung."
+        : "Ohne Eintrag rechnet die App mit einer Lagerempfehlung. Das Etikett ist genauer — es gilt für genau diese Packung."));
     }
   }
+
+  /* ---------- 5. Vorrat ---------- */
+  /* Nur wenn es etwas zu sagen gibt. Eine Überschrift „Vorrat" über
+     der einzigen Zeile „Bestand — nicht schätzbar" kostet drei Zeilen
+     Platz, um mitzuteilen, dass nichts bekannt ist. Wo die App nichts
+     weiß, schweigt sie hier; die Erklärung dazu steht unten unter
+     „Wie die App darauf kommt". */
+  if (!nf && (inv || range)) {
+    const a = abschnitt("Vorrat");
+    a.zeile("Bestand", inv
+      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${tage(inv.daysLeft)} · Sicherheit ${pct(inv.confidence)}`
+      : null);
+    a.zeile("Reichweite", range ? `${tage(range.days)} · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
+    a.fertig();
+  }
+
+  /* ---------- 6. Haushaltsprodukte rechnen anders ---------- */
   if (nf) {
     const sup = ctx.supplies.find((x) => x.productId === productId);
     const swap = ctx.swapsDue.find((x) => x.productId === productId);
@@ -588,34 +765,44 @@ function productSheet(productId, ctx) {
       RATE: "wird aufgebraucht", INTERVAL: "wird ausgetauscht",
       SPORADIC: "unregelmäßig", DATED: "hat ein Ablaufdatum"
     };
-    fact("Verbrauchsart", CLASS_LABEL[nf.consumptionClass]);
-    fact("Packung", `${de(nf.package.value)} ${nf.package.unit}`);
-    if (rate) fact("Verbrauch", `${de(rate.rate)} ${nf.package.unit}/Tag · ${rate.label}`);
+    const a = abschnitt("Verbrauch");
+    a.zeile("Verbrauchsart", CLASS_LABEL[nf.consumptionClass]);
+    a.zeile("Packung", `${de(nf.package.value)} ${nf.package.unit}`);
+    if (rate) a.zeile("Verbrauch", `${de(rate.rate)} ${nf.package.unit}/Tag · ${rate.label}`);
     if (sup && sup.daysOfSupply !== null && sup.confidence !== "UNSICHER") {
-      fact("Reicht noch", tage(sup.daysOfSupply));
+      a.zeile("Reicht noch", tage(sup.daysOfSupply));
     }
     if (swap) {
-      fact("Austausch", `${alleTage(swap.intervalDays)} · ${swap.source}` +
+      a.zeile("Austausch", `${alleTage(swap.intervalDays)} · ${swap.source}` +
         (swap.hardnessAdjusted ? " · an die Wasserhärte angepasst" : ""));
-      fact("Im Einsatz", tage(swap.inUse));
+      a.zeile("Im Einsatz", tage(swap.inUse));
     }
     const bp = ctx.basePrices && ctx.basePrices.get(productId);
-    if (bp) fact("Grundpreis", bp.message);
-    if (nf.paoMonths) fact("Nach dem Öffnen", `${nf.paoMonths} Monate haltbar`);
-    fact("Quelle", nf.rateSource || nf.intervalSource || nf.datedSource);
-    fact("In der WG", nf.sharedByDefault ? "geteilt" : "persönlich");
-    if (nf.requiresDevice) fact("Braucht", {
+    if (bp) a.zeile("Grundpreis", bp.message);
+    if (nf.paoMonths) a.zeile("Nach dem Öffnen", `${nf.paoMonths} Monate haltbar`);
+    a.zeile("In der WG", nf.sharedByDefault ? "geteilt" : "persönlich");
+    if (nf.requiresDevice) a.zeile("Braucht", {
       hasDishwasher: "Spülmaschine", hasWashingMachine: "Waschmaschine",
       hasCoffeeMachine: "Kaffeemaschine", hasWaterFilter: "Wasserfilter"
     }[nf.requiresDevice]);
-  }
-  body.append(facts);
+    a.fertig();
 
-  /* Was bei einem guten Preis sinnvoll wäre.
-     Herkunft heute: die eigene Preishistorie. Dieselbe Rechnung
-     nimmt später einen Schwarm-Index entgegen — offerAdvisor.js
-     interessiert nicht, woher das „üblich" kommt, nur dass die
-     Herkunft mitgeführt und angezeigt wird. */
+    if (nf.paoMonths) {
+      body.append(el("div", "note gold",
+        "Die Frist läuft ab dem Öffnen. Die App kennt dieses Datum nicht und rechnet ab dem Kauf — das ist eine Annahme, keine Messung."));
+    }
+    if (nf.consumptionClass === "SPORADIC") {
+      body.append(el("div", "note",
+        "Für dieses Produkt macht die App keine Vorhersage. Der Kaufabstand lässt kein Muster erkennen."));
+    }
+  }
+
+  /* ---------- 7. Verlust: die Schätzung widersprechbar machen ---------- */
+  if (st && (st.chronicShare > 0 || (st.details && st.details.length))) {
+    body.append(wasteSheetGroup(productId, st, ctx));
+  }
+
+  /* ---------- 8. Was bei einem guten Preis sinnvoll wäre ---------- */
   if (pm && pm.lowest && pm.usual && r && r.perUnitDays) {
     const rat = offerAdvice(productId, {
       preis: pm.lowest, üblich: pm.usual, perUnitDays: r.perUnitDays, herkunft: "eigen"
@@ -637,90 +824,61 @@ function productSheet(productId, ctx) {
     }
   }
 
-  /* Die Schätzung widersprechbar machen. */
-  if (st && (st.chronicShare > 0 || (st.details && st.details.length))) {
-    body.append(wasteSheetGroup(productId, st, ctx));
-  }
-
-  if (nf && nf.paoMonths) {
-    body.append(el("div", "note gold",
-      `Die Frist läuft ab dem Öffnen. Die App kennt dieses Datum nicht und rechnet ab dem Kauf — das ist eine Annahme, keine Messung.`));
-  }
-  if (nf && nf.consumptionClass === "SPORADIC") {
-    body.append(el("div", "note",
-      "Für dieses Produkt macht die App keine Vorhersage. Der Kaufabstand lässt kein Muster erkennen."));
-  }
-
+  /* ---------- 9. Hinweise, die eine Änderung erklären ---------- */
   if (!nf && r && r.feedback && r.feedback.message) {
     body.append(el("div", "note", esc(r.feedback.message)));
   }
-  if (!nf) {
-    const chg = ctx.changes && ctx.changes.get(productId);
-    if (chg && chg.found) body.append(el("div", "note blue", esc(chg.message)));
-  }
-  if (p.safetyCritical) {
-    const f = safetyFacts(productId);
-    const note = el("div", "note red");
-    note.innerHTML = "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. " +
-      "Die App verlängert diese Frist nie.";
-    body.append(note);
-    if (f) {
-      // Rechtsgrundlage und Empfehlung getrennt, nie vermischt: das
-      // eine ist Gesetz, das andere ein Erfahrungswert. Wer beides in
-      // einen Satz packt, verleiht dem Erfahrungswert eine Autorität,
-      // die er nicht hat.
-      const q = el("button", "linkBtn", "Worauf beruht das?");
-      q.addEventListener("click", () => App.notice(p.name,
-        `Gruppe: ${f.label}.\n\n` +
-        `RECHTLICH GEREGELT ist zweierlei:\n${f.legal.join("\n\n")}\n\n` +
-        `NICHT geregelt ist die Anzahl der Tage. Dafür gibt es keine amtliche Zahl. ` +
-        `Die App rechnet mit höchstens ${tagen(f.maxDays)} — das ist die untere Grenze ` +
-        `dieser Lagerempfehlung:\n\n${f.guide}\n\n${f.printedWins}`));
-      body.append(q);
-    }
-  }
-
-  /* Das aufgedruckte Datum eintragen.
-     Für sicherheitskritische Produkte ist das die einzige belastbare
-     Angabe, die es gibt — und sie steht auf der Packung, die gerade
-     in der Hand liegt. Ab dem Eintrag rechnet die App damit statt mit
-     ihrer Lagerempfehlung, und die Bestandsanzeige sagt, dass die
-     Zahl nicht mehr geschätzt ist. */
-  if (p.isFood && ctx.history.some((h) => h.productId === productId)) {
-    const gesetzt = (Data.get().useBy || {})[productId] || "";
-    const wrap = el("label", "field");
-    wrap.append(el("span", "lbl", p.safetyCritical
-      ? "Aufgedrucktes Verbrauchsdatum"
-      : "Aufgedrucktes Mindesthaltbarkeitsdatum"));
-    const inp = el("input");
-    inp.type = "date";
-    inp.value = gesetzt;
-    inp.setAttribute("aria-label", `Aufgedrucktes Datum für ${p.name}`);
-    inp.addEventListener("change", () => {
-      const ok = Data.setUseBy(productId, inp.value || null);
-      if (!ok) { App.toast("Das Datum liegt vor dem Kauf"); inp.value = gesetzt; return; }
-      App.closeSheet();
-      App.toast(inp.value ? "Es gilt jetzt dein Datum" : "Wieder geschätzt");
-    });
-    wrap.append(inp);
-    body.append(wrap);
-    body.append(el("p", "srcnote", gesetzt
-      ? "Die Bestandsanzeige rechnet mit diesem Datum, nicht mehr mit der Schätzung."
-      : "Ohne Eintrag rechnet die App mit einer Lagerempfehlung. Das Etikett ist genauer — es gilt für genau diese Packung."));
-  }
-  if (season && season.status === "importware") body.append(el("div", "note gold", esc(season.message)));
+  if (!nf && chg && chg.found) body.append(el("div", "note blue", esc(chg.message)));
   if (p.note) body.append(el("div", "note", esc(p.note)));
 
-  // Angebrochen: ein Tippen, mehr Pflege darf es nicht kosten.
-  if (p.isFood && p.shelfLifeOpenedDays && p.shelfLifeOpenedDays < p.shelfLifeDays) {
-    const b = el("button", "cta light", isOpen ? "✓ angebrochen" : "Als angebrochen markieren");
-    b.addEventListener("click", () => {
-      Data.toggleOpened(productId);
-      App.closeSheet();
-      App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${tage(p.shelfLifeOpenedDays)}`);
-    });
-    body.append(b);
+  /* ---------- 10. Herkunft der Zahlen — eingeklappt ---------- */
+  /* Alles, was erklärt, WOHER eine Zahl kommt. Das ist der Kern des
+     Vertrauensversprechens dieser App und darf nicht verschwinden —
+     aber es ist nichts, was beim Öffnen des Blattes im Weg stehen
+     muss. `<details>` statt eigener Klapp-Logik: der Inhalt bleibt
+     im Dokument (auch für die Suche und für Vorlesehilfen), das
+     Auf- und Zuklappen kann der Browser selbst, und die Tastatur
+     bedient es ohne eine Zeile JavaScript. */
+  const herkunft = el("details", "pMore");
+  const sum = el("summary", null, "Wie die App darauf kommt");
+  herkunft.append(sum);
+  const hdl = el("dl", "facts");
+  const hz = (k, v) => { if (v === null || v === undefined || v === "") return;
+    hdl.append(el("dt", null, esc(k)), el("dd", null, esc(v))); };
+
+  hz("Kategorie", p.category);
+  if (!nf) {
+    /* Das Vertrauen in den gelernten Rhythmus -- immer hier, auch
+       wenn der Rhythmus schon der Leitwert ist. Zwei Gründe: es sagt
+       nicht, WAS gilt, sondern wie sicher die App sich ist, und
+       genau das ist die Frage dieses Abschnitts. Und es hält das
+       Wort „Rhythmus" im Blatt, das der Leitwert bewusst umschreibt
+       („alle 7 Tage · kaufst du das"). */
+    if (r && r.rhythmDays) hz("Vertrauen in den Rhythmus", pct(r.confidence));
+    /* Wo die App nichts weiß, sagt sie es -- aber hier unten, nicht
+       als eigene Überschrift mit einer einzigen Zeile darunter. Die
+       alte Fassung zeigte „Bestand: nicht schätzbar" und „Verlust:
+       keiner erkannt" ganz oben zwischen den echten Angaben. */
+    if (!inv) hz("Bestand", "nicht schätzbar");
+    if (!st || !(st.wastedEuros > 0)) hz("Verlust", "keiner erkannt");
+    hz("Datenqualität", {
+      regulatorisch: "rechtlich definiert",
+      leitlinie: "behördliche Lagerempfehlung",
+      schaetzwert: "Schätzwert ohne amtliche Quelle"
+    }[p.quality]);
+    if (r && r.baseRhythmDays && r.baseRhythmDays !== r.rhythmDays) {
+      hz("davor gelernt", alleTage(r.baseRhythmDays));
+    }
+    if (r && r.feedback && r.feedback.signals) {
+      hz("Rückmeldungen", `${r.feedback.signals} · ${r.feedback.applied ? "wirken auf den Rhythmus" : "noch ohne Wirkung"}`);
+    }
+    if (r && r.season && r.season.applied) hz("Saison", r.season.message);
+    if (chg && chg.found) hz("Verhalten geändert", chg.message);
   }
+  if (nf) hz("Quelle", nf.rateSource || nf.intervalSource || nf.datedSource);
+  hz("Zuletzt gekauft", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
+  herkunft.append(hdl);
+  body.append(herkunft);
 
   App.sheet(p.name, null, body);
 }

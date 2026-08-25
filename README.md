@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1759 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1778 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3048,6 +3048,62 @@ Zehn neue Tests. Alle jetzt 1759 Tests bestehen.
 
 ---
 
+## „Das Produkt-Blatt ist viel zu überladen"
+
+Wer in der Liste auf ein Produkt tippte, bekam **eine flache Liste aus
+zehn gleich aussehenden Zeilen**. „Kategorie: Fleisch/Fisch" stand dort
+in derselben Größe und Farbe wie „Verbrauchsdatum: höchstens 2 Tage ·
+max. 4 °C". Alles gleich gewichtet heißt: nichts gewichtet. Bei
+Hähnchenbrust — 85 % Verlust, 123 € verdorben, Verbrauchsdatum — musste
+man zehn Zeilen lesen, um die beiden zu finden, auf die es ankommt; sie
+standen auf Position acht und zehn.
+
+**Das Blatt beantwortet jetzt drei Fragen in fester Reihenfolge:**
+
+1. **Was ist mit diesem Produkt los?** Ein Leitwert, groß, ganz oben.
+   Welcher das ist, entscheidet die Dringlichkeit der Folgen, nicht die
+   Reihenfolge im Datensatz: **Verbrauchsdatum → Verlust → Rhythmus →
+   Preis.** Ein Verbrauchsdatum kann krank machen, ein hoher Verlust
+   kostet Geld, ein Rhythmus ist nützlich, ein Preis ist Beiwerk. Nur
+   der dringendste Fall wird rot ausgezeichnet.
+2. **Was muss ich wissen?** Direkt darunter die zweit- und
+   drittwichtigste Zahl, dann Gruppen mit Überschrift — jede nur, wenn
+   sie Inhalt hat. Der Preis steht als **drei vergleichbare Werte**
+   (zuletzt / üblich / Spanne) statt als Satz mit Punkten dazwischen.
+3. **Wo kommt das her?** Eingeklappt. Datenqualität, Rückmeldungen,
+   Herkunft: der Kern des Vertrauensversprechens, aber nichts, was beim
+   Öffnen im Weg stehen muss. Ein `<details>` statt eigener Klapp-Logik
+   — der Inhalt bleibt im Dokument (Suche, Vorlesehilfe), Tastatur-
+   bedienung bringt der Browser mit.
+
+Dazu drei Aufräumarbeiten: „Verbrauchsdatum" stand **dreimal** auf einem
+Bildschirm (Leitwert, Faktenzeile, roter Hinweis) — die Faktenzeile ist
+weg. Überschriften über einer einzigen Zeile „nicht schätzbar" sind weg;
+die Auskunft selbst steht unter „Wie die App darauf kommt", wo sie
+hingehört. Und die Verlust-Liste zeigte **zwölf** gleich aussehende
+Zeilen mit je einem Knopf — jetzt drei, der Rest eingeklappt. Wer
+widersprechen will, meint fast immer den letzten Kauf.
+
+**Der Umbau hätte fast Information gekostet — gemessen, nicht gehofft.**
+Ein Vergleich Alt gegen Neu über alle 29 Produkte der Beispieldaten
+zeigte 18 verschwundene Werte: Hähnchenbrust verlor Rhythmus *und*
+Verlustquote, weil das Verbrauchsdatum den Platz des Leitwerts bekam.
+Genau dafür gibt es jetzt die Kennzahlenzeile darunter. Nach der
+Korrektur steht der Nachweis: **227 Zahlenwerte, alle Beschriftungen und
+alle Bedienelemente sind erhalten** — kein einziger Verlust. (Zwei
+gemeldete „Verluste" waren Fehler der Prüfung selbst: die Preisspanne
+trägt jetzt nur noch ein Eurozeichen, „6,99–7,49 €" statt „6,99 €–7,49 €",
+weil das zweite auf schmalen Geräten allein in die nächste Zeile
+umbrach.)
+
+Geprüft im echten Browser bei 420 px und 320 px, hell und dunkel, ohne
+Überlauf. Neunzehn neue Oberflächentests halten die Rangfolge fest —
+genau ein Leitwert, höchstens drei Kennzahlen, Preis als drei Werte,
+Herkunft zugeklappt — damit das Blatt nicht wieder zuwächst. Alle jetzt
+1778 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3116,12 +3172,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1759
+npm test          # alle 1778
 npm run test:algo # 1129 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 594 Oberflächentests in jsdom
+npm run test:ui   # 613 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
