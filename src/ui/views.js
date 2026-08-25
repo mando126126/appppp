@@ -618,6 +618,16 @@ function productSheet(productId, ctx) {
   if (st && st.wastedEuros > 0 && schonImLeit !== "landen im Müll") {
     kennzahlen.push({ v: pct(st.wasteRate), l: "Verlust", ton: st.wasteRate >= 0.25 ? "warn" : null });
   }
+  /* Der zuletzt gezahlte Preis gehört hierher, nicht in einen eigenen
+     Abschnitt mit Überschrift: er ist eine Kennzahl wie die anderen.
+     Die Farbe trägt den Vergleich mit dem üblichen Preis -- rot heißt
+     teurer als sonst, grün günstiger. Damit braucht es keine zweite
+     Zeile, die dasselbe noch einmal als Zahl danebenstellt; „üblich"
+     und „Spanne" stehen als Bezugswerte unten in der Faktenliste. */
+  if (pm && schonImLeit !== "üblicher Preis") {
+    kennzahlen.push({ v: eur(pm.last), l: "zuletzt",
+      ton: pm.last > pm.usual * 1.08 ? "warn" : pm.last < pm.usual * 0.92 ? "good" : null });
+  }
   if (!nf && range && kennzahlen.length < 3) {
     kennzahlen.push({ v: tage(range.days), l: "reicht noch" });
   }
@@ -647,40 +657,33 @@ function productSheet(productId, ctx) {
     };
   };
 
-  /* ---------- 3. Preis: drei Zahlen, nicht ein Satz ---------- */
-  /* „zuletzt 7,49 € · üblich 7,24 € · Spanne 6,99 €–7,49 €" war eine
-     einzige Zeile, die auf einem schmalen Bildschirm umbrach und
-     dabei drei verschiedene Aussagen ineinanderschob. Drei Zahlen
-     nebeneinander lassen sich vergleichen — genau das will man hier. */
-  if (pm) {
-    body.append(el("div", "sheetGroupTitle", "Preis"));
-    const pr = el("div", "pPrice");
-    const feld = (l, v, cls) => el("div", "pPriceCell" + (cls ? " " + cls : ""),
-      `<div class="v">${esc(v)}</div><div class="l">${esc(l)}</div>`);
-    const teurer = pm.last > pm.usual * 1.08, guenstiger = pm.last < pm.usual * 0.92;
-    pr.append(feld("zuletzt", eur(pm.last), teurer ? "warn" : guenstiger ? "good" : null));
-    pr.append(feld("üblich", eur(pm.usual)));
-    // Nur EIN Eurozeichen: „6,99 €–7,49 €" brach auf schmalen
-    // Geräten hinter dem zweiten € um und ließ das Zeichen allein in
-    // der nächsten Zeile stehen. „6,99–7,49 €" ist zudem die übliche
-    // deutsche Schreibweise für eine Spanne.
-    pr.append(feld("Spanne", `${de(pm.lowest.toFixed(2))}–${eur(pm.highest)}`));
-    body.append(pr);
-  } else {
-    body.append(el("div", "sheetGroupTitle", "Preis"));
-    const pr = el("div", "pPrice");
-    pr.append(el("div", "pPriceCell",
-      `<div class="v">${esc(eur(p.typicalPrice))}</div><div class="l">üblich, noch ohne eigenen Kauf</div>`));
-    body.append(pr);
-  }
-
-  /* ---------- 4. Frische und Lagerung ---------- */
+  /* ---------- 3. Eine Faktenliste, keine Abschnittsparade ----------
+     Vorher hatte dieses Blatt für den Preis einen eigenen Abschnitt
+     mit Versal-Überschrift und drei umrandeten Kästchen, direkt über
+     dem nächsten Abschnitt mit Versal-Überschrift. Zwei solche
+     Blöcke übereinander sehen nach Gliederung aus und sind in
+     Wahrheit nur Lärm: sechs zusätzliche Trennlinien, zwei laute
+     Überschriften, für vier Zahlen.
+     Jetzt trägt die Kennzahlenzeile oben den zuletzt gezahlten Preis
+     (mit Farbe als Vergleich), und „üblich" und „Spanne" stehen als
+     das, was sie sind: Bezugswerte in derselben Liste wie
+     Haltbarkeit und Lagerort. Ein Block statt drei. */
   if (!nf) {
     const a = abschnitt("Frische & Lagerung");
     a.zeile("Haltbarkeit", p.isFood
       ? `${tage(p.shelfLifeDays)}${p.shelfLifeOpenedDays ? `, offen ${tage(p.shelfLifeOpenedDays)}` : ""}`
       : null);
     a.zeile("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
+    if (pm) {
+      a.zeile("üblicher Preis", eur(pm.usual));
+      // Nur EIN Eurozeichen: „6,99 €–7,49 €" brach auf schmalen
+      // Geräten hinter dem zweiten € um und ließ das Zeichen allein
+      // in der nächsten Zeile stehen. „6,99–7,49 €" ist zudem die
+      // übliche deutsche Schreibweise für eine Spanne.
+      a.zeile("Preisspanne", `${de(pm.lowest.toFixed(2))}–${eur(pm.highest)}`);
+    } else {
+      a.zeile("üblicher Preis", `${eur(p.typicalPrice)} · noch ohne eigenen Kauf`);
+    }
     /* Das Verbrauchsdatum steht NICHT noch einmal als Faktenzeile:
        es ist bereits der Leitwert ganz oben und wird gleich darunter
        im roten Hinweis erklärt. Dreimal dasselbe auf einem Bildschirm
@@ -688,9 +691,13 @@ function productSheet(productId, ctx) {
     a.fertig();
 
     if (sicherheit) {
+      /* Kurz. Der Leitwert ganz oben nennt die Frist schon in Rot und
+         nennt sie beim Namen; dieser Hinweis muss nur noch sagen, was
+         daraus folgt. Die ausführliche Fassung stand vorher hier als
+         vierzeiliger Block, obwohl direkt darunter der Knopf steht,
+         der genau das erklärt. */
       const note = el("div", "note red");
-      note.innerHTML = "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. " +
-        "Die App verlängert diese Frist nie.";
+      note.innerHTML = "Nach Ablauf in den Müll — Keime sieht und riecht man nicht.";
       body.append(note);
       const q = el("button", "linkBtn", "Worauf beruht das?");
       q.addEventListener("click", () => App.notice(p.name,
@@ -779,6 +786,14 @@ function productSheet(productId, ctx) {
     }
     const bp = ctx.basePrices && ctx.basePrices.get(productId);
     if (bp) a.zeile("Grundpreis", bp.message);
+    // Wie bei den Lebensmitteln: der zuletzt gezahlte Preis steht als
+    // Kennzahl oben, die Bezugswerte hier als Zeilen.
+    if (pm) {
+      a.zeile("üblicher Preis", eur(pm.usual));
+      a.zeile("Preisspanne", `${de(pm.lowest.toFixed(2))}–${eur(pm.highest)}`);
+    } else {
+      a.zeile("üblicher Preis", `${eur(p.typicalPrice)} · noch ohne eigenen Kauf`);
+    }
     if (nf.paoMonths) a.zeile("Nach dem Öffnen", `${nf.paoMonths} Monate haltbar`);
     a.zeile("In der WG", nf.sharedByDefault ? "geteilt" : "persönlich");
     if (nf.requiresDevice) a.zeile("Braucht", {

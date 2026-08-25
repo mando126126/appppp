@@ -967,8 +967,8 @@ button.row.action,label.row.action{cursor:pointer}
   white-space:pre-wrap;word-break:break-word;margin:0 0 12px;
 }
 .facts{margin:0 0 14px;display:grid;grid-template-columns:auto 1fr;gap:0}
-.facts dt{font-size:0.79rem;color:var(--ink-2);padding:10px 14px 10px 0;border-top:1px solid var(--hairline);white-space:nowrap}
-.facts dd{margin:0;font-size:0.9rem;padding:10px 0;text-align:right;border-top:1px solid var(--hairline)}
+.facts dt{font-size:0.79rem;color:var(--ink-2);padding:11px 14px 11px 0;border-top:1px solid var(--hairline);white-space:nowrap}
+.facts dd{margin:0;font-size:0.9rem;padding:11px 0;text-align:right;border-top:1px solid var(--hairline)}
 .facts dt:first-of-type,.facts dd:first-of-type{border-top:none}
 /* Lange Werte dürfen umbrechen statt über den Rand zu laufen; der
    Wortumbruch bleibt an sinnvollen Stellen, deshalb kein break-all. */
@@ -981,7 +981,7 @@ button.row.action,label.row.action{cursor:pointer}
    Verlust), deshalb nur als Textfarbe und dünner Trennstrich,
    nicht als Fläche: eine rote Fläche direkt unter der Überschrift
    erschlägt das ganze Blatt. */
-.pLead{padding:2px 0 16px;border-bottom:1px solid var(--hairline);margin-bottom:4px}
+.pLead{padding:2px 0 20px}
 .pLeadVal{
   font-size:2.15rem;font-weight:750;letter-spacing:-.025em;line-height:1.02;
   font-variant-numeric:tabular-nums;
@@ -992,29 +992,23 @@ button.row.action,label.row.action{cursor:pointer}
 .pLead.red .pLeadWhat{color:var(--red-ink)}
 
 /* Kennzahlen unter dem Leitwert: die zweit- und drittwichtigste
-   Aussage, die der Leitwert nicht schon trägt. Bewusst kleiner als
-   er -- eine Rangfolge, keine zweite Kopfzeile. */
-.pStats{display:flex;gap:1px;background:var(--hairline);margin:0 0 14px}
-.pStat{flex:1 1 0;min-width:0;background:var(--surface);padding:10px 12px 11px}
+   Aussage, die der Leitwert nicht schon trägt.
+   OHNE Kästchen. Die erste Fassung setzte jede Kennzahl auf eine
+   eigene Fläche mit Haarlinien-Fugen dazwischen -- drei Kennzahlen
+   plus drei Preisfelder ergaben sechs Kästchen und ein halbes
+   Dutzend zusätzlicher Linien auf einem Bildschirm, der ohnehin
+   schon Karten, Faktenzeilen und einen roten Hinweis trägt. Zahlen
+   brauchen keinen Rahmen, um als Zahlen gelesen zu werden; Abstand
+   genügt. */
+.pStats{display:flex;gap:26px;margin:0 0 22px;flex-wrap:wrap}
+.pStat{min-width:0}
 .pStat .v{
-  font-size:1.02rem;font-weight:700;letter-spacing:-.012em;
+  font-size:1.06rem;font-weight:700;letter-spacing:-.012em;
   font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
 }
-.pStat .l{font-size:0.72rem;color:var(--ink-2);margin-top:3px}
+.pStat .l{font-size:0.74rem;color:var(--ink-2);margin-top:2px}
 .pStat.warn .v{color:var(--red-ink)}
-
-/* Preis: drei Zahlen nebeneinander statt ein Satz mit Punkten
-   dazwischen. Nebeneinander lassen sie sich vergleichen -- genau
-   das ist die Frage, mit der man auf den Preis schaut. */
-.pPrice{display:flex;gap:1px;background:var(--hairline);margin-bottom:14px}
-.pPriceCell{flex:1 1 0;min-width:0;background:var(--surface);padding:11px 12px 12px}
-.pPriceCell .v{
-  font-size:1.02rem;font-weight:700;letter-spacing:-.012em;
-  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
-}
-.pPriceCell .l{font-size:0.72rem;color:var(--ink-2);margin-top:3px}
-.pPriceCell.warn .v{color:var(--red-ink)}
-.pPriceCell.good .v{color:var(--accent-ink)}
+.pStat.good .v{color:var(--accent-ink)}
 
 /* Herkunft der Zahlen: eingeklappt, aber im Dokument. `details`
    bringt Tastaturbedienung und Vorlesehilfe von sich aus mit. */
@@ -1417,9 +1411,15 @@ button.row.action,label.row.action{cursor:pointer}
 .halfRow.on{background:var(--accent-soft);color:var(--accent-ink)}
 .halfRow.on .hMark{background:var(--accent-ink)}
 
+/* Zwischenüberschrift im Blatt. Versalien mit Sperrung und Fettung
+   waren drei Auszeichnungen gleichzeitig für eine Beschriftung, die
+   nur trennen soll -- neben Karten, Kennzahlen und einem roten
+   Hinweis las sich das lauter als der Inhalt darunter. Eine Stufe
+   leiser: normale Schreibweise, kräftig genug zum Trennen, mehr Luft
+   davor. */
 .sheetGroupTitle{
-  font-size:0.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--ink-2);margin:16px 0 6px;
+  font-size:0.79rem;font-weight:650;letter-spacing:0;
+  color:var(--ink-2);margin:22px 0 2px;
 }
 .sheetGroupTitle:first-child{margin-top:4px}
 

@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1778 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1781 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3096,11 +3096,35 @@ trägt jetzt nur noch ein Eurozeichen, „6,99–7,49 €" statt „6,99 €–7
 weil das zweite auf schmalen Geräten allein in die nächste Zeile
 umbrach.)
 
+**Zweiter Durchgang: sortiert war es, ruhig nicht.** Die erste Fassung
+ordnete die Information richtig, blieb optisch aber unruhig — und genau
+das war die Rückmeldung. Der Befund am eigenen Screenshot: jede Kennzahl
+und jeder Preiswert saß auf einer eigenen Fläche mit Haarlinien-Fuge
+dazwischen. Sechs Kästchen und ein halbes Dutzend zusätzlicher Linien,
+auf einem Bildschirm, der ohnehin schon Karten, Faktenzeilen und einen
+roten Hinweis trägt. Vier Änderungen:
+
+- **Kästchen raus.** Zahlen brauchen keinen Rahmen, um als Zahlen
+  gelesen zu werden — Abstand genügt.
+- **Ein Block statt drei.** Der Preis hatte einen eigenen Abschnitt mit
+  Überschrift und drei umrandeten Feldern, direkt über dem nächsten
+  Abschnitt mit Überschrift. Jetzt trägt die Kennzahlenzeile den zuletzt
+  gezahlten Preis (Farbe = Vergleich zum üblichen), und „üblich" und
+  „Spanne" stehen als das, was sie sind: Bezugswerte in derselben Liste
+  wie Haltbarkeit und Lagerort.
+- **Überschriften eine Stufe leiser.** Versalien mit Sperrung *und*
+  Fettung waren drei Auszeichnungen gleichzeitig für eine Beschriftung,
+  die nur trennen soll.
+- **Roter Hinweis von vier Zeilen auf eine.** Der Leitwert nennt die
+  Frist schon in Rot; direkt darunter steht der Knopf, der sie erklärt.
+
 Geprüft im echten Browser bei 420 px und 320 px, hell und dunkel, ohne
-Überlauf. Neunzehn neue Oberflächentests halten die Rangfolge fest —
-genau ein Leitwert, höchstens drei Kennzahlen, Preis als drei Werte,
-Herkunft zugeklappt — damit das Blatt nicht wieder zuwächst. Alle jetzt
-1778 Tests bestehen.
+Überlauf. Nach dem Aufräumen erneut gegengeprüft: **227 Zahlenwerte,
+alle Beschriftungen, alle Bedienelemente weiterhin vollständig.**
+Zweiundzwanzig neue Oberflächentests halten die Rangfolge *und* die Ruhe
+fest — genau ein Leitwert, höchstens drei Kennzahlen, keine Kästchen,
+höchstens zwei Zwischenüberschriften, Herkunft zugeklappt — damit das
+Blatt nicht wieder zuwächst. Alle jetzt 1781 Tests bestehen.
 
 ---
 
@@ -3172,12 +3196,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1778
+npm test          # alle 1781
 npm run test:algo # 1129 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 613 Oberflächentests in jsdom
+npm run test:ui   # 616 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

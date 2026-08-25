@@ -1745,13 +1745,28 @@ console.log("\n--- Das Produkt-Blatt: ein Leitwert, dann Gruppen ---");
 
   /* Der Preis war ein Satz: „zuletzt 7,49 € · üblich 7,24 € · Spanne
      6,99 €–7,49 €" -- auf schmalen Geräten mit Umbruch mitten in der
-     Zahl. Drei Werte nebeneinander lassen sich vergleichen. */
-  const preis = blatt.querySelector(".pPrice");
-  ok("Der Preis steht als drei vergleichbare Werte, nicht als Satz",
-    preis && preis.querySelectorAll(".pPriceCell").length === 3,
-    preis && preis.querySelectorAll(".pPriceCell").length);
+     Zahl. Er ist jetzt aufgeteilt nach Bedeutung: der zuletzt
+     gezahlte Preis ist eine KENNZAHL (mit Farbe als Vergleich zum
+     üblichen), „üblich" und „Spanne" sind BEZUGSWERTE in der
+     Faktenliste. Ein eigener Abschnitt mit Überschrift und drei
+     umrandeten Kästchen war für vier Zahlen zu viel Apparat. */
+  ok("Der zuletzt gezahlte Preis steht als Kennzahl, nicht in einem Satz",
+    kennzahlen && /zuletzt/.test(kennzahlen.textContent), kennzahlen && kennzahlen.textContent);
+  ok("Die Bezugswerte stehen als eigene Faktenzeilen",
+    /üblicher Preis/.test(blatt.textContent) && /Preisspanne/.test(blatt.textContent));
   ok("Die Spanne trägt nur EIN Eurozeichen (sonst bricht sie um)",
-    preis && !/€\s*–/.test(preis.textContent), preis && preis.textContent);
+    !/€\s*–/.test(blatt.textContent),
+    (blatt.textContent.match(/.{0,15}€\s*–.{0,15}/) || [""])[0]);
+
+  /* Der eigentliche Befund nach der ersten Fassung: sortiert war sie,
+     ruhig nicht. Kästchen mit Haarlinien-Fugen für jede Kennzahl und
+     jeden Preiswert ergaben ein halbes Dutzend zusätzlicher Linien
+     auf einem Bildschirm, der schon Karten und Faktenzeilen trägt. */
+  ok("Kennzahlen stehen ohne Kästchen -- Abstand statt Rahmen",
+    !blatt.querySelector(".pPrice") && !blatt.querySelector(".pPriceCell"));
+  ok("Höchstens eine Zwischenüberschrift im sichtbaren Teil über der Verlust-Karte",
+    [...blatt.querySelectorAll(".sheetGroupTitle")].length <= 2,
+    [...blatt.querySelectorAll(".sheetGroupTitle")].map((x) => x.textContent).join(" | "));
 
   /* Herkunft und Datenqualität sind der Kern des Vertrauens-
      versprechens und dürfen nicht verschwinden -- aber sie müssen
