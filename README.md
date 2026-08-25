@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1781 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1795 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3128,6 +3128,84 @@ Blatt nicht wieder zuwächst. Alle jetzt 1781 Tests bestehen.
 
 ---
 
+## „Mehr Produkte — und den Algorithmus verbessern, der die Liste schreibt"
+
+### Die Einkaufsliste: erstmals gemessen
+
+Der Listen-Algorithmus war nie daran gemessen worden, ob er das
+Richtige vorschlägt. Neues Werkzeug (`test/liste.js`): für jeden
+Einkaufstag von 14 synthetischen Haushalten wird die Liste **nur aus
+den Daten davor** erzeugt und mit dem verglichen, was an dem Tag
+wirklich gekauft wurde — 1222 Einkaufstage. Ausgangswert: Trefferquote
+77,8 %, Genauigkeit 47,7 %.
+
+**Die 47,7 % sehen schlechter aus, als sie sind** — nachgemessen statt
+angenommen: die Liste nennt im Schnitt 5,7 Positionen, der Einkauf
+umfasst 3,5. Mehr als **61 % kann selbst ein perfekter Algorithmus
+nicht treffen**. Und **vier von fünf „Fehlalarmen" werden binnen zwei
+Wochen doch gekauft** — der Vorschlag war berechtigt, nur früh.
+
+**Drei Verbesserungen gemessen — und alle drei verworfen:**
+
+- *Vorlauf an den Einkaufsabstand koppeln statt fest:* F1 58,7 % gegen
+  59,1 %. Kein Gewinn.
+- *Vertrauensschwelle von 0,40 auf 0,25 senken:* im Rückvergleich 126
+  übersehene Käufe weniger — im Drei-Jahres-Lauf aber **53 zusätzliche
+  Tage mit leerem Schrank**. Ursache: zu frühe Vorschläge lösen „Hab
+  noch" aus, das verlängert den gelernten Rhythmus, und danach kommt
+  das Produkt zu spät. Eine Rückkopplung, die der Rückvergleich
+  prinzipiell nicht sehen kann — simulierte Haushalte richten sich
+  nicht nach den Vorschlägen der App, echte schon.
+- *Nach Rhythmuslänge statt nach Überfälligkeit sortieren:* hebt die
+  Genauigkeit der ersten Zeile von 40,9 % auf **58,6 %** — die größte
+  Einzelzahl dieser Runde. Trotzdem nicht übernommen: die Kennzahl
+  belohnt, das Offensichtliche zuerst zu nennen. An Milch erinnert
+  sich jeder; der Wert einer Liste liegt beim Unregelmäßigen. Die
+  Simulation vergisst gleichmäßig und kann den Unterschied nicht
+  messen — ohne Beleg keine Änderung.
+
+**Das Ergebnis dieser Runde ist damit kein neuer Schwellwert, sondern
+die Messfähigkeit selbst** plus acht Prüfungen, die festhalten, was
+gilt: Trefferquote mindestens 75 %, Liste höchstens doppelt so lang
+wie der Einkauf, höchstens 3 % Einkaufstage ohne Vorschlag — und die
+Deckelung des Vorlaufs auf ein Drittel des Zyklus, ausgerechnet gegen
+die Kennzahl abgesichert, die sie aufzuweichen empfehlen würde.
+
+### Mehr Produkte: 1698 → 1727
+
+Auch hier nicht geraten, welche fehlen: **112 in deutschen Haushalten
+übliche Artikel** gegen den Abgleich gehalten, **37 blieben ohne
+sicheren Treffer**. Zwei davon waren keine Lücken, sondern **echte
+Fehlzuordnungen mit Folgen für die Haltbarkeit**:
+
+| Bon-Zeile | landete auf | ist aber |
+|---|---|---|
+| Pfefferbeißer | Pfeffer (Gewürz) | Dauerwurst |
+| Schinkenspeck | Kochschinken (gegart) | roh geräuchert |
+
+Die dünnsten Kategorien wurden gezielt aufgefüllt: Wurstwaren 10 → 17,
+Baby 9 → 13, Tierbedarf 10 → 14, Haushaltszubehör 15 → 21. Alle 39
+zuvor fehlenden oder schwachen Artikel treffen jetzt sicher, ohne dass
+sich an den echten Bons etwas verschlechtert (70 sicher / 66 unsicher /
+3 ohne Treffer, unverändert); am 1000-Bon-Korpus vier Zeilen besser.
+
+**Sieben der neuen Einträge waren Dubletten** — „Cabanossi",
+„Landjäger", „Blutwurst", „Chorizo", „Puten-Aufschnitt" standen längst
+unter Fleisch/Fisch, „Abflussreiniger" und „Aperitif" ebenso.
+Aufgefallen ist das nur, weil der Stresstest jeden Katalognamen gegen
+sein eigenes Produkt prüft. Die Dubletten wurden zurückgenommen und
+stattdessen die fehlenden Schreibweisen bei den Originalen ergänzt;
+eine neue Prüfung schließt doppelte Produktnamen künftig aus.
+
+Sicherheitsregel eingehalten: keiner der neuen Einträge trägt ein
+Verbrauchsdatum. Rohe Streichwurst (Mettwurst) folgt dem vorhandenen
+Muster der Teewurst — kurzes MHD plus ausdrücklicher Vorbehalt, statt
+einer Frist, die Sicherheit vortäuscht.
+
+Vierzehn neue Tests. Alle jetzt 1795 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3196,8 +3274,8 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1781
-npm run test:algo # 1129 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1795
+npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation

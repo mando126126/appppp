@@ -680,11 +680,11 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
   ["weisswurst","Weißwurst",M,7,2,EST,3.49,300,[]],
   ["merguez","Merguez",V,2,1,LEIT,4.99,300,[]],
   ["chorizo","Chorizo",M,40,14,EST,2.99,200,[]],
-  ["cabanossi","Cabanossi",M,35,12,EST,2.49,200,[]],
-  ["landjaeger","Landjäger",M,60,20,EST,2.79,100,[]],
+  ["cabanossi","Cabanossi",M,35,12,EST,2.49,200,["CABANOSSI","KABANOSSI"]],
+  ["landjaeger","Landjäger",M,60,20,EST,2.79,100,["LANDJAEGER","LANDJÄGER"]],
   ["schinkenwuerfel","Schinkenwürfel",M,14,4,EST,1.49,150,[]],
   ["pastrami","Pastrami",M,14,4,EST,2.99,100,[]],
-  ["blutwurst","Blutwurst",M,14,4,EST,2.29,200,[]],
+  ["blutwurst","Blutwurst",M,14,4,EST,2.29,200,["BLUTWURST","ROTWURST"]],
   ["sulze","Sülze",M,10,3,EST,1.99,200,[]],
   ["griebenschmalz","Griebenschmalz",M,60,21,EST,1.79,200,[]],
   ["veggie_schnitzel","Veggie-Schnitzel",M,14,2,EST,2.99,200,[]],
@@ -714,7 +714,7 @@ group("Fleisch/Fisch", "Fleisch & Fisch", STORAGE.FRIDGE_BOTTOM, [
   ["bismarckhering","Bismarckhering",M,18,5,EST,2.49,250,[]],
   ["forelle_geraeuchert","Räucherforelle",M,10,3,EST,4.49,150,[]],
   ["makrele_geraeuchert","Räuchermakrele",M,10,3,EST,3.29,200,[]],
-  ["sardellen","Sardellenfilets",M,365,5,EST,2.49,50,[],{storage:STORAGE.PANTRY}],
+  ["sardellen","Sardellenfilets",M,365,5,EST,2.49,50,["SARDELLEN"],{storage:STORAGE.PANTRY}],
   ["kaviar_ersatz","Seehasenrogen",M,60,7,EST,3.49,100,[]],
   ["fischstaebchen_frisch","Backfisch",V,2,1,LEIT,4.49,400,[]]
 ]);
@@ -789,7 +789,7 @@ group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
 group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
   ["tomaten_dose","Tomaten stückig",M,900,3,EST,0.89,400,[]],
   ["mais_dose","Mais Dose",M,900,3,EST,0.89,300,[]],
-  ["kidneybohnen","Kidneybohnen Dose",M,900,3,EST,0.89,400,[]],
+  ["kidneybohnen","Kidneybohnen Dose",M,900,3,EST,0.89,400,["KIDNEYBOHNEN"]],
   ["kichererbsen_dose","Kichererbsen Dose",M,900,3,EST,0.99,400,[]],
   ["weisse_bohnen","Weiße Bohnen Dose",M,900,3,EST,0.85,400,[]],
   ["linsen_dose","Linsen Dose",M,900,3,EST,1.09,400,[]],
@@ -877,7 +877,7 @@ group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
   ["gelatine","Gelatine",M,900,365,EST,1.19,20,[]],
   ["agar","Agar-Agar",M,900,365,EST,2.49,30,[]],
   ["schokoladenstueckchen","Schokotropfen",M,365,120,EST,1.79,100,[]],
-  ["marzipan","Marzipanrohmasse",M,270,30,EST,2.29,200,[]],
+  ["marzipan","Marzipanrohmasse",M,270,30,EST,2.29,200,["MARZIPAN"]],
   ["rosinen","Rosinen",M,365,90,EST,1.49,250,[]],
   ["datteln","Datteln",M,270,60,EST,2.99,200,[]],
   ["feigen_getrocknet","Getrocknete Feigen",M,270,60,EST,3.49,200,[]],
@@ -938,7 +938,7 @@ group("Getränke", "Getränke", STORAGE.PANTRY, [
   ["wein_weiss","Weißwein",M,540,3,EST,5.49,750,[]],
   ["wein_rose","Roséwein",M,365,3,EST,5.49,750,[]],
   ["prosecco","Prosecco",M,540,1,EST,5.99,750,[]],
-  ["aperitif","Aperitif",M,900,90,EST,9.99,700,[]],
+  ["aperitif","Aperitif",M,900,90,EST,9.99,700,["APERITIF","APEROL","CAMPARI"]],
   ["gin","Gin",M,3650,900,EST,15.99,700,[]],
   ["wodka","Wodka",M,3650,900,EST,12.99,700,[]],
   ["rum","Rum",M,3650,900,EST,14.99,700,[]],
@@ -1088,7 +1088,7 @@ group("Waschen & Reinigen", "Drogerie", STORAGE.NONE, [
   ["backofenreiniger","Backofenreiniger",N,1095,1095,EST,3.49,500,[]],
   ["kalkreiniger","Kalkreiniger",N,1095,1095,EST,2.49,750,[]],
   ["moebelpolitur","Möbelpolitur",N,1095,1095,EST,3.29,300,[]],
-  ["abflussreiniger","Abflussreiniger",N,1095,1095,EST,3.99,1000,[]],
+  ["abflussreiniger","Abflussreiniger",N,1095,1095,EST,3.99,1000,["ABFLUSSREINIGER","ROHRREINIGER"]],
   ["mikrofasertuch","Mikrofasertuch",N,3650,3650,EST,2.49,50,[]],
   ["putzlappen","Putzlappen",N,3650,3650,EST,1.99,100,[]],
   ["gummihandschuhe","Gummihandschuhe",N,3650,3650,EST,1.79,80,[]],
@@ -1160,6 +1160,83 @@ group("International", "Trockenware", STORAGE.PANTRY, [
   ["bohnenpaste","Bohnenpaste",M,540,30,EST,2.49,200,[]],
   ["tortillachips_blau","Blaue Maischips",M,180,5,EST,2.49,200,[]],
   ["taco_shells","Taco Shells",M,365,7,EST,1.99,150,[]]
+]);
+
+
+/* ================================================================
+   Kuratierte Ergänzung: gängige deutsche Supermarktartikel, die
+   der Katalog nicht kannte.
+   ----------------------------------------------------------------
+   Nicht geraten, welche fehlen: 112 in deutschen Haushalten übliche
+   Artikel wurden gegen den Abgleich gehalten, 37 davon blieben ohne
+   sicheren Treffer. Zwei waren dabei nicht nur Lücken, sondern echte
+   FEHLZUORDNUNGEN mit Folgen für die Haltbarkeit:
+     „Pfefferbeißer"  landete auf „Pfeffer"      (Wurst -> Gewürz)
+     „Schinkenspeck"  landete auf „Kochschinken" (roh -> gegart)
+   Beide bekommen jetzt einen eigenen Eintrag.
+
+   Datenqualität: durchweg EST (Schätzwert ohne amtliche Quelle) --
+   dieselbe ehrliche Einstufung wie bei den übrigen selbst gepflegten
+   Einträgen. Haltbarkeiten sind an vergleichbaren Katalogprodukten
+   derselben Warenart ausgerichtet, nicht einzeln belegt.
+
+   Sicherheitsregel eingehalten: keiner dieser Einträge trägt ein
+   Verbrauchsdatum (V). Rohe Streichwurst (Mettwurst) folgt dem schon
+   vorhandenen Muster der Teewurst -- kurzes MHD plus ausdrücklicher
+   Hinweis, statt einer Frist, die Sicherheit vortäuscht.
+   ================================================================ */
+group("Wurstwaren", "Kühlregal", STORAGE.FRIDGE_MIDDLE, [
+  ["wurst_gelbwurst","Gelbwurst",M,10,4,EST,1.69,150,["GELBWURST","STADTWURST"]],
+  ["wurst_schinkenwurst","Schinkenwurst",M,12,4,EST,1.79,150,["SCHINKENWURST"]],
+  ["wurst_bierschinken","Bierschinken",M,12,4,EST,1.79,150,["BIERSCHINKEN"]],
+  ["wurst_krakauer","Krakauer",M,18,5,EST,2.29,250,["KRAKAUER"]],
+  ["wurst_pfefferbeisser","Pfefferbeißer",M,45,14,EST,2.29,150,["PFEFFERBEISSER","PFEFFERBEIßER"]],
+  ["wurst_schinkenspeck","Schinkenspeck",M,21,7,EST,2.29,150,["SCHINKENSPECK","DUERRFLEISCH"]],
+  ["wurst_mettwurst","Mettwurst",M,18,5,EST,1.99,150,["METTWURST","ZWIEBELMETTWURST"],
+    {note:"Streichfähige Rohwurst. Wie bei Teewurst gilt: nach dem Öffnen zügig aufbrauchen, bei Verfärbung oder säuerlichem Geruch entsorgen."}],
+]);
+
+group("Körperpflege", "Drogerie", STORAGE.NONE, [
+  ["duschcreme","Duschcreme",M,900,180,EST,2.29,300,["DUSCHCREME","CREMEDUSCHE"]],
+  ["koerperoel","Körperöl",M,720,180,EST,4.49,200,["KOERPEROEL","BODY OIL"]]
+]);
+
+group("Waschen & Reinigen", "Drogerie", STORAGE.NONE, [
+  ["waschmittel_fluessig","Flüssigwaschmittel",M,900,365,EST,5.49,1500,["FLUESSIGWASCHMITTEL","WASCHMITTEL FLUESSIG"]],
+  ["hygienespueler","Hygienespüler",M,900,365,EST,3.49,1500,["HYGIENESPUELER"]],
+]);
+
+group("Haushaltszubehör", "Drogerie", STORAGE.NONE, [
+  ["grillkohle","Grillkohle",N,1800,1800,EST,5.99,3000,["GRILLKOHLE","HOLZKOHLE"]],
+  ["grillanzuender","Grillanzünder",N,1800,1800,EST,2.49,500,["GRILLANZUENDER"]],
+  ["einweggeschirr","Einweggeschirr",N,1800,1800,EST,2.99,300,["EINWEGGESCHIRR","PAPPTELLER","PLASTIKBECHER"]],
+  ["frischhaltedosen","Frischhaltedosen",N,3600,3600,EST,4.99,400,["FRISCHHALTEDOSEN","VORRATSDOSEN"]],
+  ["geschenkpapier","Geschenkpapier",N,1800,1800,EST,1.99,150,["GESCHENKPAPIER"]],
+  ["luftballons","Luftballons",N,1800,1800,EST,2.49,100,["LUFTBALLONS"]]
+]);
+
+group("Baby", "Drogerie", STORAGE.NONE, [
+  ["babyoel","Babyöl",M,900,180,EST,2.99,200,["BABYOEL"]],
+  ["babypuder","Babypuder",M,900,365,EST,2.49,100,["BABYPUDER"]],
+  ["stilleinlagen","Stilleinlagen",N,1800,1800,EST,3.99,120,["STILLEINLAGEN"]],
+  ["windeleimerbeutel","Windeleimerbeutel",N,1800,1800,EST,4.49,200,["WINDELEIMERBEUTEL"]]
+]);
+
+group("Tierbedarf", "Drogerie", STORAGE.NONE, [
+  ["hundekauknochen","Hundekauknochen",M,540,90,EST,3.49,200,["HUNDEKAUKNOCHEN","KAUKNOCHEN"]],
+  ["katzenminze","Katzenminze",M,720,180,EST,2.99,30,["KATZENMINZE"]],
+  ["nagerfutter","Nagerfutter",M,540,90,EST,3.29,1000,["NAGERFUTTER","MEERSCHWEINCHENFUTTER","KANINCHENFUTTER","HAMSTERFUTTER"]],
+  ["aquarienfutter","Aquarienfutter",M,720,180,EST,4.49,100,["AQUARIENFUTTER"]]
+]);
+
+group("Getränke", "Getränke", STORAGE.PANTRY, [
+  ["malzbier","Malzbier",M,270,3,EST,0.99,500,["MALZBIER","MALZTRUNK"]]
+]);
+
+group("Trocken/Vorrat", "Trockenware", STORAGE.PANTRY, [
+  ["kuvertuere","Kuvertüre",M,540,90,EST,1.99,200,["KUVERTUERE","SCHOKOGLASUR"]],
+  ["weizenkleie","Weizenkleie",M,270,60,EST,1.79,250,["WEIZENKLEIE"]],
+  ["haferkleie","Haferkleie",M,270,60,EST,2.29,250,["HAFERKLEIE"]]
 ]);
 
 

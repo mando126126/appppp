@@ -1048,6 +1048,84 @@ t("Mit Schranke gerechnet ist bitgenau dasselbe wie ohne -- über alle drei Korp
 });
 
 // ================================================================
+section("R: Gängige deutsche Artikel, die der Katalog nicht kannte");
+
+/* Nicht geraten, welche Produkte fehlen: 112 in deutschen Haushalten
+   übliche Artikel wurden gegen den Abgleich gehalten, 37 blieben ohne
+   sicheren Treffer. Zwei davon waren keine Lücken, sondern echte
+   FEHLZUORDNUNGEN mit Folgen für die Haltbarkeit -- und genau die
+   sind der Grund, warum diese Prüfung hier steht und nicht nur eine
+   Katalogzahl irgendwo hochgezählt wurde. */
+
+t("„Pfefferbeißer“ landet nicht mehr auf „Pfeffer“ — Wurst statt Gewürz", () => {
+  const m = matchProduct("Pfefferbeißer");
+  const p = FOOD_DATABASE.find((x) => x.id === m.productId);
+  return p && p.category === "Wurstwaren" ? true : JSON.stringify(m);
+});
+
+t("„Schinkenspeck“ landet nicht mehr auf „Kochschinken“ — roh statt gegart", () => {
+  const m = matchProduct("Schinkenspeck");
+  return m.productId === "wurst_schinkenspeck" ? true : JSON.stringify(m);
+});
+
+t("Alle 39 zuvor fehlenden oder schwach getroffenen Artikel treffen jetzt sicher", () => {
+  const artikel = ["Mortadella", "Schinkenwurst", "Gelbwurst", "Cabanossi", "Landjäger",
+    "Bierschinken", "Krakauer", "Chorizo", "Putenbrust Aufschnitt", "Blutwurst", "Mettwurst",
+    "Pfefferbeißer", "Schinkenspeck", "Duschcreme", "Rohrreiniger", "Waschmittel flüssig",
+    "Hygienespüler", "Grillkohle", "Grillanzünder", "Einweggeschirr", "Luftballons",
+    "Geschenkpapier", "Frischhaltedosen", "Babyöl", "Babypuder", "Stilleinlagen",
+    "Windeleimerbeutel", "Hundekauknochen", "Katzenminze", "Meerschweinchenfutter",
+    "Aquarienfutter", "Aperol", "Malzbier", "Kuvertüre", "Marzipan", "Weizenkleie",
+    "Haferkleie", "Sardellen", "Kidneybohnen"];
+  const schwach = artikel.filter((a) => {
+    const m = matchProduct(a);
+    return !m.productId || m.confidence < SAFE_THRESHOLD;
+  });
+  return schwach.length === 0 ? true : schwach.join(", ");
+});
+
+/* Die Falle, in die dieser Durchgang tatsächlich getappt ist: sieben
+   der neuen Einträge waren DUBLETTEN. „Cabanossi", „Landjäger",
+   „Blutwurst", „Chorizo" und „Puten-Aufschnitt" standen längst unter
+   Fleisch/Fisch, „Abflussreiniger" und „Aperitif" ebenso. Aufgefallen
+   ist es nur, weil der Stresstest jeden Namen gegen sein eigenes
+   Produkt prüft -- eine Dublette lässt genau diese Prüfung scheitern.
+   Die neuen Einträge wurden zurückgenommen und stattdessen die
+   fehlenden Schreibweisen bei den Originalen ergänzt. */
+t("Keine zwei Produkte tragen denselben Namen", () => {
+  const gesehen = new Map();
+  const doppelt = [];
+  FOOD_DATABASE.forEach((p) => {
+    const k = p.name.toLowerCase().trim();
+    if (gesehen.has(k)) doppelt.push(`${p.name}: ${gesehen.get(k)} und ${p.id}`);
+    else gesehen.set(k, p.id);
+  });
+  return doppelt.length === 0 ? true : doppelt.join("; ");
+});
+
+t("Die neuen Einträge tragen alle ein MHD, keines ein Verbrauchsdatum", () => {
+  const neu = ["wurst_gelbwurst", "wurst_schinkenwurst", "wurst_bierschinken", "wurst_krakauer",
+    "wurst_pfefferbeisser", "wurst_schinkenspeck", "wurst_mettwurst", "duschcreme", "koerperoel",
+    "waschmittel_fluessig", "hygienespueler", "grillkohle", "grillanzuender", "einweggeschirr",
+    "frischhaltedosen", "geschenkpapier", "luftballons", "babyoel", "babypuder", "stilleinlagen",
+    "windeleimerbeutel", "hundekauknochen", "katzenminze", "nagerfutter", "aquarienfutter",
+    "malzbier", "kuvertuere", "weizenkleie", "haferkleie"];
+  const fehlend = neu.filter((id) => !FOOD_DATABASE.some((p) => p.id === id));
+  if (fehlend.length) return `nicht im Katalog: ${fehlend.join(", ")}`;
+  const kritisch = neu.filter((id) => (FOOD_DATABASE.find((p) => p.id === id) || {}).safetyCritical);
+  return kritisch.length === 0 ? true : `tragen ein Verbrauchsdatum: ${kritisch.join(", ")}`;
+});
+
+t("Rohe Streichwurst wird nicht stillschweigend wie gegarte behandelt", () => {
+  // Mettwurst ist rohes Fleisch im Glas. Sie bekommt kein
+  // Verbrauchsdatum (das wäre eine Frist, die niemand geprüft hat),
+  // aber sie muss ihren Vorbehalt mitführen -- wie die Teewurst.
+  const p = FOOD_DATABASE.find((x) => x.id === "wurst_mettwurst");
+  return p && p.note && /Rohwurst|aufbrauchen|entsorgen/i.test(p.note)
+    ? true : JSON.stringify(p && p.note);
+});
+
+// ================================================================
 console.log("\n" + "=".repeat(60));
 console.log(`ABGLEICH: ${pass} bestanden, ${fail} fehlgeschlagen`);
 console.log("=".repeat(60));
