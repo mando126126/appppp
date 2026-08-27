@@ -37,6 +37,27 @@
  *     zusätzliche Tage mit leerem Schrank. Ursache: zu frühe
  *     Vorschläge lösen „Hab noch" aus, das verlängert den gelernten
  *     Rhythmus, und danach kommt das Produkt zu spät.
+ *   - Stichprobengröße als Wurzel statt als Gerade werten (n=1
+ *     Intervall zählte nur ein Viertel, obwohl gerade die erste
+ *     Wiederholung am meisten aussagt): im Rückvergleich der beste
+ *     bisher gemessene Stand — Trefferquote 80,7 % statt 77,7 %, in
+ *     den ersten zwanzig Käufen sogar 17,2 % statt 4,8 %, und reife
+ *     Haushalte blieben unberührt (84,2 % -> 84,5 %). Im
+ *     Drei-Jahres-Lauf trotzdem 75 zusätzliche Leertage. Der Schaden
+ *     entsteht IM Kaltstart und bleibt danach: die zu früh
+ *     vorgeschlagenen Produkte lösen „Hab noch" aus, der gelernte
+ *     Rhythmus wird länger, und der Haushalt kommt davon nicht mehr
+ *     los. Dass die reife Phase sauber aussieht, hat genau nichts zu
+ *     bedeuten — sie erbt einen bereits verdorbenen Takt.
+ *   - Den Vorlauf am Vertrauen bemessen (Vorlauf = Einstellung x
+ *     Vertrauen), als Gegenmittel gegen ebenjene Schleife: sah im
+ *     Rückvergleich auf jeder Achse besser aus als der Ausgangsstand
+ *     (Genauigkeit 49,3 %, Trefferquote 78,3 %, F1 60,5 %) und
+ *     scheiterte trotzdem — 1786 statt 1696 Leertage. Ohne die
+ *     Wurzel darüber immer noch 1719. Das Mittel wirkt also nicht
+ *     gegen die Ursache: es kürzt den Vorlauf ALLER Produkte, auch
+ *     der gut belegten, und verliert dort mehr, als es im Kaltstart
+ *     gewinnt.
  *   - Nach Rhythmuslänge statt nach Überfälligkeit sortieren: hebt
  *     die Genauigkeit der ersten Zeile von 40,9 % auf 58,6 % — aber
  *     die Kennzahl belohnt, das Offensichtliche zuerst zu nennen.
@@ -46,7 +67,7 @@
  * ================================================================
  */
 const { haushalt } = require("./fixtures/haushalte");
-const { computeAllRhythms, daysBetween } = require("../src/algo/rhythmEngine2");
+const { computeAllRhythms, computeRhythm, daysBetween } = require("../src/algo/rhythmEngine2");
 const { effectiveLookahead } = require("../src/algo/shoppingDay");
 const { isNonFood } = require("../src/algo/nonFoodCatalog");
 
@@ -201,6 +222,128 @@ t("Der Vorlauf nimmt nie mehr als ein gutes Drittel des Zyklus vorweg", () => {
 t("Und nie mehr, als eingestellt ist", () => {
   const schlecht = [[7, 2], [30, 1], [10, 0]].filter(([rh, w]) => effectiveLookahead(rh, w) > w);
   return schlecht.length === 0 ? true : "Vorlauf über der Einstellung";
+});
+
+// ================================================================
+section("E: Der Kaltstart — was ein neuer Haushalt zu sehen bekommt");
+
+/* Der Rückvergleich oben überspringt die ersten 40 Käufe. Genau dort
+   ist die App aber am schwächsten, und genau dort entscheidet sich,
+   ob jemand sie behält. Deshalb hier ohne Aufwärmfilter, nach
+   Erfahrungsalter aufgeschlüsselt. Die Zahlen sind kein Ruhmesblatt
+   und sollen es auch nicht sein — sie stehen hier, damit die
+   Schwäche benannt und messbar ist statt unsichtbar. */
+const STUFEN = [[0, 20], [20, 40], [40, 80], [80, 1e9]];
+const kalt = STUFEN.map(() => ({ tr: 0, ue: 0 }));
+HAUSHALTE.forEach((H) => {
+  const tage = [...new Set(H.map((h) => h.date))].sort();
+  tage.forEach((tag) => {
+    const davor = H.filter((h) => h.date < tag);
+    if (davor.length < 5) return;
+    const heute = new Set(H.filter((h) => h.date === tag).map((h) => h.productId));
+    if (heute.size === 0) return;
+    const si = STUFEN.findIndex(([a, b]) => davor.length >= a && davor.length < b);
+    const liste = new Set(listeFuer(computeAllRhythms(davor, { ref: tag }), tag));
+    heute.forEach((id) => { if (liste.has(id)) kalt[si].tr++; else kalt[si].ue++; });
+  });
+});
+const quote = (i) => kalt[i].tr / (kalt[i].tr + kalt[i].ue);
+console.log("\n  Erfahrung        Trefferquote");
+STUFEN.forEach(([a, b], i) => console.log(
+  `  ${(b > 1e8 ? `ab ${a} Käufen` : `${a}-${b} Käufe`).padEnd(16)} ${pct(quote(i))}`));
+
+/* Die Trefferquote muss mit der Erfahrung STEIGEN. Fällt sie
+   irgendwo, lernt die App aus mehr Daten schlechter statt besser —
+   das wäre ein Fehler, keine Kinderkrankheit. */
+t("Mehr Erfahrung heißt nie schlechtere Vorschläge", () => {
+  const brueche = STUFEN.map((_, i) => i).slice(1)
+    .filter((i) => quote(i) < quote(i - 1) - 0.01);
+  return brueche.length === 0 ? true
+    : `Rückschritt bei Stufe ${brueche.join(", ")}`;
+});
+
+/* Untergrenzen als Rückschrittsicherung, knapp unter dem heute
+   Gemessenen (4,8 % / 27,5 % / 54,5 %): sie sollen einen echten
+   Verfall melden, nicht bei jeder Nachkommastelle anschlagen.
+
+   Dass die erste Schwelle bei 4 % steht, ist kein Zielwert, sondern
+   ein Befund: in den ersten zwanzig Käufen findet die Liste so gut
+   wie nichts. Der Grund ist strukturell — ein Produkt braucht vier
+   Intervalle, also fünf Käufe, für volles Vertrauen, und so weit ist
+   in Woche eins kein einziges. Zwei Anläufe, das zu heben, sind am
+   Drei-Jahres-Lauf gescheitert (siehe Kopf dieser Datei). Solange das
+   so ist, gehört die Zahl sichtbar hierher und nicht in eine Fußnote. */
+t(`In den ersten 20 Käufen wenigstens 4 % — gemessen ${pct(quote(0))}`,
+  () => quote(0) >= 0.04 ? true : pct(quote(0)));
+t(`Nach 40 Käufen wenigstens 50 % — gemessen ${pct(quote(2))}`,
+  () => quote(2) >= 0.50 ? true : pct(quote(2)));
+
+// ================================================================
+section("F: Die Streuungs-Stützung für dünn belegte Produkte");
+
+/* Ein Produkt mit zwei, drei Käufen wurde zweimal bestraft: einmal
+   offen über die Stichprobengröße, und einmal verdeckt, weil seine
+   gemessene Streuung bei so wenigen Werten fast nur Rauschen ist.
+   Die Stützung mischt deshalb den Erfahrungswert DIESES Haushalts
+   dazu. Diese Prüfungen halten die drei Eigenschaften fest, auf die
+   es dabei ankommt. */
+
+/* Käufe aus einer Liste von Abständen bauen — so steht die Streuung
+   ausdrücklich im Test und ist nicht Nebenwirkung einer Formel.
+   (Abwechselnde Abstände wie 19,1,19,1 wären KEIN unsteter Haushalt:
+   der Median trifft dort den häufigeren Wert, und die MAD fällt auf
+   null. Deshalb hier echte, ungleiche Abstände.) */
+const kaeufe = (id, abstaende) => {
+  let t0 = Date.parse("2026-01-01");
+  const out = [{ productId: id, date: "2026-01-01", quantity: 1 }];
+  abstaende.forEach((d) => {
+    t0 += d * 86400000;
+    out.push({ productId: id, date: new Date(t0).toISOString().slice(0, 10), quantity: 1 });
+  });
+  return out;
+};
+const REGELMAESSIG = [10, 10, 10, 10, 10];
+const UNSTET = [3, 17, 8, 22, 5];
+const NEU = [7, 9];                  // zwei Intervalle, leicht schwankend
+
+const bauHaushalt = (abstaende) => [
+  ...kaeufe("a", abstaende), ...kaeufe("b", abstaende),
+  ...kaeufe("c", abstaende), ...kaeufe("d", abstaende),
+  ...kaeufe("neu", NEU)
+];
+const alleinConfidence = (H, id) =>
+  computeRhythm(H.filter((h) => h.productId === id)).confidence;
+
+t("Ein regelmäßiger Haushalt vertraut einem neuen Produkt schneller", () => {
+  const H = bauHaushalt(REGELMAESSIG);
+  const mit = computeAllRhythms(H).get("neu").confidence;
+  const ohne = alleinConfidence(H, "neu");
+  return mit > ohne ? true : `mit Stützung ${mit}, ohne ${ohne}`;
+});
+
+t("Ein unsteter Haushalt bleibt dagegen vorsichtig — die Stützung wirkt in beide Richtungen", () => {
+  const H = bauHaushalt(UNSTET);
+  const mit = computeAllRhythms(H).get("neu").confidence;
+  const ohne = alleinConfidence(H, "neu");
+  return mit < ohne ? true : `mit Stützung ${mit}, ohne ${ohne} — hätte fallen müssen`;
+});
+
+t("Gut belegte Produkte bleiben unberührt", () => {
+  const H = bauHaushalt(REGELMAESSIG);
+  const alle = computeAllRhythms(H);
+  const schlecht = ["a", "b", "c", "d"]
+    .filter((id) => alle.get(id).confidence !== alleinConfidence(H, id));
+  return schlecht.length === 0 ? true : `verändert: ${schlecht.join(", ")}`;
+});
+
+/* Ohne genug belastbare Produkte gibt es kein Vorwissen — dann muss
+   alles bleiben, wie es war. Sonst würde die Stützung sich auf einen
+   einzelnen Zufallswert stützen. */
+t("Ohne genug belastbare Produkte bleibt alles beim Alten", () => {
+  const H = [...kaeufe("neu", NEU), ...kaeufe("auch_neu", [9, 7])];
+  const mit = computeAllRhythms(H).get("neu").confidence;
+  const ohne = alleinConfidence(H, "neu");
+  return mit === ohne ? true : `${mit} statt ${ohne}`;
 });
 
 // ================================================================

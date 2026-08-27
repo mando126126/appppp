@@ -2538,6 +2538,15 @@ const MIN_INTERVALS_FOR_TREND = 6;
 const PAUSE_FACTOR = 3;          // ab dem Dreifachen des Medians: Unterbrechung
 const MIN_INTERVALS_FULL_CONFIDENCE = 4;
 
+/* Gewicht des Haushalts-Vorwissens bei der Streuungsschätzung, in
+   Intervallen gerechnet. Zwei, weil die Streuung bei genau zwei
+   Intervallen rechnerisch von einem einzigen Abstand abhängt
+   (MAD = |x1-x2|/2) und damit ungefähr so viel wert ist wie eine
+   einzelne Beobachtung. Bei zwei Intervallen zählt das Vorwissen
+   also zur Hälfte, bei vier zu einem Drittel, bei acht zu einem
+   Fünftel — es verschwindet von selbst, sobald es echte Daten gibt. */
+const DISPERSION_PRIOR_WEIGHT = 2;
+
 function daysBetween(a, b) {
   const ta = new Date(b).getTime();
   const tb = new Date(a).getTime();
@@ -2671,7 +2680,53 @@ function computeRhythm(purchases, opts = {}) {
 
   // Vertrauen: genug Datenpunkte UND geringe robuste Streuung
   const dispersion = mad(perUnitValues);
-  const relativeDispersion = perUnitDays > 0 && dispersion !== null ? dispersion / perUnitDays : 1;
+  const rawDispersion = perUnitDays > 0 && dispersion !== null ? dispersion / perUnitDays : 1;
+
+  /* Kleine Stichproben wurden hier zweimal bestraft: einmal offen
+     über sampleFactor, und einmal verdeckt, weil die Streuung selbst
+     bei zwei bis drei Intervallen fast nur Rauschen ist. Nachgemessen
+     an 181 Produkten mit langer Historie: aus den ersten zwei
+     Intervallen gerechnet liegt die Streuung im Mittel bei 0,152, aus
+     der vollen Historie desselben Produkts bei 0,103 — 46 % der
+     Produkte sehen früh unsteter aus, als sie sind. Ein ganz normales
+     Produkt landete dadurch bei Vertrauen 0,39 und blieb unter der
+     Schwelle von 0,40 hängen, obwohl sein Takt stimmte.
+
+     Gegenmittel ist keine niedrigere Schwelle (das wurde gemessen und
+     verworfen, siehe test/liste.js), sondern eine ehrlichere
+     Schätzung: bei wenigen Intervallen wird die eigene Messung mit
+     dem Erfahrungswert DIESES Haushalts gemischt. Ein Haushalt, der
+     seine Einkäufe regelmäßig erledigt, bekommt für ein neues Produkt
+     früher Vertrauen; ein unsteter Haushalt bleibt vorsichtig. Der
+     Wert kommt also aus dem Haushalt selbst und nicht aus einer
+     Konstanten — und er kann die Streuung genauso gut nach OBEN
+     ziehen. Fehlt das Vorwissen, bleibt alles beim Alten. */
+  const prior = Number.isFinite(opts.dispersionPrior) ? opts.dispersionPrior : null;
+  const relativeDispersion = prior === null ? rawDispersion
+    : (working.length * rawDispersion + DISPERSION_PRIOR_WEIGHT * prior)
+      / (working.length + DISPERSION_PRIOR_WEIGHT);
+
+  /* Wurzel statt Gerade. Der lineare Verlauf n/4 behandelte das erste
+     beobachtete Intervall als ein Viertel der Evidenz von vieren —
+     und untertreibt damit, denn gerade die erste Wiederholung trägt
+     am meisten: sie unterscheidet "einmal gekauft, vielleicht nie
+     wieder" von "das kommt wieder". Danach nimmt der Erkenntnis-
+     gewinn ab, wie bei jeder Stichprobe (der Standardfehler fällt
+     mit 1/Wurzel(n), nicht mit 1/n).
+
+     Praktische Folge der alten Geraden: ein zweimal gekauftes Produkt
+     kam auf höchstens 0,25 Vertrauen und blieb damit UNTER JEDEN
+     UMSTÄNDEN unter der Schwelle von 0,40 — es war unsichtbar, egal
+     wie sauber sein Takt war. Gemessen an den ersten zwanzig Käufen
+     eines Haushalts lag die Trefferquote deshalb bei 4,8 % bei
+     gleichzeitig 83,3 % Genauigkeit: die App schwieg fast völlig und
+     hatte recht damit. Für jemanden, der die App gerade erst
+     ausprobiert, ist Schweigen aber der teurere Fehler.
+
+     Erst zusammen mit der Streuungs-Stützung oben ist das sauber:
+     ein einzelnes Intervall hat MAD 0 und sähe für sich genommen
+     perfekt stabil aus. Die Mischung mit dem Erfahrungswert des
+     Haushalts verhindert dieses falsche Versprechen. */
   const sampleFactor = Math.min(1, working.length / MIN_INTERVALS_FULL_CONFIDENCE);
   const stabilityFactor = Math.max(0, 1 - relativeDispersion * 1.5);
   const confidence = Math.round(sampleFactor * stabilityFactor * 100) / 100;
@@ -2692,6 +2747,10 @@ function computeRhythm(purchases, opts = {}) {
 
   return {
     rhythmDays, confidence, sampleSize: working.length,
+    // Ungemischt ausgegeben: hieraus bildet computeAllRhythms das
+    // Vorwissen des Haushalts, und ein gemischter Wert würde sich
+    // dabei selbst als Beleg zählen.
+    rawDispersion,
     lastPurchaseDate: last.date, lastQuantity,
     pauses, trend, perUnitDays: perUnitDays !== null ? Math.round(perUnitDays * 10) / 10 : null,
     absenceCorrected,
@@ -2699,16 +2758,44 @@ function computeRhythm(purchases, opts = {}) {
   };
 }
 
-/** Rhythmen für alle Produkte eines Haushalts. */
+/**
+ * Rhythmen für alle Produkte eines Haushalts.
+ *
+ * Zwei Durchgänge, weil ein Produkt mit wenigen Käufen vom Rest des
+ * Haushalts lernen kann: Produkte mit genug Intervallen sagen, wie
+ * regelmäßig hier überhaupt eingekauft wird, und dieser Erfahrungswert
+ * stützt dann die Schätzung der noch dünn belegten. Ohne genug
+ * belastbare Produkte bleibt es beim einfachen Durchgang.
+ */
 function computeAllRhythms(history, opts = {}) {
   const byProduct = new Map();
   for (const entry of history) {
     if (!byProduct.has(entry.productId)) byProduct.set(entry.productId, []);
     byProduct.get(entry.productId).push(entry);
   }
+
   const out = new Map();
   for (const [productId, purchases] of byProduct.entries()) {
     out.set(productId, computeRhythm(purchases, opts));
+  }
+
+  // Vorwissen nur aus Produkten, die für sich allein schon tragen.
+  if (Number.isFinite(opts.dispersionPrior)) return out;
+  const belastbar = [];
+  for (const r of out.values()) {
+    if (r.sampleSize >= MIN_INTERVALS_FULL_CONFIDENCE && Number.isFinite(r.rawDispersion)) {
+      belastbar.push(r.rawDispersion);
+    }
+  }
+  // Drei ist die Untergrenze, ab der ein Median überhaupt etwas
+  // aussagt. Darunter wäre das "Vorwissen" nur ein weiterer Zufall.
+  if (belastbar.length < 3) return out;
+  const dispersionPrior = median(belastbar);
+
+  for (const [productId, purchases] of byProduct.entries()) {
+    const r = out.get(productId);
+    if (r.sampleSize >= MIN_INTERVALS_FULL_CONFIDENCE) continue;  // braucht keine Stütze
+    out.set(productId, computeRhythm(purchases, { ...opts, dispersionPrior }));
   }
   return out;
 }

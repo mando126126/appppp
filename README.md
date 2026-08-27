@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1795 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1802 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3206,6 +3206,94 @@ Vierzehn neue Tests. Alle jetzt 1795 Tests bestehen.
 
 ---
 
+## Der Kaltstart, benannt und halb behoben (2026-08-27)
+
+Die Trefferquote der Einkaufsliste lag bei 77,7 %. Interessanter als
+die Zahl war die Frage, woher die 968 übersehenen Käufe kommen. Also
+erst gezählt, dann geändert:
+
+| Ursache | Fälle |
+|---|---|
+| noch nicht fällig (Vorlauf zu kurz) | 583 |
+| Vertrauen unter der Schwelle | 265 |
+| erst einmal gekauft, also kein Intervall | 95 |
+| gar kein Rhythmus-Eintrag | 25 |
+
+Von den 265 zu unsicheren stammten **252 aus schlichtem Datenmangel**
+(unter fünf Käufen) und nur 13 aus echter Unregelmäßigkeit. Zusammen
+mit den beiden unteren Zeilen sind **372 der 968 Fälle — 38 % — ein
+und dasselbe Problem: die App ist für ein Produkt blind, bis es etwa
+fünfmal gekauft wurde.**
+
+Wie schlimm das ist, verdeckte der Rückvergleich selbst, denn er
+überspringt die ersten 40 Käufe. Ohne diesen Filter, nach
+Erfahrungsalter aufgeschlüsselt:
+
+| Erfahrung | Trefferquote | Genauigkeit |
+|---|---|---|
+| 0–20 Käufe | **4,8 %** | 83,3 % |
+| 20–40 Käufe | 27,5 % | 64,8 % |
+| 40–80 Käufe | 54,5 % | 62,6 % |
+| ab 160 Käufen | 84,2 % | 46,0 % |
+
+In den ersten Wochen sagt die App also fast nichts — und hat mit dem
+Wenigen recht. Für jemanden, der sie gerade erst ausprobiert, ist
+Schweigen aber der teurere Fehler.
+
+**Was geändert wurde.** Ein Produkt mit zwei, drei Käufen wurde
+zweimal bestraft: einmal offen über die Stichprobengröße, und einmal
+verdeckt, weil seine gemessene Streuung bei so wenigen Werten fast nur
+Rauschen ist — bei genau zwei Intervallen hängt sie rechnerisch von
+einem einzigen Abstand ab. Nachgemessen an 181 Produkten mit langer
+Historie: aus den ersten zwei Intervallen gerechnet liegt die Streuung
+im Mittel bei 0,152, aus der vollen Historie desselben Produkts bei
+0,103. 46 % der Produkte sehen früh unsteter aus, als sie sind.
+
+Jetzt wird bei dünn belegten Produkten der Erfahrungswert **dieses
+Haushalts** dazugemischt, mit dem Gewicht von zwei Intervallen. Ein
+regelmäßiger Haushalt bekommt für ein neues Produkt früher Vertrauen,
+ein unsteter bleibt vorsichtig — der Wert kommt also aus dem Haushalt
+selbst und nicht aus einer Konstanten, und er kann die Streuung
+genauso gut nach oben ziehen. Gut belegte Produkte bleiben unberührt,
+und ohne genug belastbare Produkte bleibt alles beim Alten.
+
+Ergebnis: 968 → 946 übersehene Käufe, Trefferquote 77,7 % → 78,2 %,
+Genauigkeit unverändert 48,8 %, Drei-Jahres-Lauf unverändert bei 1696
+Leertagen. Ein kleiner, aber kostenloser Gewinn.
+
+**Was gemessen und verworfen wurde.** Zwei größere Anläufe, den
+Kaltstart wirklich zu heben, sind gescheitert — beide sahen im
+Rückvergleich sehr gut aus:
+
+- *Stichprobengröße als Wurzel statt als Gerade.* Bisher zählte ein
+  einzelnes Intervall nur ein Viertel, obwohl gerade die erste
+  Wiederholung am meisten aussagt — sie unterscheidet „einmal gekauft"
+  von „das kommt wieder". Nebenwirkung der alten Geraden: ein zweimal
+  gekauftes Produkt kam nie über 0,25 Vertrauen und war damit unter
+  allen Umständen unsichtbar. Mit der Wurzel: Trefferquote 80,7 %, in
+  den ersten zwanzig Käufen 17,2 % statt 4,8 %, reife Haushalte
+  unberührt. Im Drei-Jahres-Lauf trotzdem **75 zusätzliche Leertage**.
+- *Den Vorlauf am Vertrauen bemessen*, als Gegenmittel gegen ebenjene
+  Schleife. Im Rückvergleich auf jeder Achse besser als der
+  Ausgangsstand (Genauigkeit 49,3 %, Trefferquote 78,3 %, F1 60,5 %) —
+  und trotzdem 1786 statt 1696 Leertage.
+
+Die Lehre ist dieselbe wie beim letzten Mal, nur schärfer: der Schaden
+entsteht **im** Kaltstart und bleibt danach. Zu früh vorgeschlagene
+Produkte lösen „Hab noch" aus, der gelernte Rhythmus wird länger, und
+der Haushalt kommt davon nicht mehr los. Dass die reife Phase in der
+Messung sauber aussah, hatte genau nichts zu bedeuten — sie erbt einen
+bereits verdorbenen Takt.
+
+Der Kaltstart bleibt damit die größte bekannte Schwäche der App. Er
+steht jetzt als eigener Testabschnitt mit den echten Zahlen im
+Rückvergleich, samt Untergrenzen gegen weiteren Verfall und einer
+Prüfung, dass mehr Erfahrung nie zu schlechteren Vorschlägen führt.
+
+Sieben neue Tests. Alle jetzt 1802 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3274,7 +3362,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1795
+npm test          # alle 1802
 npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
