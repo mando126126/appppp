@@ -58,6 +58,38 @@
  *     gegen die Ursache: es kürzt den Vorlauf ALLER Produkte, auch
  *     der gut belegten, und verliert dort mehr, als es im Kaltstart
  *     gewinnt.
+ *   - Vertrauensschwelle nur für bereits FÄLLIGE Produkte senken
+ *     (dueIn <= 0), den Vorlauf für vorzeitige unangetastet lassen —
+ *     in der Annahme, dass ein bereits fälliges Produkt kein
+ *     Frühwarn-Risiko trägt. Im Rückvergleich sehr sauber (Treffer-
+ *     quote 78,2 % -> 80,8 %, Genauigkeit unverändert). Trotzdem im
+ *     Drei-Jahres-Lauf gescheitert, und zwar nicht dort, wo erwartet:
+ *     nicht an Leertagen, sondern an einem einzelnen Quartal direkt
+ *     nach dem simulierten Urlaub (13,5 % statt 7,9 % vergessen).
+ *     Ursache gefunden: nach einer Abwesenheit werden plötzlich viele
+ *     Produkte gleichzeitig rechnerisch "fällig", weil der reine
+ *     Kalenderabstand die Abwesenheitstage mitzählt — sie treffen
+ *     dann gebündelt auf vollen Bestand (nichts verbraucht im Urlaub)
+ *     und lösen reihenweise "Hab noch" aus.
+ *     Der naheliegende Gegenzug — Abwesenheitstage auch im Fällig-
+ *     keits-Check abziehen, nicht nur in der Rhythmus-Berechnung
+ *     selbst — ist in der Sache richtig (rhythmDays IST bereits
+ *     abwesenheitsbereinigt, der Vergleich damit sollte es auch
+ *     sein). Trotzdem NICHT übernommen: allein diese Korrektur, ganz
+ *     ohne die niedrigere Schwelle, hat den Drei-Jahres-Lauf über
+ *     eine andere Kennzahl kippen lassen (Leertage 1696 -> 1727,
+ *     Rhythmus-Treffgenauigkeit 30,3 % statt darunter). Die erkannte
+ *     Abwesenheit im Test deckt sich offenbar nicht exakt mit der
+ *     simulierten — die Korrektur ersetzt einen bekannten Fehler
+ *     (Überzählen über Abwesenheiten) durch ein neues, kleineres
+ *     Rauschen (Erkennungs-Ungenauigkeit), und das war in dieser
+ *     einen Simulation kein Gewinn.
+ *     Der Kaltstart bleibt deshalb NUR über die Streuungs-Stützung
+ *     oben gelindert, nicht über eine weichere Fälligkeits-Schwelle.
+ *     Wer das noch einmal versucht: das eigentliche Ziel wäre, den
+ *     BÜNDEL-Effekt direkt zu entschärfen (z. B. "Hab noch" nach
+ *     einer erkannten Abwesenheit den Rhythmus nicht verlängern zu
+ *     lassen), nicht die Sichtbarkeits-Schwelle.
  *   - Nach Rhythmuslänge statt nach Überfälligkeit sortieren: hebt
  *     die Genauigkeit der ersten Zeile von 40,9 % auf 58,6 % — aber
  *     die Kennzahl belohnt, das Offensichtliche zuerst zu nennen.

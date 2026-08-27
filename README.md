@@ -3292,6 +3292,37 @@ Prüfung, dass mehr Erfahrung nie zu schlechteren Vorschlägen führt.
 
 Sieben neue Tests. Alle jetzt 1802 Tests bestehen.
 
+**Nachtrag, selber Tag: ein naheliegender nächster Schritt gemessen
+und verworfen.** Die 583 der 968 übersehenen Käufe, die an einer zu
+kurzen Vorlaufzeit liegen, hätten sich mit einer einfachen Idee
+angehen lassen: die Vertrauensschwelle nur für bereits FÄLLIGE
+Produkte senken (kein Vorlauf beteiligt, also kein Frühwarn-Risiko),
+den Vorlauf für vorzeitige Vorschläge unangetastet lassen. Im
+Rückvergleich sehr sauber — Trefferquote 78,2 % → 80,8 %, Genauigkeit
+unverändert. Im Drei-Jahres-Lauf trotzdem gescheitert, und zwar nicht
+an Leertagen (die blieben gleich), sondern an einem einzelnen Quartal
+direkt nach dem simulierten Urlaub (13,5 % statt 7,9 % vergessen):
+nach einer Abwesenheit werden plötzlich viele Produkte gleichzeitig
+rechnerisch „fällig", weil der Kalenderabstand die Abwesenheitstage
+mitzählt — sie treffen gebündelt auf vollen Bestand und lösen
+reihenweise „Hab noch" aus.
+
+Der naheliegende Gegenzug — Abwesenheitstage auch im Fälligkeits-
+Check abziehen, so wie es die Rhythmus-Berechnung selbst längst tut —
+ist in der Sache richtig. Trotzdem nicht übernommen: allein diese
+Korrektur, ganz ohne die niedrigere Schwelle, hat den Drei-Jahres-Lauf
+über eine ANDERE Kennzahl kippen lassen (Leertage 1696 → 1727,
+Rhythmus-Treffgenauigkeit knapp unter der Grenze). Die im Test
+erkannte Abwesenheit deckt sich offenbar nicht exakt mit der
+simulierten — die Korrektur tauscht einen bekannten, erklärbaren
+Fehler gegen ein kleineres, aber ebenso wirksames Rauschen ein.
+
+Vollständig protokolliert in `test/liste.js`, damit der nächste
+Anlauf beim eigentlichen Mechanismus ansetzt (das Bündeln von „Hab
+noch" nach einer Abwesenheit dämpfen) statt wieder bei der
+Sichtbarkeits-Schwelle. Kein Code geändert — der Kaltstart bleibt
+beim Stand von oben.
+
 ---
 
 ## Aufbau
