@@ -173,18 +173,18 @@ function headlineFor(days, total, shoppingSlot) {
 
   const verderb = days[0].events.filter((e) => e.kind === "verderb");
   if (verderb.length === 1) return `${verderb[0].name} sollte heute weg.`;
-  if (verderb.length > 1) return `${verderb.length} Sachen sollten heute weg.`;
+  if (verderb.length > 1) return `${verderb.length} ${verderb.length === 1 ? "Produkt" : "Produkte"} sollten heute weg.`;
 
   const heute = days[0].count;
-  if (heute > 0 && shoppingSlot === 0) return `Heute ist dein Einkaufstag — ${heute} ${heute === 1 ? "Sache" : "Sachen"} stehen an.`;
+  if (heute > 0 && shoppingSlot === 0) return `Heute ist dein Einkaufstag — ${heute} ${heute === 1 ? "Produkt" : "Produkte"} stehen an.`;
   if (shoppingSlot !== null && shoppingSlot > 0) {
     const bis = days.slice(0, shoppingSlot + 1).reduce((a, d) => a + d.count, 0);
-    return `Bis ${days[shoppingSlot].name} ${bis === 1 ? "kommt eine Sache" : `kommen ${bis} Sachen`} zusammen.`;
+    return `Bis ${days[shoppingSlot].name} ${bis === 1 ? "kommt ein Produkt" : `kommen ${bis} Produkte`} zusammen.`;
   }
-  if (heute > 0) return `Heute ${heute === 1 ? "steht eine Sache" : `stehen ${heute} Sachen`} an.`;
+  if (heute > 0) return `Heute ${heute === 1 ? "steht ein Produkt" : `stehen ${heute} Produkte`} an.`;
 
   const naechster = days.find((d) => d.count > 0);
-  return `Als Nächstes ${naechster.index === 1 ? "morgen" : naechster.name}: ${naechster.count} ${naechster.count === 1 ? "Sache" : "Sachen"}.`;
+  return `Als Nächstes ${naechster.index === 1 ? "morgen" : naechster.name}: ${naechster.count} ${naechster.count === 1 ? "Produkt" : "Produkte"}.`;
 }
 
 module.exports = { weekPulse, DAY_SHORT, DAY_NAMES, HORIZON, KIND_TEXT };

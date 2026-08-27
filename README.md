@@ -3325,6 +3325,43 @@ beim Stand von oben.
 
 ---
 
+## Wortwahl durchgesehen (2026-08-27)
+
+Ein Durchgang durch die sichtbaren Texte, mit demselben Ziel wie die
+Produkt-Blatt-Aufräumung weiter oben: professionell und nie überladen.
+
+**„Sachen" raus.** Sechs Stellen sagten „2 Sachen tauschen", „13
+Sachen kommen zusammen" — umgangssprachlich für einen Sachverhalt, der
+immer exakt Produkte meint (jedes Ereignis im Wochenstreifen hängt an
+einem Produkt). Ersetzt durch „Produkte", an einer Stelle durch
+„Hinweise" (Zero-Waste-Sheet, wo es tatsächlich um Hinweisarten statt
+Produkte geht). Zwei Tests hingen am alten Wortlaut und wurden
+mitgezogen.
+
+**Ein dichter Absatz beim Bon-Erfassen entwirrt.** Drei Fakten
+(Aufnahmeweg, Datenschutz, Open-Food-Facts-Abgleich) standen in einem
+Satz mit einer Gedankenstrich-Einschiebung mittendrin. Jetzt drei
+kurze Sätze — dieselben Fakten, aber auf einen Blick erfassbar statt
+einmal quer gelesen.
+
+**Zwei Großbuchstaben-Zwischenüberschriften leiser gestellt.** „Wo dein
+Geld hingeht" hatte auf der Zahlen-Seite eine ALL-CAPS-Überschrift
+„KATEGORIEN" direkt über weiteren fett gesetzten Werten — dieselbe
+Abwägung wie beim Produkt-Blatt schon einmal getroffen (normale
+Schreibweise trennt genauso gut, ohne lauter zu sein als der Inhalt
+darunter). Betraf `.moneySection` (Kategorien, Märkte, Immer wieder
+gekauft) und `.confirmProgress` (Fortschritt beim Bon-Bestätigen).
+
+Bewusst NICHT angefasst: die ausführlichen Erklärtexte hinter den
+Info-Punkten (`PILL_INFO`). Die sind an genau einer Stelle definiert,
+schon einmal gegen Dopplung durchgesehen (siehe Kommentar dort) und
+öffnen sich nur auf Antippen — Länge ist dort kein Problem, weil
+niemand sie ungefragt sieht.
+
+Alle 1802 Tests bestehen, zwei davon mit angepasstem Wortlaut.
+
+---
+
 ## Aufbau
 
 ```

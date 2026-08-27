@@ -2095,7 +2095,7 @@ console.log("\n--- Einkauf aus einem Bild ---");
   ok("Mit Texterkennung erscheint der Bildweg", /fotografieren|Bild wählen/.test(txt));
   ok("Und sagt, wo Bild und Bon-Text bleiben", /bleiben auf dem Gerät/.test(txt));
   ok("Und sagt ehrlich, was NICHT auf dem Gerät bleibt",
-    /Open Food Facts/.test(txt) && /nur der Name, ohne Preis, Datum oder Markt/.test(txt), txt);
+    /Open Food Facts/.test(txt) && /reiner Name, ohne Preis, Datum oder Markt/.test(txt), txt);
   const knopf = [...$("main").querySelectorAll("button")].find((b) => /Bild wählen/.test(b.textContent));
   ok("Es gibt eine Schaltfläche zum Wählen", !!knopf);
   const kamera = [...$("main").querySelectorAll("input[type=file]")].find((i) => i.hasAttribute("capture"));

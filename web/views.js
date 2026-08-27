@@ -1006,7 +1006,7 @@ function pulseCard(ctx, app) {
       (d.isShoppingDay ? " shop" : "") +
       (d.count ? "" : " quiet"));
     b.setAttribute("aria-label",
-      `${d.name}, ${d.count === 0 ? "nichts" : d.count === 1 ? "eine Sache" : d.count + " Sachen"}` +
+      `${d.name}, ${d.count === 0 ? "nichts" : d.count === 1 ? "ein Produkt" : d.count + " Produkte"}` +
       (d.isShoppingDay ? ", dein Einkaufstag" : ""));
 
     // Die Zahl steht ÜBER der Säule, nicht darunter: darunter steht
@@ -1125,7 +1125,7 @@ function todoCard(ctx, app) {
 
   const faellig = ctx.swapsDue.filter((x) => x.due);
   if (faellig.length) {
-    rows.push([faellig.length === 1 ? `${faellig[0].name} tauschen` : `${faellig.length} Sachen tauschen`,
+    rows.push([faellig.length === 1 ? `${faellig[0].name} tauschen` : `${zahlwort(faellig.length, "Produkt", "Produkte")} tauschen`,
       faellig.length === 1 ? "nach Zeit fällig" : faellig.slice(0, 3).map((x) => x.name).join(", "),
       flag("tauschen", "f-gold", String(faellig.length)), () => app.goto("faellig")]);
   }
@@ -1552,7 +1552,7 @@ function hintsSheet(ctx, app) {
     "Alles hier hat denselben Zweck: dass nichts weggeworfen werden muss. Jeder Hinweis kommt, " +
     "solange sich noch etwas machen lässt — nicht hinterher."));
 
-  app.sheet("Zero Waste", `${hinweise.length} ${hinweise.length === 1 ? "Sache" : "Sachen"}`, body);
+  app.sheet("Zero Waste", `${hinweise.length} ${hinweise.length === 1 ? "Hinweis" : "Hinweise"}`, body);
 }
 
 /**
@@ -2594,7 +2594,7 @@ function viewBestand(ctx, app) {
     if (ctx.swapsDue.length || ctx.stockUp.length) {
       const offen = ctx.swapsDue.filter((x) => x.due).length;
       g.body.append(uiRow("Austausch und Nachschub",
-        offen ? `${offen} ${offen === 1 ? "Sache ist" : "Sachen sind"} fällig` : "nichts fällig",
+        offen ? `${offen} ${offen === 1 ? "Produkt ist" : "Produkte sind"} fällig` : "nichts fällig",
         null, { onClick: () => app.goto("faellig") }));
     }
     c.append(g);
@@ -2845,10 +2845,9 @@ function ocrPicker(box, cap, app) {
   });
 
   wrap.append(el("p", "srcnote",
-    "Foto eines Papierbons oder Screenshot aus der Händler-App. Bild und Bon-Text bleiben auf " +
-    "dem Gerät — die Erkennung läuft hier, nicht auf einem Server. Ein nicht erkannter " +
-    "Produktname wird — nur der Name, ohne Preis, Datum oder Markt — bei Open Food Facts " +
-    "nachgeschlagen."));
+    "Foto eines Papierbons oder Screenshot aus der Händler-App. Bild und Text bleiben auf dem " +
+    "Gerät — erkannt wird hier, nicht auf einem Server. Nur ein unbekannter Produktname geht als " +
+    "reiner Name, ohne Preis, Datum oder Markt, an Open Food Facts."));
 
   if (cap.ocr) {
     const q = cap.ocr.quality;

@@ -461,8 +461,11 @@ button.row:active,label.row:active{background:var(--fill)}
    gutem Grund) -- die Pfeilrichtung reicht als Information, ohne ein
    Urteil zu fällen, das die Zahl allein nicht hergibt. */
 .moneyDelta{color:var(--ink-2);font-weight:600}
-.moneySection{font-size:0.76rem;font-weight:650;color:var(--ink-2);text-transform:uppercase;
-  letter-spacing:.03em;margin:22px 0 2px}
+/* Normale Schreibweise statt Großbuchstaben+Sperrung -- dieselbe
+   Abwägung wie bei .sheetGroupTitle: eine Zwischenüberschrift soll
+   trennen, nicht schreien. */
+.moneySection{font-size:0.79rem;font-weight:650;color:var(--ink-2);
+  letter-spacing:0;margin:22px 0 2px}
 .moneyBarRow{display:block;width:100%;text-align:left;padding:11px 0;position:relative}
 .moneyBarRow + .moneyBarRow::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--hairline)}
 /* Nur Produktzeilen sind Knöpfe (öffnen das Detail-Blatt) -- Kategorien
@@ -853,7 +856,7 @@ tbody tr:last-child td{border-bottom:none}
    von der Nutzerin erwartet, bevor es weitergeht. */
 .confirmCard{margin:14px 16px;padding:16px;border-radius:var(--r-lg);background:var(--surface);
   border:1.5px solid var(--amber);box-shadow:var(--lift)}
-.confirmProgress{font-size:0.76rem;font-weight:650;color:var(--amber-ink);text-transform:uppercase;letter-spacing:.02em}
+.confirmProgress{font-size:0.79rem;font-weight:650;color:var(--amber-ink)}
 .confirmRaw{font-size:1rem;font-weight:600;margin-top:6px;word-break:break-word}
 .confirmChoices{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .confirmChoice{width:100%;padding:13px 16px;text-align:left;border-radius:var(--r-md);
