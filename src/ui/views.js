@@ -927,12 +927,20 @@ function productSheet(productId, ctx) {
 function viewStart(ctx, app) {
   const c = frag();
 
-  /* --- Kaltstart: erst einmal Daten --- */
+  /* --- Kaltstart: erst einmal Daten ---
+     Das ist die ganze Einführung, die es gibt — bewusst eine einzige
+     Karte statt eines mehrschrittigen Dialogs. Drei kurze Zeilen
+     statt eines Fließtexts, weil die drei Fragen, die hier zählen
+     (was macht das, wo bleiben meine Daten, was tue ich als Erstes),
+     sich nicht der Reihe nach lesen lassen wollen, sondern auf einen
+     Blick beantwortet sein sollen. */
   if (!ctx.history.length) {
     const w = card();
-    w.append(el("p", "welcome",
-      "Einkaufs-Anker lernt aus deinen Kassenbons, was wann bei dir ausgeht — " +
-      "und sagt es dir, bevor es fehlt."));
+    w.append(el("p", "welcomeTitle", "Willkommen bei Einkaufs-Anker"));
+    w.append(el("ul", "welcomePoints",
+      "<li>Lernt aus deinen Kassenbons, was wann bei dir ausgeht, und sagt es dir vorher.</li>" +
+      "<li>Bleibt auf deinem Gerät — kein Konto, kein Server, keine Übertragung.</li>" +
+      "<li>Schon der erste Bon zeigt deine Ausgaben; die Einkaufsliste kommt mit der Zeit dazu.</li>"));
     const b = el("button", "cta", "Ersten Bon erfassen");
     b.addEventListener("click", () => app.goto("erfassen"));
     w.append(b);
