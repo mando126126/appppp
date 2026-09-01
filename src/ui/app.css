@@ -547,6 +547,12 @@ button.moneyBarRow:active{opacity:.6}
 .scroller{
   display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;
   margin:14px calc(var(--pad) * -1) 0;padding:2px var(--pad) 4px;
+  /* Weicher rechter Rand statt hartem Schnitt an der letzten Kachel --
+     sagt "hier geht's weiter", ohne ein eigenes Zeichen dafür zu
+     brauchen. Fünf Kacheln passen auf Telefonbreite so gut wie nie
+     ganz hin, der Rand ist also praktisch immer sichtbar begründet. */
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%);
+  mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%);
 }
 .scroller::-webkit-scrollbar{display:none}
 .tile{
@@ -882,6 +888,12 @@ tbody tr:last-child td{border-bottom:none}
 
 .row.action .rowTitle{color:var(--accent);font-weight:550}
 .row.action.danger .rowTitle{color:var(--red)}
+/* Unwiderrufliches bekommt einen eigenen Ton, nicht nur eine eigene
+   Textfarbe -- der Unterschied zwischen "eine Meldung tippen" und
+   "unwiderruflich" verdient mehr als ein einzelnes rotes Wort in einer
+   Liste sonst harmloser Zeilen. */
+.row.action.danger{background:var(--red-soft)}
+button.row.action.danger:active{background:var(--red-soft)}
 button.row.action,label.row.action{cursor:pointer}
 
 /* ---------------- Ladenmodus ---------------- */
