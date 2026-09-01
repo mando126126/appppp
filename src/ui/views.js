@@ -2731,6 +2731,29 @@ function nachschlagen(cap, app) {
 function ocrPicker(box, cap, app) {
   const wrap = el("div", "shot");
 
+  // Aus dem System-Teilen-Menü angekommen (siehe App.consumeSharedIfAny).
+  // Nur einmal abgeholt — sofort leeren, sonst griffe ein späterer
+  // erneuter Aufbau dieser Ansicht denselben Fund noch einmal auf.
+  //
+  // Text übernehmen und ein falsches Dateiformat melden passiert HIER,
+  // vor der Weiche nach Texterkennungs-Unterstützung: sonst würde eine
+  // geteilte PDF-Datei in einem Browser ohne Texterkennung spurlos
+  // verschwinden, statt wenigstens gesagt zu bekommen, dass sie nicht
+  // gelesen werden konnte.
+  const geteilt = app.pendingShare;
+  if (geteilt) app.pendingShare = null;
+  const bildhaft = !!(geteilt && geteilt.datei && /^image\//.test(geteilt.datei.type || ""));
+  if (geteilt && geteilt.datei && !bildhaft) {
+    // Manche Händler-Apps bieten den eBon als PDF zum Teilen an, nicht
+    // als Bild. Die Texterkennung liest bisher nur Bilder.
+    app.notice("Dieses Format liest die Texterkennung noch nicht",
+      `Aus dem Teilen-Menü kam eine Datei vom Typ „${geteilt.datei.type || "unbekannt"}" — ` +
+      "die Texterkennung liest bisher nur Bilder.\n\n" +
+      "Zwei Wege bleiben: den Bon-Text unten einfügen, oder in der Händler-App statt der " +
+      "Datei einen Screenshot teilen.");
+  }
+  if (geteilt && geteilt.text && !cap.text) cap.text = geteilt.text;
+
   if (!OCR.supported()) {
     // Kein Vorwurf und kein Fehler: der Textweg steht ja darunter.
     wrap.append(el("p", "srcnote", esc(OCR.reason())));
@@ -2806,6 +2829,11 @@ function ocrPicker(box, cap, app) {
 
   input.addEventListener("change", () => lies(input.files && input.files[0]));
   kamera.addEventListener("change", () => lies(kamera.files && kamera.files[0]));
+
+  // Bild: sofort durch dieselbe Erkennung schicken wie beim Einfügen
+  // oder Ablegen eines Bildes. Text und Format-Hinweis stehen bereits
+  // oben — hier nur noch der Teil, der Texterkennung voraussetzt.
+  if (bildhaft) lies(geteilt.datei);
 
   const knoepfe = el("div", "shotRow");
   const foto = el("button", "cta", "Fotografieren");

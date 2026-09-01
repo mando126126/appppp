@@ -17,5 +17,18 @@
   "shortcuts": [
     { "name": "Einkauf erfassen", "url": "./index.html#erfassen" },
     { "name": "Deine Zahlen", "url": "./index.html#zahlen" }
-  ]
+  ],
+  "share_target": {
+    "action": "./index.html?teilen=1",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "titel",
+      "text": "text",
+      "url": "adresse",
+      "files": [
+        { "name": "datei", "accept": ["image/*", "application/pdf", "text/plain"] }
+      ]
+    }
+  }
 }

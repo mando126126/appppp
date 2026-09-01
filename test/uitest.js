@@ -63,6 +63,23 @@ window.scrollTo = () => {};
 window.URL.createObjectURL = () => "blob:test";
 window.URL.revokeObjectURL = () => {};
 
+// Cache Storage: jsdom kennt sie nicht (kein Service Worker). Ein
+// simples In-Memory-Double reicht, um App.consumeSharedIfAny() zu
+// prüfen — den eigentlichen Worker (sw.js, läuft in einem eigenen
+// Kontext, den Node nicht ausführt) deckt das nicht ab, siehe unten.
+const cacheStores = new Map();
+window.caches = {
+  open: async (name) => {
+    if (!cacheStores.has(name)) cacheStores.set(name, new Map());
+    const store = cacheStores.get(name);
+    return {
+      match: async (key) => store.get(key) || undefined,
+      put: async (key, res) => { store.set(key, res); },
+      delete: async (key) => store.delete(key)
+    };
+  }
+};
+
 const origWarn = window.console && window.console.warn;
 window.console = {
   ...console,
@@ -2158,6 +2175,106 @@ console.log("\n--- Einkauf aus einem Bild ---");
   App.goto("liste");
   ok("Kein Hörer bleibt nach dem Wechsel hängen",
     !App._cleanup || App._cleanup.length === 0, App._cleanup && App._cleanup.length);
+}
+
+console.log("\n--- Aus dem Teilen-Menü (REWE, Lidl & Co. → „eBon teilen“) ---");
+{
+  /* Was hier NICHT geprüft wird, und warum: den eigentlichen Worker
+     (sw.js) führt Node nicht aus — er läuft in einem eigenen
+     ServiceWorker-Kontext, den weder jsdom noch dieser Testlauf
+     nachbildet. Geprüft wird deshalb die Kette AB dem Punkt, an dem
+     der Worker seine Arbeit abgegeben hat: eine Datei im
+     Cache-Speicher, `?teilen=1` in der Adresse. Dass der Worker
+     selbst korrekt daraus einen Cache-Eintrag macht, hält Abschnitt
+     „Ein Ding, ein Name“ unten als Quelltext-Prüfung fest — mehr geht
+     ohne echten Browser nicht ehrlich zu behaupten. */
+  const legeInCache = async (text, datei) => {
+    const cache = await window.caches.open("einkaufsanker-geteilt");
+    await cache.put("./geteilt-text", { text: async () => text });
+    if (datei) await cache.put("./geteilt-datei", { blob: async () => datei });
+    else await cache.delete("./geteilt-datei");
+  };
+
+  D.reset();
+  D.loadDemo("full");
+  // App.capture überlebt D.reset() -- das ist Oberflächenzustand, kein
+  // Haushaltszustand. Ohne diese Zeile träfe der erste Fall hier auf
+  // Text, der von einem früheren Testabschnitt übrig ist.
+  App.capture.text = "";
+
+  // --- Nur Text (z. B. eine Bon-Zusammenfassung ohne Bilddatei) ---
+  await legeInCache("Vollmilch 3,5% 1,29\nNaturjoghurt 0,59", null);
+  window.history.pushState(null, "", "/?teilen=1#start");
+  await App.consumeSharedIfAny();
+
+  ok("Springt auf die Erfassen-Seite", App.tab === "erfassen", App.tab);
+  ok("Und dorthin, wo der Bon-Text steht", App.capture.tab === "scan", App.capture.tab);
+  ok("Die Adresse ist wieder sauber", !window.location.search.includes("teilen"), window.location.search);
+  App.render();
+  ok("Der geteilte Text steht im Feld",
+    $("main").querySelector("textarea").value.includes("Naturjoghurt"),
+    $("main").querySelector("textarea").value);
+
+  // --- Bild, mit Texterkennung: läuft automatisch durch, wie beim
+  //     Einfügen oder Ablegen eines Bildes auch. ---
+  App.capture.text = "";
+  T.OCR.engine = () => "REWE\nBrot 2,19\nSUMME 2,19";
+  await legeInCache("", { type: "image/jpeg" });
+  window.history.pushState(null, "", "/?teilen=1#start");
+  await App.consumeSharedIfAny();
+  App.render();
+  // OCR.read() hängt an einem Versprechen -- eine echte Wartezeit statt
+  // einer geratenen Anzahl Microtask-Runden, sonst wird der Test genauso
+  // brüchig wie das, was er prüfen soll.
+  await new Promise((res) => setTimeout(res, 20));
+  ok("Ein geteiltes Bild läuft von selbst durch die Texterkennung",
+    /Brot/.test(App.capture.text || ""), App.capture.text);
+
+  // --- PDF (manche Händler-Apps bieten den eBon so an): ehrlich
+  //     sagen, dass das noch nicht geht, statt es stillschweigend
+  //     zu verwerfen. ---
+  App.capture.text = "";
+  T.OCR.engine = null;
+  await legeInCache("", { type: "application/pdf" });
+  window.history.pushState(null, "", "/?teilen=1#start");
+  await App.consumeSharedIfAny();
+  App.render();
+  ok("Ein PDF wird nicht stillschweigend verworfen",
+    /Texterkennung.*noch nicht|noch nicht.*Texterkennung/i.test($("sheetTitle").textContent) ||
+    /Screenshot/.test($("sheetOpts").textContent),
+    $("sheetTitle").textContent + " | " + $("sheetOpts").textContent);
+  App.closeSheet();
+
+  // --- Ohne "?teilen=1" passiert nichts — ein gewöhnlicher Start
+  //     darf den Cache nicht anfassen. ---
+  App.pendingShare = null;
+  window.history.pushState(null, "", "/#start");
+  await App.consumeSharedIfAny();
+  ok("Ohne Markierung in der Adresse bleibt alles unberührt", App.pendingShare === null);
+
+  /* Die Gegenseite: dass der Worker (sw.js) aus einer geteilten
+     Anfrage tatsächlich einen Cache-Eintrag macht und dahin
+     umleitet, wo App.consumeSharedIfAny() oben es erwartet. Node
+     führt sw.js nicht aus (eigener ServiceWorker-Kontext) — geprüft
+     wird deshalb der Quelltext, nicht das Verhalten. Das ist bewusst
+     schwächer als ein echter Testlauf und wird hier auch so benannt. */
+  const swSrc = fs.readFileSync(path.join(WEB, "sw.js"), "utf8");
+  ok("Der Worker fängt POST-Anfragen ans Teilen-Ziel ab",
+    /method === "POST"/.test(swSrc) && /searchParams\.has\("teilen"\)/.test(swSrc));
+  ok("Und legt Datei und Text in einem eigenen Zwischenspeicher ab",
+    /geteilt-text/.test(swSrc) && /geteilt-datei/.test(swSrc));
+  ok("Und leitet danach zur App zurück",
+    /Response\.redirect/.test(swSrc));
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(WEB, "manifest.webmanifest"), "utf8"));
+  const ziel = manifest.share_target || {};
+  ok("Das Manifest meldet ein Teilen-Ziel", !!manifest.share_target);
+  ok("POST mit Formulardaten, wie es der Worker erwartet",
+    ziel.method === "POST" && ziel.enctype === "multipart/form-data");
+  ok("Nimmt Bilder, PDFs und reinen Text an",
+    !!(ziel.params && ziel.params.files && ziel.params.files[0] &&
+      ["image/*", "application/pdf", "text/plain"]
+        .every((t) => ziel.params.files[0].accept.includes(t))));
 }
 
 console.log("\n--- Zweite Stufe: Open Food Facts als Übersetzer ---");

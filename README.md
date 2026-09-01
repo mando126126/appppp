@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1802 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1815 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3362,6 +3362,60 @@ Alle 1802 Tests bestehen, zwei davon mit angepasstem Wortlaut.
 
 ---
 
+## Als Teilen-Ziel: „eBon teilen" aus REWE, Lidl & Co. (2026-08-27)
+
+REWE, Lidl und andere Händler-Apps bieten an, den digitalen Bon direkt
+über das System-Teilen-Menü zu verschicken. Einkaufs-Anker meldet sich
+jetzt selbst als Ziel dafür an (`share_target` im Manifest) — Bild,
+PDF oder Text kommen direkt bei der App an, ohne Umweg über
+Zwischenablage oder Dateiverwaltung.
+
+**Wie es technisch geht, ohne eigenen Server:** Das Betriebssystem
+schickt eine POST-Anfrage mit der geteilten Datei an die App. Auf
+statischem Hosting (GitHub Pages) gäbe es dafür normalerweise niemanden,
+der antwortet — der Service Worker fängt die Anfrage deshalb selbst ab,
+legt Datei und Text in einem eigenen Zwischenspeicher ab und leitet zur
+App zurück. Die App holt sich das beim nächsten Start ab
+(`App.consumeSharedIfAny`) und löscht den Zwischenspeicher sofort danach
+wieder — nichts bleibt liegen, was nicht gebraucht wird.
+
+**Was danach passiert, richtet sich nach dem Format:**
+- Bild → läuft automatisch durch dieselbe Texterkennung wie ein
+  eingefügter Screenshot, genau wie beim Fotografieren.
+- Text → landet im Bon-Text-Feld, zur Kontrolle, bevor „Auswerten"
+  gedrückt wird — nichts wird ungesehen gebucht.
+- PDF oder ein anderes Format → die Texterkennung liest bisher nur
+  Bilder. Statt das still zu verwerfen, sagt die App das ausdrücklich
+  und bietet die zwei verbleibenden Wege an (Text einfügen, oder in der
+  Händler-App einen Screenshot statt der Datei teilen). Ob REWE, Lidl
+  & Co. den eBon als Bild oder als PDF anbieten, ist unterschiedlich
+  und nicht in jedem Fall bekannt — deshalb nimmt das Manifest
+  vorsichtshalber alle drei Formen an (`image/*`, `application/pdf`,
+  `text/plain`), damit die App im Teilen-Menü überhaupt erscheint,
+  unabhängig davon, welches Format am Ende ankommt.
+
+**Die Grenze, klar benannt: nur Android.** `share_target` ist Teil des
+Web-App-Manifests, und Safari/WebKit hat dieses Feld nie implementiert.
+Auf einem iPhone taucht Einkaufs-Anker im Teilen-Menü nicht auf — das
+ist keine Einschränkung dieser App, sondern eine fehlende Funktion in
+iOS selbst, die keine Web-App umgehen kann.
+
+**Getestet wurde, was ohne echten Browser ehrlich geht:** die ganze
+Kette AB dem Punkt, an dem der Worker seine Arbeit abgegeben hat
+(Cache-Eintrag, `?teilen=1` in der Adresse) — Sprung auf die
+Erfassen-Seite, Text im Feld, Bild durch die Texterkennung, PDF mit
+Format-Hinweis statt Stille, ein gewöhnlicher Start bleibt unberührt.
+Dazu strukturelle Prüfungen, dass Manifest und Worker zueinander
+passen. Der Worker selbst (`sw.js`) läuft in einem eigenen
+ServiceWorker-Kontext, den Node nicht ausführt — dass ein echtes
+Android-Gerät die App im System-Teilen-Menü tatsächlich anzeigt und die
+Anfrage richtig durchreicht, ist ungetestet und lässt sich ohne
+reales Gerät nicht schließen.
+
+Dreizehn neue Tests. Alle jetzt 1815 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3430,7 +3484,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1802
+npm test          # alle 1815
 npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

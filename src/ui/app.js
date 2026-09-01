@@ -69,6 +69,11 @@ const App = {
   ctx: null,
   storeOpen: false,
   capture: { tab: "scan", text: "", parsed: null, basket: [], query: "", date: null, store: "" },
+  // Aus dem System-Teilen-Menü übernommen (REWE, Lidl & Co. → „eBon
+  // teilen" → Einkaufs-Anker). Wird einmal von ocrPicker() abgeholt
+  // und danach sofort geleert — kein dauerhafter Zustand, keine
+  // Sicherung nötig.
+  pendingShare: null,
   // Nur die Ansicht, nicht der Haushalt: der gewählte Zeitraum in
   // "Wo dein Geld hingeht" ist eine Anzeige-Einstellung, kein
   // Haushaltsdatum -- sie geht deshalb nicht über Data.update() und
@@ -82,6 +87,43 @@ const App = {
 
   /* ---------- Zustand ändern ---------- */
   set(fn) { Data.update(fn); },
+
+  /**
+   * Holt ab, was der Worker aus dem Teilen-Menü zwischengelegt hat
+   * (siehe sw.js, `handleShare`). Nur aktiv, wenn die URL das
+   * verrät (`?teilen=1`) — an jedem gewöhnlichen Start ein einziger
+   * synchroner Vergleich, kein Cache-Zugriff.
+   *
+   * Die URL wird sofort bereinigt, bevor überhaupt etwas gelesen ist:
+   * schlägt das Lesen fehl, soll ein Neuladen nicht denselben Versuch
+   * wiederholen und wieder scheitern.
+   */
+  async consumeSharedIfAny() {
+    const url = new URL(location.href);
+    if (!url.searchParams.has("teilen")) return;
+    url.searchParams.delete("teilen");
+    history.replaceState(null, "", url.pathname + (url.search || "") + url.hash);
+
+    if (!("caches" in window)) return;
+    try {
+      const cache = await caches.open("einkaufsanker-geteilt");
+      const [textRes, datenRes] = await Promise.all([
+        cache.match("./geteilt-text"), cache.match("./geteilt-datei")
+      ]);
+      const text = textRes ? await textRes.text() : "";
+      const datei = datenRes ? await datenRes.blob() : null;
+      await Promise.all([cache.delete("./geteilt-text"), cache.delete("./geteilt-datei")]);
+      if (!text && !datei) return;
+
+      App.pendingShare = { text, datei };
+      App.tab = "erfassen";
+      App.capture.tab = "scan";
+      location.hash = "erfassen";
+      App.render();
+    } catch (e) {
+      console.warn("Geteilten Bon nicht lesen können.", e);
+    }
+  },
 
   /**
    * Eine Wochenentscheidung zu einer Position festhalten.
@@ -974,6 +1016,7 @@ function boot() {
 
   Data.subscribe(() => App.render());
   App.render();
+  App.consumeSharedIfAny();
 
   const rec = Data.recoveryNotice();
   if (rec) {
