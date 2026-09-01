@@ -46,6 +46,10 @@ const SUBVIEWS = [
   {
     id: "faellig", label: "Fällig", title: "Fällig", view: viewFaellig, parent: "start",
     icon: '<circle cx="12" cy="12.5" r="8"/><path d="M12 8.5v4.2l2.8 1.7"/><path d="M9 3h6"/>'
+  },
+  {
+    id: "angebote", label: "Angebote", title: "Angebote", view: viewAngebote, parent: "start",
+    icon: '<path d="M12 3.5l2.4 5.1 5.6.8-4 4 1 5.6-5-2.6-5 2.6 1-5.6-4-4 5.6-.8z"/>'
   }
 ];
 

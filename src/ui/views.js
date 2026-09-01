@@ -231,7 +231,14 @@ const PILL_INFO = {
 
   eigenmarke: ["Eigenmarke",
     "Die Handelsmarke des Händlers — ja!, Gut&Günstig, K-Classic, Milbona und so weiter.\n\n" +
-    "Die App empfiehlt nichts davon. Sie zeigt nur, was der Unterschied bei dir ausmachen würde."]
+    "Die App empfiehlt nichts davon. Sie zeigt nur, was der Unterschied bei dir ausmachen würde."],
+
+  angebote: ["Angebote",
+    "Bei deinem letzten Einkauf hast du für dieses Produkt deutlich weniger bezahlt als sonst — " +
+    "mindestens 15 % unter deinem üblichen Preis.\n\n" +
+    "Das ist kein aktueller Regalpreis: die App hat keinen Zugang zu dem, was gerade im Laden " +
+    "steht, sondern nur zu dem, was auf deinen Bons stand. Die Menge richtet sich nach der " +
+    "Haltbarkeit und deinem gelernten Verbrauch — nie mehr, als bis dahin aufgebraucht wäre."]
 };
 
 /**
@@ -1128,6 +1135,12 @@ function todoCard(ctx, app) {
     rows.push([faellig.length === 1 ? `${faellig[0].name} tauschen` : `${zahlwort(faellig.length, "Produkt", "Produkte")} tauschen`,
       faellig.length === 1 ? "nach Zeit fällig" : faellig.slice(0, 3).map((x) => x.name).join(", "),
       flag("tauschen", "f-gold", String(faellig.length)), () => app.goto("faellig")]);
+  }
+
+  if (ctx.foodDeals.length) {
+    rows.push([`${zahlwort(ctx.foodDeals.length, "Angebot", "Angebote")} erkannt`,
+      ctx.foodDeals.slice(0, 3).map((d) => d.name).join(", "),
+      flag("angebote", "f-ok", String(ctx.foodDeals.length)), () => app.goto("angebote")]);
   }
 
   if (ctx.review.due) {
@@ -2462,6 +2475,39 @@ function viewFaellig(ctx, app) {
     c.append(g);
   }
 
+  return c;
+}
+
+/**
+ * Lebensmittel, die beim letzten Einkauf deutlich unter dem eigenen
+ * üblichen Preis lagen — die Lebensmittel-Entsprechung zu „Günstig
+ * bevorraten" oben, das nur Haushaltsprodukte kennt.
+ *
+ * Bewusst getrennt von jenem Abschnitt statt eingemischt: der eine
+ * Grund für eine Empfehlung (Haltbarkeit) und der andere (Lagerplatz,
+ * Aktionszyklus) haben kaum etwas gemeinsam, und eine Liste, die beide
+ * mischt, beantwortet keine der beiden Fragen mehr sauber.
+ */
+function viewAngebote(ctx, app) {
+  const c = frag();
+
+  if (!ctx.foodDeals.length) {
+    c.append(emptyView(
+      "Gerade keine Angebote erkannt. Das braucht ein paar Einkäufe mehr Preisgeschichte je Produkt.",
+      "Einkauf erfassen", () => app.goto("erfassen")));
+    return c;
+  }
+
+  const g = uiGroup("Zuletzt günstig gekauft",
+    "Bei diesen Produkten hast du beim letzten Einkauf mindestens 15 % unter deinem üblichen " +
+    "Preis bezahlt. Kein aktueller Regalpreis — die App kennt nur, was auf deinen Bons stand.\n\n" +
+    "Die Menge ist durch die Haltbarkeit begrenzt: nie mehr, als bis dahin aufgebraucht wäre.");
+  ctx.foodDeals.forEach((a) => g.body.append(uiRow(a.name,
+    `${Math.round(a.nachlass * 100)} % günstiger · zuletzt ${deDate(a.lastDate)}`, null, {
+      value: a.kind === "vorrat" ? `${a.einheiten}×` : null,
+      onClick: () => productSheet(a.productId, ctx)
+    })));
+  c.append(g);
   return c;
 }
 

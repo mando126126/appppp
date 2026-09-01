@@ -2277,6 +2277,55 @@ console.log("\n--- Aus dem Teilen-Menü (REWE, Lidl & Co. → „eBon teilen“)
         .every((t) => ziel.params.files[0].accept.includes(t))));
 }
 
+console.log("\n--- Angebote: die Lebensmittel-Entsprechung zu \"Günstig bevorraten\" ---");
+{
+  D.reset();
+  App.goto("start");
+  App.render();
+  ok("Ohne Historie keine Angebote", App.ctx.foodDeals.length === 0);
+
+  // Fünf Käufe zu üblichem Preis, damit Rhythmus UND Preisgedächtnis
+  // etwas zu arbeiten haben -- dann einer deutlich billiger.
+  const kauf = (tag, preis) => D.addReceipt({
+    date: tag, store: "Test", items: [{ productId: "kaffee", quantity: 1, unitPrice: preis }]
+  });
+  kauf("2026-06-01", 6.49);
+  kauf("2026-06-15", 6.49);
+  kauf("2026-06-29", 6.49);
+  kauf("2026-07-13", 6.49);
+  kauf("2026-07-27", 4.99);   // gut 23 % unter dem üblichen Preis
+  App.render();
+
+  const deal = App.ctx.foodDeals.find((d) => d.productId === "kaffee");
+  ok("Der günstige Kauf wird als Angebot erkannt", !!deal, JSON.stringify(App.ctx.foodDeals));
+  ok("Der Nachlass stimmt ungefähr",
+    !!deal && deal.nachlass > 0.20 && deal.nachlass < 0.26, deal && deal.nachlass);
+
+  ok("Erscheint in \"Jetzt zu tun\"",
+    /Angebot/.test($("main").textContent) && /Kaffee/.test($("main").textContent));
+
+  App.goto("angebote");
+  App.render();
+  ok("Die Angebote-Seite zeigt das Produkt", /Kaffee/.test($("main").textContent));
+  // "zuletzt DD.MM.JJJJ" statt eines aktuellen Preises -- die Zeile
+  // behauptet an keiner Stelle, das gelte im Laden gerade jetzt.
+  ok("Und sagt ehrlich, dass es der letzte GESEHENE Preis ist, kein Regalpreis",
+    /zuletzt \d\d\.\d\d\.\d{4}/.test($("main").textContent), $("main").textContent);
+
+  // Zurück zu leer: ohne Treffer bleibt die Seite verständlich, keine
+  // leere Fläche.
+  D.reset();
+  App.goto("start");
+  App.render();
+  ok("Ohne Angebote verschwindet die Zeile aus \"Jetzt zu tun\"",
+    !/Angebot erkannt|Angebote erkannt/.test($("main").textContent));
+  App.goto("angebote");
+  App.render();
+  ok("Und die Seite selbst erklärt das Fehlen statt leer zu bleiben",
+    /Gerade keine Angebote erkannt/.test($("main").textContent));
+  App.goto("start");
+}
+
 console.log("\n--- Zweite Stufe: Open Food Facts als Übersetzer ---");
 {
   /* T.OffLookup.fetcher ersetzt fetch() — genau das Muster von

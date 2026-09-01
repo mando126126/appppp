@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1815 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1823 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3416,6 +3416,49 @@ Dreizehn neue Tests. Alle jetzt 1815 Tests bestehen.
 
 ---
 
+## Angebote: die Lücke zwischen zwei fertigen Modulen geschlossen (2026-08-27)
+
+Auffällig beim letzten Auftrag: ein Großteil der angefragten „Struktur"
+existierte schon. `priceMemory.js` erkennt je Produkt, ob der letzte
+gezahlte Preis deutlich unter dem eigenen üblichen liegt. `offerAdvisor.js`
+rechnet daraus eine Menge, die sich bei der Haltbarkeit noch lohnt. Beide
+fertig, beide getestet (`test/schwarm.js`) — nur nirgends verbunden, und
+`offerAdvisor.js` stand in keiner einzigen Ansicht.
+
+Der Grund war eine Lücke, keine Redundanz: `stockUpAdvisor.js` macht
+dieselbe Rechnung bereits, aber nur für Haushaltsprodukte (die verderben
+nicht). Für Lebensmittel — genau das, was zuletzt gefragt war — gab es
+keine Entsprechung in der Oberfläche.
+
+**Was jetzt dazukommt:** `compute()` verknüpft `priceMemory` und
+`offerAdvice` zu `ctx.foodDeals` — alle Lebensmittel, bei denen der letzte
+Kauf mindestens 15 % unter dem eigenen Median lag, mit einer aus
+Haltbarkeit und gelerntem Verbrauch gerechneten Menge. Ein neuer, von der
+Startseite erreichbarer Bereich („Angebote", nach demselben Muster wie
+„Fällig" — ein siebter Reiter unten passt nicht) zeigt sie.
+
+**Was bewusst NICHT behauptet wird:** Das ist der zuletzt GESEHENE
+Preis, kein aktueller Regalpreis — die App hat keinen Zugang zu dem, was
+gerade im Laden steht. Jede Zeile sagt „zuletzt DD.MM.JJJJ" statt eine
+Aktualität vorzutäuschen, die nicht da ist.
+
+**Was das NICHT ist:** eine Antwort auf den größeren Teil derselben
+Anfrage — eine Datenbank, die Preise über mehrere Haushalte oder Händler
+hinweg zusammenführt. Das bräuchte einen Server oder einen
+Austauschmechanismus zwischen Geräten, und genau diese Weggabelung liegt
+bereits fertig durchdacht in `docs/schwarm.md`: drei Stufen, von
+„lokal, wie jetzt" bis „öffentlicher Index mit Impressum,
+Datenschutzerklärung und Hosting-Verantwortung". `priceShare.js`
+(k-Anonymität, nur bekannte Ketten, keine Kennung) liegt dafür fertig
+und ungenutzt bereit — SEIT einer früheren Runde, nicht seit heute.
+Diese Entscheidung wurde nicht getroffen, weil sie nicht lokal zu treffen
+ist: sie ändert das Kernversprechen der App, das auf jedem Bildschirm
+steht.
+
+Acht neue Tests. Alle jetzt 1823 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3484,7 +3527,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1815
+npm test          # alle 1823
 npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

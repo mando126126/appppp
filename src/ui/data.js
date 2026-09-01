@@ -1255,6 +1255,28 @@ function compute() {
   const range = stockRange(inventory, rhythms);
   const prices = allPriceMemories(history);
 
+  /* Lebensmittel-Angebote: die Lücke zu stockUpAdvice oben, das nur
+     Haushaltsprodukte kennt (die verderben nicht). offerAdvice
+     rechnet dieselbe Frage für Lebensmittel — begrenzt durch die
+     Haltbarkeit, nicht nur durch Lagerplatz. Beide Module standen
+     lange nebeneinander; offerAdvisor.js war fertig und ungenutzt.
+     Grundlage ist der ZULETZT gezahlte Preis aus dem Preisgedächtnis
+     oben, nicht ein Preis, der jetzt im Laden gilt — die App hat
+     keinen Zugang zu aktuellen Regalpreisen und behauptet das nicht. */
+  const foodDeals = [];
+  for (const [pid, pm] of prices) {
+    if (pm.verdict !== "günstig") continue;
+    const p = byId(pid);
+    if (!p || !p.isFood || p.safetyCritical) continue;
+    const r = rhythms.get(pid);
+    const advice = offerAdvice(pid, {
+      preis: pm.last, üblich: pm.usual, herkunft: "eigen",
+      perUnitDays: r && r.perUnitDays
+    });
+    if (advice) foodDeals.push({ ...advice, lastDate: pm.lastDate, nachlassProzent: pm.changePercent });
+  }
+  foodDeals.sort((a, b) => b.nachlass - a.nachlass);
+
   // Weggetippte Hinweise gelten eine Woche, danach kommen sie wieder.
   const dis = s.dismissed.week === wk ? s.dismissed : { forgotten: [], freeze: [] };
 
@@ -1340,7 +1362,7 @@ function compute() {
     items, manualItems, knownItems: known, duplicates, budgetResult, vacation, savings,
     deposit, depositEntries, openDepositEntries: openEntries, archive,
     inflation,
-    range, prices, forgotten, freeze, safety,
+    range, prices, foodDeals, forgotten, freeze, safety,
     opened, pattern, season, seasonNow,
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog, absences,
