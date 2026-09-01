@@ -112,7 +112,8 @@ try {
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
-    " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf };"
+    " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
+    " mascotSvg, mascotMood };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -2927,6 +2928,45 @@ console.log("\n--- Stufe 2 ist vorbereitet, aber nirgends erreichbar ---");
     !/schwarm/i.test(v) && !/schwarm/i.test(a));
   ok("data.js liest oder schreibt die Einwilligung dort dennoch nicht aktiv um",
     !/settings\.schwarm\.enabled\s*=/.test(fs.readFileSync(path.join(WEB, "data.js"), "utf8")));
+}
+
+console.log("\n--- Das Wesen ---");
+{
+  /* Reihenfolge ist Dringlichkeit -- ein akutes Risiko schlägt einen
+     guten Streak. Jeder Fall baut nur die Signale, die er braucht,
+     der Rest bleibt bei "nichts los". */
+  const leer = { safety: null, pulse: { days: [{ events: [] }] }, forgotten: [], streak: { weeks: 0 } };
+
+  ok("Kühlkette schlägt alles", T.mascotMood({ ...leer, safety: { message: "x" }, streak: { weeks: 5 } }) === "alarm");
+  ok("Verderb heute ist genauso ein Alarm", T.mascotMood({
+    ...leer, pulse: { days: [{ events: [{ kind: "verderb" }] }] }, streak: { weeks: 5 }
+  }) === "alarm");
+  ok("Vergessenes ohne akutes Risiko macht es nur besorgt", T.mascotMood({
+    ...leer, forgotten: [{ productId: "x" }], streak: { weeks: 5 }
+  }) === "besorgt");
+  ok("Guter Streak ohne offene Sorgen ist froh", T.mascotMood({ ...leer, streak: { weeks: 3 } }) === "froh");
+  ok("Ohne jedes Signal bleibt es neutral", T.mascotMood(leer) === "neutral");
+
+  // Die vier bekannten Stimmungen tragen ihre eigene Klasse (Farbe
+  // kommt darüber aus app.css) und ein eigenes Gesicht.
+  ["froh", "neutral", "besorgt", "alarm"].forEach((m) => {
+    const svg = T.mascotSvg(m, 40);
+    ok(`mascotSvg("${m}") trägt die passende Klasse`, new RegExp(`class="mascot ${m}"`).test(svg), svg.slice(0, 60));
+    ok(`mascotSvg("${m}") hat Augen, Brauen und einen Mund`,
+      /mascotEyeWhite/.test(svg) && /mascotBrow/.test(svg) && /mascotMouth/.test(svg));
+  });
+
+  // Eine unbekannte Stimmung darf nicht mit einem Gesicht ohne Farbe
+  // enden -- app.css kennt nur die vier benannten Klassen.
+  ok("Unbekannte Stimmung fällt auf neutral zurück, nicht auf eine Klasse ohne Farbe",
+    /class="mascot neutral"/.test(T.mascotSvg("erfunden", 40)));
+
+  // Und im echten Kopfbereich: dieselbe Stelle läuft auf jeder Seite.
+  D.reset(); D.loadDemo("full");
+  ["start", "liste", "bestand", "zahlen", "mehr"].forEach((tab) => {
+    App.goto(tab);
+    ok(`Das Wesen steht im Kopfbereich von "${tab}"`, !!$("largeTitle").querySelector("svg.mascot"));
+  });
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

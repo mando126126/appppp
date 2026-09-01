@@ -109,6 +109,86 @@ const markSvg = (key) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[key] || MARKS.receipt}</svg>`;
 
 /* ================================================================
+   Das Wesen — ein Begleiter, keine Illustration
+   ================================================================
+   Acht Büschel um einen Kern statt gezeichnetem Fell: bei 56–64 px
+   Darstellungsgröße (siehe app.css, .mascot) wäre feineres Detail nur
+   Rauschen. Die Stimmung trägt die Farbe (mascotMood unten wählt sie
+   aus echten Signalen), die Form von Brauen und Mund trägt den
+   Ausdruck — beides in app.css/hier bewusst getrennt von der
+   Fachlogik, die diese Signale berechnet.
+   ================================================================ */
+const MASCOT_TUFTS = [
+  [77, 54], [69.1, 73.1], [50, 81], [30.9, 73.1],
+  [23, 54], [30.9, 34.9], [50, 27], [69.1, 34.9]
+];
+const MASCOT_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+const MASCOT_FACE = {
+  froh: {
+    browL: "M33,39 Q38,35 44,38", browR: "M56,38 Q62,35 67,39",
+    mouth: '<path class="mascotMouth filled" d="M39,63 Q50,76 61,63 Q50,71 39,63 Z"/>'
+  },
+  neutral: {
+    browL: "M33,38 L44,38", browR: "M56,38 L67,38",
+    mouth: '<path class="mascotMouth" d="M42,65 Q50,68.5 58,65"/>'
+  },
+  besorgt: {
+    browL: "M33,40 L44,34", browR: "M67,40 L56,34",
+    mouth: '<path class="mascotMouth" d="M42,67 Q50,63.5 58,67"/>'
+  },
+  alarm: {
+    browL: "M32,42 L44,32", browR: "M68,42 L56,32",
+    mouth: '<ellipse class="mascotMouth filled" cx="50" cy="66" rx="5" ry="6.5"/>'
+  }
+};
+
+/**
+ * Baut das Wesen als eigenständiges SVG. `mood` eine der vier
+ * Stimmungen aus MASCOT_FACE — unbekannte fallen auf "neutral".
+ */
+function mascotSvg(mood, size = 58) {
+  // Dieselbe Rückfallregel für Ausdruck UND Farbe -- sonst bekäme eine
+  // unbekannte Stimmung ein neutrales Gesicht ohne jede Mundfarbe, weil
+  // app.css nur die vier benannten Klassen mit --m-body/--m-eye belegt.
+  const gueltig = MASCOT_FACE[mood] ? mood : "neutral";
+  const face = MASCOT_FACE[gueltig];
+  const tufts = MASCOT_TUFTS.map(([x, y], i) =>
+    `<ellipse class="mascotBody" cx="${x}" cy="${y}" rx="15" ry="10" ` +
+    `transform="rotate(${MASCOT_ANGLES[i]} ${x} ${y})"/>`).join("");
+  const eye = (cx) =>
+    `<g class="mascotBlink">` +
+    `<ellipse class="mascotEyeWhite" cx="${cx}" cy="50" rx="8.5" ry="10.5"/>` +
+    `<circle class="mascotPupil" cx="${cx}" cy="51" r="4"/>` +
+    `<circle class="mascotPupil" cx="${cx - 2}" cy="47.5" r="1.4" opacity=".8"/>` +
+    `</g>`;
+  return `<svg class="mascot ${gueltig}" viewBox="0 0 100 100" width="${size}" height="${size}" ` +
+    `aria-hidden="true" focusable="false">` +
+    `<circle class="mascotBody" cx="50" cy="54" r="32"/>${tufts}` +
+    `<ellipse class="mascotCheek" cx="27" cy="60" rx="6.5" ry="4.5"/>` +
+    `<ellipse class="mascotCheek" cx="73" cy="60" rx="6.5" ry="4.5"/>` +
+    eye(38) + eye(62) +
+    `<path class="mascotBrow" d="${face.browL}"/><path class="mascotBrow" d="${face.browR}"/>` +
+    face.mouth +
+    `</svg>`;
+}
+
+/**
+ * Welche Stimmung, aus Signalen, die die App schon hat — keines davon
+ * neu berechnet, nur neu gelesen. Reihenfolge ist Dringlichkeit:
+ * ein akutes Risiko schlägt einen guten Streak.
+ */
+function mascotMood(ctx) {
+  if (ctx.safety) return "alarm";
+  const heuteVerdirbt = ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
+    ctx.pulse.days[0].events.some((e) => e.kind === "verderb");
+  if (heuteVerdirbt) return "alarm";
+  if (ctx.forgotten && ctx.forgotten.length) return "besorgt";
+  if (ctx.streak && ctx.streak.weeks > 0) return "froh";
+  return "neutral";
+}
+
+/* ================================================================
    Was bedeutet dieses Zeichen?
    ================================================================
    Die Liste ist voller kleiner Marken: „von dir“, „+8 %“, „doppelt?“,

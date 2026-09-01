@@ -352,11 +352,77 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 }
 .barBtn.filled:active{transform:scale(.94)}
 
-.largeTitle{padding:2px var(--pad) 0}
+.largeTitle{
+  padding:2px var(--pad) 0;display:flex;align-items:flex-start;
+  justify-content:space-between;gap:10px;
+}
+.largeTitleText{flex:1;min-width:0}
 .largeTitle h1{font-size:1.94rem;line-height:1.14;letter-spacing:-.016em}
 .largeTitle .sub{
   font-size:0.85rem;color:var(--ink-2);margin-top:5px;padding-bottom:2px;
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;letter-spacing:-.0025em;
+}
+
+/* ================================================================
+   Das Wesen
+   ================================================================
+   Ein Begleiter statt ein Symbol -- deshalb an der einen Stelle, die
+   auf jeder Seite läuft (App.renderBar(), nicht pro Ansicht), und
+   deshalb mit einer Stimmung statt nur einer Pose. Die Stimmung
+   kommt aus genau den Signalen, die die App ohnehin schon hat
+   (Kühlkette, Verderb heute, Streak) -- siehe mascotMood() in
+   views.js. Kein neuer Zustand, nur eine neue Lesart des alten.
+
+   Absichtlich flache SVG-Form statt echtem 3D: dieselbe Technik, mit
+   der auch Maskottchen wie das von Duolingo im Web laufen. Acht
+   Büschel um einen Kreis statt einzelner Fellsträhnen -- bei der
+   Größe, in der das Wesen hier vorkommt (56–64 px), wäre echtes Fell
+   ohnehin nur Rauschen. */
+.mascot{
+  /* Größe kommt vom width/height-Attribut (mascotSvg()-Parameter),
+     absichtlich nicht hier fest verdrahtet -- sonst überschreibt
+     diese Regel jede andere Größe, in der das Wesen einmal auftaucht. */
+  flex:0 0 auto;margin-top:2px;
+  animation:mascotBob 3.2s var(--ease) infinite;
+}
+.mascotBody{fill:var(--m-body);transition:fill .6s var(--ease)}
+.mascotCheek{fill:var(--m-cheek);opacity:.8;transition:fill .6s var(--ease)}
+.mascotEyeWhite{fill:var(--m-eye,#2b2320)}
+.mascotPupil{fill:var(--m-pupil,#fff)}
+.mascotBrow,.mascotMouth{
+  fill:none;stroke:var(--m-eye,#2b2320);stroke-width:3.2;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+.mascotMouth.filled{fill:var(--m-eye,#2b2320);stroke:none}
+.mascotBlink{
+  animation:mascotBlink 4.6s ease-in-out infinite;
+  transform-box:fill-box;transform-origin:center;
+}
+
+/* Vier Stimmungen, eine Farbskala -- von warm zu dunkel, wie
+   angefragt. Helligkeit trägt die Aussage, nicht die Form: Gesicht
+   und Büschel bleiben gleich, nur Ton und Ausdruck wechseln. */
+.mascot.froh{--m-body:#FFC9A8;--m-cheek:#FF9E80;--m-eye:#3A2A22}
+.mascot.neutral{--m-body:#F2B9A0;--m-cheek:#E28E6E;--m-eye:#3A2A22}
+.mascot.besorgt{--m-body:#C9A68D;--m-cheek:#B98063;--m-eye:#332720}
+.mascot.alarm{
+  --m-body:#5B5568;--m-cheek:#4A4456;--m-eye:#1C1922;--m-pupil:#EDE9F2;
+  animation:mascotBob 3.2s var(--ease) infinite,mascotShiver 2.6s ease-in-out infinite;
+}
+
+@keyframes mascotBob{
+  0%,100%{transform:translateY(0) rotate(0deg)}
+  50%{transform:translateY(-3px) rotate(-1.5deg)}
+}
+@keyframes mascotShiver{
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-.6px) rotate(-1deg)}
+  75%{transform:translateX(.6px) rotate(1deg)}
+}
+@keyframes mascotBlink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+
+@media (prefers-reduced-motion: reduce){
+  .mascot,.mascot.alarm,.mascotBlink{animation:none}
 }
 
 main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px);width:100%}

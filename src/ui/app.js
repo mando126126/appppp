@@ -785,7 +785,9 @@ const App = {
     // Großer Titel im Inhalt — fällt beim Scrollen in die Leiste zusammen.
     const large = document.getElementById("largeTitle");
     large.innerHTML = "";
-    large.append(el("h1", null, esc(titel)));
+    const textBlock = el("div", "largeTitleText");
+    large.append(textBlock);
+    textBlock.append(el("h1", null, esc(titel)));
     const sub = el("div", "sub");
     // Auf der Liste beschreibt die Unterzeile die LISTE, nicht die
     // Datenlage. „57 Bons · 29 Produkte“ beantwortet eine Frage, die
@@ -821,7 +823,11 @@ const App = {
       tag.addEventListener("click", () => App.goto("mehr"));
       sub.append(tag);
     }
-    large.append(sub);
+    textBlock.append(sub);
+    // Das Wesen: derselbe Ort auf jeder Seite, weil renderBar() auf
+    // jeder Seite läuft. Die Stimmung kommt aus mascotMood(ctx) --
+    // siehe dort für die Signale und ihre Rangfolge.
+    large.insertAdjacentHTML("beforeend", mascotSvg(mascotMood(ctx)));
   },
 
   renderNav() {

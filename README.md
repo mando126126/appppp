@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1833 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1852 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3495,6 +3495,59 @@ Zehn neue Tests. Alle jetzt 1833 Tests bestehen.
 
 ---
 
+## Das Wesen (2026-08-27)
+
+Ein Begleiter durch die App, angelehnt an Maskottchen wie die
+Duolingo-Eule — die Rückmeldung war ausdrücklich "durchgängig
+überall", und mit einer Stimmung, die zu echten Signalen passt statt
+Dekoration zu sein.
+
+**Wo es lebt:** in `App.renderBar()` — dem einen Kopfbereich, der auf
+jeder Seite läuft. Keine sechsfache Kopie in jeder Ansicht, eine
+Stelle, ein Ort für spätere Änderungen.
+
+**Wie es gebaut ist:** flaches SVG, acht Büschel um einen Kern statt
+gezeichnetem Fell — bei der Darstellungsgröße (56–64 px) wäre feineres
+Detail nur Rauschen, und dieselbe Technik trägt auch andere
+Web-Maskottchen (Duolingos Eule ist im Web ebenfalls flache
+Illustration plus Animation, kein Echtzeit-3D). Ein echtes 3D-Modell
+wie in der Referenzvorlage lässt sich in dieser Umgebung nicht
+erzeugen — das bräuchte ein Modellierwerkzeug, das hier nicht
+verfügbar ist.
+
+**Vier Stimmungen, aus Signalen, die die App schon hat** (`mascotMood()`
+in views.js), Rangfolge nach Dringlichkeit:
+
+| Stimmung | Auslöser | Ton |
+|---|---|---|
+| **alarm** | Kühlkette gefährdet, oder etwas verdirbt heute | dunkel, blass-violettgrau — wie angefragt |
+| **besorgt** | vergessene, fällige Produkte | gedämpftes Ocker |
+| **froh** | laufender Streak, nichts Akutes offen | warmes Korall |
+| **neutral** | keines der drei | gedeckteres Rosé |
+
+Kein neuer Zustand: `ctx.safety`, `ctx.pulse`, `ctx.forgotten`,
+`ctx.streak` gab es alle schon — nur eine neue, gebündelte Lesart
+davon.
+
+**Bewegung statt Standbild:** sanftes Auf-und-Ab in der Ruhe, ein
+Blinzeln alle paar Sekunden, bei „alarm" ein feines Zittern zusätzlich
+zur dunkleren Farbe. Ausgeschaltet, wenn das Betriebssystem weniger
+Bewegung verlangt (`prefers-reduced-motion`) — dieselbe Regel, der die
+App auch beim Konfetti schon folgt.
+
+**Ein gefundener Fehler beim Bauen:** die erste Fassung hatte
+`width`/`height` fest in der CSS verdrahtet — jede angeforderte
+Größe wurde dadurch stillschweigend auf 58 px gezogen, auch beim
+Testen mit absichtlich großen Werten. Vor dem Verifizieren aufgefallen,
+weil ein 170-px-Debug-Rendering trotzdem klein blieb.
+
+Neunzehn neue Tests: die Stimmungs-Rangfolge, dass eine unbekannte
+Stimmung auf ein vollständig eingefärbtes Gesicht zurückfällt statt
+auf eines ohne Farbe, und dass das Wesen tatsächlich auf jeder
+geprüften Seite im Kopfbereich steht. Alle jetzt 1852 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3563,7 +3616,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1833
+npm test          # alle 1852
 npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
