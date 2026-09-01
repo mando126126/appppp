@@ -76,9 +76,19 @@ const Backup = {
       .catch(() => false);
   },
 
-  /** Läuft die App als installierte Web-App? */
+  /** Läuft die App in einer nativen App-Huelle (Capacitor: iOS/Android)? */
+  isNative() {
+    try {
+      return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /** Läuft die App als installierte Web-App (oder als native App)? */
   isInstalled() {
     if (Backup.adapter) return !!Backup.adapter.installed;
+    if (Backup.isNative()) return true;
     try {
       return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
              window.navigator.standalone === true;
@@ -94,6 +104,7 @@ const Backup = {
    */
   isWebkit() {
     if (Backup.adapter) return !!Backup.adapter.webkit;
+    if (Backup.isNative()) return false;
     const ua = navigator.userAgent || "";
     return /^((?!chrome|android|crios|fxios).)*safari/i.test(ua) || /iPad|iPhone|iPod/.test(ua);
   },
