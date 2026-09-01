@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1823 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1833 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3459,6 +3459,42 @@ Acht neue Tests. Alle jetzt 1823 Tests bestehen.
 
 ---
 
+## Stufe 2 vorbereitet, aber nicht live (2026-08-27)
+
+Die Entscheidung aus `docs/schwarm.md` §8 Punkt 1 ist gefallen: ein
+öffentlicher Server-Preisindex ist das Ziel, kein reines Schwarm-ohne-
+Server-Modell. Ausdrücklich **noch nicht am Start** — nur die
+Infrastruktur dafür ist jetzt vorbereitet, aus zwei Gründen: die
+Rechenlogik lässt sich schon heute schreiben und prüfen, und Punkt 2
+und 3 aus §8 (ein Verantwortlicher mit Anschrift, eine betriebene
+Hosting-Umgebung) sind echte Entscheidungen von Menschen, keine, die
+sich vorab programmieren lassen.
+
+**Was dazukam:** `src/algo/schwarmClient.js` — `weeklyBatch()` sammelt
+aus den eigenen Käufen, welche Preissichtungen (siehe `priceShare.js`)
+in die Sendung der laufenden Kalenderwoche gehören. `attemptShare()`
+ist der einzige Ort, an dem eine Übertragung überhaupt anfinge — und
+er sendet unter keiner Einstellungskombination etwas, weil `ENDPOINT`
+auf `null` steht. Dazu ein rein struktureller, standardmäßig
+ausgeschalteter Einwilligungs-Zustand (`settings.schwarm.enabled`,
+Vorgabe `false`) im Datenmodell, damit eine spätere Einwilligungs-
+Oberfläche einen echten, migrationssicheren Zustand zum Umschalten
+vorfindet statt eines neuen Felds mit alten Wanderungsfragen.
+
+**Zwei getrennt geprüfte Garantien**, weil „noch nicht am Start" zwei
+verschiedene Dinge bedeutet: Erstens, dass `attemptShare()` unter
+keiner Kombination `sent: true` liefert, solange `ENDPOINT` leer ist
+(`test/schwarm.js`, Abschnitt F). Zweitens, dass keine Oberfläche
+überhaupt dorthin verweist — kein Menüpunkt, kein Knopf, keine
+Einstellung ist heute erreichbar (`test/uitest.js`, „Stufe 2 ist
+vorbereitet, aber nirgends erreichbar"). Die erste Garantie allein
+wäre nicht genug: sie sagt nichts darüber, ob ein Nutzer die Funktion
+versehentlich überhaupt finden und anschalten könnte.
+
+Zehn neue Tests. Alle jetzt 1833 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3527,7 +3563,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1823
+npm test          # alle 1833
 npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

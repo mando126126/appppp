@@ -87,7 +87,8 @@ const MODULES = [
   "weekPulse.js",
   "hoardDetector.js",
   "priceShare.js",
-  "offerAdvisor.js"
+  "offerAdvisor.js",
+  "schwarmClient.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt

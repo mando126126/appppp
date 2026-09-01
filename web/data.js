@@ -63,7 +63,15 @@ function emptyState() {
       vacation: { active: false, from: null, to: null },
       theme: "system",          // system | hell | dunkel
       textScale: 1,             // Schriftgröße 1 | 1.15 | 1.3
-      demo: false
+      demo: false,
+      // Stufe 2 aus docs/schwarm.md, vorbereitet und absichtlich
+      // untätig: kein Menüpunkt setzt das je auf true, und selbst
+      // wenn — schwarmClient.js sendet trotzdem nichts, solange dort
+      // keine Gegenstelle eingetragen ist. Steht hier schon, damit
+      // spätere Einwilligungs-Oberfläche einen echten, gesicherten
+      // Zustand zum Umschalten hat statt eines neuen Felds mit allen
+      // Wanderungsfragen, die ein neues Feld sonst aufwirft.
+      schwarm: { enabled: false }
     },
     // Haushaltsprofil: bestimmt Verbrauchsraten und filtert Produkte,
     // für die das Gerät fehlt. Ohne Kaffeemaschine kein Entkalker.

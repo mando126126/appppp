@@ -2912,6 +2912,23 @@ console.log("\n--- Ein Ding, ein Name ---");
     T.alleTage(1) === "täglich" && T.alleTage(3) === "alle 3 Tage", T.alleTage(1));
 }
 
+console.log("\n--- Stufe 2 ist vorbereitet, aber nirgends erreichbar ---");
+{
+  /* schwarmClient.js ist gebaut und im Bündel (siehe test/schwarm.js
+     für die Garantie, dass er trotzdem nichts sendet). Diese Prüfung
+     hält die ZWEITE Garantie fest, die für "noch nicht am Start"
+     nötig ist: keine Oberfläche verweist darauf. Kein Menüpunkt, kein
+     Knopf, keine Einstellung -- ein Nutzer, der die App heute
+     bedient, kann diese Funktion gar nicht finden, geschweige denn
+     anschalten. */
+  const v = fs.readFileSync(path.join(WEB, "views.js"), "utf8");
+  const a = fs.readFileSync(path.join(WEB, "app.js"), "utf8");
+  ok("Kein Menüpunkt oder Knopf verweist auf die Schwarm-Einwilligung",
+    !/schwarm/i.test(v) && !/schwarm/i.test(a));
+  ok("data.js liest oder schreibt die Einwilligung dort dennoch nicht aktiv um",
+    !/settings\.schwarm\.enabled\s*=/.test(fs.readFileSync(path.join(WEB, "data.js"), "utf8")));
+}
+
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");
   ok("Konsole blieb fehlerfrei", errors.length === 0, errors.slice(0, 3).join(" | "));
 
