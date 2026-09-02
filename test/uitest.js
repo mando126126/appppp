@@ -113,7 +113,7 @@ try {
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
-    " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES };"
+    " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES, mascotAlarmSignature };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -3086,7 +3086,81 @@ console.log("\n--- Das Wesen ---");
     title: "Zehn Bons erfasst", note: "Weiter so." });
   ok("Die Meilenstein-Feier zeigt das Wesen, fröhlich",
     /class="mascot froh"/.test($("partyMascot").innerHTML));
+
+  /* --- Dieselbe Sprechblase läuft auch in der Feier-Karte: nicht nur
+     die Farbe wird dort geteilt, sondern die ganze Interaktion. */
+  const partyBtn = $("partyMascot");
+  ok("Das Wesen in der Feier ist ebenfalls eine Schaltfläche mit Namen",
+    partyBtn.tagName === "BUTTON" && !!partyBtn.getAttribute("aria-label"));
+  ok("Seine Sprechblase ist zunächst verborgen", $("partyMascotBubble").hidden);
+
+  click(partyBtn);
+  ok("Antippen öffnet die Sprechblase in der Feier-Karte", !$("partyMascotBubble").hidden);
+  ok("Sie trägt einen Text", $("partyMascotBubble").textContent.trim().length > 0);
+
+  doc.body.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  ok("Ein Klick außerhalb schließt nur die Sprechblase, nicht die Feier",
+    $("partyMascotBubble").hidden && !$("party").hidden);
+
+  click(partyBtn);
+  doc.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  ok("Escape schließt auch die Sprechblase der Feier", $("partyMascotBubble").hidden);
+
+  click(partyBtn);
+  ok("Die Sprechblase ist offen, bevor die Feier endet", !$("partyMascotBubble").hidden);
   App.closeParty();
+  ok("Das Beenden der Feier schließt auch ihre Sprechblase", $("partyMascotBubble").hidden);
+
+  D.loadDemo("full");
+  App.goto("start");
+
+  /* --- "neu"-Punkt: ein Alarmsignal, das seit dem letzten Antippen
+     aufgetaucht ist. mascotAlarmSignature() ist eine reine Funktion --
+     geprüft wie mascotMood(), mit selbst gebauten ctx-Objekten statt
+     mit echten Demodaten (ob die gerade einen Kühlketten-Fall
+     enthalten, hängt vom Kalenderdatum ab, an dem der Test läuft). */
+  ok("Ohne Kühlkette und ohne Verderb heute ist die Signatur leer",
+    T.mascotAlarmSignature(leer) === "");
+  ok("Kühlkette liefert eine Signatur",
+    T.mascotAlarmSignature({ ...leer, safety: { short: "x" } }).length > 0);
+  ok("Verderb heute liefert ebenfalls eine Signatur", T.mascotAlarmSignature({
+    ...leer, pulse: { days: [{ events: [{ kind: "verderb" }] }] }
+  }).length > 0);
+  ok("Kühlkette schlägt Verderb -- dieselbe Rangfolge wie mascotMood",
+    T.mascotAlarmSignature({
+      ...leer, safety: { short: "kühl" }, pulse: { days: [{ events: [{ kind: "verderb" }] }] }
+    }).startsWith("safety:"));
+  ok("Zwei verschiedene Kühlketten-Meldungen ergeben verschiedene Signaturen",
+    T.mascotAlarmSignature({ ...leer, safety: { short: "a" } }) !==
+    T.mascotAlarmSignature({ ...leer, safety: { short: "b" } }));
+
+  /* --- Derselbe Punkt, jetzt am echten Wesen: erscheint bei einem
+     ungesehenen Signal, verschwindet sofort beim Antippen (nicht
+     erst beim nächsten App.render()), und kehrt bei einem ANDEREN
+     Signal danach zurück. */
+  App.mascotSeenAlarm = null;
+  App.ctx = { ...D.compute(), safety: { short: "Testfall", message: "x", source: "y" } };
+  App.renderBar();
+  ok("Der 'neu'-Punkt erscheint bei einem noch nicht gesehenen Alarmsignal",
+    fab.classList.contains("hasNew"));
+  ok("Das aria-label nennt es ebenfalls, nicht nur der Punkt",
+    /^Neu: /.test(fab.getAttribute("aria-label")));
+
+  click(fab);
+  ok("Antippen räumt den Punkt sofort weg, nicht erst beim nächsten Rendern",
+    !fab.classList.contains("hasNew"));
+  ok("Und auch das aria-label trägt kein „Neu“ mehr",
+    !/^Neu: /.test(fab.getAttribute("aria-label")));
+  click(fab);
+
+  App.ctx = { ...D.compute(), safety: { short: "Anderer Testfall", message: "x", source: "y" } };
+  App.renderBar();
+  ok("Ein ANDERES Signal nach dem Antippen zeigt den Punkt erneut",
+    fab.classList.contains("hasNew"));
+
+  App.mascotSeenAlarm = null;
+  D.loadDemo("full");
+  App.render();
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

@@ -183,6 +183,25 @@ function mascotMood(ctx) {
   return "neutral";
 }
 
+/**
+ * Fingerabdruck des akuten Signals, das gerade hinter der Stimmung
+ * "alarm" steckt -- dieselbe Rangfolge wie in mascotMood() (Kühlkette
+ * schlägt Verderb heute), aber als Zeichenkette statt als Farbe.
+ *
+ * Dient dem "neu"-Punkt am Wesen: App.mascotSeenAlarm hält fest,
+ * welcher Fingerabdruck beim letzten Antippen sichtbar war. Ändert
+ * sich das Signal seither (eine andere Kühlketten-Meldung, ein
+ * anderer Verderb-Tag), ist er ungleich -- ohne akutes Signal ist er
+ * die leere Zeichenkette und zeigt nie einen Punkt.
+ */
+function mascotAlarmSignature(ctx) {
+  if (ctx.safety) return "safety:" + ctx.safety.short;
+  const heuteVerdirbt = ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
+    ctx.pulse.days[0].events.some((e) => e.kind === "verderb");
+  if (heuteVerdirbt) return "verderb:" + ctx.pulse.headline;
+  return "";
+}
+
 /* ================================================================
    Das Wesen — was es sagt, wenn man es antippt
    ================================================================

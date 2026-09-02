@@ -397,10 +397,26 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
   transition:transform .16s var(--spring);
 }
 .mascotFab:active{transform:scale(.9)}
+/* Punkt statt Text: „seit dem letzten Antippen ist ein neues
+   Alarmsignal aufgetaucht" (Kühlkette oder Verderb heute, siehe
+   mascotAlarmSignature() in views.js). Der Rand in der Seitenfarbe
+   schneidet den Punkt optisch aus dem Wesen heraus, statt nur davor
+   zu liegen. Wer nicht sieht, bekommt dieselbe Information über das
+   „Neu: "-Präfix im aria-label -- ein Punkt allein wäre für
+   Vorleseprogramme stumm. */
+.mascotFab.hasNew::after{
+  content:"";position:absolute;top:2px;right:2px;
+  width:11px;height:11px;border-radius:50%;
+  background:var(--red-strong);border:2px solid var(--paper);
+}
 
-.mascotBubble{
-  position:fixed;z-index:44;
-  top:calc(var(--safe-top) + 114px);right:14px;
+/* Dieselbe Sprechblasen-Optik läuft an zwei Stellen: fest am Wesen im
+   Kopfbereich (.mascotBubble) und, seit die Feier ebenfalls ein
+   antippbares Wesen hat, in der Meilenstein-Karte (.partyMascotBubble).
+   .speechBubble trägt alles Gemeinsame, jede Variante nur noch ihre
+   eigene Position und die Richtung der Sprechblasen-Spitze. */
+.speechBubble{
+  z-index:44;
   max-width:min(76vw,290px);
   padding:12px 14px;
   background:var(--material);
@@ -410,12 +426,23 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
   font-size:0.86rem;line-height:1.42;color:var(--ink);
   animation:bubbleIn .22s var(--spring);
 }
-.mascotBubble::before{
-  content:"";position:absolute;top:-7px;right:20px;
+.speechBubble::before{
+  content:"";position:absolute;top:-7px;
   width:11px;height:11px;background:var(--material);
   border-left:1px solid var(--hairline-strong);border-top:1px solid var(--hairline-strong);
   transform:rotate(45deg);
 }
+.mascotBubble{position:fixed;top:calc(var(--safe-top) + 114px);right:14px}
+.mascotBubble::before{right:20px}
+
+/* Innerhalb der Feier-Karte (.partyCard ist position:relative) statt
+   fest im Bildschirm -- die Karte selbst sitzt schon mittig, die
+   Blase muss ihr nur folgen, nicht dem Viewport. Zentriert über
+   `left:0;right:0;margin-inline:auto` statt `transform:translateX()`,
+   weil dieselbe Eigenschaft schon die Einblend-Animation trägt --
+   zwei Transforms auf einer Regel überschreiben sich sonst. */
+.partyMascotBubble{position:absolute;left:0;right:0;margin-inline:auto;width:fit-content;top:122px}
+.partyMascotBubble::before{left:0;right:0;margin-inline:auto}
 @keyframes bubbleIn{from{opacity:0;transform:translateY(-6px) scale(.96)}to{opacity:1;transform:none}}
 
 .mascot{
@@ -1412,7 +1439,11 @@ button.row.action,label.row.action{cursor:pointer}
   to{transform:scale(1) translateY(0);opacity:1}
 }
 
-.partyMascot{margin-bottom:2px}
+.partyMascot{
+  margin-bottom:2px;padding:0;border:none;background:none;line-height:0;
+  transition:transform .16s var(--spring);
+}
+.partyMascot:active{transform:scale(.94)}
 .party:not(.still) .partyMascot{animation:markIn .62s var(--spring) .02s both}
 
 .partyKicker{

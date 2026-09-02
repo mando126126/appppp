@@ -93,6 +93,11 @@ const App = {
   // (mascotMessage() rotiert reihum, nicht zufällig). Reine
   // Anzeige-Einstellung wie zahlenFilter, kein Haushaltsdatum.
   mascotTapCount: {},
+  // Welches Alarmsignal (siehe mascotAlarmSignature()) beim letzten
+  // Antippen des Wesens sichtbar war -- null heißt "noch nie
+  // angetippt". Weicht das aktuelle Signal davon ab, zeigt der
+  // "neu"-Punkt an, dass seither etwas Neues aufgetaucht ist.
+  mascotSeenAlarm: null,
 
   /* ---------- Zustand ändern ---------- */
   set(fn) { Data.update(fn); },
@@ -344,6 +349,7 @@ const App = {
     const card = document.getElementById("partyCard");
     const glow = document.getElementById("partyGlow");
 
+    App.closeMascotBubble();
     App._partyOpen = true;
     box.hidden = false;
     box.className = "party show m-" + badge.id + (still ? " still" : "");
@@ -352,7 +358,12 @@ const App = {
     // Ein Meilenstein ist der einzige Moment, in dem die Stimmung
     // nicht aus mascotMood(ctx) kommt: die Feier selbst ist der
     // Grund zur Freude, unabhängig davon, was sonst gerade ansteht.
-    document.getElementById("partyMascot").innerHTML = mascotSvg("froh", 64);
+    // Antippbar wie sein Gegenstück im Kopfbereich -- dieselbe
+    // Sprechblase, derselbe Zähler, siehe togglePartyMascotBubble().
+    const partyMascot = document.getElementById("partyMascot");
+    partyMascot.innerHTML = mascotSvg("froh", 64);
+    partyMascot.setAttribute("aria-label", App.mascotLabel(false));
+    partyMascot.onclick = () => App.togglePartyMascotBubble();
     document.getElementById("partyKicker").textContent =
       badge.level >= badge.maxLevel ? "Höchste Stufe" : "Geschafft";
     document.getElementById("partyMark").innerHTML = markSvg(badge.icon);
@@ -452,6 +463,7 @@ const App = {
 
   closeParty() {
     const box = document.getElementById("party");
+    App.closeMascotBubble();
     App._partyOpen = false;
     App._party = [];
     if (App._rollTimer) { cancelAnimationFrame(App._rollTimer); App._rollTimer = null; }
@@ -533,24 +545,70 @@ const App = {
    * die zutreffenden Aussagen rotiert statt jedes Mal dieselbe zu
    * zeigen -- deterministisch, nicht zufällig, damit es sich prüfen
    * lässt.
+   *
+   * Dieselbe Blase läuft an zwei Stellen im DOM: fest am Wesen im
+   * Kopfbereich und, seit die Meilenstein-Feier ebenfalls ein
+   * antippbares Wesen hat, in der Feier-Karte. Beide Aufrufstellen
+   * unterscheiden sich nur in Blase und Schaltfläche, teilen sich
+   * aber Zähler, Text und den "gesehen"-Stand des Alarmsignals.
    */
-  toggleMascotBubble() {
-    const bubble = document.getElementById("mascotBubble");
-    if (!bubble.hidden) { App.closeMascotBubble(); return; }
+  toggleMascotBubble() { App._toggleBubble("mascotBubble", "mascotFab"); },
+  togglePartyMascotBubble() { App._toggleBubble("partyMascotBubble", "partyMascot"); },
+
+  _toggleBubble(bubbleId, anchorId) {
+    const bubble = document.getElementById(bubbleId);
+    const schonOffen = !bubble.hidden;
+    App.closeMascotBubble();
+    if (schonOffen) return;
     const seed = App.mascotTapCount[App.tab] || 0;
     App.mascotTapCount[App.tab] = seed + 1;
+    App.mascotSeenAlarm = mascotAlarmSignature(App.ctx);
     bubble.textContent = mascotMessage(App.ctx, App.tab, seed);
     bubble.hidden = false;
-    document.getElementById("mascotFab").setAttribute("aria-expanded", "true");
-    document.getElementById("mascotFab").setAttribute("aria-label", "Hinweis vom Wesen schließen");
+    App._setMascotAnchorState(anchorId, true);
   },
+
+  /** Beide Sprechblasen schließen -- Reiterwechsel, Escape, Klick daneben, Feierende. */
   closeMascotBubble() {
-    const bubble = document.getElementById("mascotBubble");
-    if (bubble.hidden) return;
-    bubble.hidden = true;
+    [["mascotBubble", "mascotFab"], ["partyMascotBubble", "partyMascot"]].forEach(([bubbleId, anchorId]) => {
+      const bubble = document.getElementById(bubbleId);
+      if (!bubble || bubble.hidden) return;
+      bubble.hidden = true;
+      App._setMascotAnchorState(anchorId, false);
+    });
+  },
+
+  _setMascotAnchorState(anchorId, offen) {
+    const anchor = document.getElementById(anchorId);
+    if (!anchor) return;
+    anchor.setAttribute("aria-expanded", String(offen));
+    anchor.setAttribute("aria-label", App.mascotLabel(offen));
+    // Der Punkt hängt an mascotSeenAlarm, das sich gerade geändert
+    // haben kann -- ohne diesen Aufruf bliebe er bis zum nächsten
+    // App.render() stehen, obwohl das Antippen ihn schon erledigt hat.
+    App.syncMascotNewDot();
+  },
+
+  /** Zeigt/verbirgt den "neu"-Punkt am Wesen im Kopfbereich. */
+  syncMascotNewDot() {
+    if (!App.ctx) return;
     const fab = document.getElementById("mascotFab");
-    fab.setAttribute("aria-expanded", "false");
-    fab.setAttribute("aria-label", "Hinweis vom Wesen anzeigen");
+    const sig = mascotAlarmSignature(App.ctx);
+    fab.classList.toggle("hasNew", !!sig && sig !== App.mascotSeenAlarm);
+  },
+
+  /**
+   * Beschriftung des Wesens -- nennt auch, wenn seit dem letzten
+   * Antippen ein neues Alarmsignal aufgetaucht ist (Kühlkette,
+   * Verderb heute). Derselbe Text steht als "Neu: "-Präfix im
+   * aria-label, damit die Information nicht nur am Punkt aus app.css
+   * hängt, den ein Vorleseprogramm nicht sieht.
+   */
+  mascotLabel(offen) {
+    const sig = mascotAlarmSignature(App.ctx);
+    const neu = sig && sig !== App.mascotSeenAlarm;
+    const basis = offen ? "Hinweis vom Wesen schließen" : "Hinweis vom Wesen anzeigen";
+    return neu ? "Neu: " + basis : basis;
   },
 
   /**
@@ -872,9 +930,10 @@ const App = {
     // schon gibt.
     const fab = document.getElementById("mascotFab");
     fab.innerHTML = mascotSvg(mascotMood(ctx), 46);
+    App.syncMascotNewDot();
     const offen = !document.getElementById("mascotBubble").hidden;
     fab.setAttribute("aria-expanded", String(offen));
-    fab.setAttribute("aria-label", offen ? "Hinweis vom Wesen schließen" : "Hinweis vom Wesen anzeigen");
+    fab.setAttribute("aria-label", App.mascotLabel(offen));
     fab.onclick = () => App.toggleMascotBubble();
   },
 
@@ -1047,18 +1106,21 @@ function boot() {
   document.getElementById("sheet").addEventListener("click", (e) => {
     if (e.target.id === "sheet") App.closeSheet();
   });
+  const irgendeineSprechblaseOffen = () =>
+    !document.getElementById("mascotBubble").hidden || !document.getElementById("partyMascotBubble").hidden;
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!document.getElementById("sheet").hidden) App.closeSheet();
     else if (App.storeOpen) App.closeStore();
-    else if (!document.getElementById("mascotBubble").hidden) App.closeMascotBubble();
+    else if (irgendeineSprechblaseOffen()) App.closeMascotBubble();
   });
   // Sprechblase ist absichtlich kein Blatt -- also schließt sie auch
   // nicht wie eines, sondern wie jedes andere Popover: ein Tipp
-  // irgendwo sonst auf der Seite räumt sie weg.
+  // irgendwo sonst auf der Seite räumt sie weg. Gilt für beide
+  // Blasen -- die am Kopfbereich und die in der Feier-Karte.
   document.addEventListener("click", (e) => {
-    if (document.getElementById("mascotBubble").hidden) return;
-    if (e.target.closest("#mascotBubble, #mascotFab")) return;
+    if (!irgendeineSprechblaseOffen()) return;
+    if (e.target.closest("#mascotBubble, #mascotFab, #partyMascotBubble, #partyMascot")) return;
     App.closeMascotBubble();
   });
 

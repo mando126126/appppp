@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1896 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1914 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3662,6 +3662,50 @@ Alle jetzt 1896 Tests bestehen.
 
 ---
 
+## Zwei Interaktionsfeinheiten am Wesen (2026-09-02)
+
+**Dieselbe Sprechblase läuft jetzt auch in der Meilenstein-Feier.** Das
+Wesen dort (`#partyMascot`) war bisher reine Dekoration
+(`aria-hidden`, kein Knopf) — jetzt ist es ein `<button>` wie sein
+Gegenstück im Kopfbereich und öffnet dieselbe Art Sprechblase, nur
+innerhalb der Feier-Karte verankert statt fest im Bildschirm (`.partyCard`
+ist bereits `position:relative`, die Blase also `position:absolute`
+statt `position:fixed`). Die gemeinsame Optik — Hintergrund, Blur,
+Rahmen, Sprechblasen-Spitze, Einblend-Animation — steckt jetzt in einer
+geteilten Klasse `.speechBubble`; `.mascotBubble` und
+`.partyMascotBubble` fügen nur noch ihre eigene Position hinzu. Zähler
+und Text kommen aus derselben `mascotMessage()`, über
+`App._toggleBubble()`, das beide Aufrufstellen (Kopfbereich, Feier)
+bedient. Schließen funktioniert überall gleich: erneutes Antippen,
+Klick daneben, Escape — und zusätzlich beim Beenden der Feier
+(`App.closeParty()`).
+
+**Ein „neu"-Punkt zeigt ein ungesehenes Alarmsignal.** Wer die
+Sprechblase eine Weile nicht geöffnet hat, sollte trotzdem merken,
+wenn inzwischen eine Kühlketten-Warnung oder ein „verdirbt heute"
+aufgetaucht ist — ohne extra nachzusehen. `mascotAlarmSignature(ctx)`
+(views.js) bildet einen Fingerabdruck aus genau diesen beiden Signalen,
+in derselben Rangfolge wie `mascotMood()`. `App.mascotSeenAlarm` merkt
+sich, welcher Fingerabdruck beim letzten Antippen sichtbar war; weicht
+der aktuelle davon ab, bekommt das Wesen einen kleinen roten Punkt
+(`.mascotFab.hasNew`) und das aria-label ein „Neu: "-Präfix — der
+Punkt allein wäre für ein Vorleseprogramm stumm. Der Punkt verschwindet
+sofort beim Antippen, nicht erst beim nächsten Neuzeichnen: dafür
+läuft `App.syncMascotNewDot()` sowohl in `App.renderBar()` als auch
+direkt nach jedem Öffnen/Schließen der Sprechblase.
+
+18 neue Tests: dass das Wesen in der Feier eine benannte Schaltfläche
+ist und dieselbe Sprechblasen-Mechanik bedient (öffnen, schließen,
+Klick daneben schließt nur die Blase — nicht die Feier —, Escape,
+Ende der Feier räumt mit auf), dass `mascotAlarmSignature()` bei
+Kühlkette und Verderb heute je eine eigene, unterscheidbare Signatur
+liefert und Kühlkette dabei vorgeht, und dass der „neu"-Punkt am
+echten Wesen erscheint, beim Antippen sofort verschwindet und bei
+einem abweichenden Signal danach zurückkehrt. Alle jetzt 1914 Tests
+bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3730,12 +3774,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1896
+npm test          # alle 1914
 npm run test:algo # 1158 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Liste, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 702 Oberflächentests in jsdom
+npm run test:ui   # 720 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
