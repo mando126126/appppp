@@ -352,11 +352,82 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 }
 .barBtn.filled:active{transform:scale(.94)}
 
-.largeTitle{padding:2px var(--pad) 0}
+.largeTitle{
+  padding:2px var(--pad) 0;display:flex;align-items:flex-start;
+  justify-content:space-between;gap:10px;
+}
+.largeTitleText{flex:1;min-width:0}
 .largeTitle h1{font-size:1.94rem;line-height:1.14;letter-spacing:-.016em}
 .largeTitle .sub{
   font-size:0.85rem;color:var(--ink-2);margin-top:5px;padding-bottom:2px;
   display:flex;align-items:center;gap:8px;flex-wrap:wrap;letter-spacing:-.0025em;
+}
+
+/* ================================================================
+   Das Wesen
+   ================================================================
+   Ein Begleiter statt ein Symbol -- deshalb an der einen Stelle, die
+   auf jeder Seite läuft (App.renderBar(), nicht pro Ansicht), und
+   deshalb mit einer Stimmung statt nur einer Pose. Die Stimmung
+   kommt aus genau den Signalen, die die App ohnehin schon hat
+   (Kühlkette, Verderb heute, Streak) -- siehe mascotMood() in
+   views.js. Kein neuer Zustand, nur eine neue Lesart des alten.
+
+   Absichtlich flache SVG-Form statt echtem 3D: dieselbe Technik, mit
+   der auch Maskottchen wie das von Duolingo im Web laufen. Die Form
+   selbst ist Platzhalter (siehe Kommentar bei MASCOT_BODY_PATH in
+   views.js) -- was hier bleibt, auch wenn sie ersetzt wird, ist die
+   Bewegung, die Stimmungsfarben und die Antippbarkeit. */
+.mascotBtn{
+  flex:0 0 auto;padding:0;border:none;background:none;line-height:0;
+  transition:transform .16s var(--spring);
+}
+.mascotBtn:active{transform:scale(.9)}
+.mascot{
+  /* Größe kommt vom width/height-Attribut (mascotSvg()-Parameter),
+     absichtlich nicht hier fest verdrahtet -- sonst überschreibt
+     diese Regel jede andere Größe, in der das Wesen einmal auftaucht. */
+  flex:0 0 auto;margin-top:2px;
+  animation:mascotBob 3.2s var(--ease) infinite;
+}
+.mascotBody{fill:var(--m-body);transition:fill .6s var(--ease)}
+.mascotCheek{fill:var(--m-cheek);opacity:.8;transition:fill .6s var(--ease)}
+.mascotEyeWhite{fill:var(--m-eye,#2b2320)}
+.mascotPupil{fill:var(--m-pupil,#fff)}
+.mascotBrow,.mascotMouth{
+  fill:none;stroke:var(--m-eye,#2b2320);stroke-width:3.2;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+.mascotMouth.filled{fill:var(--m-eye,#2b2320);stroke:none}
+.mascotBlink{
+  animation:mascotBlink 4.6s ease-in-out infinite;
+  transform-box:fill-box;transform-origin:center;
+}
+
+/* Vier Stimmungen, eine Farbskala -- von warm zu dunkel, wie
+   angefragt. Helligkeit trägt die Aussage, nicht die Form: Gesicht
+   und Büschel bleiben gleich, nur Ton und Ausdruck wechseln. */
+.mascot.froh{--m-body:#FFC9A8;--m-cheek:#FF9E80;--m-eye:#3A2A22}
+.mascot.neutral{--m-body:#F2B9A0;--m-cheek:#E28E6E;--m-eye:#3A2A22}
+.mascot.besorgt{--m-body:#C9A68D;--m-cheek:#B98063;--m-eye:#332720}
+.mascot.alarm{
+  --m-body:#5B5568;--m-cheek:#4A4456;--m-eye:#1C1922;--m-pupil:#EDE9F2;
+  animation:mascotBob 3.2s var(--ease) infinite,mascotShiver 2.6s ease-in-out infinite;
+}
+
+@keyframes mascotBob{
+  0%,100%{transform:translateY(0) rotate(0deg)}
+  50%{transform:translateY(-3px) rotate(-1.5deg)}
+}
+@keyframes mascotShiver{
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-.6px) rotate(-1deg)}
+  75%{transform:translateX(.6px) rotate(1deg)}
+}
+@keyframes mascotBlink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+
+@media (prefers-reduced-motion: reduce){
+  .mascot,.mascot.alarm,.mascotBlink{animation:none}
 }
 
 main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px);width:100%}
@@ -431,7 +502,79 @@ button.row:active,label.row:active{background:var(--fill)}
 .headrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
 .stat{font-size:0.79rem;color:var(--ink-2)}
 .srcnote{font-size:0.73rem;color:var(--ink-3);margin-top:13px;line-height:1.45}
-.empty{font-size:0.9rem;color:var(--ink-2);padding:26px 0;text-align:center}
+.empty{font-size:0.9rem;color:var(--ink-2);padding:0 0 26px;text-align:center}
+.emptyMascot{display:flex;justify-content:center;padding:22px 0 4px}
+.emptyMascot .mascot{animation-delay:-.6s}
+
+/* ---------------- Wo dein Geld hingeht: eigener Bereich -----------
+   Ein eigenständiger, erhöhter Bereich wie `.hero` (Vorrat) -- weiße
+   Fläche, kräftiger Schatten, GROSSE Zahl -- statt einer weiteren
+   Karte in der Liste. Farbe bleibt bewusst der Rückblick-Karte
+   vorbehalten ("die einzige farbige Karte der App", siehe oben);
+   diese Fläche hebt sich stattdessen über Fläche, Schatten und
+   Zahlengröße ab, nicht über Farbe.
+
+   Die Balken sind dieselbe Form wie beim Vorrat-Balken: eine SVG-Linie
+   mit rundem Kappenende (`stroke-linecap="round"`), nicht ein Rechteck
+   mit `border-radius` -- die einzige runde Form dieser sonst kantigen
+   Oberfläche (`--r-*` steht überall sonst auf 0), reserviert für
+   Mengen und Anteile. Eine Kategorie ist keine Rangfolge mit
+   Eigenbedeutung (anders als z. B. Ampelstufen), deshalb EIN Farbton
+   für jeden Balken -- eine Skala von hell zu dunkel würde die
+   Balkenlänge ein zweites Mal verschlüsseln, ohne dass „dunkler"
+   irgendetwas Eigenes bedeutet. */
+.moneyHero{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--lift);
+  padding:18px 18px 8px;margin-top:14px}
+.moneyHeroHead{display:flex;align-items:center;gap:6px;font-size:1.02rem;font-weight:650;letter-spacing:-.0075em}
+.moneyTotal{margin-top:16px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.moneyTotal .n{font-size:2.15rem;font-weight:750;letter-spacing:-.02em;line-height:1}
+.moneyTotal .sub{font-size:0.82rem;color:var(--ink-2)}
+/* Bewusst KEINE Ampelfarbe (rot/grün): mehr ausgegeben ist nicht
+   automatisch schlecht (Vorräte, ein Fest, ein teurerer Laden aus
+   gutem Grund) -- die Pfeilrichtung reicht als Information, ohne ein
+   Urteil zu fällen, das die Zahl allein nicht hergibt. */
+.moneyDelta{color:var(--ink-2);font-weight:600}
+/* Normale Schreibweise statt Großbuchstaben+Sperrung -- dieselbe
+   Abwägung wie bei .sheetGroupTitle: eine Zwischenüberschrift soll
+   trennen, nicht schreien. */
+.moneySection{font-size:0.79rem;font-weight:650;color:var(--ink-2);
+  letter-spacing:0;margin:22px 0 2px}
+.moneyBarRow{display:block;width:100%;text-align:left;padding:11px 0;position:relative}
+.moneyBarRow + .moneyBarRow::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--hairline)}
+/* Nur Produktzeilen sind Knöpfe (öffnen das Detail-Blatt) -- Kategorien
+   und Märkte bleiben unklickbare div, es gibt für sie kein Blatt. */
+button.moneyBarRow{transition:opacity .14s linear}
+button.moneyBarRow:active{opacity:.6}
+.moneyBarHead{display:flex;align-items:baseline;gap:9px;margin-bottom:7px}
+.moneyBarLabel{flex:1 1 auto;font-size:0.92rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Kleine Verlaufslinie der letzten sechs Monate -- "trend"-Baustein
+   einer Kennzahl, hier neben statt in einer eigenen Kachel, damit die
+   Rangliste nicht in zwei Bereiche zerfällt. Feste Breite, damit die
+   Spalte bei wechselnden Kategorien nicht springt. */
+.moneySparklineWrap{flex:0 0 auto;display:flex;align-items:center}
+.moneySparkline{width:44px;height:16px;display:block;overflow:visible}
+.moneyBarValue{font-size:0.88rem;font-variant-numeric:tabular-nums;flex:0 0 auto;color:var(--ink)}
+.moneyBarValue small{margin-left:5px;font-size:0.78rem;color:var(--ink-3);font-variant-numeric:normal}
+.moneyBarSvg{width:100%;height:9px;display:block;overflow:visible}
+/* Verbindet Ausgabe und Verlust: dieselbe Ampelfarbe wie die
+   "Verlust"-Kachel ganz oben, damit "rot = verdorben" app-weit
+   dasselbe bedeutet -- anders als der neutrale Vorperioden-Vergleich
+   oben, der bewusst KEINE Ampelfarbe trägt (mehr ausgegeben ist kein
+   Fehlverhalten, Lebensmittel wegwerfen schon eher). */
+.moneyWaste{margin-top:6px;font-size:0.78rem;color:var(--red)}
+/* "Sonstige" ist keine echte Kategorie, sondern eine Sammelzeile für
+   alles jenseits der Top 7 -- tritt bewusst zurück (graue statt
+   Akzentfarbe im Balken, siehe moneyBarSvg, und hier gedämpfter Text),
+   damit sie nicht wie ein weiterer gleichwertiger Rang aussieht. */
+.moneyBarRow.muted .moneyBarLabel{color:var(--ink-2);font-style:italic}
+.moneyEmpty{padding:16px 0 20px;font-size:0.9rem;color:var(--ink-2)}
+/* Fünf Chips passen nicht mehr in eine Zeile wie die sonst nur
+   zwei-/dreistufigen `.segmented`-Regler (Erscheinungsbild,
+   Schriftgröße) -- hier wird umgebrochen statt gequetscht oder
+   abgeschnitten, ohne die geteilte Komponente für ihre anderen
+   Einsatzstellen zu verändern. */
+.moneyHero .segmented{flex-wrap:wrap}
+.moneyHero .segmented button{flex:1 1 30%}
 
 .infoBtn{
   width:17px;height:17px;flex:0 0 auto;border-radius:99px;
@@ -477,6 +620,12 @@ button.row:active,label.row:active{background:var(--fill)}
 .scroller{
   display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;
   margin:14px calc(var(--pad) * -1) 0;padding:2px var(--pad) 4px;
+  /* Weicher rechter Rand statt hartem Schnitt an der letzten Kachel --
+     sagt "hier geht's weiter", ohne ein eigenes Zeichen dafür zu
+     brauchen. Fünf Kacheln passen auf Telefonbreite so gut wie nie
+     ganz hin, der Rand ist also praktisch immer sichtbar begründet. */
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%);
+  mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%);
 }
 .scroller::-webkit-scrollbar{display:none}
 .tile{
@@ -770,7 +919,6 @@ tbody tr:last-child td{border-bottom:none}
 .matchRow .raw .n{font-size:0.94rem;font-weight:550;margin-top:2px}
 .matchRow .amt{flex:0 0 auto;text-align:right;font-size:0.9rem;font-variant-numeric:tabular-nums}
 .matchRow .amt small{display:block;font-size:0.7rem;color:var(--ink-3)}
-.matchRow select{width:100%;margin-top:8px;padding:10px 12px;border:none;border-radius:var(--r-sm);background:var(--surface-2);min-height:42px;font-size:0.9rem}
 
 .results{list-style:none;margin:10px 0 0;padding:0;max-height:288px;overflow-y:auto;background:var(--surface-2);border-radius:var(--r-md)}
 .results li{position:relative}
@@ -780,6 +928,28 @@ tbody tr:last-child td{border-bottom:none}
 .results .rn{font-size:0.97rem}
 .results .rc{font-size:0.76rem;color:var(--ink-2)}
 .noHit{padding:13px 14px;font-size:0.9rem;color:var(--ink-2)}
+
+/* Eine unsichere Bon-Zeile nach der anderen bestätigen: drei
+   Vorschläge zum Antippen statt eines Dropdowns mit dem ganzen
+   Katalog. Betonter Rahmen, damit klar ist: hier wird gerade etwas
+   von der Nutzerin erwartet, bevor es weitergeht. */
+.confirmCard{margin:14px 16px;padding:16px;border-radius:var(--r-lg);background:var(--surface);
+  border:1.5px solid var(--amber);box-shadow:var(--lift)}
+.confirmProgress{font-size:0.79rem;font-weight:650;color:var(--amber-ink)}
+.confirmRaw{font-size:1rem;font-weight:600;margin-top:6px;word-break:break-word}
+.confirmChoices{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.confirmChoice{width:100%;padding:13px 16px;text-align:left;border-radius:var(--r-md);
+  background:var(--accent-soft);color:var(--accent-ink);font-size:0.97rem;font-weight:600;min-height:48px}
+.confirmChoice:active{transform:scale(.98)}
+.confirmFoot{display:flex;gap:10px;margin-top:12px;align-items:center}
+.confirmAlt{flex:1;padding:11px 14px;font-size:0.87rem;border-radius:var(--r-md);background:var(--fill);color:var(--ink-2)}
+.confirmAlt:active{background:var(--fill-2)}
+.confirmSkip{flex:0 0 auto;padding:11px 14px;font-size:0.83rem;color:var(--ink-3);text-decoration:underline}
+.confirmSearchWrap{margin-top:12px}
+.confirmSearchWrap.hide{display:none}
+.confirmSearchWrap input{width:100%;padding:11px 13px;border:none;border-radius:var(--r-sm);
+  background:var(--surface-2);min-height:44px;font-size:0.92rem}
+.confirmSearchWrap .results{max-height:220px}
 
 .basket{list-style:none;margin:0;padding:0}
 .basket li{display:flex;align-items:center;gap:11px;padding:11px 16px;position:relative;background:var(--surface)}
@@ -791,6 +961,12 @@ tbody tr:last-child td{border-bottom:none}
 
 .row.action .rowTitle{color:var(--accent);font-weight:550}
 .row.action.danger .rowTitle{color:var(--red)}
+/* Unwiderrufliches bekommt einen eigenen Ton, nicht nur eine eigene
+   Textfarbe -- der Unterschied zwischen "eine Meldung tippen" und
+   "unwiderruflich" verdient mehr als ein einzelnes rotes Wort in einer
+   Liste sonst harmloser Zeilen. */
+.row.action.danger{background:var(--red-soft)}
+button.row.action.danger:active{background:var(--red-soft)}
 button.row.action,label.row.action{cursor:pointer}
 
 /* ---------------- Ladenmodus ---------------- */
@@ -879,9 +1055,66 @@ button.row.action,label.row.action{cursor:pointer}
   white-space:pre-wrap;word-break:break-word;margin:0 0 12px;
 }
 .facts{margin:0 0 14px;display:grid;grid-template-columns:auto 1fr;gap:0}
-.facts dt{font-size:0.79rem;color:var(--ink-2);padding:10px 14px 10px 0;border-top:1px solid var(--hairline);white-space:nowrap}
-.facts dd{margin:0;font-size:0.9rem;padding:10px 0;text-align:right;border-top:1px solid var(--hairline)}
+.facts dt{font-size:0.79rem;color:var(--ink-2);padding:11px 14px 11px 0;border-top:1px solid var(--hairline);white-space:nowrap}
+.facts dd{margin:0;font-size:0.9rem;padding:11px 0;text-align:right;border-top:1px solid var(--hairline)}
 .facts dt:first-of-type,.facts dd:first-of-type{border-top:none}
+/* Lange Werte dürfen umbrechen statt über den Rand zu laufen; der
+   Wortumbruch bleibt an sinnvollen Stellen, deshalb kein break-all. */
+.facts dd{overflow-wrap:anywhere}
+
+/* ---------------- Produkt-Blatt ----------------
+   Der Leitwert: EINE Aussage, groß, ganz oben. Kein Kasten mit
+   Rahmen -- das Blatt hat schon einen. Die Farbe trägt hier
+   ausnahmsweise Bedeutung (rot = Verbrauchsdatum oder hoher
+   Verlust), deshalb nur als Textfarbe und dünner Trennstrich,
+   nicht als Fläche: eine rote Fläche direkt unter der Überschrift
+   erschlägt das ganze Blatt. */
+.pLead{padding:2px 0 20px}
+.pLeadVal{
+  font-size:2.15rem;font-weight:750;letter-spacing:-.025em;line-height:1.02;
+  font-variant-numeric:tabular-nums;
+}
+.pLeadWhat{font-size:0.97rem;font-weight:600;color:var(--ink);margin-top:5px}
+.pLeadSub{font-size:0.82rem;color:var(--ink-2);margin-top:5px;line-height:1.45}
+.pLead.red .pLeadVal{color:var(--red-ink)}
+.pLead.red .pLeadWhat{color:var(--red-ink)}
+
+/* Kennzahlen unter dem Leitwert: die zweit- und drittwichtigste
+   Aussage, die der Leitwert nicht schon trägt.
+   OHNE Kästchen. Die erste Fassung setzte jede Kennzahl auf eine
+   eigene Fläche mit Haarlinien-Fugen dazwischen -- drei Kennzahlen
+   plus drei Preisfelder ergaben sechs Kästchen und ein halbes
+   Dutzend zusätzlicher Linien auf einem Bildschirm, der ohnehin
+   schon Karten, Faktenzeilen und einen roten Hinweis trägt. Zahlen
+   brauchen keinen Rahmen, um als Zahlen gelesen zu werden; Abstand
+   genügt. */
+.pStats{display:flex;gap:26px;margin:0 0 22px;flex-wrap:wrap}
+.pStat{min-width:0}
+.pStat .v{
+  font-size:1.06rem;font-weight:700;letter-spacing:-.012em;
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
+}
+.pStat .l{font-size:0.74rem;color:var(--ink-2);margin-top:2px}
+.pStat.warn .v{color:var(--red-ink)}
+.pStat.good .v{color:var(--accent-ink)}
+
+/* Herkunft der Zahlen: eingeklappt, aber im Dokument. `details`
+   bringt Tastaturbedienung und Vorlesehilfe von sich aus mit. */
+.pMore{margin-top:18px;border-top:1px solid var(--hairline);padding-top:4px}
+.pMore > summary{
+  list-style:none;cursor:pointer;padding:11px 0;
+  font-size:0.79rem;font-weight:600;color:var(--ink-2);
+  display:flex;align-items:center;gap:7px;
+}
+.pMore > summary::-webkit-details-marker{display:none}
+.pMore > summary::before{
+  content:"";width:7px;height:7px;flex:0 0 auto;
+  border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;
+  transform:rotate(-45deg);transition:transform .18s var(--ease);
+}
+.pMore[open] > summary::before{transform:rotate(45deg)}
+.pMore > summary:active{opacity:.55}
+.pMore .facts{margin-top:2px}
 
 /* ---------------- Bestätigung ---------------- */
 .toast{
@@ -960,9 +1193,21 @@ button.row.action,label.row.action{cursor:pointer}
    auch flach. Ein Balkendiagramm, das sich selbst skaliert, sieht
    bei einer Sache genauso dramatisch aus wie bei zwölf.
    ================================================================ */
-.welcome{
-  font-size:1.06rem;line-height:1.5;color:var(--ink);
-  padding:22px 4px 4px;letter-spacing:-.0075em;
+.welcomeTitle{
+  font-size:1.2rem;font-weight:650;line-height:1.3;color:var(--ink);
+  padding:22px 4px 12px;letter-spacing:-.012em;
+}
+.welcomePoints{
+  list-style:none;margin:0;padding:0 4px 18px;
+  display:flex;flex-direction:column;gap:11px;
+}
+.welcomePoints li{
+  position:relative;padding-left:15px;
+  font-size:0.95rem;line-height:1.4;color:var(--ink-2);
+}
+.welcomePoints li::before{
+  content:"";position:absolute;left:0;top:0.55em;
+  width:5px;height:5px;border-radius:50%;background:var(--accent);
 }
 
 .pulse{background:var(--surface);padding:15px 14px 13px}
@@ -1132,6 +1377,9 @@ button.row.action,label.row.action{cursor:pointer}
   to{transform:scale(1) translateY(0);opacity:1}
 }
 
+.partyMascot{margin-bottom:2px}
+.party:not(.still) .partyMascot{animation:markIn .62s var(--spring) .02s both}
+
 .partyKicker{
   font-size:0.7rem;font-weight:750;letter-spacing:.09em;text-transform:uppercase;
   color:var(--party-ink);
@@ -1266,9 +1514,15 @@ button.row.action,label.row.action{cursor:pointer}
 .halfRow.on{background:var(--accent-soft);color:var(--accent-ink)}
 .halfRow.on .hMark{background:var(--accent-ink)}
 
+/* Zwischenüberschrift im Blatt. Versalien mit Sperrung und Fettung
+   waren drei Auszeichnungen gleichzeitig für eine Beschriftung, die
+   nur trennen soll -- neben Karten, Kennzahlen und einem roten
+   Hinweis las sich das lauter als der Inhalt darunter. Eine Stufe
+   leiser: normale Schreibweise, kräftig genug zum Trennen, mehr Luft
+   davor. */
 .sheetGroupTitle{
-  font-size:0.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--ink-2);margin:16px 0 6px;
+  font-size:0.79rem;font-weight:650;letter-spacing:0;
+  color:var(--ink-2);margin:22px 0 2px;
 }
 .sheetGroupTitle:first-child{margin-top:4px}
 

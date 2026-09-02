@@ -109,6 +109,117 @@ const markSvg = (key) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[key] || MARKS.receipt}</svg>`;
 
 /* ================================================================
+   Das Wesen — ein Begleiter, keine Illustration
+   ================================================================
+   PLATZHALTER-FORM, ausdrücklich: die erste von zehn Varianten
+   ("Organischer Blob"), die dem Referenzbild vorgezogen wurde, bis
+   echtes Bild-/Videomaterial existiert (siehe README, "Das Wesen").
+   Wenn dieses Material da ist, ersetzt es NUR die Körperform bzw.
+   den Loop — Stimmungslogik (mascotMood), Platzierung und die
+   Interaktionen unten bleiben unverändert, weil sie an der Fachlogik
+   hängen, nicht an der Zeichnung.
+   ================================================================ */
+const MASCOT_BODY_PATH = "M50,8 C68,6 88,18 92,40 C96,64 84,88 60,94 C38,99 14,88 8,64 " +
+  "C3,42 14,18 34,10 C39,8 45,9 50,8 Z";
+
+const MASCOT_FACE = {
+  froh: {
+    browL: "M33,39 Q38,35 44,38", browR: "M56,38 Q62,35 67,39",
+    mouth: '<path class="mascotMouth filled" d="M39,63 Q50,76 61,63 Q50,71 39,63 Z"/>'
+  },
+  neutral: {
+    browL: "M33,38 L44,38", browR: "M56,38 L67,38",
+    mouth: '<path class="mascotMouth" d="M42,65 Q50,68.5 58,65"/>'
+  },
+  besorgt: {
+    browL: "M33,40 L44,34", browR: "M67,40 L56,34",
+    mouth: '<path class="mascotMouth" d="M42,67 Q50,63.5 58,67"/>'
+  },
+  alarm: {
+    browL: "M32,42 L44,32", browR: "M68,42 L56,32",
+    mouth: '<ellipse class="mascotMouth filled" cx="50" cy="66" rx="5" ry="6.5"/>'
+  }
+};
+
+/**
+ * Baut das Wesen als eigenständiges SVG. `mood` eine der vier
+ * Stimmungen aus MASCOT_FACE — unbekannte fallen auf "neutral".
+ */
+function mascotSvg(mood, size = 58) {
+  // Dieselbe Rückfallregel für Ausdruck UND Farbe -- sonst bekäme eine
+  // unbekannte Stimmung ein neutrales Gesicht ohne jede Mundfarbe, weil
+  // app.css nur die vier benannten Klassen mit --m-body/--m-eye belegt.
+  const gueltig = MASCOT_FACE[mood] ? mood : "neutral";
+  const face = MASCOT_FACE[gueltig];
+  const eye = (cx) =>
+    `<g class="mascotBlink">` +
+    `<ellipse class="mascotEyeWhite" cx="${cx}" cy="50" rx="8.5" ry="10.5"/>` +
+    `<circle class="mascotPupil" cx="${cx}" cy="51" r="4"/>` +
+    `<circle class="mascotPupil" cx="${cx - 2}" cy="47.5" r="1.4" opacity=".8"/>` +
+    `</g>`;
+  return `<svg class="mascot ${gueltig}" viewBox="0 0 100 100" width="${size}" height="${size}" ` +
+    `aria-hidden="true" focusable="false">` +
+    `<path class="mascotBody" d="${MASCOT_BODY_PATH}"/>` +
+    `<ellipse class="mascotCheek" cx="27" cy="66" rx="6.5" ry="4.5"/>` +
+    `<ellipse class="mascotCheek" cx="73" cy="66" rx="6.5" ry="4.5"/>` +
+    eye(38) + eye(62) +
+    `<path class="mascotBrow" d="${face.browL}"/><path class="mascotBrow" d="${face.browR}"/>` +
+    face.mouth +
+    `</svg>`;
+}
+
+/**
+ * Welche Stimmung, aus Signalen, die die App schon hat — keines davon
+ * neu berechnet, nur neu gelesen. Reihenfolge ist Dringlichkeit:
+ * ein akutes Risiko schlägt einen guten Streak.
+ */
+function mascotMood(ctx) {
+  if (ctx.safety) return "alarm";
+  const heuteVerdirbt = ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
+    ctx.pulse.days[0].events.some((e) => e.kind === "verderb");
+  if (heuteVerdirbt) return "alarm";
+  if (ctx.forgotten && ctx.forgotten.length) return "besorgt";
+  if (ctx.streak && ctx.streak.weeks > 0) return "froh";
+  return "neutral";
+}
+
+/**
+ * Was passiert, wenn man das Wesen antippt — eine antippbare Fläche
+ * statt Dekoration. Öffnet an jeder Stelle etwas, das es schon gibt
+ * (dieselbe Kühlkette-Meldung wie in "Jetzt zu tun", dasselbe
+ * Sammelblatt wie bei den Hinweisen), statt eine zweite Fassung
+ * derselben Aussage zu schreiben — genau die Fehlerklasse, die
+ * PILL_INFO oben im Kopf schon einmal vermeiden wollte.
+ *
+ * @returns {{label:string, run:function(app)}}
+ */
+function mascotTap(ctx) {
+  if (ctx.safety) {
+    return {
+      label: "Kühlkette ansehen",
+      run: (app) => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
+    };
+  }
+  const heuteVerdirbt = ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
+    ctx.pulse.days[0].events.some((e) => e.kind === "verderb");
+  if (heuteVerdirbt) {
+    return { label: "Was heute ansteht ansehen", run: (app) => app.notice("Heute", ctx.pulse.headline) };
+  }
+  if (ctx.forgotten && ctx.forgotten.length) {
+    return { label: `${zahlwort(ctx.forgotten.length, "vergessenes Produkt", "vergessene Produkte")} ansehen`,
+      run: (app) => hintsSheet(ctx, app) };
+  }
+  if (ctx.streak && ctx.streak.weeks > 0) {
+    return {
+      label: "Streak ansehen",
+      run: (app) => app.notice("Weiter so",
+        `${zahlwort(ctx.streak.weeks, "Woche", "Wochen")} am Stück ohne vergessenen Einkauf.`)
+    };
+  }
+  return { label: "Nichts Dringendes", run: (app) => app.notice("Alles ruhig", "Gerade steht nichts Dringendes an.") };
+}
+
+/* ================================================================
    Was bedeutet dieses Zeichen?
    ================================================================
    Die Liste ist voller kleiner Marken: „von dir“, „+8 %“, „doppelt?“,
@@ -231,7 +342,14 @@ const PILL_INFO = {
 
   eigenmarke: ["Eigenmarke",
     "Die Handelsmarke des Händlers — ja!, Gut&Günstig, K-Classic, Milbona und so weiter.\n\n" +
-    "Die App empfiehlt nichts davon. Sie zeigt nur, was der Unterschied bei dir ausmachen würde."]
+    "Die App empfiehlt nichts davon. Sie zeigt nur, was der Unterschied bei dir ausmachen würde."],
+
+  angebote: ["Angebote",
+    "Bei deinem letzten Einkauf hast du für dieses Produkt deutlich weniger bezahlt als sonst — " +
+    "mindestens 15 % unter deinem üblichen Preis.\n\n" +
+    "Das ist kein aktueller Regalpreis: die App hat keinen Zugang zu dem, was gerade im Laden " +
+    "steht, sondern nur zu dem, was auf deinen Bons stand. Die Menge richtet sich nach der " +
+    "Haltbarkeit und deinem gelernten Verbrauch — nie mehr, als bis dahin aufgebraucht wäre."]
 };
 
 /**
@@ -360,8 +478,18 @@ function tile(label, value, note, cls) {
 }
 
 /** Leerzustand: ein Satz und ein Knopf, nicht mehr. */
-function emptyView(text, actionLabel, onAction) {
+/**
+ * Leere-Ansicht — jetzt mit dem Wesen statt einer Textzeile allein.
+ * `mood` ist bewusst nicht `mascotMood(ctx)`: eine leere Ansicht hat
+ * meist gar keine der Signale, aus denen jene Funktion wählt, und
+ * "neutral" (abwartend) passt hier eher als eine geratene Stimmung.
+ * "Nichts fällig, alles im Rhythmus" ist die eine Ausnahme, die
+ * ausdrücklich "froh" übergibt — das ist eine echte gute Nachricht,
+ * keine leere Fläche.
+ */
+function emptyView(text, actionLabel, onAction, mood = "neutral") {
   const c = card();
+  c.append(el("div", "emptyMascot", mascotSvg(mood, 52)));
   c.append(el("p", "empty", esc(text)));
   if (actionLabel) {
     const b = el("button", "cta", actionLabel);
@@ -442,6 +570,16 @@ function wasteSheetGroup(productId, st, ctx) {
     "Es wird nichts gutgeschrieben: eine Schätzung zurückzunehmen ist kein Erfolg, es war nur nie ein " +
     "Verlust. Rückgängig geht beides jederzeit.");
 
+  /* Die Summe, um die es geht -- vorher stand sie als Zeile
+     „Verlust: 123,03 € über 20 Käufe (85 %)" in der allgemeinen
+     Faktenliste, also weit weg von den Fällen, aus denen sie besteht.
+     Hier oben steht sie da, wo man ihr auch widersprechen kann. */
+  if (st.wastedEuros > 0) {
+    g.body.append(uiRow("Geschätzter Verlust",
+      `über ${zahlwort(st.purchased, "Kauf", "Käufe")} · ${pct(st.wasteRate)} der Menge`,
+      null, { value: eur(st.wastedEuros) }));
+  }
+
   /* Der laufende Anteil: EIN Schalter, nicht einer je Kauf. */
   if (st.chronicShare > 0) {
     const r = el("div", "row");
@@ -463,8 +601,22 @@ function wasteSheetGroup(productId, st, ctx) {
   }
 
   /* Die einzelnen Ausreißer: je einer eine eigene Zeile, weil jeder
-     ein eigenes Ereignis behauptet. */
-  st.details.slice(0, 12).forEach((d) => {
+     ein eigenes Ereignis behauptet.
+     Sichtbar sind die drei jüngsten -- bei Hähnchenbrust standen hier
+     zwölf gleich aussehende Zeilen mit je einem Knopf und schoben
+     alles darunter aus dem Blick. Wer widersprechen will, meint fast
+     immer den letzten Kauf; die älteren bleiben erreichbar, nur
+     eingeklappt. */
+  const OFFEN = 3;
+  const spaeter = st.details.length > OFFEN
+    ? el("details", "pMore") : null;
+  if (spaeter) {
+    spaeter.append(el("summary", null,
+      `${st.details.length - OFFEN} ältere ${st.details.length - OFFEN === 1 ? "Fall" : "Fälle"}`));
+  }
+  st.details.slice(0, 12).forEach((d, i) => {
+    const ziel = i < OFFEN ? g.body : spaeter;
+    if (!ziel) return;
     const r = el("div", "row");
     r.append(el("div", "rowMain",
       `<div class="rowTitle">${esc(deDate(d.date))}</div>` +
@@ -483,8 +635,9 @@ function wasteSheetGroup(productId, st, ctx) {
       App.closeSheet();
     });
     r.append(b);
-    g.body.append(r);
+    ziel.append(r);
   });
+  if (spaeter) g.body.append(spaeter);
 
   if (st.details.length > 12) {
     g.body.append(el("p", "srcnote", `${st.details.length - 12} ältere Fälle nicht gezeigt.`));
@@ -497,6 +650,32 @@ function wasteSheetGroup(productId, st, ctx) {
   return g;
 }
 
+/**
+ * Ein Leitwert, dann Gruppen, dann die Herkunft — in dieser Reihenfolge.
+ *
+ * Vorher war dieses Blatt EINE flache Liste aus zehn gleich
+ * aussehenden Zeilen: „Kategorie: Fleisch/Fisch" stand da genauso
+ * groß wie „Verbrauchsdatum: höchstens 2 Tage · max. 4 °C". Alles
+ * gleich gewichtet heißt: nichts gewichtet. Wer das Blatt öffnete,
+ * musste zehn Zeilen lesen, um die eine zu finden, die zählt — und
+ * bei Hähnchenbrust waren das 85 % Verlust und ein Verbrauchsdatum,
+ * versteckt auf Position acht und zehn.
+ *
+ * Jetzt beantwortet das Blatt drei Fragen in fester Reihenfolge:
+ *
+ *   1. WAS IST MIT DIESEM PRODUKT LOS?  — ein Leitwert, groß, oben.
+ *      Welcher das ist, entscheidet die Dringlichkeit, nicht die
+ *      Reihenfolge im Datensatz: Verbrauchsdatum schlägt Verlust,
+ *      Verlust schlägt Rhythmus, Rhythmus schlägt den Preis.
+ *   2. WAS MUSS ICH WISSEN?             — wenige Kacheln, dann
+ *      Gruppen mit Überschrift, jede nur wenn sie Inhalt hat.
+ *   3. WO KOMMT DAS HER?                — eingeklappt. Herkunft,
+ *      Datenqualität, Rückmeldungen: wichtig für das Vertrauen,
+ *      aber nicht beim Öffnen.
+ *
+ * Nichts ist weggefallen. Jede Angabe der alten Liste steht weiter
+ * im Blatt, nur an einem Ort, der ihrer Bedeutung entspricht.
+ */
 function productSheet(productId, ctx) {
   const p = byId(productId);
   if (!p) return;
@@ -508,78 +687,211 @@ function productSheet(productId, ctx) {
   const range = ctx.range.byProduct.find((x) => x.productId === productId);
   const season = seasonFor(productId, ctx.ref);
   const isOpen = Data.get().opened.some((o) => o.productId === productId);
+  const nf = nonFoodFor(productId);
+  const chg = ctx.changes && ctx.changes.get(productId);
+  const sicherheit = p.safetyCritical ? safetyFacts(productId) : null;
 
   const body = el("div");
 
-  /* Die Wochenentscheidung steht ganz oben, vor allen Fakten.
-     Sie ist der Grund, aus dem dieses Blatt in der Liste geöffnet
-     wird — Rhythmus, Preisverlauf und Datenqualität sind Nachschlag.
-     Nur wenn das Produkt diese Woche überhaupt ansteht: im Bestand
-     oder im Wochenstreifen wäre die Frage gegenstandslos. */
+  /* ---------- 1. Der Leitwert ---------- */
+  /* Genau EINE Aussage, und zwar die dringendste. Die Reihenfolge
+     ist eine Rangfolge der Folgen, nicht der Verfügbarkeit: ein
+     Verbrauchsdatum kann krank machen, ein hoher Verlust kostet
+     Geld, ein Rhythmus ist nützlich, ein Preis ist Beiwerk. */
+  const leit = (() => {
+    if (sicherheit) {
+      return { ton: "red", wert: "max. " + tage(sicherheit.maxDays), was: "Verbrauchsdatum",
+        dazu: `bei höchstens ${de(sicherheit.maxTempC)} °C · das aufgedruckte Datum gilt immer` };
+    }
+    if (st && st.wasteRate >= 0.25 && st.wastedEuros > 0) {
+      return { ton: "red", wert: pct(st.wasteRate), was: "landen im Müll",
+        dazu: `${eur(st.wastedEuros)} über ${zahlwort(st.purchased, "Kauf", "Käufe")} — geschätzt, nicht gemessen` };
+    }
+    if (!nf && r && r.rhythmDays) {
+      return { ton: null, wert: alleTage(r.rhythmDays), was: "kaufst du das",
+        dazu: (r.lastPurchaseDate ? `zuletzt am ${deDate(r.lastPurchaseDate)}` : "") +
+          ` · Vertrauen ${pct(r.confidence)}` };
+    }
+    if (nf) {
+      const sup = ctx.supplies.find((x) => x.productId === productId);
+      if (sup && sup.daysOfSupply !== null && sup.confidence !== "UNSICHER") {
+        return { ton: null, wert: tage(sup.daysOfSupply), was: "reicht der Vorrat noch",
+          dazu: `${de(nf.package.value)} ${nf.package.unit} je Packung` };
+      }
+    }
+    return { ton: null, wert: eur(pm ? pm.usual : p.typicalPrice), was: "üblicher Preis",
+      dazu: p.category + (r && r.lastPurchaseDate ? ` · zuletzt am ${deDate(r.lastPurchaseDate)}` : "") };
+  })();
+
+  const kopf = el("div", "pLead" + (leit.ton ? " " + leit.ton : ""));
+  kopf.append(el("div", "pLeadVal", esc(leit.wert)));
+  kopf.append(el("div", "pLeadWhat", esc(leit.was)));
+  if (leit.dazu) kopf.append(el("div", "pLeadSub", esc(leit.dazu.trim().replace(/^· /, ""))));
+  body.append(kopf);
+
+  /* ---------- 1b. Die Kennzahlen, die NICHT der Leitwert sind ----------
+     Der Leitwert kann immer nur eine Sache zeigen. Ohne diese Zeile
+     verschwand die zweitwichtigste komplett: bei Hähnchenbrust nannte
+     das Blatt das Verbrauchsdatum und verlor dabei den Rhythmus
+     (alle 10 Tage) UND die Verlustquote (85 %, 123,03 €) -- beides
+     stand in der alten flachen Liste noch da. Gemessen an einem
+     Alt-gegen-Neu-Abgleich über alle Produkte der Beispieldaten, nicht
+     im Nachhinein bemerkt. Gezeigt wird nur, was der Leitwert nicht
+     schon sagt, höchstens drei Werte. */
+  const kennzahlen = [];
+  const schonImLeit = leit.was;
+  if (!nf && r && r.rhythmDays && schonImLeit !== "kaufst du das") {
+    kennzahlen.push({ v: alleTage(r.rhythmDays), l: "Rhythmus" });
+  }
+  if (st && st.wastedEuros > 0 && schonImLeit !== "landen im Müll") {
+    kennzahlen.push({ v: pct(st.wasteRate), l: "Verlust", ton: st.wasteRate >= 0.25 ? "warn" : null });
+  }
+  /* Der zuletzt gezahlte Preis gehört hierher, nicht in einen eigenen
+     Abschnitt mit Überschrift: er ist eine Kennzahl wie die anderen.
+     Die Farbe trägt den Vergleich mit dem üblichen Preis -- rot heißt
+     teurer als sonst, grün günstiger. Damit braucht es keine zweite
+     Zeile, die dasselbe noch einmal als Zahl danebenstellt; „üblich"
+     und „Spanne" stehen als Bezugswerte unten in der Faktenliste. */
+  if (pm && schonImLeit !== "üblicher Preis") {
+    kennzahlen.push({ v: eur(pm.last), l: "zuletzt",
+      ton: pm.last > pm.usual * 1.08 ? "warn" : pm.last < pm.usual * 0.92 ? "good" : null });
+  }
+  if (!nf && range && kennzahlen.length < 3) {
+    kennzahlen.push({ v: tage(range.days), l: "reicht noch" });
+  }
+  if (kennzahlen.length) {
+    const kz = el("div", "pStats");
+    kennzahlen.slice(0, 3).forEach((k) => kz.append(el("div", "pStat" + (k.ton ? " " + k.ton : ""),
+      `<div class="v">${esc(k.v)}</div><div class="l">${esc(k.l)}</div>`)));
+    body.append(kz);
+  }
+
+  /* ---------- 2. Die Wochenentscheidung ---------- */
+  /* Bleibt direkt unter dem Leitwert: sie ist der Grund, aus dem
+     dieses Blatt aus der Liste heraus geöffnet wird. */
   const aufDerListe = (ctx.items || []).find((i) => i.productId === productId && i.basis !== "manuell");
   if (aufDerListe) body.append(weekChoice(aufDerListe, ctx, App, () => App.closeSheet()));
 
-  const facts = el("dl", "facts");
-  const fact = (k, v) => {
-    if (v === null || v === undefined || v === "") return;
-    facts.append(el("dt", null, esc(k)), el("dd", null, esc(v)));
+  /* ---------- Bausteine für die Abschnitte ---------- */
+  const abschnitt = (titel) => {
+    const t = el("div", "sheetGroupTitle", esc(titel));
+    const dl = el("dl", "facts");
+    let leer = true;
+    return {
+      zeile(k, v) { if (v === null || v === undefined || v === "") return;
+        dl.append(el("dt", null, esc(k)), el("dd", null, esc(v))); leer = false; },
+      anhaengen(node) { if (node) { body.append(t); body.append(dl); body.append(node); leer = false; } },
+      fertig() { if (!leer) { body.append(t); body.append(dl); } }
+    };
   };
 
-  // Haushaltsprodukte rechnen anders — und zeigen deshalb andere
-  // Fakten. Ein Kaufrhythmus wäre dort irreführend (die Menge zählt,
-  // nicht der Abstand), und die Lebensmittel-Bestandsschätzung liefert
-  // bei einer Haltbarkeit von zehn Jahren „noch 3633 Tage“.
-  const nf = nonFoodFor(productId);
-
-  fact("Kategorie", p.category);
+  /* ---------- 3. Eine Faktenliste, keine Abschnittsparade ----------
+     Vorher hatte dieses Blatt für den Preis einen eigenen Abschnitt
+     mit Versal-Überschrift und drei umrandeten Kästchen, direkt über
+     dem nächsten Abschnitt mit Versal-Überschrift. Zwei solche
+     Blöcke übereinander sehen nach Gliederung aus und sind in
+     Wahrheit nur Lärm: sechs zusätzliche Trennlinien, zwei laute
+     Überschriften, für vier Zahlen.
+     Jetzt trägt die Kennzahlenzeile oben den zuletzt gezahlten Preis
+     (mit Farbe als Vergleich), und „üblich" und „Spanne" stehen als
+     das, was sie sind: Bezugswerte in derselben Liste wie
+     Haltbarkeit und Lagerort. Ein Block statt drei. */
   if (!nf) {
-    fact("Rhythmus", r && r.rhythmDays ? `${alleTage(r.rhythmDays)} · Vertrauen ${pct(r.confidence)}` : "noch nicht gelernt");
-    // Was der rohe Median sagte, bevor Bruch, Saison und Rückmeldungen
-    // darauf gewirkt haben. Ohne diese Zeile wäre die Zahl oben eine
-    // Behauptung ohne Herkunft.
-    if (r && r.baseRhythmDays && r.baseRhythmDays !== r.rhythmDays) {
-      fact("davor gelernt", alleTage(r.baseRhythmDays));
-    }
-    if (r && r.feedback && r.feedback.signals) {
-      fact("Rückmeldungen", `${r.feedback.signals} · ${r.feedback.applied ? "wirken auf den Rhythmus" : "noch ohne Wirkung"}`);
-    }
-    if (r && r.season && r.season.applied) fact("Saison", r.season.message);
-    const chg = ctx.changes && ctx.changes.get(productId);
-    if (chg && chg.found) fact("Verhalten geändert", chg.message);
-  }
-  fact("Zuletzt", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
-  if (!nf) {
-    fact("Haltbarkeit", p.isFood
-      ? `${tage(p.shelfLifeDays)}${p.shelfLifeOpenedDays ? `, offen ${p.shelfLifeOpenedDays}` : ""}`
+    const a = abschnitt("Frische & Lagerung");
+    a.zeile("Haltbarkeit", p.isFood
+      ? `${tage(p.shelfLifeDays)}${p.shelfLifeOpenedDays ? `, offen ${tage(p.shelfLifeOpenedDays)}` : ""}`
       : null);
-  }
-  fact("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
-  fact("Preis", pm
-    ? `zuletzt ${eur(pm.last)} · üblich ${eur(pm.usual)} · Spanne ${eur(pm.lowest)}–${eur(pm.highest)}`
-    : `üblich ${eur(p.typicalPrice)}`);
-  if (!nf) {
-    fact("Bestand", inv
-      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${tage(inv.daysLeft)} · Sicherheit ${pct(inv.confidence)}`
-      : "nicht schätzbar");
-    fact("Reichweite", range ? `${tage(range.days)} · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
-    fact("Verlust", st && st.wastedEuros > 0
-      ? `${eur(st.wastedEuros)} über ${zahlwort(st.purchased, "Kauf", "Käufe")} (${pct(st.wasteRate)})`
-      : "keiner erkannt");
-    fact("Datenqualität", {
-      regulatorisch: "rechtlich definiert",
-      leitlinie: "behördliche Lagerempfehlung",
-      schaetzwert: "Schätzwert ohne amtliche Quelle"
-    }[p.quality]);
-    // Bei sicherheitskritischen Produkten reicht die Stufe nicht: dort
-    // steht die Rechtsgrundlage daneben, und der wichtigste Satz ist,
-    // dass das aufgedruckte Datum jede Schätzung schlägt.
-    if (p.safetyCritical) {
-      const f = safetyFacts(productId);
-      if (f) {
-        fact("Verbrauchsdatum", `höchstens ${tage(f.maxDays)} · max. ${de(f.maxTempC)} °C`);
-      }
+    a.zeile("Lagerort", p.storage !== "kein Lagerhinweis" ? p.storage : null);
+    if (pm) {
+      a.zeile("üblicher Preis", eur(pm.usual));
+      // Nur EIN Eurozeichen: „6,99 €–7,49 €" brach auf schmalen
+      // Geräten hinter dem zweiten € um und ließ das Zeichen allein
+      // in der nächsten Zeile stehen. „6,99–7,49 €" ist zudem die
+      // übliche deutsche Schreibweise für eine Spanne.
+      a.zeile("Preisspanne", `${de(pm.lowest.toFixed(2))}–${eur(pm.highest)}`);
+    } else {
+      a.zeile("üblicher Preis", `${eur(p.typicalPrice)} · noch ohne eigenen Kauf`);
+    }
+    /* Das Verbrauchsdatum steht NICHT noch einmal als Faktenzeile:
+       es ist bereits der Leitwert ganz oben und wird gleich darunter
+       im roten Hinweis erklärt. Dreimal dasselbe auf einem Bildschirm
+       macht es nicht wichtiger, nur unübersichtlicher. */
+    a.fertig();
+
+    if (sicherheit) {
+      /* Kurz. Der Leitwert ganz oben nennt die Frist schon in Rot und
+         nennt sie beim Namen; dieser Hinweis muss nur noch sagen, was
+         daraus folgt. Die ausführliche Fassung stand vorher hier als
+         vierzeiliger Block, obwohl direkt darunter der Knopf steht,
+         der genau das erklärt. */
+      const note = el("div", "note red");
+      note.innerHTML = "Nach Ablauf in den Müll — Keime sieht und riecht man nicht.";
+      body.append(note);
+      const q = el("button", "linkBtn", "Worauf beruht das?");
+      q.addEventListener("click", () => App.notice(p.name,
+        `Gruppe: ${sicherheit.label}.\n\n` +
+        `RECHTLICH GEREGELT ist zweierlei:\n${sicherheit.legal.join("\n\n")}\n\n` +
+        `NICHT geregelt ist die Anzahl der Tage. Dafür gibt es keine amtliche Zahl. ` +
+        `Die App rechnet mit höchstens ${tagen(sicherheit.maxDays)} — das ist die untere Grenze ` +
+        `dieser Lagerempfehlung:\n\n${sicherheit.guide}\n\n${sicherheit.printedWins}`));
+      body.append(q);
+    }
+    if (season && season.status === "importware") body.append(el("div", "note gold", esc(season.message)));
+
+    // Angebrochen: ein Tippen, mehr Pflege darf es nicht kosten.
+    if (p.isFood && p.shelfLifeOpenedDays && p.shelfLifeOpenedDays < p.shelfLifeDays) {
+      const b = el("button", "cta light", isOpen ? "✓ angebrochen" : "Als angebrochen markieren");
+      b.addEventListener("click", () => {
+        Data.toggleOpened(productId);
+        App.closeSheet();
+        App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${tage(p.shelfLifeOpenedDays)}`);
+      });
+      body.append(b);
+    }
+
+    /* Das aufgedruckte Datum eintragen. Für sicherheitskritische
+       Produkte ist das die einzige belastbare Angabe, die es gibt —
+       und sie steht auf der Packung, die gerade in der Hand liegt. */
+    if (p.isFood && ctx.history.some((h) => h.productId === productId)) {
+      const gesetzt = (Data.get().useBy || {})[productId] || "";
+      const wrap = el("label", "field");
+      wrap.append(el("span", "lbl", p.safetyCritical
+        ? "Aufgedrucktes Verbrauchsdatum"
+        : "Aufgedrucktes Mindesthaltbarkeitsdatum"));
+      const inp = el("input");
+      inp.type = "date";
+      inp.value = gesetzt;
+      inp.setAttribute("aria-label", `Aufgedrucktes Datum für ${p.name}`);
+      inp.addEventListener("change", () => {
+        const ok = Data.setUseBy(productId, inp.value || null);
+        if (!ok) { App.toast("Das Datum liegt vor dem Kauf"); inp.value = gesetzt; return; }
+        App.closeSheet();
+        App.toast(inp.value ? "Es gilt jetzt dein Datum" : "Wieder geschätzt");
+      });
+      wrap.append(inp);
+      body.append(wrap);
+      body.append(el("p", "srcnote", gesetzt
+        ? "Die Bestandsanzeige rechnet mit diesem Datum, nicht mehr mit der Schätzung."
+        : "Ohne Eintrag rechnet die App mit einer Lagerempfehlung. Das Etikett ist genauer — es gilt für genau diese Packung."));
     }
   }
+
+  /* ---------- 5. Vorrat ---------- */
+  /* Nur wenn es etwas zu sagen gibt. Eine Überschrift „Vorrat" über
+     der einzigen Zeile „Bestand — nicht schätzbar" kostet drei Zeilen
+     Platz, um mitzuteilen, dass nichts bekannt ist. Wo die App nichts
+     weiß, schweigt sie hier; die Erklärung dazu steht unten unter
+     „Wie die App darauf kommt". */
+  if (!nf && (inv || range)) {
+    const a = abschnitt("Vorrat");
+    a.zeile("Bestand", inv
+      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${tage(inv.daysLeft)} · Sicherheit ${pct(inv.confidence)}`
+      : null);
+    a.zeile("Reichweite", range ? `${tage(range.days)} · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
+    a.fertig();
+  }
+
+  /* ---------- 6. Haushaltsprodukte rechnen anders ---------- */
   if (nf) {
     const sup = ctx.supplies.find((x) => x.productId === productId);
     const swap = ctx.swapsDue.find((x) => x.productId === productId);
@@ -588,34 +900,52 @@ function productSheet(productId, ctx) {
       RATE: "wird aufgebraucht", INTERVAL: "wird ausgetauscht",
       SPORADIC: "unregelmäßig", DATED: "hat ein Ablaufdatum"
     };
-    fact("Verbrauchsart", CLASS_LABEL[nf.consumptionClass]);
-    fact("Packung", `${de(nf.package.value)} ${nf.package.unit}`);
-    if (rate) fact("Verbrauch", `${de(rate.rate)} ${nf.package.unit}/Tag · ${rate.label}`);
+    const a = abschnitt("Verbrauch");
+    a.zeile("Verbrauchsart", CLASS_LABEL[nf.consumptionClass]);
+    a.zeile("Packung", `${de(nf.package.value)} ${nf.package.unit}`);
+    if (rate) a.zeile("Verbrauch", `${de(rate.rate)} ${nf.package.unit}/Tag · ${rate.label}`);
     if (sup && sup.daysOfSupply !== null && sup.confidence !== "UNSICHER") {
-      fact("Reicht noch", tage(sup.daysOfSupply));
+      a.zeile("Reicht noch", tage(sup.daysOfSupply));
     }
     if (swap) {
-      fact("Austausch", `${alleTage(swap.intervalDays)} · ${swap.source}` +
+      a.zeile("Austausch", `${alleTage(swap.intervalDays)} · ${swap.source}` +
         (swap.hardnessAdjusted ? " · an die Wasserhärte angepasst" : ""));
-      fact("Im Einsatz", tage(swap.inUse));
+      a.zeile("Im Einsatz", tage(swap.inUse));
     }
     const bp = ctx.basePrices && ctx.basePrices.get(productId);
-    if (bp) fact("Grundpreis", bp.message);
-    if (nf.paoMonths) fact("Nach dem Öffnen", `${nf.paoMonths} Monate haltbar`);
-    fact("Quelle", nf.rateSource || nf.intervalSource || nf.datedSource);
-    fact("In der WG", nf.sharedByDefault ? "geteilt" : "persönlich");
-    if (nf.requiresDevice) fact("Braucht", {
+    if (bp) a.zeile("Grundpreis", bp.message);
+    // Wie bei den Lebensmitteln: der zuletzt gezahlte Preis steht als
+    // Kennzahl oben, die Bezugswerte hier als Zeilen.
+    if (pm) {
+      a.zeile("üblicher Preis", eur(pm.usual));
+      a.zeile("Preisspanne", `${de(pm.lowest.toFixed(2))}–${eur(pm.highest)}`);
+    } else {
+      a.zeile("üblicher Preis", `${eur(p.typicalPrice)} · noch ohne eigenen Kauf`);
+    }
+    if (nf.paoMonths) a.zeile("Nach dem Öffnen", `${nf.paoMonths} Monate haltbar`);
+    a.zeile("In der WG", nf.sharedByDefault ? "geteilt" : "persönlich");
+    if (nf.requiresDevice) a.zeile("Braucht", {
       hasDishwasher: "Spülmaschine", hasWashingMachine: "Waschmaschine",
       hasCoffeeMachine: "Kaffeemaschine", hasWaterFilter: "Wasserfilter"
     }[nf.requiresDevice]);
-  }
-  body.append(facts);
+    a.fertig();
 
-  /* Was bei einem guten Preis sinnvoll wäre.
-     Herkunft heute: die eigene Preishistorie. Dieselbe Rechnung
-     nimmt später einen Schwarm-Index entgegen — offerAdvisor.js
-     interessiert nicht, woher das „üblich" kommt, nur dass die
-     Herkunft mitgeführt und angezeigt wird. */
+    if (nf.paoMonths) {
+      body.append(el("div", "note gold",
+        "Die Frist läuft ab dem Öffnen. Die App kennt dieses Datum nicht und rechnet ab dem Kauf — das ist eine Annahme, keine Messung."));
+    }
+    if (nf.consumptionClass === "SPORADIC") {
+      body.append(el("div", "note",
+        "Für dieses Produkt macht die App keine Vorhersage. Der Kaufabstand lässt kein Muster erkennen."));
+    }
+  }
+
+  /* ---------- 7. Verlust: die Schätzung widersprechbar machen ---------- */
+  if (st && (st.chronicShare > 0 || (st.details && st.details.length))) {
+    body.append(wasteSheetGroup(productId, st, ctx));
+  }
+
+  /* ---------- 8. Was bei einem guten Preis sinnvoll wäre ---------- */
   if (pm && pm.lowest && pm.usual && r && r.perUnitDays) {
     const rat = offerAdvice(productId, {
       preis: pm.lowest, üblich: pm.usual, perUnitDays: r.perUnitDays, herkunft: "eigen"
@@ -637,90 +967,61 @@ function productSheet(productId, ctx) {
     }
   }
 
-  /* Die Schätzung widersprechbar machen. */
-  if (st && (st.chronicShare > 0 || (st.details && st.details.length))) {
-    body.append(wasteSheetGroup(productId, st, ctx));
-  }
-
-  if (nf && nf.paoMonths) {
-    body.append(el("div", "note gold",
-      `Die Frist läuft ab dem Öffnen. Die App kennt dieses Datum nicht und rechnet ab dem Kauf — das ist eine Annahme, keine Messung.`));
-  }
-  if (nf && nf.consumptionClass === "SPORADIC") {
-    body.append(el("div", "note",
-      "Für dieses Produkt macht die App keine Vorhersage. Der Kaufabstand lässt kein Muster erkennen."));
-  }
-
+  /* ---------- 9. Hinweise, die eine Änderung erklären ---------- */
   if (!nf && r && r.feedback && r.feedback.message) {
     body.append(el("div", "note", esc(r.feedback.message)));
   }
-  if (!nf) {
-    const chg = ctx.changes && ctx.changes.get(productId);
-    if (chg && chg.found) body.append(el("div", "note blue", esc(chg.message)));
-  }
-  if (p.safetyCritical) {
-    const f = safetyFacts(productId);
-    const note = el("div", "note red");
-    note.innerHTML = "<b>Verbrauchsdatum.</b> Nach Ablauf in den Müll — Keime sind weder zu sehen noch zu riechen. " +
-      "Die App verlängert diese Frist nie.";
-    body.append(note);
-    if (f) {
-      // Rechtsgrundlage und Empfehlung getrennt, nie vermischt: das
-      // eine ist Gesetz, das andere ein Erfahrungswert. Wer beides in
-      // einen Satz packt, verleiht dem Erfahrungswert eine Autorität,
-      // die er nicht hat.
-      const q = el("button", "linkBtn", "Worauf beruht das?");
-      q.addEventListener("click", () => App.notice(p.name,
-        `Gruppe: ${f.label}.\n\n` +
-        `RECHTLICH GEREGELT ist zweierlei:\n${f.legal.join("\n\n")}\n\n` +
-        `NICHT geregelt ist die Anzahl der Tage. Dafür gibt es keine amtliche Zahl. ` +
-        `Die App rechnet mit höchstens ${tagen(f.maxDays)} — das ist die untere Grenze ` +
-        `dieser Lagerempfehlung:\n\n${f.guide}\n\n${f.printedWins}`));
-      body.append(q);
-    }
-  }
-
-  /* Das aufgedruckte Datum eintragen.
-     Für sicherheitskritische Produkte ist das die einzige belastbare
-     Angabe, die es gibt — und sie steht auf der Packung, die gerade
-     in der Hand liegt. Ab dem Eintrag rechnet die App damit statt mit
-     ihrer Lagerempfehlung, und die Bestandsanzeige sagt, dass die
-     Zahl nicht mehr geschätzt ist. */
-  if (p.isFood && ctx.history.some((h) => h.productId === productId)) {
-    const gesetzt = (Data.get().useBy || {})[productId] || "";
-    const wrap = el("label", "field");
-    wrap.append(el("span", "lbl", p.safetyCritical
-      ? "Aufgedrucktes Verbrauchsdatum"
-      : "Aufgedrucktes Mindesthaltbarkeitsdatum"));
-    const inp = el("input");
-    inp.type = "date";
-    inp.value = gesetzt;
-    inp.setAttribute("aria-label", `Aufgedrucktes Datum für ${p.name}`);
-    inp.addEventListener("change", () => {
-      const ok = Data.setUseBy(productId, inp.value || null);
-      if (!ok) { App.toast("Das Datum liegt vor dem Kauf"); inp.value = gesetzt; return; }
-      App.closeSheet();
-      App.toast(inp.value ? "Es gilt jetzt dein Datum" : "Wieder geschätzt");
-    });
-    wrap.append(inp);
-    body.append(wrap);
-    body.append(el("p", "srcnote", gesetzt
-      ? "Die Bestandsanzeige rechnet mit diesem Datum, nicht mehr mit der Schätzung."
-      : "Ohne Eintrag rechnet die App mit einer Lagerempfehlung. Das Etikett ist genauer — es gilt für genau diese Packung."));
-  }
-  if (season && season.status === "importware") body.append(el("div", "note gold", esc(season.message)));
+  if (!nf && chg && chg.found) body.append(el("div", "note blue", esc(chg.message)));
   if (p.note) body.append(el("div", "note", esc(p.note)));
 
-  // Angebrochen: ein Tippen, mehr Pflege darf es nicht kosten.
-  if (p.isFood && p.shelfLifeOpenedDays && p.shelfLifeOpenedDays < p.shelfLifeDays) {
-    const b = el("button", "cta light", isOpen ? "✓ angebrochen" : "Als angebrochen markieren");
-    b.addEventListener("click", () => {
-      Data.toggleOpened(productId);
-      App.closeSheet();
-      App.toast(isOpen ? "Markierung entfernt" : `Hält noch ${tage(p.shelfLifeOpenedDays)}`);
-    });
-    body.append(b);
+  /* ---------- 10. Herkunft der Zahlen — eingeklappt ---------- */
+  /* Alles, was erklärt, WOHER eine Zahl kommt. Das ist der Kern des
+     Vertrauensversprechens dieser App und darf nicht verschwinden —
+     aber es ist nichts, was beim Öffnen des Blattes im Weg stehen
+     muss. `<details>` statt eigener Klapp-Logik: der Inhalt bleibt
+     im Dokument (auch für die Suche und für Vorlesehilfen), das
+     Auf- und Zuklappen kann der Browser selbst, und die Tastatur
+     bedient es ohne eine Zeile JavaScript. */
+  const herkunft = el("details", "pMore");
+  const sum = el("summary", null, "Wie die App darauf kommt");
+  herkunft.append(sum);
+  const hdl = el("dl", "facts");
+  const hz = (k, v) => { if (v === null || v === undefined || v === "") return;
+    hdl.append(el("dt", null, esc(k)), el("dd", null, esc(v))); };
+
+  hz("Kategorie", p.category);
+  if (!nf) {
+    /* Das Vertrauen in den gelernten Rhythmus -- immer hier, auch
+       wenn der Rhythmus schon der Leitwert ist. Zwei Gründe: es sagt
+       nicht, WAS gilt, sondern wie sicher die App sich ist, und
+       genau das ist die Frage dieses Abschnitts. Und es hält das
+       Wort „Rhythmus" im Blatt, das der Leitwert bewusst umschreibt
+       („alle 7 Tage · kaufst du das"). */
+    if (r && r.rhythmDays) hz("Vertrauen in den Rhythmus", pct(r.confidence));
+    /* Wo die App nichts weiß, sagt sie es -- aber hier unten, nicht
+       als eigene Überschrift mit einer einzigen Zeile darunter. Die
+       alte Fassung zeigte „Bestand: nicht schätzbar" und „Verlust:
+       keiner erkannt" ganz oben zwischen den echten Angaben. */
+    if (!inv) hz("Bestand", "nicht schätzbar");
+    if (!st || !(st.wastedEuros > 0)) hz("Verlust", "keiner erkannt");
+    hz("Datenqualität", {
+      regulatorisch: "rechtlich definiert",
+      leitlinie: "behördliche Lagerempfehlung",
+      schaetzwert: "Schätzwert ohne amtliche Quelle"
+    }[p.quality]);
+    if (r && r.baseRhythmDays && r.baseRhythmDays !== r.rhythmDays) {
+      hz("davor gelernt", alleTage(r.baseRhythmDays));
+    }
+    if (r && r.feedback && r.feedback.signals) {
+      hz("Rückmeldungen", `${r.feedback.signals} · ${r.feedback.applied ? "wirken auf den Rhythmus" : "noch ohne Wirkung"}`);
+    }
+    if (r && r.season && r.season.applied) hz("Saison", r.season.message);
+    if (chg && chg.found) hz("Verhalten geändert", chg.message);
   }
+  if (nf) hz("Quelle", nf.rateSource || nf.intervalSource || nf.datedSource);
+  hz("Zuletzt gekauft", r && r.lastPurchaseDate ? deDate(r.lastPurchaseDate) : null);
+  herkunft.append(hdl);
+  body.append(herkunft);
 
   App.sheet(p.name, null, body);
 }
@@ -754,12 +1055,20 @@ function productSheet(productId, ctx) {
 function viewStart(ctx, app) {
   const c = frag();
 
-  /* --- Kaltstart: erst einmal Daten --- */
+  /* --- Kaltstart: erst einmal Daten ---
+     Das ist die ganze Einführung, die es gibt — bewusst eine einzige
+     Karte statt eines mehrschrittigen Dialogs. Drei kurze Zeilen
+     statt eines Fließtexts, weil die drei Fragen, die hier zählen
+     (was macht das, wo bleiben meine Daten, was tue ich als Erstes),
+     sich nicht der Reihe nach lesen lassen wollen, sondern auf einen
+     Blick beantwortet sein sollen. */
   if (!ctx.history.length) {
     const w = card();
-    w.append(el("p", "welcome",
-      "Einkaufs-Anker lernt aus deinen Kassenbons, was wann bei dir ausgeht — " +
-      "und sagt es dir, bevor es fehlt."));
+    w.append(el("p", "welcomeTitle", "Willkommen bei Einkaufs-Anker"));
+    w.append(el("ul", "welcomePoints",
+      "<li>Lernt aus deinen Kassenbons, was wann bei dir ausgeht, und sagt es dir vorher.</li>" +
+      "<li>Bleibt auf deinem Gerät — kein Konto, kein Server, keine Übertragung.</li>" +
+      "<li>Schon der erste Bon zeigt deine Ausgaben; die Einkaufsliste kommt mit der Zeit dazu.</li>"));
     const b = el("button", "cta", "Ersten Bon erfassen");
     b.addEventListener("click", () => app.goto("erfassen"));
     w.append(b);
@@ -825,7 +1134,7 @@ function pulseCard(ctx, app) {
       (d.isShoppingDay ? " shop" : "") +
       (d.count ? "" : " quiet"));
     b.setAttribute("aria-label",
-      `${d.name}, ${d.count === 0 ? "nichts" : d.count === 1 ? "eine Sache" : d.count + " Sachen"}` +
+      `${d.name}, ${d.count === 0 ? "nichts" : d.count === 1 ? "ein Produkt" : d.count + " Produkte"}` +
       (d.isShoppingDay ? ", dein Einkaufstag" : ""));
 
     // Die Zahl steht ÜBER der Säule, nicht darunter: darunter steht
@@ -944,9 +1253,15 @@ function todoCard(ctx, app) {
 
   const faellig = ctx.swapsDue.filter((x) => x.due);
   if (faellig.length) {
-    rows.push([faellig.length === 1 ? `${faellig[0].name} tauschen` : `${faellig.length} Sachen tauschen`,
+    rows.push([faellig.length === 1 ? `${faellig[0].name} tauschen` : `${zahlwort(faellig.length, "Produkt", "Produkte")} tauschen`,
       faellig.length === 1 ? "nach Zeit fällig" : faellig.slice(0, 3).map((x) => x.name).join(", "),
       flag("tauschen", "f-gold", String(faellig.length)), () => app.goto("faellig")]);
+  }
+
+  if (ctx.foodDeals.length) {
+    rows.push([`${zahlwort(ctx.foodDeals.length, "Angebot", "Angebote")} erkannt`,
+      ctx.foodDeals.slice(0, 3).map((d) => d.name).join(", "),
+      flag("angebote", "f-ok", String(ctx.foodDeals.length)), () => app.goto("angebote")]);
   }
 
   if (ctx.review.due) {
@@ -1202,16 +1517,14 @@ function finishListe(c, ctx, app, on, sumOn, hinweise, dringend) {
 
   /* --- Losgehen --- */
   const actions = el("div", "ctaRow");
-  /* Kein zweiter Modus, eine andere Sicht: derselbe Wagen, nach
-     Gängen sortiert und mit großen Zielen. Deshalb auch nicht mehr
-     der auffälligste Knopf der Seite — das ist jetzt das Buchen. */
-  const go = el("button", "cta light", "Nach Gängen");
-  go.disabled = !on.length;
-  go.addEventListener("click", () => app.openStore());
+  // "Nach Gängen" stand hier zusätzlich zum immer sichtbaren Knopf
+  // oben im Kopfbereich (renderBar in app.js) -- derselbe Text, dieselbe
+  // Aktion, zweimal im selben Bild. Der Kopfbereich-Knopf bleibt beim
+  // Scrollen erreichbar, deshalb reicht der eine.
   const share = el("button", "cta light", "Teilen");
   share.disabled = !on.length;
   share.addEventListener("click", () => app.shareList());
-  actions.append(go, share);
+  actions.append(share);
   c.append(actions);
 
   /* Ohne jede Historie bleibt der Weg zu den Beispieldaten stehen —
@@ -1373,7 +1686,7 @@ function hintsSheet(ctx, app) {
     "Alles hier hat denselben Zweck: dass nichts weggeworfen werden muss. Jeder Hinweis kommt, " +
     "solange sich noch etwas machen lässt — nicht hinterher."));
 
-  app.sheet("Zero Waste", `${hinweise.length} ${hinweise.length === 1 ? "Sache" : "Sachen"}`, body);
+  app.sheet("Zero Waste", `${hinweise.length} ${hinweise.length === 1 ? "Hinweis" : "Hinweise"}`, body);
 }
 
 /**
@@ -2233,7 +2546,8 @@ function viewFaellig(ctx, app) {
         ? "Nichts fällig. Alles im Rhythmus."
         : "Noch keine Haushaltsprodukte erfasst.",
       ctx.nonFoodEntries.length ? null : "Einkauf erfassen",
-      () => app.goto("erfassen")));
+      () => app.goto("erfassen"),
+      ctx.nonFoodEntries.length ? "froh" : "neutral"));
     return c;
   }
 
@@ -2283,6 +2597,39 @@ function viewFaellig(ctx, app) {
     c.append(g);
   }
 
+  return c;
+}
+
+/**
+ * Lebensmittel, die beim letzten Einkauf deutlich unter dem eigenen
+ * üblichen Preis lagen — die Lebensmittel-Entsprechung zu „Günstig
+ * bevorraten" oben, das nur Haushaltsprodukte kennt.
+ *
+ * Bewusst getrennt von jenem Abschnitt statt eingemischt: der eine
+ * Grund für eine Empfehlung (Haltbarkeit) und der andere (Lagerplatz,
+ * Aktionszyklus) haben kaum etwas gemeinsam, und eine Liste, die beide
+ * mischt, beantwortet keine der beiden Fragen mehr sauber.
+ */
+function viewAngebote(ctx, app) {
+  const c = frag();
+
+  if (!ctx.foodDeals.length) {
+    c.append(emptyView(
+      "Gerade keine Angebote erkannt. Das braucht ein paar Einkäufe mehr Preisgeschichte je Produkt.",
+      "Einkauf erfassen", () => app.goto("erfassen")));
+    return c;
+  }
+
+  const g = uiGroup("Zuletzt günstig gekauft",
+    "Bei diesen Produkten hast du beim letzten Einkauf mindestens 15 % unter deinem üblichen " +
+    "Preis bezahlt. Kein aktueller Regalpreis — die App kennt nur, was auf deinen Bons stand.\n\n" +
+    "Die Menge ist durch die Haltbarkeit begrenzt: nie mehr, als bis dahin aufgebraucht wäre.");
+  ctx.foodDeals.forEach((a) => g.body.append(uiRow(a.name,
+    `${Math.round(a.nachlass * 100)} % günstiger · zuletzt ${deDate(a.lastDate)}`, null, {
+      value: a.kind === "vorrat" ? `${a.einheiten}×` : null,
+      onClick: () => productSheet(a.productId, ctx)
+    })));
+  c.append(g);
   return c;
 }
 
@@ -2415,7 +2762,7 @@ function viewBestand(ctx, app) {
     if (ctx.swapsDue.length || ctx.stockUp.length) {
       const offen = ctx.swapsDue.filter((x) => x.due).length;
       g.body.append(uiRow("Austausch und Nachschub",
-        offen ? `${offen} ${offen === 1 ? "Sache ist" : "Sachen sind"} fällig` : "nichts fällig",
+        offen ? `${offen} ${offen === 1 ? "Produkt ist" : "Produkte sind"} fällig` : "nichts fällig",
         null, { onClick: () => app.goto("faellig") }));
     }
     c.append(g);
@@ -2517,6 +2864,25 @@ function viewErfassen(ctx, app) {
   return c;
 }
 
+/**
+ * Zweite Stufe im Hintergrund anstoßen — für Zeilen, die der eigene
+ * Katalog nicht einordnen konnte. Läuft nach dem Rendern, still, und
+ * zeichnet nur neu, wenn sich wirklich etwas ergeben hat.
+ *
+ * Die Prüfung `cap.parsed !== parsed` fängt den Fall ab, dass der
+ * Nutzer während der Anfrage schon den nächsten Bon fotografiert
+ * oder das Feld geleert hat — sonst würde eine späte Antwort auf
+ * einen Bon, der gar nicht mehr angezeigt wird, trotzdem die
+ * Oberfläche verändern.
+ */
+function nachschlagen(cap, app) {
+  const parsed = cap.parsed;
+  if (!parsed) return;
+  Data.enrichUnmatched(parsed).then((geaendert) => {
+    if (geaendert && cap.parsed === parsed) app.render();
+  });
+}
+
 /* ================================================================
    Bild statt Abtippen
    ================================================================
@@ -2532,6 +2898,29 @@ function viewErfassen(ctx, app) {
    ================================================================ */
 function ocrPicker(box, cap, app) {
   const wrap = el("div", "shot");
+
+  // Aus dem System-Teilen-Menü angekommen (siehe App.consumeSharedIfAny).
+  // Nur einmal abgeholt — sofort leeren, sonst griffe ein späterer
+  // erneuter Aufbau dieser Ansicht denselben Fund noch einmal auf.
+  //
+  // Text übernehmen und ein falsches Dateiformat melden passiert HIER,
+  // vor der Weiche nach Texterkennungs-Unterstützung: sonst würde eine
+  // geteilte PDF-Datei in einem Browser ohne Texterkennung spurlos
+  // verschwinden, statt wenigstens gesagt zu bekommen, dass sie nicht
+  // gelesen werden konnte.
+  const geteilt = app.pendingShare;
+  if (geteilt) app.pendingShare = null;
+  const bildhaft = !!(geteilt && geteilt.datei && /^image\//.test(geteilt.datei.type || ""));
+  if (geteilt && geteilt.datei && !bildhaft) {
+    // Manche Händler-Apps bieten den eBon als PDF zum Teilen an, nicht
+    // als Bild. Die Texterkennung liest bisher nur Bilder.
+    app.notice("Dieses Format liest die Texterkennung noch nicht",
+      `Aus dem Teilen-Menü kam eine Datei vom Typ „${geteilt.datei.type || "unbekannt"}" — ` +
+      "die Texterkennung liest bisher nur Bilder.\n\n" +
+      "Zwei Wege bleiben: den Bon-Text unten einfügen, oder in der Händler-App statt der " +
+      "Datei einen Screenshot teilen.");
+  }
+  if (geteilt && geteilt.text && !cap.text) cap.text = geteilt.text;
 
   if (!OCR.supported()) {
     // Kein Vorwurf und kein Fehler: der Textweg steht ja darunter.
@@ -2594,6 +2983,7 @@ function ocrPicker(box, cap, app) {
         cap.parsed = gelesen.quality.ok ? Data.parseReceiptText(gelesen.text) : null;
         app.render();
         if (!gelesen.quality.ok) app.notice("Nicht genug erkannt", gelesen.quality.message);
+        nachschlagen(cap, app);
       })
       .catch((e) => {
         laeuft = false;
@@ -2607,6 +2997,11 @@ function ocrPicker(box, cap, app) {
 
   input.addEventListener("change", () => lies(input.files && input.files[0]));
   kamera.addEventListener("change", () => lies(kamera.files && kamera.files[0]));
+
+  // Bild: sofort durch dieselbe Erkennung schicken wie beim Einfügen
+  // oder Ablegen eines Bildes. Text und Format-Hinweis stehen bereits
+  // oben — hier nur noch der Teil, der Texterkennung voraussetzt.
+  if (bildhaft) lies(geteilt.datei);
 
   const knoepfe = el("div", "shotRow");
   const foto = el("button", "cta", "Fotografieren");
@@ -2646,8 +3041,9 @@ function ocrPicker(box, cap, app) {
   });
 
   wrap.append(el("p", "srcnote",
-    "Foto eines Papierbons oder Screenshot aus der Händler-App. Das Bild bleibt auf dem Gerät — " +
-    "die Erkennung läuft hier, nicht auf einem Server."));
+    "Foto eines Papierbons oder Screenshot aus der Händler-App. Bild und Text bleiben auf dem " +
+    "Gerät — erkannt wird hier, nicht auf einem Server. Nur ein unbekannter Produktname geht als " +
+    "reiner Name, ohne Preis, Datum oder Markt, an Open Food Facts."));
 
   if (cap.ocr) {
     const q = cap.ocr.quality;
@@ -2655,6 +3051,85 @@ function ocrPicker(box, cap, app) {
   }
 
   box.append(wrap);
+}
+
+/**
+ * Eine unsichere Bon-Zeile nach der anderen bestätigen — nie alle auf
+ * einmal. Drei Vorschläge zum Antippen (dieselbe Bewertung wie der
+ * automatische Abgleich, nur die besten drei statt nur der einen),
+ * dazu die Möglichkeit, selbst etwas einzutragen, und eine Zeile
+ * bewusst nicht zu buchen. Kein Dropdown mit dem ganzen Katalog —
+ * genau DAS war die Beschwerde, die zu dieser Karte geführt hat.
+ */
+function renderConfirmStep(box, p, app) {
+  const idx = p.rows.findIndex((r) => r.needsConfirmation);
+  if (idx === -1) return;
+  const rowData = p.rows[idx];
+
+  const entscheiden = (productId) => {
+    p.rows[idx].productId = productId;
+    p.rows[idx].productName = productId ? byId(productId).name : null;
+    p.rows[idx].needsConfirmation = false;
+    p.rows[idx].learn = !!productId;
+    p.sure = p.rows.filter((x) => !x.needsConfirmation).length;
+    p.open = p.rows.filter((x) => x.needsConfirmation).length;
+    app.render();
+  };
+
+  const card = el("div", "confirmCard");
+  card.append(el("div", "confirmProgress",
+    `${zahlwort(p.open, "Position", "Positionen")} noch zu bestätigen`));
+  card.append(el("div", "confirmRaw", esc(rowData.raw)));
+  // Auch hier schon sichtbar, nicht erst nach dem Bestätigen: ein
+  // Vorschlag über den Umweg Open Food Facts bleibt ein Vorschlag
+  // über zwei Ecken, das gehört zur Entscheidung dazu.
+  if (String(rowData.method || "").startsWith("extern:")) {
+    card.append(el("div", "srcnote", "über Internet-Abgleich vorgeschlagen, bitte prüfen"));
+  }
+
+  const choices = el("div", "confirmChoices");
+  topMatches(rowData.raw, undefined, 3).forEach((v) => {
+    const prod = byId(v.productId);
+    if (!prod) return;
+    const b = el("button", "confirmChoice", esc(prod.name));
+    b.addEventListener("click", () => entscheiden(v.productId));
+    choices.append(b);
+  });
+  card.append(choices);
+
+  const searchWrap = el("div", "confirmSearchWrap hide");
+  const inp = el("input");
+  inp.type = "search";
+  inp.placeholder = "Anderes Produkt suchen";
+  inp.setAttribute("aria-label", "Anderes Produkt suchen");
+  const results = el("ul", "results");
+  inp.addEventListener("input", () => {
+    results.innerHTML = "";
+    const q = inp.value.trim();
+    if (!q) return;
+    Data.searchProducts(q, 6).forEach((x) => {
+      const li = el("li");
+      const b = el("button", null, `<span class="rn">${esc(x.name)}</span>`);
+      b.addEventListener("click", () => entscheiden(x.id));
+      li.append(b);
+      results.append(li);
+    });
+  });
+  searchWrap.append(inp, results);
+  card.append(searchWrap);
+
+  const foot = el("div", "confirmFoot");
+  const altBtn = el("button", "confirmAlt", "Anders? Selbst eintragen");
+  altBtn.addEventListener("click", () => {
+    searchWrap.classList.toggle("hide");
+    if (!searchWrap.classList.contains("hide")) inp.focus();
+  });
+  const skip = el("button", "confirmSkip", "nicht buchen");
+  skip.addEventListener("click", () => entscheiden(null));
+  foot.append(altBtn, skip);
+  card.append(foot);
+
+  box.append(card);
 }
 
 function renderScan(box, cap, app) {
@@ -2692,6 +3167,7 @@ function renderScan(box, cap, app) {
       if (!cap.parsed.rows.length) app.toast("Nichts erkannt");
     } catch (e) { app.toast("Nicht lesbar"); console.error(e); }
     app.render();
+    nachschlagen(cap, app);
   });
   box.append(go);
 
@@ -2729,33 +3205,22 @@ function renderScan(box, cap, app) {
       { onClick: () => app.notice("Rechenprobe", p.warnings.join("\n\n")) }));
   }
 
+  renderConfirmStep(box, p, app);
+
   const rows = el("div");
-  p.rows.forEach((rowData, idx) => {
+  p.rows.forEach((rowData) => {
+    // Unsichere Zeilen laufen jetzt über die Karte oben, eine nach der
+    // anderen — hier stehen sie erst, sobald sie entschieden sind.
+    if (rowData.needsConfirmation) return;
     const r = el("div", "matchRow");
     const left = el("div", "raw");
     left.append(el("div", "n", rowData.productName ? esc(rowData.productName) : "nicht zugeordnet"));
     left.append(el("div", "r", esc(rowData.raw)));
-
-    if (rowData.needsConfirmation) {
-      const sel = el("select");
-      sel.setAttribute("aria-label", `Zuordnung für ${rowData.raw}`);
-      const pool = new Map();
-      if (rowData.productId && byId(rowData.productId)) pool.set(rowData.productId, byId(rowData.productId));
-      Data.searchProducts(rowData.raw.split(/\s+/)[0] || "", 8).forEach((x) => pool.set(x.id, x));
-      FOOD_DATABASE.forEach((x) => { if (!pool.has(x.id)) pool.set(x.id, x); });
-      sel.innerHTML = `<option value="">— nicht buchen —</option>` +
-        [...pool.values()].map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
-      sel.value = rowData.productId || "";
-      sel.addEventListener("change", () => {
-        p.rows[idx].productId = sel.value || null;
-        p.rows[idx].productName = sel.value ? byId(sel.value).name : null;
-        p.rows[idx].needsConfirmation = false;
-        p.rows[idx].learn = !!sel.value;
-        p.sure = p.rows.filter((x) => !x.needsConfirmation).length;
-        p.open = p.rows.filter((x) => x.needsConfirmation).length;
-        app.render();
-      });
-      left.append(sel);
+    // Ein Vorschlag über zwei Ecken (fremder Dienst, dann der eigene
+    // Katalog) sieht sonst aus wie ein normaler Treffer — das wäre
+    // nicht falsch, aber es verschweigt, woher er kommt.
+    if (String(rowData.method || "").startsWith("extern:")) {
+      left.append(el("div", "srcnote", "über Internet-Abgleich vorgeschlagen, bitte prüfen"));
     }
 
     r.append(left, el("div", "amt",
@@ -2768,10 +3233,15 @@ function renderScan(box, cap, app) {
      der Liste und der in den Gängen: einen Einkauf buchen. Die Zahl
      bleibt, weil sie hier etwas sagt, was nirgends sonst steht —
      wie viele der erkannten Zeilen tatsächlich gebucht werden. Das
-     Verb ist jetzt überall dasselbe. */
-  const buchbar = p.rows.filter((r) => r.productId).length;
+     Verb ist jetzt überall dasselbe.
+
+     Gesperrt, solange p.open > 0: erst wenn jede unsichere Zeile oben
+     in der Karte eine Entscheidung bekommen hat — ausgewählt, selbst
+     eingetragen oder bewusst „nicht buchen" —, ist überhaupt etwas zu
+     buchen, das nicht nur eine unbestätigte Vermutung ist. */
+  const buchbar = p.rows.filter((r) => r.productId && !r.needsConfirmation).length;
   const save = el("button", "cta", `${zahlwort(buchbar, "Position", "Positionen")} buchen`);
-  save.disabled = !p.rows.some((r) => r.productId);
+  save.disabled = p.open > 0 || buchbar === 0;
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
     const res = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
@@ -2882,13 +3352,42 @@ function viewZahlen(ctx, app) {
   const s = el("div", "scroller");
   s.append(tile("Am Stück", `${ctx.streak.weeks}`,
     ctx.streak.weeks === 1 ? "Woche" : "Wochen", ctx.streak.weeks > 0 ? "good" : null));
-  s.append(tile("Ø pro Woche", eur(t.spendPerWeek), zahlwort(t.receipts, "Bon", "Bons")));
+  // "gesamt" im Namen, nicht nur im Kopf: direkt darunter zeigt "Wo
+  // dein Geld hingeht" einen ZWEITEN Wochendurchschnitt für den dort
+  // gewählten Zeitraum -- ohne die Unterscheidung im Wortlaut selbst
+  // sehen zwei fast gleiche Zahlen wie ein Rechenfehler aus, sind aber
+  // nur zwei verschiedene Zeiträume (Lebenszeit hier, frei wählbar dort).
+  s.append(tile("Ø/Woche gesamt", eur(t.spendPerWeek), zahlwort(t.receipts, "Bon", "Bons")));
   s.append(tile("zu holen", eur(savingsTotal), "ohne Verzicht", "good"));
   s.append(tile("Verlust", eur(t.wastedPerWeek), `${de(ctx.impact.kg)} kg gesamt`, "warn"));
   s.append(tile("Rhythmen", String([...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length),
     `von ${ctx.rhythms.size}`));
   c.append(s);
 
+  c.append(moneyFlowCard(ctx, app));
+
+  // Drei Unterbereiche statt eines endlosen Scrolls: hier standen über
+  // 20 Abschnitte hintereinander, nur durch Überschriften getrennt. Die
+  // Aufteilung folgt der Frage, mit der man herkommt -- "wofür gebe ich
+  // aus", "wie kaufe ich ein", "was bringt mir das" -- statt der
+  // Reihenfolge, in der die Abschnitte entstanden sind. Die Kachelzeile
+  // und "Wo dein Geld hingeht" bleiben oben immer sichtbar, weil sie
+  // schon für sich einen vollständigen Überblick geben.
+  const nav = el("div", "group");
+  nav.append(segmented(
+    [["ausgaben", "Ausgaben"], ["verhalten", "Verhalten"], ["bilanz", "Bilanz"]],
+    app.zahlenTab, (k) => { app.zahlenTab = k; app.render(); }, "Bereich"));
+  c.append(nav);
+
+  if (app.zahlenTab === "bilanz") renderZahlenBilanz(c, ctx, app);
+  else if (app.zahlenTab === "verhalten") renderZahlenVerhalten(c, ctx, app);
+  else renderZahlenAusgaben(c, ctx, app);
+
+  return c;
+}
+
+/** Unterbereich "Bilanz": was das bisherige Verhalten gebracht hat. */
+function renderZahlenBilanz(c, ctx, app) {
   /* --- Wochenrückblick: immer abrufbar, nicht nur sonntags --- */
   const rv = uiGroup("Rückblick",
     "Fasst zusammen, was im Zeitraum tatsächlich passiert ist — aus dem Ereignis-Protokoll, nicht aus einer " +
@@ -2923,6 +3422,106 @@ function viewZahlen(ctx, app) {
   }
   c.append(ms);
 
+  /* --- Sparen --- */
+  const sc = uiGroup("Sparen", "Aus deinen eigenen Zahlen abgeleitet, nicht aus allgemeinen Tipps.");
+  if (!ctx.savings.length) sc.body.append(el("p", "empty", "Noch keine Vorschläge."));
+  ctx.savings.forEach((x) => {
+    const d = el("div", "save",
+      `<div class="amt">${eur(x.estimatedWeeklySaving)}</div><div class="txt"><b>${esc(x.title)}</b></div>`);
+    const b = el("button", "pillBtn" + (x.on ? " on" : ""), x.on ? "✓" : "nehmen");
+    b.setAttribute("aria-pressed", x.on ? "true" : "false");
+    b.setAttribute("aria-label", x.title);
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      app.set((st) => {
+        st.savingsAccepted = x.on ? st.savingsAccepted.filter((y) => y !== x.id) : [...st.savingsAccepted, x.id];
+      });
+    });
+    d.addEventListener("click", () => app.notice(x.title, x.detail));
+    d.append(b);
+    sc.body.append(d);
+  });
+  const wk = ctx.savings.filter((x) => x.on).reduce((a, x) => a + x.estimatedWeeklySaving, 0);
+  sc.body.append(el("div", "strip",
+    `<div><div class="big">${eur(wk)}</div><div class="l">pro Woche</div></div>` +
+    `<div style="text-align:right"><div class="big">${Math.round(wk * 52)} €</div><div class="l">im Jahr</div></div>`));
+  c.append(sc);
+
+  /* --- Wirkung --- */
+  const cmp = compareToReference(ctx.impact.kg, Data.get().settings.household);
+  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note +
+    "\n\nJede dieser Zahlen ist abgeleitet, keine ist gewogen. Ein Tippen auf ein Produkt zeigt die " +
+    "einzelnen Verdachtsfälle — und lässt dich widersprechen, wo du es besser weißt.");
+  ig.body.append(uiRow("Geschätzter Verlust", null, null, { value: de(ctx.impact.kg) + " kg" }));
+  ctx.impact.byProduct.slice(0, 5).forEach((x) => {
+    // Antippbar: von der Gesamtzahl zu den Fällen, aus denen sie besteht.
+    const pid = (FOOD_DATABASE.find((f) => f.name === x.name) || {}).id;
+    ig.body.append(uiRow(x.name, null, null, {
+      value: de(x.kg) + " kg",
+      onClick: pid ? () => productSheet(pid, ctx) : undefined
+    }));
+  });
+  c.append(ig);
+}
+
+/** Unterbereich "Verhalten": wie und wann eingekauft wird. */
+function renderZahlenVerhalten(c, ctx, app) {
+  /* --- Einkaufsmuster --- */
+  if (ctx.pattern) {
+    const g = uiGroup("Dein Einkaufsrhythmus",
+      "Ausgezählt über die Bontage. Ohne erkennbaren Lieblingstag nennt die App nur die Häufigkeit.");
+    g.body.append(uiRow(ctx.pattern.dayName || "kein fester Tag",
+      ctx.pattern.dayName ? `${pct(ctx.pattern.share)} deiner Einkäufe` : null,
+      null, { value: `${de(ctx.pattern.perWeek)}×/Woche` }));
+    g.body.append(uiRow("Ø Korb", null, null, { value: eur(ctx.pattern.avgBasket) }));
+    const suggested = suggestedLookahead(ctx.pattern);
+    const cur = Data.get().settings.lookaheadDays;
+    if (suggested && suggested !== cur) {
+      g.body.append(uiRow(`Vorausschau auf ${tage(suggested)}`, `aktuell ${cur}`, null, {
+        onClick: () => { app.set((st) => { st.settings.lookaheadDays = suggested; }); app.toast("Übernommen"); }
+      }));
+    }
+    c.append(g);
+  }
+
+  /* --- Rhythmen --- */
+  const rg = uiGroup("Rhythmen",
+    "Median der Kaufabstände je Einheit. Pausen über dem Dreifachen werden ausgeschlossen statt weggemittelt.");
+  [...ctx.rhythms.entries()].sort((a, b) => b[1].confidence - a[1].confidence).slice(0, 12).forEach(([pid, r]) => {
+    const p = byId(pid);
+    if (!p) return;
+    rg.body.append(uiRow(p.name, `Vertrauen ${pct(r.confidence)}`, null, {
+      value: r.rhythmDays ? `${r.rhythmDays} T` : "–",
+      onClick: () => productSheet(pid, ctx)
+    }));
+  });
+  c.append(rg);
+
+  /* --- Inflation --- */
+  if (ctx.inflation && ctx.inflation.productsCompared) {
+    const inf = ctx.inflation;
+    const g = uiGroup("Persönliche Inflation", inf.caveat);
+    g.body.append(uiRow("Dein Warenkorb", `${zahlwort(inf.productsCompared, "Produkt", "Produkte")} verglichen`,
+      null, { value: sign(inf.changePercent) + " %" }));
+    inf.biggestIncreases.slice(0, 5).forEach((i) => g.body.append(
+      uiRow(i.name, `${eur(i.basePrice)} → ${eur(i.currentPrice)}`, null, { value: sign(i.changePercent) + " %" })));
+    c.append(g);
+  }
+
+  /* --- Preis-Gedächtnis --- */
+  const notable = [...ctx.prices.values()]
+    .filter((m) => m.verdict !== "üblich")
+    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+  if (notable.length) {
+    const g = uiGroup("Preise", "Median der eigenen Kaufpreise. Kein Vergleich zwischen Händlern — dafür fehlen die Daten.");
+    notable.slice(0, 8).forEach((m) => g.body.append(uiRow(m.name, `üblich ${eur(m.usual)}`, null,
+      { value: eur(m.last), onClick: () => productSheet(m.productId, ctx) })));
+    c.append(g);
+  }
+}
+
+/** Unterbereich "Ausgaben": wofür das Geld weggeht, jenseits der Geld-Karte oben. */
+function renderZahlenAusgaben(c, ctx, app) {
   /* --- Marke oder Eigenmarke --- */
   if (ctx.brandHeadline) {
     const h = ctx.brandHeadline;
@@ -2956,85 +3555,7 @@ function viewZahlen(ctx, app) {
     c.append(g);
   }
 
-  /* --- Einkaufsmuster --- */
-  if (ctx.pattern) {
-    const g = uiGroup("Dein Einkaufsrhythmus",
-      "Ausgezählt über die Bontage. Ohne erkennbaren Lieblingstag nennt die App nur die Häufigkeit.");
-    g.body.append(uiRow(ctx.pattern.dayName || "kein fester Tag",
-      ctx.pattern.dayName ? `${pct(ctx.pattern.share)} deiner Einkäufe` : null,
-      null, { value: `${de(ctx.pattern.perWeek)}×/Woche` }));
-    g.body.append(uiRow("Ø Korb", null, null, { value: eur(ctx.pattern.avgBasket) }));
-    const suggested = suggestedLookahead(ctx.pattern);
-    const cur = Data.get().settings.lookaheadDays;
-    if (suggested && suggested !== cur) {
-      g.body.append(uiRow(`Vorausschau auf ${tage(suggested)}`, `aktuell ${cur}`, null, {
-        onClick: () => { app.set((st) => { st.settings.lookaheadDays = suggested; }); app.toast("Übernommen"); }
-      }));
-    }
-    c.append(g);
-  }
-
   c.append(chartCard(ctx));
-
-  /* --- Inflation --- */
-  if (ctx.inflation && ctx.inflation.productsCompared) {
-    const inf = ctx.inflation;
-    const g = uiGroup("Persönliche Inflation", inf.caveat);
-    g.body.append(uiRow("Dein Warenkorb", `${zahlwort(inf.productsCompared, "Produkt", "Produkte")} verglichen`,
-      null, { value: sign(inf.changePercent) + " %" }));
-    inf.biggestIncreases.slice(0, 5).forEach((i) => g.body.append(
-      uiRow(i.name, `${eur(i.basePrice)} → ${eur(i.currentPrice)}`, null, { value: sign(i.changePercent) + " %" })));
-    c.append(g);
-  }
-
-  /* --- Preis-Gedächtnis --- */
-  const notable = [...ctx.prices.values()]
-    .filter((m) => m.verdict !== "üblich")
-    .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
-  if (notable.length) {
-    const g = uiGroup("Preise", "Median der eigenen Kaufpreise. Kein Vergleich zwischen Händlern — dafür fehlen die Daten.");
-    notable.slice(0, 8).forEach((m) => g.body.append(uiRow(m.name, `üblich ${eur(m.usual)}`, null,
-      { value: eur(m.last), onClick: () => productSheet(m.productId, ctx) })));
-    c.append(g);
-  }
-
-  /* --- Rhythmen --- */
-  const rg = uiGroup("Rhythmen",
-    "Median der Kaufabstände je Einheit. Pausen über dem Dreifachen werden ausgeschlossen statt weggemittelt.");
-  [...ctx.rhythms.entries()].sort((a, b) => b[1].confidence - a[1].confidence).slice(0, 12).forEach(([pid, r]) => {
-    const p = byId(pid);
-    if (!p) return;
-    rg.body.append(uiRow(p.name, `Vertrauen ${pct(r.confidence)}`, null, {
-      value: r.rhythmDays ? `${r.rhythmDays} T` : "–",
-      onClick: () => productSheet(pid, ctx)
-    }));
-  });
-  c.append(rg);
-
-  /* --- Sparen --- */
-  const sc = uiGroup("Sparen", "Aus deinen eigenen Zahlen abgeleitet, nicht aus allgemeinen Tipps.");
-  if (!ctx.savings.length) sc.body.append(el("p", "empty", "Noch keine Vorschläge."));
-  ctx.savings.forEach((x) => {
-    const d = el("div", "save",
-      `<div class="amt">${eur(x.estimatedWeeklySaving)}</div><div class="txt"><b>${esc(x.title)}</b></div>`);
-    const b = el("button", "pillBtn" + (x.on ? " on" : ""), x.on ? "✓" : "nehmen");
-    b.setAttribute("aria-pressed", x.on ? "true" : "false");
-    b.setAttribute("aria-label", x.title);
-    b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      app.set((st) => {
-        st.savingsAccepted = x.on ? st.savingsAccepted.filter((y) => y !== x.id) : [...st.savingsAccepted, x.id];
-      });
-    });
-    d.addEventListener("click", () => app.notice(x.title, x.detail));
-    d.append(b);
-    sc.body.append(d);
-  });
-  const wk = ctx.savings.filter((x) => x.on).reduce((a, x) => a + x.estimatedWeeklySaving, 0);
-  sc.body.append(el("div", "strip",
-    `<div><div class="big">${eur(wk)}</div><div class="l">pro Woche</div></div>` +
-    `<div style="text-align:right"><div class="big">${Math.round(wk * 52)} €</div><div class="l">im Jahr</div></div>`));
-  c.append(sc);
 
   /* --- Ersparnis bei Haushaltsprodukten: getrennt ausweisen --- */
   if (ctx.nonFoodSaved.total > 0) {
@@ -3057,24 +3578,391 @@ function viewZahlen(ctx, app) {
       { onClick: () => app.notice("Packungsgröße", x.recommendation) })));
     c.append(g);
   }
+}
 
-  /* --- Wirkung --- */
-  const cmp = compareToReference(ctx.impact.kg, Data.get().settings.household);
-  const ig = uiGroup("Wirkung", cmp.framing + "\n\n" + cmp.note +
-    "\n\nJede dieser Zahlen ist abgeleitet, keine ist gewogen. Ein Tippen auf ein Produkt zeigt die " +
-    "einzelnen Verdachtsfälle — und lässt dich widersprechen, wo du es besser weißt.");
-  ig.body.append(uiRow("Geschätzter Verlust", null, null, { value: de(ctx.impact.kg) + " kg" }));
-  ctx.impact.byProduct.slice(0, 5).forEach((x) => {
-    // Antippbar: von der Gesamtzahl zu den Fällen, aus denen sie besteht.
-    const pid = (FOOD_DATABASE.find((f) => f.name === x.name) || {}).id;
-    ig.body.append(uiRow(x.name, null, null, {
-      value: de(x.kg) + " kg",
-      onClick: pid ? () => productSheet(pid, ctx) : undefined
-    }));
+/**
+ * Vom Filter gewählter Zeitraum als {from, to} (ISO-Daten, from kann
+ * null sein für "Gesamt"). Eigener Fensterausdruck statt fester
+ * Wochenzahl in `compute()` — das hier ist eine reine Anzeigefrage,
+ * berührt keine Rhythmen oder Rückblicke.
+ */
+function zahlenSpanne(filter, ref) {
+  if (filter.range === "custom") return { from: filter.from || Data.plusDays(ref, -84), to: filter.to || ref };
+  if (filter.range === "all") return { from: null, to: ref };
+  const wochen = { "4w": 4, "12w": 12, "year": 52 }[filter.range] || 12;
+  return { from: Data.plusDays(ref, -wochen * 7), to: ref };
+}
+
+/**
+ * Balken mit rundem Kappenende, dieselbe Form wie beim Vorrats-Balken
+ * (`rangeHero`): Track in `--fill-2`, Füllung in Akzentfarbe, gezeichnet
+ * als `<line>` mit `stroke-linecap="round"` und `non-scaling-stroke`,
+ * damit die Rundung rund bleibt, wenn die Fläche in die Breite gezogen
+ * wird — ein Rechteck mit `border-radius` würde bei Streckung oval.
+ *
+ * `frac` bemisst sich am GRÖSSTEN Wert der Liste, nicht am Gesamtbetrag:
+ * die längste Zeile füllt den Balken voll aus, das liest sich als
+ * Rangfolge. Der Anteil an der Gesamtsumme steht daneben als Zahl,
+ * unabhängig von der Balkenlänge.
+ */
+function moneyBarSvg(frac, muted) {
+  const W = 300, PAD = 4.5, SW = 9;
+  const bar = (to, stroke) =>
+    `<line x1="${PAD}" y1="${SW / 2}" x2="${to.toFixed(1)}" y2="${SW / 2}" stroke="${stroke}" ` +
+    `stroke-width="${SW}" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+  const x1 = PAD + Math.max(0, Math.min(1, frac)) * (W - PAD * 2);
+  return `<svg class="moneyBarSvg" viewBox="0 0 ${W} ${SW}" preserveAspectRatio="none" aria-hidden="true">` +
+    bar(W - PAD, "var(--fill-2)") + (frac > 0 ? bar(x1, muted ? "var(--ink-3)" : "var(--accent)") : "") + `</svg>`;
+}
+
+/**
+ * Kleine Verlaufslinie: mehrere Monatswerte, letzter Punkt betont.
+ * Entspricht dem "trend"-Baustein einer Kennzahl-Kachel — eine
+ * de-emphasis-farbene Linie, der aktuelle Wert als Punkt in
+ * Akzentfarbe. Zu wenig Datenpunkte (< 3, sonst ist "Verlauf" nur
+ * geraten) liefern kein Ergebnis, statt eine bedeutungslose Linie
+ * durch zwei Punkte zu ziehen.
+ */
+function moneySparklineSvg(values) {
+  if (values.length < 3 || values.every((v) => v === 0)) return "";
+  const W = 56, H = 20, PAD = 2.5;
+  const max = Math.max(...values, 0.01);
+  const step = (W - PAD * 2) / (values.length - 1);
+  const punkte = values.map((v, i) => [
+    PAD + i * step,
+    H - PAD - (v / max) * (H - PAD * 2)
+  ]);
+  const pfad = punkte.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const [lx, ly] = punkte[punkte.length - 1];
+  return `<svg class="moneySparkline" viewBox="0 0 ${W} ${H}" aria-hidden="true">` +
+    `<path d="${pfad}" fill="none" stroke="var(--ink-3)" stroke-width="1.6" ` +
+    `stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` +
+    `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="2.4" fill="var(--accent)"/></svg>`;
+}
+
+/** Eine Rangzeile: Name, Verlauf und Betrag/Anteil oben, Balken darunter.
+ *  `muted` markiert "Sonstige" — eine Sammelzeile ist keine echte
+ *  Kategorie und soll sich nicht wie eine anfühlen (Emphasis-Prinzip:
+ *  die echten Zeilen tragen die Akzentfarbe, der Rest tritt zurück).
+ *  `wasteFrac` (0..1, optional) blendet einen roten Verlust-Hinweis
+ *  unter dem Balken ein. `verlauf` (Array Monatsbeträge, optional)
+ *  wird zur kleinen Trendlinie neben dem Betrag. `onClick` (optional)
+ *  macht die Zeile zum Knopf — bei Produkten öffnet das dasselbe
+ *  Detail-Blatt wie bei „Preise“ und „Rhythmen“ weiter unten, statt
+ *  eine zweite, verkürzte Ansicht für dieselben Fakten zu bauen. */
+function moneyBarRow(label, amount, share, frac, muted, wasteFrac, verlauf, onClick) {
+  const r = el(onClick ? "button" : "div", "moneyBarRow" + (muted ? " muted" : ""));
+  const spark = verlauf ? moneySparklineSvg(verlauf) : "";
+  r.innerHTML =
+    `<div class="moneyBarHead"><span class="moneyBarLabel">${esc(label)}</span>` +
+    (spark ? `<span class="moneySparklineWrap" title="Verlauf der letzten Monate">${spark}</span>` : "") +
+    `<span class="moneyBarValue">${eur(amount)}<small>${pct(share)}</small></span></div>` +
+    moneyBarSvg(frac, muted) +
+    (wasteFrac >= 0.05
+      ? `<div class="moneyWaste">${Math.round(wasteFrac * 100)} % davon meist verschwendet, laut deinem Kauf-Verlauf</div>`
+      : "");
+  if (onClick) r.addEventListener("click", onClick);
+  return r;
+}
+
+/**
+ * Monatsbeträge für die letzten `n` echten Kalendermonate (nicht
+ * 30-Tage-Schritte, die gegen Monatsenden verrutschen), gruppiert
+ * über `gruppe(h)` — liefert einen Schlüssel oder `null`, um eine
+ * Zeile auszuschließen. Immer über die VOLLE Historie, unabhängig vom
+ * Zeitraum-Filter oben — aus demselben Grund wie bei `kategorieVerlust`:
+ * ein Verlauf über vier gefilterte Wochen wäre kein Verlauf, sondern
+ * ein einzelner Punkt.
+ */
+function monatsverlaufNach(ctx, n, gruppe) {
+  const [jahr, monat] = Data.today().slice(0, 7).split("-").map(Number);
+  const monate = [];
+  for (let i = n - 1; i >= 0; i--) {
+    let m = monat - i, j = jahr;
+    while (m <= 0) { m += 12; j -= 1; }
+    monate.push(`${j}-${String(m).padStart(2, "0")}`);
+  }
+  const monatsIndex = new Map(monate.map((m, i) => [m, i]));
+
+  const byGruppe = new Map();
+  ctx.history.forEach((h) => {
+    const idx = monatsIndex.get(h.date.slice(0, 7));
+    if (idx === undefined) return;
+    const key = gruppe(h);
+    if (key === null) return;
+    if (!byGruppe.has(key)) byGruppe.set(key, new Array(n).fill(0));
+    byGruppe.get(key)[idx] += h.unitPrice * h.quantity;
   });
-  c.append(ig);
+  return byGruppe;
+}
 
-  return c;
+function kategorieMonatsverlauf(ctx, n) {
+  return monatsverlaufNach(ctx, n, (h) => {
+    const p = h.productId ? byId(h.productId) : null;
+    return p ? p.category : "Ohne Kategorie";
+  });
+}
+
+/**
+ * Nur Produkte mit einem gelernten Rhythmus (`ctx.rhythms`) — das ist
+ * die Definition dieser App für "wird immer wieder gekauft", dieselbe
+ * wie im Abschnitt „Rhythmen" weiter unten. Ein einmaliger Kauf hat
+ * keinen Verlauf, den man als "mehr oder weniger" lesen könnte.
+ */
+function produktMonatsverlauf(ctx, n) {
+  return monatsverlaufNach(ctx, n, (h) => {
+    if (!h.productId || !ctx.rhythms.has(h.productId)) return null;
+    const p = byId(h.productId);
+    return p ? p.name : null;
+  });
+}
+
+/**
+ * Top-`n` einer Betrags-Map, der Rest als EINE "Sonstige"-Zeile
+ * zusammengefasst statt kommentarlos abgeschnitten. Ohne das ergäben
+ * die gezeigten Prozente nie 100 % — bei einem Haushalt mit vielen
+ * Kategorien eine stille, wachsende Lücke (siehe README).
+ */
+function topNMitSonstige(map, n) {
+  const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, n);
+  const rest = sorted.slice(n).reduce((a, [, v]) => a + v, 0);
+  if (rest > 0) top.push(["Sonstige", rest, true]);
+  return top;
+}
+
+/**
+ * Markt-Namen werden bei jeder Erfassung neu eingetippt, ohne Abgleich
+ * gegen frühere Schreibweisen — "REWE", "Rewe City" und "rewe" wären
+ * sonst drei Balken statt einer. Hier wird nur für die ANZEIGE nach
+ * Groß-/Kleinschreibung und Leerraum zusammengefasst (nicht in den
+ * gespeicherten Daten verändert); angezeigt wird die Schreibweise, die
+ * am häufigsten vorkam.
+ */
+function marktGruppen(rows) {
+  const buckets = new Map(); // normalisiert -> { total, formen: Map<original, count> }
+  rows.forEach((x) => {
+    const roh = (x.store || "Unbekannt").trim() || "Unbekannt";
+    const key = roh.toLowerCase();
+    if (!buckets.has(key)) buckets.set(key, { total: 0, formen: new Map() });
+    const b = buckets.get(key);
+    b.total += x.unitPrice * x.quantity;
+    b.formen.set(roh, (b.formen.get(roh) || 0) + 1);
+  });
+  const byStore = new Map();
+  buckets.forEach((b) => {
+    const label = [...b.formen.entries()].sort((a, b2) => b2[1] - a[1])[0][0];
+    byStore.set(label, b.total);
+  });
+  return byStore;
+}
+
+/**
+ * Verlustanteil je Kategorie — aus `ctx.wasteStats`, das schon jedes
+ * Produkt einzeln nach chronischer Verschwendung und Ausreißern
+ * auswertet (siehe `wasteInference2.js`). Hier nur nach Kategorie
+ * aufsummiert, nicht neu geschätzt.
+ *
+ * BEWUSST unabhängig vom oben gewählten Zeitraum-Filter: `wasteStats`
+ * rechnet über den GESAMTEN Kauf-Verlauf je Produkt (chronische Muster
+ * brauchen genug Käufe, um erkennbar zu sein — ein 4-Wochen-Fenster
+ * hätte oft nur einen einzigen Kauf, keine Grundlage für „chronisch").
+ * Eine erfundene 4-Wochen-Verlustquote wäre keine ehrlichere Zahl als
+ * gar keine. Deshalb ausdrücklich im Infotext erklärt, nicht verschwiegen.
+ */
+function kategorieVerlust(ctx) {
+  const spent = new Map(), wasted = new Map();
+  ctx.wasteStats.forEach((st, pid) => {
+    const p = byId(pid);
+    if (!p || !st.spent) return;
+    const cat = p.category;
+    spent.set(cat, (spent.get(cat) || 0) + st.spent);
+    wasted.set(cat, (wasted.get(cat) || 0) + st.wastedEuros);
+  });
+  const share = new Map();
+  spent.forEach((s, cat) => { if (s > 0) share.set(cat, (wasted.get(cat) || 0) / s); });
+  return share;
+}
+
+/** Wie `kategorieVerlust`, nur ohne Umweg über eine Summe: `wasteStats`
+ *  ist bereits je Produkt, hier nur auf den Produktnamen umgeschlüsselt. */
+function produktVerlust(ctx) {
+  const share = new Map();
+  ctx.wasteStats.forEach((st, pid) => {
+    const p = byId(pid);
+    if (p && st.spent > 0) share.set(p.name, st.wastedEuros / st.spent);
+  });
+  return share;
+}
+
+/**
+ * Ausgaben je Produkt im gewählten Zeitraum — nur Produkte mit einem
+ * gelernten Rhythmus (siehe `produktMonatsverlauf`): ein Produkt, das
+ * genau einmal gekauft wurde, kann man nicht als "mehr oder weniger
+ * als sonst" lesen, es gibt kein "sonst".
+ */
+function produktRang(ctx, rows) {
+  const byProdukt = new Map();
+  rows.forEach((x) => {
+    if (!x.productId || !ctx.rhythms.has(x.productId)) return;
+    const p = byId(x.productId);
+    if (!p) return;
+    byProdukt.set(p.name, (byProdukt.get(p.name) || 0) + x.unitPrice * x.quantity);
+  });
+  return byProdukt;
+}
+
+/**
+ * Direkt vorangehender Zeitraum GLEICHER LÄNGE — die einzige faire
+ * Vergleichsbasis für "mehr oder weniger als sonst". Für "Gesamt"
+ * gibt es keine sinnvolle Vorperiode (nichts liegt vor dem Anfang der
+ * eigenen Geschichte), dafür wird bewusst nichts erfunden.
+ */
+function zahlenVorperiode(filter, from, to) {
+  if (filter.range === "all") return null;
+  const tage = daysBetween(from, to) + 1;
+  const prevTo = Data.plusDays(from, -1);
+  return { from: Data.plusDays(prevTo, -(tage - 1)), to: prevTo };
+}
+
+/**
+ * „Wo dein Geld hingeht“ — ein eigener, erhöhter Bereich (siehe
+ * `.moneyHero` in app.css), nicht nur eine weitere Karte in der Liste.
+ * Kategorien und Märkte für einen frei wählbaren Zeitraum, mit
+ * vorgeschlagenen Zeiträumen als Chips und einem eigenen Zeitraum als
+ * Ausweg. Rein additive Anzeige: nichts hier verändert Rhythmen,
+ * Rückblick oder eine andere Auswertung — nur `ctx.history`, gefiltert
+ * nach Datum.
+ */
+function moneyFlowCard(ctx, app) {
+  const h = el("div", "moneyHero");
+  const head = el("div", "moneyHeroHead");
+  head.append(el("span", null, "Wo dein Geld hingeht"));
+  // Erklärung antippbar statt dauerhaft im Weg -- dasselbe Muster wie
+  // bei jeder anderen Karte (`uiGroup`s `infoBtn`), nicht neu erfunden,
+  // nur hier von Hand nachgebaut, weil dieser Bereich kein `uiGroup` ist.
+  const infoBtn = el("button", "infoBtn", "i");
+  infoBtn.setAttribute("aria-label", "Erklärung: Wo dein Geld hingeht");
+  infoBtn.addEventListener("click", () => app.notice("Wo dein Geld hingeht",
+    "Aus deinen eigenen Bons, nach Kategorie und Markt aufgeteilt, für den gewählten Zeitraum. " +
+    "Frei erfasste Zeilen ohne Produkt zählen unter „Ohne Kategorie“. " +
+    "„Sonstige“ fasst alles jenseits der sieben größten Zeilen zusammen, damit die Prozente " +
+    "immer auf 100 % kommen. Marktnamen werden nur für diese Ansicht nach Groß-/Kleinschreibung " +
+    "zusammengefasst — deine erfassten Bons bleiben unverändert.\n\n" +
+    "Der rote Verlust-Hinweis unter einer Kategorie rechnet über deinen GESAMTEN Kauf-Verlauf, " +
+    "unabhängig vom Zeitraum oben: chronische Verschwendung braucht genug Käufe, um erkennbar zu " +
+    "sein — ein kurzes Zeitfenster hätte oft nur einen einzigen Kauf, keine tragfähige Grundlage.\n\n" +
+    "„Immer wieder gekauft“ zeigt nur Produkte mit einem gelernten Rhythmus (derselbe Rhythmus wie " +
+    "weiter unten in der Ansicht) — ein einmaliger Kauf hat kein „mehr oder weniger als sonst“."));
+  head.append(infoBtn);
+  h.append(head);
+
+  const filter = App.zahlenFilter;
+  const ref = Data.today();
+
+  const chipRow = el("div", "row stacked");
+  chipRow.append(segmented(
+    [["4w", "4 Wochen"], ["12w", "12 Wochen"], ["year", "Jahr"], ["all", "Gesamt"], ["custom", "eigener"]],
+    filter.range,
+    (v) => { filter.range = v; app.render(); },
+    "Zeitraum für Geldaufteilung"
+  ));
+  h.append(chipRow);
+
+  if (filter.range === "custom") {
+    const row = el("div", "row2");
+    const ff = el("label", "field", '<span class="lbl">Von</span>');
+    const fi = el("input"); fi.type = "date"; fi.value = filter.from || Data.plusDays(ref, -84);
+    fi.addEventListener("change", () => { filter.from = fi.value; app.render(); });
+    ff.append(fi);
+    const tf = el("label", "field", '<span class="lbl">Bis</span>');
+    const ti = el("input"); ti.type = "date"; ti.value = filter.to || ref;
+    ti.addEventListener("change", () => { filter.to = ti.value; app.render(); });
+    tf.append(ti);
+    row.append(ff, tf);
+    h.append(row);
+  }
+
+  const { from, to } = zahlenSpanne(filter, ref);
+  const rows = ctx.history.filter((x) => (!from || x.date >= from) && x.date <= to);
+
+  if (!rows.length) {
+    h.append(el("p", "moneyEmpty", "Keine Käufe in diesem Zeitraum."));
+    return h;
+  }
+
+  const total = rows.reduce((a, x) => a + x.unitPrice * x.quantity, 0);
+  const tage = Math.max(1, daysBetween(from || rows[0].date, to) + 1);
+  const proWoche = total / (tage / 7);
+
+  /* Vorperiode gleicher Länge: die einzige ehrliche Antwort auf "ist
+     das viel?". Nur gezeigt, wenn davor überhaupt etwas liegt — sonst
+     wäre "+100 %" gegen eine leere Vorperiode eine erfundene Zahl. */
+  let deltaHtml = "";
+  const vor = zahlenVorperiode(filter, from || rows[0].date, to);
+  if (vor) {
+    const vorRows = ctx.history.filter((x) => x.date >= vor.from && x.date <= vor.to);
+    const vorTotal = vorRows.reduce((a, x) => a + x.unitPrice * x.quantity, 0);
+    if (vorRows.length && vorTotal > 0) {
+      const deltaFrac = (total - vorTotal) / vorTotal;
+      const pfeil = deltaFrac > 0.005 ? "↑" : deltaFrac < -0.005 ? "↓" : "→";
+      deltaHtml = ` <span class="moneyDelta">${pfeil} ${Math.round(Math.abs(deltaFrac) * 100)} % ggü. Vorperiode</span>`;
+    }
+  }
+
+  h.append(el("div", "moneyTotal",
+    `<span class="n">${eur(total)}</span>` +
+    `<span class="sub">Ø ${eur(proWoche)}/Woche · ${zahlwort(rows.length, "Position", "Positionen")}${deltaHtml}</span>`));
+
+  const byCat = new Map();
+  rows.forEach((x) => {
+    const p = x.productId ? byId(x.productId) : null;
+    const cat = p ? p.category : "Ohne Kategorie";
+    byCat.set(cat, (byCat.get(cat) || 0) + x.unitPrice * x.quantity);
+  });
+  const byStore = marktGruppen(rows);
+
+  const kategorien = topNMitSonstige(byCat, 7), maerkte = topNMitSonstige(byStore, 7);
+  const maxCat = kategorien.length ? Math.max(...kategorien.map((x) => x[1])) : 0;
+  const maxStore = maerkte.length ? Math.max(...maerkte.map((x) => x[1])) : 0;
+
+  const verlustAnteil = kategorieVerlust(ctx);
+  const monatsverlauf = kategorieMonatsverlauf(ctx, 6);
+  h.append(el("div", "moneySection", "Kategorien"));
+  kategorien.forEach(([label, amount, sonstige]) =>
+    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxCat > 0 ? amount / maxCat : 0,
+      sonstige, sonstige ? 0 : (verlustAnteil.get(label) || 0), sonstige ? null : monatsverlauf.get(label))));
+
+  h.append(el("div", "moneySection", "Märkte"));
+  maerkte.forEach(([label, amount, sonstige]) =>
+    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxStore > 0 ? amount / maxStore : 0, sonstige)));
+
+  /* Produkte, die immer wieder gekauft werden: dieselbe Rangliste wie
+     oben, nur je Produkt statt je Kategorie/Markt — damit sichtbar
+     wird, ob ein einzelnes, regelmäßig gekauftes Produkt über die Zeit
+     mehr oder weniger kostet, nicht nur die ganze Kategorie drumherum. */
+  const byProdukt = produktRang(ctx, rows);
+  if (byProdukt.size) {
+    // Name -> ID, nur für den Antipp-Aufruf unten. produktRang() bleibt
+    // namensbasiert wie byCat/byStore, damit topNMitSonstige unverändert
+    // auf allen drei Listen funktioniert.
+    const idByName = new Map();
+    ctx.rhythms.forEach((r, pid) => { const p = byId(pid); if (p) idByName.set(p.name, pid); });
+
+    const produkte = topNMitSonstige(byProdukt, 7);
+    const maxProdukt = Math.max(...produkte.map((x) => x[1]));
+    const produktVerlustAnteil = produktVerlust(ctx);
+    const produktVerlauf = produktMonatsverlauf(ctx, 6);
+    h.append(el("div", "moneySection", "Immer wieder gekauft"));
+    produkte.forEach(([label, amount, sonstige]) => {
+      const pid = idByName.get(label);
+      h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxProdukt > 0 ? amount / maxProdukt : 0,
+        sonstige, sonstige ? 0 : (produktVerlustAnteil.get(label) || 0), sonstige ? null : produktVerlauf.get(label),
+        pid ? () => productSheet(pid, ctx) : null));
+    });
+  }
+
+  return h;
 }
 
 /** Balken je Monat, mit geschätztem Verderb-Anteil obenauf. */
@@ -3122,6 +4010,25 @@ function chartCard(ctx) {
 function viewMehr(ctx, app) {
   const c = frag();
   if (ctx.backup.urgent) c.append(backupGroup(ctx, app));
+
+  // Zwei Bereiche statt 13 Karten in einem Scroll: "Einstellungen" für
+  // alles, was man einmal anfasst und dann lange nicht wieder, und
+  // "Auswertungen" für alles, was man nachschlägt. Die Gefahrenzone
+  // bleibt bei den Einstellungen, nie bei den Auswertungen.
+  const nav = el("div", "group");
+  nav.append(segmented(
+    [["einstellungen", "Einstellungen"], ["auswertungen", "Auswertungen"]],
+    app.mehrTab, (k) => { app.mehrTab = k; app.render(); }, "Bereich"));
+  c.append(nav);
+
+  if (app.mehrTab === "auswertungen") renderMehrAuswertungen(c, ctx, app);
+  else renderMehrEinstellungen(c, ctx, app);
+
+  return c;
+}
+
+/** Unterbereich "Einstellungen": Dinge, die man selten anfasst. */
+function renderMehrEinstellungen(c, ctx, app) {
   const S = Data.get();
 
   /* --- Darstellung --- */
@@ -3190,86 +4097,6 @@ function viewMehr(ctx, app) {
     });
     c.append(g);
   }
-
-  /* --- Saison --- */
-  if (ctx.seasonNow.length) {
-    const g = uiGroup("Jetzt Saison", "Saisonkalender des BZfE. Anregung, kein Vorschlag.");
-    g.body.append(uiRow(ctx.seasonNow.map((x) => x.name).join(", ")));
-    c.append(g);
-  }
-
-  /* --- Pfand --- */
-  const d = ctx.deposit;
-  const pg = uiGroup("Pfand",
-    "Einwegpfand 0,25 € ist gesetzlich einheitlich. Mehrwegsätze sind herstellerabhängig — die Beträge sind übliche Sätze, keine Zusicherung.");
-  if (!d.byType.length) {
-    pg.body.append(uiRow("Nichts offen", null, null, { value: "0,00 €" }));
-  } else {
-    d.byType.forEach((t) => pg.body.append(uiRow(t.label, `${t.count} Gebinde`, null, { value: eur(t.amount) })));
-    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${tagen(d.daysOpen)}`, null, {
-      onClick: () => {
-        app.set((s) => {
-          s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
-        });
-        app.toast("Notiert");
-      }
-    }));
-  }
-  c.append(pg);
-
-  /* --- Archiv --- */
-  const st = archiveStats(ctx.archive);
-  const ag = uiGroup("Märkte",
-    "Die App speichert und erinnert. Sie gibt keine Rechtsauskunft — Fristen und Kulanz hängen vom Einzelfall ab.");
-  st.stores.forEach((x) => ag.body.append(uiRow(x.name, `${x.visits} Besuche · Ø ${eur(x.avgBasket)}`,
-    null, { value: eur(x.spend) })));
-  if (!st.stores.length) ag.body.append(el("p", "empty", "Noch keine Bons."));
-  const fr = expiringWarranties(ctx.archive, ctx.ref, 800);
-  if (fr.length) {
-    ag.body.append(uiRow(`${fr.length} Gewährleistungsfrist(en)`, fr[0].message, null,
-      { onClick: () => app.notice("Gewährleistung", fr.slice(0, 8).map((f) => f.message).join("\n\n")) }));
-  }
-  c.append(ag);
-
-  /* --- Rechenweg --- */
-  const m = uiGroup("Rechenweg");
-  m.body.append(uiRow("Wie die App rechnet", "kein KI-Modell", null, {
-    onClick: () => app.notice("Rechenweg", [
-      "Bonzeile → Produkt: Alias-Tabelle, sonst Token- und Levenshtein-Vergleich. 65–85 % werden gefragt statt geraten. Der Steuersatz auf dem Bon ist ein Vorfilter (7 % meist Lebensmittel, 19 % meist Haushalt), kein Ersatz für den Abgleich.",
-      "Rhythmus: Median der Kaufabstände je Einheit. Pausen über dem Dreifachen ausgeschlossen.",
-      "Vertrauen: Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung.",
-      "Bestand: gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit).",
-      "Reichweite: kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit.",
-      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2. Geschätzt heißt: die App sieht, dass wieder gekauft wurde, bevor die Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank geschaut.",
-      "Budget: erst Verschwender halbieren, dann Süßes und Alkohol. Grundnahrung nie.",
-      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet. Der Median statt des Durchschnitts, damit ein einzelnes Angebot den Bezugswert nicht verschiebt. Kein Vergleich zwischen Märkten — dafür fehlen die Daten, und fremde Preise wären erfunden.",
-      "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen.",
-      "Haushaltsprodukte rechnen anders: sie verderben nicht, also entspricht die gekaufte Menge der verbrauchten. Statt eines Kaufrhythmus gilt eine Verbrauchsrate, skaliert mit der Haushaltsgröße hoch einem Exponenten je Produkt — Zahnpasta linear, Waschmittel degressiv, Allzweckreiniger gar nicht.",
-      "Rate: Referenzwert als Prior, Beobachtung über ein 180-Tage-Fenster als Posterior, gewichtet mit min(Käufe, 6) gegen 2. Nach sechs Käufen bestimmt die Beobachtung drei Viertel.",
-      "Austausch: Kaufdatum plus Intervall, ohne Verbrauchsmodell. Bei unregelmäßigem Kauf (Variationskoeffizient ab 0,35) sagt die App gar nichts statt etwas Falsches."
-    ].join("\n\n"))
-  }));
-
-  const q = databaseQualityReport();
-  m.body.append(uiRow("Datenbasis", `${zahlwort(q.total, "Produkt", "Produkte")} · ${q.anteilGeschaetzt} % geschätzt`, null, {
-    onClick: () => app.notice("Datenbasis, ungeschönt",
-      `${zahlwort(q.total, "Produkt", "Produkte")}, ${zahlwort(q.kategorien, "Kategorie", "Kategorien")}, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
-      `rechtlich definiert: ${q.regulatorisch}\n` +
-      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE, BMEL)\n` +
-      `Schätzwert: ${q.schaetzwert} — ohne amtliche Quelle, vor Produktivbetrieb prüfen\n\n` +
-      `${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen. Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten.\n\n` +
-      `${zahlwort(q.safetyCritical, "Produkt", "Produkte")} tragen ein Verbrauchsdatum. Für sie schlägt die App nie eine Weiterverwendung vor — und ihre Tageszahlen ` +
-      `stehen ausdrücklich NICHT als „rechtlich definiert“ da: geregelt sind die Pflicht zum Verbrauchsdatum (LMIV Art. 24) und die ` +
-      `Höchsttemperatur (Tier-LMHV Anlage 5), nicht die Anzahl der Tage. Die Tage sind Lagerempfehlungen, jeweils an der unteren Grenze. ` +
-      `Es gilt immer das aufgedruckte Datum.`)
-  }));
-  m.body.append(uiRow("Über", `Bauversion ${window.__BUILD__ || "dev"}`, null, {
-    onClick: () => app.notice("Einkaufs-Anker",
-      "Alle Zahlen werden im Browser gerechnet. Kein Server, kein Konto, keine Übertragung.\n\n" +
-      "Quellen: BZfE/BLE „Haltbarkeit von Lebensmitteln\“ und „Lebensmittel richtig lagern\“ (20.02.2025), " +
-      "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\“.")
-  }));
-  c.append(m);
 
   /* --- Sicherung ---
      Steht normalerweise hier unten bei den Daten, wo man sie sucht.
@@ -3385,6 +4212,87 @@ function viewMehr(ctx, app) {
     () => { Data.reset(); app.toast("Gelöscht"); app.goto("liste"); }));
   actions.body.append(del);
   c.append(actions);
+}
 
-  return c;
+/** Unterbereich "Auswertungen": Dinge, die man nachschlägt statt anfasst. */
+function renderMehrAuswertungen(c, ctx, app) {
+  /* --- Saison --- */
+  if (ctx.seasonNow.length) {
+    const g = uiGroup("Jetzt Saison", "Saisonkalender des BZfE. Anregung, kein Vorschlag.");
+    g.body.append(uiRow(ctx.seasonNow.map((x) => x.name).join(", ")));
+    c.append(g);
+  }
+
+  /* --- Pfand --- */
+  const d = ctx.deposit;
+  const pg = uiGroup("Pfand",
+    "Einwegpfand 0,25 € ist gesetzlich einheitlich. Mehrwegsätze sind herstellerabhängig — die Beträge sind übliche Sätze, keine Zusicherung.");
+  if (!d.byType.length) {
+    pg.body.append(uiRow("Nichts offen", null, null, { value: "0,00 €" }));
+  } else {
+    d.byType.forEach((t) => pg.body.append(uiRow(t.label, `${t.count} Gebinde`, null, { value: eur(t.amount) })));
+    pg.body.append(uiRow("Alles zurückgegeben", `ältestes seit ${tagen(d.daysOpen)}`, null, {
+      onClick: () => {
+        app.set((s) => {
+          s.depositReturned = [...new Set([...s.depositReturned, ...ctx.openDepositEntries.map((e) => e.key)])];
+        });
+        app.toast("Notiert");
+      }
+    }));
+  }
+  c.append(pg);
+
+  /* --- Archiv --- */
+  const st = archiveStats(ctx.archive);
+  const ag = uiGroup("Märkte",
+    "Die App speichert und erinnert. Sie gibt keine Rechtsauskunft — Fristen und Kulanz hängen vom Einzelfall ab.");
+  st.stores.forEach((x) => ag.body.append(uiRow(x.name, `${x.visits} Besuche · Ø ${eur(x.avgBasket)}`,
+    null, { value: eur(x.spend) })));
+  if (!st.stores.length) ag.body.append(el("p", "empty", "Noch keine Bons."));
+  const fr = expiringWarranties(ctx.archive, ctx.ref, 800);
+  if (fr.length) {
+    ag.body.append(uiRow(`${fr.length} Gewährleistungsfrist(en)`, fr[0].message, null,
+      { onClick: () => app.notice("Gewährleistung", fr.slice(0, 8).map((f) => f.message).join("\n\n")) }));
+  }
+  c.append(ag);
+
+  /* --- Rechenweg --- */
+  const m = uiGroup("Rechenweg");
+  m.body.append(uiRow("Wie die App rechnet", "kein KI-Modell", null, {
+    onClick: () => app.notice("Rechenweg", [
+      "Bonzeile → Produkt: Alias-Tabelle, sonst Token- und Levenshtein-Vergleich. 65–85 % werden gefragt statt geraten. Der Steuersatz auf dem Bon ist ein Vorfilter (7 % meist Lebensmittel, 19 % meist Haushalt), kein Ersatz für den Abgleich.",
+      "Rhythmus: Median der Kaufabstände je Einheit. Pausen über dem Dreifachen ausgeschlossen.",
+      "Vertrauen: Datenpunkte × (1 − robuste Streuung), MAD statt Standardabweichung.",
+      "Bestand: gekauft − (Tage seit Kauf ÷ Verbrauch je Einheit).",
+      "Reichweite: kleinerer Wert aus Restmenge × Verbrauch und verbleibender Haltbarkeit.",
+      "Verschwendung: strukturell, wenn Rhythmus > Haltbarkeit; Ausreißer bei Abstand > Haltbarkeit × 1,2. Geschätzt heißt: die App sieht, dass wieder gekauft wurde, bevor die Haltbarkeit reichen konnte. Sie hat nicht in deinen Kühlschrank geschaut.",
+      "Budget: erst Verschwender halbieren, dann Süßes und Alkohol. Grundnahrung nie.",
+      "Preis: Median der eigenen Kaufpreise, ab 8 % Abweichung gemeldet. Der Median statt des Durchschnitts, damit ein einzelnes Angebot den Bezugswert nicht verschiebt. Kein Vergleich zwischen Märkten — dafür fehlen die Daten, und fremde Preise wären erfunden.",
+      "Inflation: gewichteter Preisindex über Produkte aus beiden Zeiträumen.",
+      "Haushaltsprodukte rechnen anders: sie verderben nicht, also entspricht die gekaufte Menge der verbrauchten. Statt eines Kaufrhythmus gilt eine Verbrauchsrate, skaliert mit der Haushaltsgröße hoch einem Exponenten je Produkt — Zahnpasta linear, Waschmittel degressiv, Allzweckreiniger gar nicht.",
+      "Rate: Referenzwert als Prior, Beobachtung über ein 180-Tage-Fenster als Posterior, gewichtet mit min(Käufe, 6) gegen 2. Nach sechs Käufen bestimmt die Beobachtung drei Viertel.",
+      "Austausch: Kaufdatum plus Intervall, ohne Verbrauchsmodell. Bei unregelmäßigem Kauf (Variationskoeffizient ab 0,35) sagt die App gar nichts statt etwas Falsches."
+    ].join("\n\n"))
+  }));
+
+  const q = databaseQualityReport();
+  m.body.append(uiRow("Datenbasis", `${zahlwort(q.total, "Produkt", "Produkte")} · ${q.anteilGeschaetzt} % geschätzt`, null, {
+    onClick: () => app.notice("Datenbasis, ungeschönt",
+      `${zahlwort(q.total, "Produkt", "Produkte")}, ${zahlwort(q.kategorien, "Kategorie", "Kategorien")}, ${q.aliasesTotal} Schreibweisen, ${q.nonFood} Non-Food.\n\n` +
+      `rechtlich definiert: ${q.regulatorisch}\n` +
+      `Leitlinie: ${q.leitlinie} — aus behördlicher Lagerempfehlung abgeleitet (BZfE, BMEL)\n` +
+      `Schätzwert: ${q.schaetzwert} — ohne amtliche Quelle, vor Produktivbetrieb prüfen\n\n` +
+      `${q.anteilGeschaetzt} % der Haltbarkeitswerte sind Schätzungen. Das ist der ehrliche Preis für die Abdeckung von ${q.total} Produkten.\n\n` +
+      `${zahlwort(q.safetyCritical, "Produkt", "Produkte")} tragen ein Verbrauchsdatum. Für sie schlägt die App nie eine Weiterverwendung vor — und ihre Tageszahlen ` +
+      `stehen ausdrücklich NICHT als „rechtlich definiert“ da: geregelt sind die Pflicht zum Verbrauchsdatum (LMIV Art. 24) und die ` +
+      `Höchsttemperatur (Tier-LMHV Anlage 5), nicht die Anzahl der Tage. Die Tage sind Lagerempfehlungen, jeweils an der unteren Grenze. ` +
+      `Es gilt immer das aufgedruckte Datum.`)
+  }));
+  m.body.append(uiRow("Über", `Bauversion ${window.__BUILD__ || "dev"}`, null, {
+    onClick: () => app.notice("Einkaufs-Anker",
+      "Alle Zahlen werden im Browser gerechnet. Kein Server, kein Konto, keine Übertragung.\n\n" +
+      "Quellen: BZfE/BLE „Haltbarkeit von Lebensmitteln\“ und „Lebensmittel richtig lagern\“ (20.02.2025), " +
+      "Verbraucherzentrale „MHD ist nicht gleich Verbrauchsdatum\“.")
+  }));
+  c.append(m);
 }

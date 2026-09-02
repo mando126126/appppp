@@ -63,7 +63,15 @@ function emptyState() {
       vacation: { active: false, from: null, to: null },
       theme: "system",          // system | hell | dunkel
       textScale: 1,             // Schriftgröße 1 | 1.15 | 1.3
-      demo: false
+      demo: false,
+      // Stufe 2 aus docs/schwarm.md, vorbereitet und absichtlich
+      // untätig: kein Menüpunkt setzt das je auf true, und selbst
+      // wenn — schwarmClient.js sendet trotzdem nichts, solange dort
+      // keine Gegenstelle eingetragen ist. Steht hier schon, damit
+      // spätere Einwilligungs-Oberfläche einen echten, gesicherten
+      // Zustand zum Umschalten hat statt eines neuen Felds mit allen
+      // Wanderungsfragen, die ein neues Feld sonst aufwirft.
+      schwarm: { enabled: false }
     },
     // Haushaltsprofil: bestimmt Verbrauchsraten und filtert Produkte,
     // für die das Gerät fehlt. Ohne Kaffeemaschine kein Entkalker.
@@ -293,7 +301,14 @@ const newId = () => `${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 function addReceipt(receipt) {
   const date = receipt.date || today();
   const store = receipt.store || "Unbekannt";
-  const rows = receipt.items.filter((i) => i.productId);
+  // needsConfirmation heißt: der Abgleich hat einen Kandidaten
+  // gefunden, aber noch NICHT bestätigt bekommen. Ohne diesen Filter
+  // würde ein zu früh gedrückter Buchen-Knopf denselben Kandidaten
+  // stillschweigend buchen — die Vermutung wäre nie wirklich
+  // bestätigt worden, nur nicht widersprochen. Manuell erfasste
+  // Positionen tragen dieses Feld gar nicht (undefined ist falsy),
+  // sind also unverändert buchbar.
+  const rows = receipt.items.filter((i) => i.productId && !i.needsConfirmation);
 
   // Vor dem Einbuchen: gegen welchen üblichen Preis wurde gekauft?
   // Danach wäre die Antwort verfälscht — der neue Kauf verschöbe den
@@ -907,7 +922,8 @@ function compute() {
     unitPrice: p.unitPrice,
     weightG: p.weightG,
     brand: p.brand || null,
-    brandLabel: p.brandLabel || null
+    brandLabel: p.brandLabel || null,
+    store: p.store || null
   }));
 
   /* --- Rhythmen, dreifach nachgeschärft ---------------------------
@@ -1247,6 +1263,28 @@ function compute() {
   const range = stockRange(inventory, rhythms);
   const prices = allPriceMemories(history);
 
+  /* Lebensmittel-Angebote: die Lücke zu stockUpAdvice oben, das nur
+     Haushaltsprodukte kennt (die verderben nicht). offerAdvice
+     rechnet dieselbe Frage für Lebensmittel — begrenzt durch die
+     Haltbarkeit, nicht nur durch Lagerplatz. Beide Module standen
+     lange nebeneinander; offerAdvisor.js war fertig und ungenutzt.
+     Grundlage ist der ZULETZT gezahlte Preis aus dem Preisgedächtnis
+     oben, nicht ein Preis, der jetzt im Laden gilt — die App hat
+     keinen Zugang zu aktuellen Regalpreisen und behauptet das nicht. */
+  const foodDeals = [];
+  for (const [pid, pm] of prices) {
+    if (pm.verdict !== "günstig") continue;
+    const p = byId(pid);
+    if (!p || !p.isFood || p.safetyCritical) continue;
+    const r = rhythms.get(pid);
+    const advice = offerAdvice(pid, {
+      preis: pm.last, üblich: pm.usual, herkunft: "eigen",
+      perUnitDays: r && r.perUnitDays
+    });
+    if (advice) foodDeals.push({ ...advice, lastDate: pm.lastDate, nachlassProzent: pm.changePercent });
+  }
+  foodDeals.sort((a, b) => b.nachlass - a.nachlass);
+
   // Weggetippte Hinweise gelten eine Woche, danach kommen sie wieder.
   const dis = s.dismissed.week === wk ? s.dismissed : { forgotten: [], freeze: [] };
 
@@ -1332,7 +1370,7 @@ function compute() {
     items, manualItems, knownItems: known, duplicates, budgetResult, vacation, savings,
     deposit, depositEntries, openDepositEntries: openEntries, archive,
     inflation,
-    range, prices, forgotten, freeze, safety,
+    range, prices, foodDeals, forgotten, freeze, safety,
     opened, pattern, season, seasonNow,
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog, absences,
@@ -1524,6 +1562,58 @@ function parseReceiptText(text) {
 }
 
 /**
+ * Zweite Stufe für Zeilen, die `parseReceiptText` nicht zuordnen
+ * konnte — ein Umweg über Open Food Facts, Details und Grenzen (nur
+ * der Name geht raus, jede Schreibweise höchstens einmal, ohne Netz
+ * übersprungen) stehen in offLookup.js.
+ *
+ * WAS HIER BEWUSST GLEICH BLEIBT: die Produktidentität kommt immer
+ * aus dem eigenen Katalog. Open Food Facts liefert nur einen
+ * ausgeschriebenen Namen („Joghurt" statt „GL Proteinjogh.sort."),
+ * der danach GENAUSO durch `matchProduct` läuft wie jede getippte
+ * Zeile. Ein Treffer über diesen Umweg bleibt deshalb immer
+ * `needsConfirmation: true` — er ist ein Vorschlag über zwei Ecken
+ * (fremder Dienst, dann der eigene Abgleich), keine Gewissheit, und
+ * bucht sich nie von selbst.
+ *
+ * Verändert `parsed.rows` in-place und aktualisiert `sure`/`open`
+ * gleich mit — die Oberfläche muss sonst zwei Zählweisen synchron
+ * halten.
+ *
+ * @returns {Promise<boolean>} ob sich überhaupt etwas geändert hat.
+ *   Die Oberfläche zeichnet nur dann neu; ein Bon voller sicherer
+ *   Treffer verursacht keinen einzigen Netzwerkversuch.
+ */
+async function enrichUnmatched(parsed) {
+  const kandidaten = parsed.rows.filter((r) => !r.productId);
+  if (!kandidaten.length) return false;
+
+  let geaendert = false;
+  for (const row of kandidaten) {
+    const uebersetzt = await OffLookup.find(row.raw);
+    if (!uebersetzt) continue;
+    const learned = state.aliases[normalizeRaw(uebersetzt)];
+    const m = learned
+      ? { productId: learned, confidence: 1, method: "gelernt" }
+      : matchProduct(uebersetzt);
+    if (!m.productId) continue;
+    const p = byId(m.productId);
+    row.productId = m.productId;
+    row.productName = p ? p.name : null;
+    row.confidence = m.confidence;
+    row.method = "extern:" + m.method;
+    row.needsConfirmation = true;
+    geaendert = true;
+  }
+
+  if (geaendert) {
+    parsed.sure = parsed.rows.filter((r) => !r.needsConfirmation).length;
+    parsed.open = parsed.rows.filter((r) => r.needsConfirmation).length;
+  }
+  return geaendert;
+}
+
+/**
  * Produktsuche für die Nachfrage-Liste und das manuelle Erfassen.
  *
  * Die Rangfolge steht in productSearch.js — hier wird nur ergänzt,
@@ -1545,6 +1635,6 @@ const Data = {
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,
   exportJson, importJson,
-  compute, parseReceiptText, searchProducts,
+  compute, parseReceiptText, enrichUnmatched, searchProducts,
   today, plusDays, weekKey, weekdayOf
 };

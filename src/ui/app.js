@@ -46,6 +46,10 @@ const SUBVIEWS = [
   {
     id: "faellig", label: "Fällig", title: "Fällig", view: viewFaellig, parent: "start",
     icon: '<circle cx="12" cy="12.5" r="8"/><path d="M12 8.5v4.2l2.8 1.7"/><path d="M9 3h6"/>'
+  },
+  {
+    id: "angebote", label: "Angebote", title: "Angebote", view: viewAngebote, parent: "start",
+    icon: '<path d="M12 3.5l2.4 5.1 5.6.8-4 4 1 5.6-5-2.6-5 2.6 1-5.6-4-4 5.6-.8z"/>'
   }
 ];
 
@@ -69,9 +73,61 @@ const App = {
   ctx: null,
   storeOpen: false,
   capture: { tab: "scan", text: "", parsed: null, basket: [], query: "", date: null, store: "" },
+  // Aus dem System-Teilen-Menü übernommen (REWE, Lidl & Co. → „eBon
+  // teilen" → Einkaufs-Anker). Wird einmal von ocrPicker() abgeholt
+  // und danach sofort geleert — kein dauerhafter Zustand, keine
+  // Sicherung nötig.
+  pendingShare: null,
+  // Nur die Ansicht, nicht der Haushalt: der gewählte Zeitraum in
+  // "Wo dein Geld hingeht" ist eine Anzeige-Einstellung, kein
+  // Haushaltsdatum -- sie geht deshalb nicht über Data.update() und
+  // landet nicht in der Sicherung. Ein Neuladen setzt sie zurück,
+  // das ist hier kein Verlust.
+  zahlenFilter: { range: "12w", from: null, to: null },
+  // Gleicher Grund wie bei zahlenFilter: reine Anzeige-Einstellung, welcher
+  // Unterbereich gerade offen ist -- kein Haushaltsdatum, kein Data.update().
+  zahlenTab: "ausgaben",
+  mehrTab: "einstellungen",
 
   /* ---------- Zustand ändern ---------- */
   set(fn) { Data.update(fn); },
+
+  /**
+   * Holt ab, was der Worker aus dem Teilen-Menü zwischengelegt hat
+   * (siehe sw.js, `handleShare`). Nur aktiv, wenn die URL das
+   * verrät (`?teilen=1`) — an jedem gewöhnlichen Start ein einziger
+   * synchroner Vergleich, kein Cache-Zugriff.
+   *
+   * Die URL wird sofort bereinigt, bevor überhaupt etwas gelesen ist:
+   * schlägt das Lesen fehl, soll ein Neuladen nicht denselben Versuch
+   * wiederholen und wieder scheitern.
+   */
+  async consumeSharedIfAny() {
+    const url = new URL(location.href);
+    if (!url.searchParams.has("teilen")) return;
+    url.searchParams.delete("teilen");
+    history.replaceState(null, "", url.pathname + (url.search || "") + url.hash);
+
+    if (!("caches" in window)) return;
+    try {
+      const cache = await caches.open("einkaufsanker-geteilt");
+      const [textRes, datenRes] = await Promise.all([
+        cache.match("./geteilt-text"), cache.match("./geteilt-datei")
+      ]);
+      const text = textRes ? await textRes.text() : "";
+      const datei = datenRes ? await datenRes.blob() : null;
+      await Promise.all([cache.delete("./geteilt-text"), cache.delete("./geteilt-datei")]);
+      if (!text && !datei) return;
+
+      App.pendingShare = { text, datei };
+      App.tab = "erfassen";
+      App.capture.tab = "scan";
+      location.hash = "erfassen";
+      App.render();
+    } catch (e) {
+      console.warn("Geteilten Bon nicht lesen können.", e);
+    }
+  },
 
   /**
    * Eine Wochenentscheidung zu einer Position festhalten.
@@ -287,6 +343,10 @@ const App = {
     box.className = "party show m-" + badge.id + (still ? " still" : "");
     glow.className = "partyGlow";
 
+    // Ein Meilenstein ist der einzige Moment, in dem die Stimmung
+    // nicht aus mascotMood(ctx) kommt: die Feier selbst ist der
+    // Grund zur Freude, unabhängig davon, was sonst gerade ansteht.
+    document.getElementById("partyMascot").innerHTML = mascotSvg("froh", 64);
     document.getElementById("partyKicker").textContent =
       badge.level >= badge.maxLevel ? "Höchste Stufe" : "Geschafft";
     document.getElementById("partyMark").innerHTML = markSvg(badge.icon);
@@ -729,7 +789,9 @@ const App = {
     // Großer Titel im Inhalt — fällt beim Scrollen in die Leiste zusammen.
     const large = document.getElementById("largeTitle");
     large.innerHTML = "";
-    large.append(el("h1", null, esc(titel)));
+    const textBlock = el("div", "largeTitleText");
+    large.append(textBlock);
+    textBlock.append(el("h1", null, esc(titel)));
     const sub = el("div", "sub");
     // Auf der Liste beschreibt die Unterzeile die LISTE, nicht die
     // Datenlage. „57 Bons · 29 Produkte“ beantwortet eine Frage, die
@@ -765,7 +827,19 @@ const App = {
       tag.addEventListener("click", () => App.goto("mehr"));
       sub.append(tag);
     }
-    large.append(sub);
+    textBlock.append(sub);
+    // Das Wesen: derselbe Ort auf jeder Seite, weil renderBar() auf
+    // jeder Seite läuft. Die Stimmung kommt aus mascotMood(ctx), das
+    // Antippen aus mascotTap(ctx) -- beide lesen nur Signale, die es
+    // schon gibt. Ein <button>, kein bloßes SVG: es tut jetzt etwas,
+    // also muss es auch mit der Tastatur erreichbar sein und einen
+    // Namen tragen, der sagt, was passiert -- nicht nur, dass dort
+    // ein Bild ist.
+    const tap = mascotTap(ctx);
+    const mascotBtn = el("button", "mascotBtn", mascotSvg(mascotMood(ctx)));
+    mascotBtn.setAttribute("aria-label", tap.label);
+    mascotBtn.addEventListener("click", () => tap.run(App));
+    large.append(mascotBtn);
   },
 
   renderNav() {
@@ -964,6 +1038,7 @@ function boot() {
 
   Data.subscribe(() => App.render());
   App.render();
+  App.consumeSharedIfAny();
 
   const rec = Data.recoveryNotice();
   if (rec) {

@@ -365,6 +365,53 @@ t("3000 Angebotslagen halten die Haltbarkeitsgrenze ein", () => {
 });
 
 // ================================================================
+section("F: Stufe-2-Infrastruktur, vorbereitet und absichtlich untätig");
+
+/* schwarmClient.js ist der einzige Ort im Code, an dem eine
+   Übertragung überhaupt vorkäme. Diese Sektion prüft nicht, dass er
+   funktioniert -- sie prüft, dass er unter KEINER Kombination aus
+   Einstellungen tatsächlich sendet, solange keine Gegenstelle
+   eingetragen ist. Das ist die Garantie, die "kein Server, keine
+   Übertragung" heute noch wahr macht, trotz der neuen Datei. */
+const { ENDPOINT, configured, weeklyBatch, attemptShare } = require("../src/algo/schwarmClient");
+
+t("Keine Gegenstelle eingetragen", () => ENDPOINT === null);
+t("configured() sagt das auch so", () => configured() === false);
+
+t("attemptShare sendet nichts, auch ohne Einwilligung", () => {
+  const r = attemptShare({ enabled: false }, [kauf()], () => "Lidl", "2026-08-18");
+  return r.sent === false ? true : JSON.stringify(r);
+});
+
+t("Und sendet auch nichts, wenn die Einwilligung (hypothetisch) an wäre", () => {
+  // Genau der Fall, der gefährlich wäre, wenn er anders liefe: ein
+  // Zustand, in dem nur noch ENDPOINT fehlt. Muss trotzdem schweigen.
+  const r = attemptShare({ enabled: true }, [kauf()], () => "Lidl", "2026-08-18");
+  return r.sent === false ? true : JSON.stringify(r);
+});
+
+t("Der Grund wird genannt, nicht nur ein 'nein'", () => {
+  const r = attemptShare({ enabled: true }, [kauf()], () => "Lidl", "2026-08-18");
+  return typeof r.reason === "string" && r.reason.length > 0 ? true : r.reason;
+});
+
+t("weeklyBatch nimmt nur Käufe der angefragten Kalenderwoche", () => {
+  const b = weeklyBatch([
+    kauf({ date: "2026-08-18" }),               // Woche 34
+    kauf({ productId: "milch", date: "2026-08-25" }) // Woche 35
+  ], () => "Lidl", "2026-08-18");
+  return b.length === 1 && b[0].produkt === "butter" ? true : JSON.stringify(b);
+});
+
+t("weeklyBatch bleibt leer ohne bekannte Kette -- dieselbe Regel wie shareableFrom", () => {
+  const b = weeklyBatch([kauf()], () => "Hofladen Müller", "2026-08-18");
+  return b.length === 0 ? true : JSON.stringify(b);
+});
+
+t("Ohne gültiges Bezugsdatum keine Sichtungen, kein Absturz",
+  () => weeklyBatch([kauf()], () => "Lidl", "keine-woche").length === 0);
+
+// ================================================================
 console.log("\n" + "=".repeat(60));
 console.log(`SCHWARM: ${pass} bestanden, ${fail} fehlgeschlagen`);
 console.log("=".repeat(60));

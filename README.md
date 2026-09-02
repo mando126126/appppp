@@ -1,13 +1,16 @@
 # Einkaufs-Anker — Web-App
 
 Wochenliste, Vorratsschätzung und Verschwendungsrechnung aus den eigenen
-Kassenbons. Kein KI-Modell, kein Server, kein Konto: robuste Statistik,
-Textabgleich und Tabellen, gerechnet im Browser.
+Kassenbons. Kein KI-Modell, kein Konto: robuste Statistik, Textabgleich
+und Tabellen, gerechnet im Browser. Ein eigener Server fehlt weiterhin —
+nur ein Produktname, den der eigene Katalog nicht kennt, geht zur
+Übersetzung an Open Food Facts (Details unten, „Wenn der eigene Katalog
+nicht reicht").
 
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1594 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1860 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -910,8 +913,8 @@ führen zum selben Ergebnis. Dieselbe Faltung fehlte im Bonabgleich für
 Akzente — „Crème fraîche" zerfiel zu `cr me fra che`, und wer `creme`
 tippte, bekam Handcreme und Schuhcreme, aber nicht das Produkt, das so
 heißt. `test/search.js` prüft das mit 56 Tests, darunter 30 Eingaben,
-die ein Mensch wirklich tippt, und der Nachweis, dass **jedes** der 846
-Produkte über seinen eigenen Namen auffindbar ist.
+die ein Mensch wirklich tippt, und der Nachweis, dass **jedes** der
+inzwischen 1699 Produkte über seinen eigenen Namen auffindbar ist.
 
 Freie Zeilen bekommen **keine Produktkennung**. Sie fließen
 ausdrücklich nicht in die Rhythmen ein, tauchen in keiner Verderb-,
@@ -1090,7 +1093,8 @@ Erfassen am Ende `goto("liste")` aufruft, war genau das der **erste
 Bildschirm nach der ersten echten Handlung** eines neuen Nutzers. Er
 sagte: kann ich noch nicht.
 
-Dabei war alles fertig gebaut. Die Suche über 846 Produkte, das freie
+Dabei war alles fertig gebaut. Die Suche über 846 Produkte (heute
+1699, siehe weiter unten), das freie
 Eintippen, der Wagen, die Gangansicht, das Teilen — nur gesperrt, weil
 noch keine *Vorhersage* möglich war. Als könnte man eine Einkaufsliste
 nur schreiben, wenn ein Algorithmus mithilft.
@@ -1728,6 +1732,1875 @@ halten.
 
 ---
 
+## „Unsere Datenbank ist viel zu gering" — war sie nicht
+
+Ein echter Testlauf auf einem iPhone (Netto-Bon, über GitHub Pages)
+brachte diesen Satz zurück. Die Beobachtung war richtig — die meisten
+Zeilen landeten auf „nicht zugeordnet" —, die Diagnose dahinter nicht
+ganz: nachgemessen ist es kein Katalogproblem. Eine Stichprobe der
+Kategorien, die angeblich fehlten, zeigt sie alle längst im Katalog:
+„Eier" → Eier, Bio-Eier; „Pudding" → Pudding, Protein-Pudding; „Wein"
+→ Rotwein, Weißwein, Roséwein. Alles längst unter den 846
+Katalogprodukten. Was fehlte, war Toleranz im **Abgleich**, nicht
+Breite im **Katalog**: er war an einem einzigen Lidl-Bon kalibriert,
+und Lidl schreibt vergleichsweise saubere Namen. Nachgemessen über
+alle acht echten Bons dieses Projekts:
+
+| Kette | sicher + Vorschlag | kein Treffer |
+|---|---|---|
+| Lidl (kalibriert) | 96 % | 4 % |
+| ALDI | 63 % | 37 % |
+| REWE | 40–55 % | 45–60 % |
+| EDEKA | 38 % | 63 % |
+| Netto | 35–57 % | ~50 % |
+
+„VL Eier FH 10ST" **enthält** „Eier" — verliert aber gegen zwei
+Verpackungscodes, die keine der 846 Katalogzeilen kennt. Die
+Rauschwortliste (`FILLER_WORDS` in `productMatcher2.js`), die „bio",
+„frisch" oder „ja!" schon herausfiltert, kannte „ST" (Stück), „FL"
+(Flasche), „DS" (Dose), „EW" (Einweg) und „sort." (sortiert) nicht —
+bei Lidl kommen sie kaum vor, bei Netto an fast jeder zweiten Zeile.
+Nachdem sie ergänzt sind:
+
+- „M.I Grana Padano St. 200g": 0,81 (Vorschlag) → 0,92 (**sicher**)
+- „Layenb.HP Skyr sort. 200g": 0,59 (kein Treffer) → 0,70 (Vorschlag)
+- „Zott Jogobella sort. 150g": 0,81 (Vorschlag) → 0,92 (**sicher**)
+
+Trefferquote insgesamt: von 51 % auf 56 % der 139 echten Positionen.
+Ein echter, aber bewusst kleiner Schritt — die größeren Ursachen
+liegen woanders und wurden **nicht** blind mitkorrigiert.
+
+**Was probiert und wieder verworfen wurde:** „mit" sah aus wie der
+nächste offensichtliche Kandidat — es steht auf halb den Netto-Zeilen
+und trägt scheinbar nichts zur Identität bei. Der Katalog widerspricht:
+„Skyr" und „Skyr mit Frucht" sind zwei Einträge, und „mit" ist der
+einzige Unterschied zwischen ihren Namen. Als Rauschwort hätte es beide
+zu einem Produkt verschmolzen — eine stille Fehlzuordnung, die erst als
+falscher Rhythmus wieder auftaucht, Monate später und ohne erkennbare
+Ursache. Genau die Gefahr, vor der der Kommentar über `FILLER_WORDS`
+schon vorher warnte. Ein Test hält das jetzt offen (`test/matching.js`,
+Abschnitt B), damit niemand „mit" beim nächsten Aufräumen doch einträgt.
+
+**Was bewusst ungelöst bleibt:** „VL" und „FH" auf „VL Eier FH 10ST"
+kommen auf allen drei Netto-Bons kein einziges Mal sonst vor — zu wenig,
+um zu wissen, was sie bedeuten, geschweige denn, um es zu erraten. Dafür
+gibt es das Lernen aus Aliasen: wählt ein Nutzer hier einmal „Eier" aus
+der Liste, merkt sich die App genau diese Schreibweise dauerhaft — ohne
+eine Vermutung, die anderswo eine echte Bedeutung zerstören könnte.
+
+**Der eigentliche Befund:** ein statischer, globaler Katalog wird nie
+jede Eigenmarken-Abkürzung von fünf Handelsketten kennen — die
+Schreibweisen ändern sich mit jeder Sortimentsumstellung, und was bei
+Netto „VL" heißt, bedeutet bei Kaufland etwas anderes oder gar nichts.
+Die tragfähige Antwort ist nicht ein größerer Katalog, sondern dass die
+App aus JEDEM Haushalt lernt, was seine eigenen Bons wirklich meinen —
+genau das leistet `learnAlias` schon heute, nur einmal pro Zeile pro
+Haushalt, nicht einmal für alle.
+
+`test/matching.js` hält die gemessene Trefferquote als Zahl fest, nicht
+als Eindruck — jede künftige Änderung am Abgleich muss sich daran messen
+lassen, in beide Richtungen.
+
+---
+
+## Wenn der eigene Katalog nicht reicht: ein Umweg über Open Food Facts
+
+Der Wunsch war unmissverständlich: der Abgleich soll (fast) immer ein
+Produkt erkennen, nicht bei jeder fünften Zeile aufgeben. Die
+Rauschwort-Erweiterung im vorigen Abschnitt schafft das nicht allein —
+sie hebt eine Zeile über die Bestätigungs-Schwelle, sie kann aber
+keinen Namen erraten, den kein Katalogeintrag ähnlich genug schreibt.
+
+Dafür jetzt ein zweiter Versuch, NUR für Zeilen, die der lokale
+Abgleich nicht einordnen konnte: Open Food Facts liefert einen
+ausgeschriebenen Produktnamen — „Joghurt" statt „GL Proteinjogh.sort."
+—, und der läuft anschließend GENAUSO durch den eigenen Katalog wie
+jede getippte Bon-Zeile. Open Food Facts ist damit nur die Übersetzung
+von Kassenjargon in normales Deutsch. Die Produktidentität —
+Haltbarkeit, Lagerort, Verbrauchsdatum-Status — kommt weiterhin immer
+aus der eigenen, geprüften Liste, nie von einem fremden Dienst. Ein
+Treffer über diesen Umweg bleibt deshalb immer ein Vorschlag zum
+Bestätigen, nie ein automatisch gebuchter — er ist eine Vermutung über
+zwei Ecken, keine Gewissheit.
+
+### Das ist eine Ausnahme von einem bisher absoluten Versprechen
+
+Die App hat an mehreren Stellen wörtlich behauptet, keine Daten würden
+das Gerät verlassen. Das stimmt für Bild und Bon-Text weiterhin
+uneingeschränkt — die Texterkennung bleibt vollständig lokal (siehe
+oben, „Die Erkennung läuft auf dem Gerät"). Für einen einzelnen
+unbekannten Produktnamen gilt es nicht mehr, und diese Ausnahme wird
+nicht versteckt: der Text im Bon-Erfassen-Bildschirm nennt sie
+ausdrücklich, bevor man scannt — *„Ein nicht erkannter Produktname
+wird — nur der Name, ohne Preis, Datum oder Markt — bei Open Food
+Facts nachgeschlagen."* Die Kurzbeschreibung im Manifest, die vorher
+pauschal „ohne Server" versprach, ist entsprechend angepasst.
+
+Es gibt bewusst KEINEN Schalter dafür in den Einstellungen. Das war
+eine echte Abwägung, keine Bequemlichkeit: eine Ein/Aus-Option hätte
+suggeriert, es gäbe eine Version dieser Funktion, die genauso gut
+funktioniert und dabei mehr Privatsphäre böte — das stimmt nicht,
+„aus" heißt schlicht „ein Fünftel der Zeilen bleibt unerkannt". Wer
+das nicht will, ist mit dem sichtbaren Hinweistext ausreichend
+informiert; ein Schalter, den man einmal umlegt und vergisst, wäre
+keine bessere Aufklärung gewesen, nur ein zusätzlicher Klick.
+
+### Vier Grenzen, technisch durchgesetzt (`src/ui/offLookup.js`)
+
+1. **Nur der bereinigte Name geht raus.** Kein Preis, kein Datum, kein
+   Markt — die Anfrage nutzt dieselbe Namens-Bereinigung wie der lokale
+   Abgleich (`parseProductName(...).core`), die Mengenangaben und
+   Sonderzeichen längst entfernt hat. Sie verrät ein Wort, nicht wann
+   oder wo jemand eingekauft hat.
+2. **Jede Schreibweise wird höchstens einmal gefragt.** Ergebnis UND
+   Fehlschlag landen dauerhaft im lokalen Zwischenspeicher
+   (`localStorage`, mit Obergrenze gegen unbegrenztes Wachstum). Dieselbe
+   Bon-Zeile fragt beim nächsten Einkauf nicht noch einmal — weniger
+   Anfragen an Open Food Facts, und dieselbe „einmal lernen, nie wieder
+   fragen"-Haltung wie bei `learnAlias`.
+3. **Ohne Netz wird es still übersprungen.** Kein Fehler, keine
+   Wartezeit — die Grundfunktion der App bleibt vollständig offline
+   nutzbar, dieser Umweg ist ein Zusatz, keine Voraussetzung.
+4. **Ein Timeout, damit nichts hängt.** Nach vier Sekunden gilt eine
+   Anfrage als erfolglos, nicht als Absturz — eine Oberfläche, die auf
+   eine fremde Antwort wartet, fühlt sich sonst kaputt an.
+
+Für Tests ist `OffLookup.fetcher` austauschbar — genau das Muster, das
+`OCR.engine` schon für Tesseract nutzt, damit kein Testlauf jemals
+gegen das echte Internet läuft.
+
+### Was noch offen ist
+
+Der dritte, in der ursprünglichen Empfehlung vorgeschlagene Schritt —
+ein reiner Kategorie-Fallback („Schlüsselwort → eine der 19
+Kategorien → konservativer Schätzwert") für Zeilen, die auch über
+Open Food Facts nicht auflösbar sind — ist bewusst noch nicht gebaut.
+Der Grund: `addReceipt` bucht heute ausschließlich Zeilen mit einer
+echten Katalog-Kennung; ein Kategorie-Rateergebnis hat keine. Es
+einfach einzubauen hätte entweder eine Fantasie-Kennung im Katalog
+erfunden (der Katalog ist kuratiert und sicherheitsgeprüft — genau die
+Sorte Vermischung, vor der `FILLER_WORDS` im Kommentar warnt) oder das
+Buchungsschema an einer zentralen Stelle geändert, ohne die Zeit für
+dieselbe Sorgfalt wie beim Rest dieses Abschnitts. Das ist eine
+eigene, saubere Aufgabe für später, keine, die im Vorbeigehen erledigt
+werden sollte.
+
+---
+
+## Der Punkt als Kürzungszeichen: Abkürzungen selbst lesen, statt zu raten
+
+Der nächste, direktere Wunsch: der eigene Abgleich soll Kürzungen selbst
+erkennen können, nicht erst über den Umweg eines fremden Dienstes.
+
+Der Ansatzpunkt kam aus einer einfachen Beobachtung: Kassenbons kürzen
+lange Namen fast immer auf dieselbe Art — sie schneiden das Ende ab und
+markieren das mit einem Punkt. „Proteinjogh." statt „Proteinjoghurt",
+„Prot.Riegel Erdn.-Car." statt „Protein-Riegel Erdnuss-Caramel". **Über
+alle acht echten Bons dieses Projekts tragen 47 von 139 Positionen —
+gut ein Drittel — genau dieses Zeichen.**
+
+Der Punkt ist damit kein Rauschen, sondern ein Signal: die Kasse selbst
+sagt „hier fehlt der Rest". Nur wurde er bisher VOR dem Vergleich zu
+einem Leerzeichen gemacht — derselbe Bereinigungsschritt, der Kommas
+und Sonderzeichen entfernt, hat ihn mit entsorgt, bevor der Abgleich
+ihn je zu Gesicht bekam. `parseProductName` liest ihn jetzt vorher und
+merkt sich, welche Wörter er betrifft (`truncated`, eine Menge von
+Wortstämmen).
+
+**Warum eine eigene Regel, und nicht einfach die alte Teilwort-Prüfung
+lockern.** Der bestehende Abgleich erkennt Teilwörter schon — aber
+erst ab fünf Zeichen, und zwar an JEDER Stelle im Wort, nicht nur am
+Anfang. Diese Grenze existiert aus gutem Grund: ein kurzes Teilwort,
+das zufällig irgendwo in einem anderen Wort auftaucht, ist leicht ein
+Zufallstreffer. Ein Wort, das die Kasse selbst mit einem Punkt als
+abgeschnitten markiert hat, ist kein Zufallsrisiko mehr — deshalb darf
+die neue Regel bei drei Zeichen greifen statt bei fünf, dafür aber
+ausschließlich als PRÄFIX (das Katalogwort muss damit *beginnen*), nie
+als Teilwort irgendwo in der Mitte. „gurk." darf „Gewürzgurken" nicht
+treffen, obwohl „gurk" darin steckt — es steckt in der Mitte, und ein
+Bon kürzt ein Wort immer am Ende, nie in der Mitte.
+
+**Eine Kürzung bucht sich nie automatisch — sie bleibt immer ein
+Vorschlag.** Der erste Test dieser Änderung hat das selbst
+durchbrochen: „Gurk." → „Gurke" erreichte mit 0,87 eine Punktzahl über
+der „sicher"-Schwelle (0,85) und hätte sich stillschweigend gebucht.
+Das widerspricht der Regel, die für jeden anderen unsicheren Weg in
+dieser App gilt — auch der Umweg über Open Food Facts bucht nie
+automatisch, aus demselben Grund: „Kaes." trifft genauso auf
+Käsekuchen wie auf ein Dutzend anderer Käseprodukte, und ein Bon nennt
+nie, welches gemeint war. Eine Kürzungs-Punktzahl wird deshalb jetzt
+technisch gedeckelt, bevor sie die „sicher"-Schwelle je erreichen kann
+— das ist eine bewusste Entwurfsentscheidung, im Code als Kommentar
+festgehalten, kein Kalibrierungsdetail, an dem später wieder gedreht
+werden könnte, ohne die Begründung zu sehen.
+
+**Über die acht echten Bons dieses Projekts hinweg bewegt sich die
+gemessene Trefferquote durch diese Änderung NICHT** (weiterhin 56 %,
+25 sicher, 53 mit Vorschlag). Das ist kein Widerspruch zu den 47
+betroffenen Positionen — die meisten davon stammen von den Ketten, die
+in früheren Schritten dieses Projekts bereits von Hand kalibriert
+wurden, mit exakten Alias-Einträgen, die höher punkten als jede
+allgemeine Regel es könnte. Die neue Regel zeigt ihren Wert deshalb
+nicht an diesem einen, schon eingeübten Korpus, sondern an jedem
+kommenden Bon, der noch nie gesehen wurde — geprüft an eigenen,
+isolierten Beispielen ohne vorhandenen Alias-Eintrag (`test/matching.js`,
+Abschnitt F): „Gurk." → Gurke, „Zwie." → Zwiebeln, „Kaes." →
+Käsekuchen, alle als Vorschlag, keines automatisch gebucht.
+
+Beim Testen dieser Änderung ist außerdem eine zweite, unabhängige
+Schwachstelle sichtbar geworden, die schon vorher da war: „Kaes.aufschn."
+matcht über die ALTE, allgemeine Teilwort-Regel auf „Wurstaufschnitt"
+(Fleisch), nicht auf ein Käseprodukt — weil es zum Zeitpunkt dieser
+Änderung gar kein „Käseaufschnitt" im Katalog gibt und „aufschnitt" als
+Teilwort mitten in „Wurstaufschnitt" steckt. Das ist kein Fehler dieser
+Änderung (die neue, striktere Präfix-Regel hätte diesen Treffer gar
+nicht zugelassen), sondern ein vorher schon vorhandenes Risiko der
+älteren, großzügigeren Regel — festgehalten hier, damit es nicht wieder
+neu entdeckt werden muss, aber bewusst nicht im selben Schritt
+mitkorrigiert: die alte Regel ist an mehreren realen Bons fein
+kalibriert, und sie ohne dieselbe Sorgfalt (volle Korpus-Messung,
+Sicherheitstests) zu ändern, hätte an anderer Stelle etwas
+zurückgeworfen, das gerade erst funktioniert.
+
+---
+
+## Nachtrag: „Kaes.aufschn." fällt nicht mehr auf Wurst
+
+Der oben festgehaltene, bewusst nicht mitkorrigierte Fund bekam eine
+eigene Runde, wie angekündigt.
+
+**Der erste Reparaturversuch war zu groß.** Naheliegend schien
+dieselbe Regel, die `looksLikeMeat` schon länger befolgt: ein
+Teilwort-Treffer zählt nur an Wortanfang oder -ende, nie mittendrin.
+Implementiert, gemessen — und der gemeldete Fall verschwand
+tatsächlich. Aber ein neuer tauchte im selben Testlauf auf:
+„ZottProteinPuddingCho200g" verlor seinen bis dahin richtigen Treffer
+auf „Protein-Pudding". Der Grund: „proteinpudding" steht dort ECHT
+mittendrin, umschlossen von Marke (Zott) und Geschmack (Cho[ko]),
+ohne Leerzeichen zusammengeklebt — genau wie es auf echten Bons
+laufend vorkommt. Die allgemeine Regel konnte den einen Fall nicht
+lösen, ohne den anderen kaputtzumachen.
+
+**Der eigentliche Fehler saß nicht im Algorithmus, sondern in einem
+einzelnen Katalog-Alias.** `wurst_aufschnitt` trug „AUFSCHNITT" als
+BLOSSEN, von „Wurst" losgelösten Alias. Bare, ohne Qualifizierung, ist
+das Wort im Deutschen nicht eindeutig — Aufschnitt gibt es auch beim
+Käse, und der Katalog hatte dafür ohnehin kein Gegenstück, gegen das
+„Käse" hätte konkurrieren können. Diesen einen Alias entfernt, und der
+gemeldete Fall verschwindet vollständig — ohne die allgemeinere,
+riskantere Regel, und ohne den Pudding-Treffer zu verlieren. Der volle
+Name „Wurstaufschnitt" bleibt über die normale Ähnlichkeitsrechnung
+weiterhin treffbar, auch als bloßes „AUFSCHNITT" ganz ohne „Wurst"
+davor.
+
+**Die Lehre, die den Umweg wert war:** eine Sicherheitsregel, die an
+einer Stelle bewährt ist (`looksLikeMeat`, gegen Fleisch-
+Fehlzuordnungen), überträgt sich nicht automatisch verlustfrei auf
+eine andere Stelle mit anderen Daten. Erst die volle Messung über alle
+139 echten Positionen hat das gezeigt — nicht die Überlegung vorher,
+so plausibel sie klang. Beide Versuche stehen in `test/matching.js`,
+Abschnitt G: der verworfene Weg als Begründung im Kommentar, der
+behaltene als drei Tests, inklusive des Falls, den die verworfene
+Regel kaputtgemacht hätte.
+
+---
+
+## Der zweite Teil desselben Wunsches: der Katalog selbst, um ein Vielfaches erweitert
+
+Der ursprüngliche Auftrag hatte zwei Hälften: Kürzungen selbst lesen
+(oben beschrieben), und — wörtlich — „wenns sein muss dann müssen wir
+eben auch die Produktkatalog um ein Vielfaches erweitern, nutze doch
+dafür die Datenbank von Open Food Facts […] und ziehe dir alle
+möglichen Produkte und hinterlege sie". Ziel: rund 1000 zusätzliche
+Produkte, zusätzlich zu den bestehenden 846, nicht statt ihnen.
+
+**Woher die Produkte kommen.** Open Food Facts bietet mehrere
+Such-Zugänge; zwei davon lieferten während der Arbeit an dieser
+Erweiterung durchgehend `503 Page temporarily unavailable` — sowohl
+die alte `cgi/search.pl`-Schnittstelle als auch die dokumentierte
+`api/v2/search`, geprüft über mehrere Werkzeuge und Zeitpunkte hinweg,
+also kein einzelner Client-Fehler. Erreichbar war die neuere
+`search.openfoodfacts.org`-Schnittstelle (Codename „search-a-licious"),
+mit echter Kategorie- und Länderfilterung. Abgefragt wurden nur
+Kategorien, die ausschließlich Lebensmittel enthalten — „Fleisch/Fisch"
+und „Wurstwaren" wurden gar nicht erst abgefragt, aus demselben Grund
+wie unten erklärt.
+
+**Drei harte, nicht verhandelbare Grenzen:**
+
+1. **Kein rohes Fleisch, kein Fisch.** Die Sicherheitsklassifizierung
+   für Verbrauchsdatum-Produkte (`safetyRules.js`, `SAFETY_GROUPS`) ist
+   eine von Hand kuratierte Positivliste, kein Automatismus — ein
+   Bulk-Import hätte entweder zu Unrecht Panik ausgelöst oder,
+   schlimmer, ein wirklich verderbliches Produkt als normales
+   MHD-Produkt eingeordnet. Import-Kategorien beschränken sich deshalb
+   auf Milchprodukte, Frischware (Obst/Gemüse), Backwaren,
+   Trocken/Vorrat, Getränke, Tiefkühl, Süßes/Snacks, Protein/Sport,
+   Fertiggerichte und International — die zehn Kategorien dieses
+   Katalogs, in denen „Verbrauchsdatum" nicht vorkommt. Ergebnis nach
+   der Erweiterung: weiterhin genau 54 sicherheitskritische Produkte,
+   keines davon neu.
+2. **Kein Non-Food.** Open *Food* Facts deckt Haushalt, Körperpflege,
+   Wasch-/Reinigungsmittel und Tierbedarf nicht ab — das sind
+   Schwester-Projekte (Open Beauty Facts, Open Products Facts, Open
+   Pet Food Facts) mit eigener, hier nicht zugänglicher Datenbank.
+   Diese Kategorien blieben unangetastet: weiterhin genau 134
+   Non-Food-Produkte, keines davon neu.
+3. **Qualitätsstufe immer `"schaetzwert"`.** Bei dieser Stückzahl ist
+   keine Einzelrecherche möglich. Der Haltbarkeits-Standardwert je
+   neuem Produkt ist der Median der bereits geprüften, bestehenden
+   Werte derselben Kategorie — kein Wert ins Blaue, sondern
+   übernommen aus Zahlen, die für diese Kategorie schon einmal
+   überlegt wurden.
+
+**Die eigentliche Arbeit war Datenqualität, nicht Beschaffung.**
+Rohdaten aus einer crowd-gepflegten Datenbank zu ziehen ist der
+einfache Teil; sie so zu bereinigen, dass sie den gleichen Ansprüchen
+genügen wie der handkuratierte Kern, ist es nicht. Konkret aufgetreten
+und behoben:
+
+- **Falsche Kategorie laut eigenem Tag.** Eine Suche unter „milks"
+  lieferte unter anderem „Bio Vollkorn Penne Rigante" — ein
+  Falsch-Tagging in Open Food Facts selbst, keine Fehlermeldung.
+  Lösung: jeder Treffer wird nach dem Laden anhand seiner EIGENEN,
+  vollständigen `categories_tags` neu bewertet — die Kategorie mit den
+  meisten passenden Tags gewinnt, nicht die Kategorie, unter der
+  zufällig gesucht wurde.
+- **Fremdsprachige Namen trotz „deutschem" Feld.** `product_name_de`
+  war gelegentlich mit einem französischen oder rumänischen Namen
+  befüllt („Ail & Fines Herbes", „Lapte 3,5 % Grasime") — ein
+  Dateneingabefehler bei Beitragenden, keine Falschabfrage. Erst die
+  harte Serverfilterung auf `lang:de` (die von der Community gepflegte
+  Hauptsprache des Eintrags, nicht nur ein befülltes Feld) plus eine
+  kurze Stopwortliste blieb zuverlässig.
+- **Eingebettete Kassenzettel-Fragmente.** Einzelne Namen enthielten
+  Preis- oder Pfandangaben („K-Exquisa der Sahnige-1,89€/19.8",
+  „Wasser Volvic […] EW" mit „EW" für Einwegpfand) — beides entfernt,
+  „EW" zusätzlich deshalb, weil es im Katalog absichtlich als
+  Füllwort reserviert ist (`FILLER_WORDS`, siehe oben) und in keinem
+  echten Produktnamen als eigenes Wort auftauchen darf.
+- **Dubletten querbeet, nicht nur gegen den alten Katalog.** Die
+  Dublettenprüfung lief zuerst nur gegen die alten 846 Produkte
+  (`matchProduct`, Schwelle 0,72) — das ließ Fälle wie „Käse-Aufschnitt"
+  und „Käse Aufschnitt" oder „Hanuta" und „Hanuta 2x" als zwei
+  getrennte Katalogeinträge durch, weil beide neu waren. Ein
+  Stresstest (`test/stresstest.js`, Abschnitt E: „jeder Name und jeder
+  Alias trifft sein eigenes Produkt") deckte das auf zwei
+  Anläufen hintereinander auf. Behoben durch eine Namens-Normalisierung
+  (Satzzeichen vereinheitlicht) für die Dublettenprüfung innerhalb des
+  Imports selbst, plus das Entfernen bloßer Packungs-Vervielfacher
+  („2x", „6er") aus dem Namenstext, weil sie kein Unterscheidungsmerkmal
+  sind.
+
+**Ergebnis:** 836 neue Produkte (Ziel: rund 1000; erreicht wurden 836,
+weil mehrere angefragte Kategorien — etwa „ready-meals" oder
+„mexican-foods" — in der Such-Schnittstelle keine oder kaum Treffer
+lieferten, und weil 543 weitere Kandidaten sich als Dubletten zum
+bestehenden Katalog erwiesen und deshalb bewusst NICHT aufgenommen
+wurden). Katalog gewachsen von **846 auf 1682 Produkte**. Damit
+verschiebt sich der Anteil an Schätzwerten spürbar — ehrlich
+ausgewiesen über `databaseQualityReport()`: von 700 auf 1536
+Schätzwert-Produkte, also von 83 % auf 91 % des Katalogs. Das ist kein
+Rückschritt, der versteckt wird: ein Import dieser Größenordnung KANN
+nicht einzeln geprüft sein, und die App behauptet das an keiner Stelle.
+`safetyCritical` (54) und `nonFood` (134) blieben beide exakt
+unverändert — der Beleg, dass die beiden harten Grenzen oben nicht nur
+Absicht, sondern Ergebnis waren.
+
+**Gemessen, nicht behauptet:** über die 139 echten Bon-Positionen
+dieses Projekts bewegt sich die Trefferquote von 25 auf 27 sicher, von
+53 auf 56 mit Vorschlag, von 61 auf 56 ohne Treffer. Ein echter, aber
+bewusst kleiner Sprung — plausibel, weil diese acht Bons nicht das
+Zielpublikum eines allgemeinen Katalog-Ausbaus sind (sie wurden längst
+mit gezielten Aliasen kalibriert); der Nutzen zeigt sich vor allem bei
+Produkten, Ketten und Marken, die in diesem Korpus gar nicht vorkommen.
+Alle 1642 Tests bestehen weiterhin, keine Regression.
+
+---
+
+## Die 56 offenen Zeilen einzeln durchgesehen — vier konkrete Funde
+
+„Führe die Tests durch und schreib konkret auf, was noch fehlt" war der
+nächste Auftrag. Die 56 „kein Treffer"-Zeilen aus dem vorigen Abschnitt
+wurden dafür einzeln ausgewertet, nicht nur als Prozentzahl gelesen —
+vier Muster kamen dabei zum Vorschein, alle behoben:
+
+1. **Ein einzelnes fehlendes Produkt kostete 10 der 56 Zeilen.** Auf dem
+   ALDI-Bon steht zehnmal „CREME DESSERT MIT SCHOKOR" (echte
+   Mehrfachkäufe). Kein Katalogtreffer, beste Punktzahl 0,53 —
+   „Dessertcreme" existierte zwar, aber in umgekehrter Wortreihenfolge,
+   und „SCHOKOR" ist keine Kürzung mit Punkt, sondern ein harter
+   Spaltenbreiten-Abschnitt bei exakt 25 Zeichen (ALDIs Drucker schneidet
+   hier ohne jedes Kürzungszeichen ab). Deshalb kein geratenes Vollwort
+   als Alias, sondern die Zeile selbst, wortgleich zum Bon: `"CREME
+   DESSERT MIT SCHOKOR"` als Alias auf `desserts_becher`.
+2. **Zwei Netto-Eigenmarken-Kürzel blockierten den gesamten Rest der
+   Zeile.** Gemessen, nicht vermutet:
+   `GL Proteinjogh.sort.200g` kein Treffer (0,45) → ohne „GL" Vorschlag
+   auf Proteinriegel (0,74). `VL Eier FH 10ST` kein Treffer (0,59) →
+   ohne „VL" Vorschlag auf Eier (0,70). Beide jetzt als Rauschwort
+   ergänzt (`FILLER_WORDS`, `productMatcher2.js`) — strukturell
+   dasselbe Muster wie „ST"/„FL"/„DS"/„EW"/„sort.", nur am Wortanfang
+   statt am Wortende. Geprüft: keine Kollision mit einem echten
+   Katalog-Token.
+3. **Drei einzelne, leicht behebbare Katalog-Lücken.** „DORNFELDER"
+   (Rotwein-Rebsorte) und „BAUCHSPECK" trafen ins Leere, weil die
+   jeweiligen Katalogeinträge (`wein_rot`, `schweinebauch`) **gar
+   keinen Alias** hatten — beide ergänzt. „Maultaschen" fehlte
+   komplett und wurde als neuer Eintrag unter Fertiggerichte
+   aufgenommen (Kategorie-Schätzwert wie beim Open-Food-Facts-Import,
+   da nicht einzeln recherchiert).
+4. **Bewusst NICHT geraten:** „Ca-Choco Riegel" (Lidl, sonst 96 %
+   Trefferquote) bleibt offen. Ohne zu wissen, was „Ca" tatsächlich
+   abkürzt (Caramel? ein Markenname?), wäre ein Alias hier eine reine
+   Vermutung — genau die Sorte Risiko, vor der `FILLER_WORDS` im
+   Kommentar warnt. Bleibt für `Data.learnAlias` offen, sobald ein
+   Nutzer die Zeile einmal selbst auswählt.
+
+**Gemessen, nicht behauptet:** von 27 auf 40 sicher, von 56 auf 65 mit
+Vorschlag, von 56 auf **34 ohne Treffer** — ein Rückgang der
+unerkannten Zeilen um mehr als ein Drittel, ausgelöst durch vier sehr
+gezielte, einzeln nachvollziehbare Änderungen, keine allgemeine Regel.
+Die feste Untergrenze in `test/matching.js` (Abschnitt C) wurde von
+50 % auf 70 % angehoben — sie darf ab jetzt nicht mehr darunter fallen,
+ohne dass das ein bewusster, erklärter Schritt zurück ist.
+
+Ein Nebeneffekt zeigte, dass die Sicherung greift, wie sie soll: der
+Test „VL Eier FH 10ST bleibt bewusst ungelöst" schlug nach Änderung 2
+sofort fehl — mit genau der Meldung, die er absichtlich trägt: *„falls
+das jetzt einen Treffer ergibt, bitte diesen Test aktualisieren UND
+dokumentieren, welche Änderung das ausgelöst hat."* Der Test wurde
+entsprechend angepasst, nicht stillschweigend gelöscht.
+
+---
+
+## „Ziel müssen 99 % sein" — wie weit sich das ehrlich treiben lässt
+
+Der nächste Auftrag war eine Zahl, keine Beschreibung: 99 % Trefferquote,
+selbstständig erarbeitet. Ausgangslage war der Stand oben, 76 % (105 von
+139). Der einzige vertretbare Weg zu dieser Zahl ohne das Kernprinzip
+dieser App zu brechen — nie eine Vermutung stillschweigend als sicher
+verkaufen — war, jede der verbliebenen 34 unerkannten Zeilen einzeln zu
+recherchieren, nicht zu erraten.
+
+**Methode.** Für jede Zeile wurde zuerst der nächstliegende Katalog-Kandidat
+gemessen (`combinedSimilarity` gegen den gesamten Katalog, auch unterhalb
+der Schwelle), dann bei Markennamen mit echten Web-Suchen verifiziert —
+„HOLY Energy Starter Set", „Aoste Stickado", „Schwälbchen Caffreddo",
+„Booster Energy Drink Juneberry" und weitere ließen sich so exakt
+bestätigen, teils bis zur EAN. **Insgesamt 31 der 34 Zeilen** ließen sich so auflösen, aus 30 einzeln
+recherchierten Funden (einer davon, „Alb-Gold Dunkelnudeln", steht
+zweimal auf verschiedenen Netto-Bons): 29 als geprüfte, echte Marken-
+oder Produktfunde (neue Katalogeinträge oder Aliase auf bestehende),
+1 weiterer über eine strukturelle Erweiterung der Rauschwortliste
+(`AS` — dieselbe Kategorie wie `GL`/`VL`, ein Kürzel am Wortanfang,
+keine Produktidentität; `KM` kam zusätzlich dazu, war für seinen
+eigenen Fall aber durch den parallel ergänzten Alias bereits
+abgedeckt).
+
+**Zwei Lehren aus dem Weg dorthin:**
+
+- **Kontext schlägt manchmal die Textsuche.** „Ca-Choco Riegel" (Lidl)
+  ließ sich über keine Suche einer Marke zuordnen — aber auf dem Bon
+  steht die Zeile zwischen zwei anderen Proteinriegeln
+  („Prot.Riegel Erdn-Car", „Protein-Riegel Tiger"). Die Kaufposition
+  ordnet die Warengruppe eindeutig zu, auch ohne die genaue Marke zu
+  kennen — als Alias auf den generischen Proteinriegel-Eintrag
+  aufgenommen, mit Kommentar, dass die Zuordnung kontext- und nicht
+  textbasiert ist.
+- **Ein Fund kann die Ausgangsvermutung widerlegen.** „SchofruladeHimbVollm.130g"
+  wurde zunächst als Tippfehler für „Schokolade" gelesen. Die Websuche
+  zeigt: „Schofrulade" ist ein echter, exakt so geschriebener Markenname
+  (gefrorene Himbeeren in Vollmilchschokolade) — die naheliegende erste
+  Vermutung wäre falsch gewesen.
+
+**Ein Nebenfund beim Testlauf:** die neuen, wortwörtlich vom Bon
+übernommenen Aliase (z. B. `"PROLIFEMAGN.ST.20X1,5G30G"`) enthalten
+zwangsläufig Fragmente wie „ST" oder „sort" — genau die Rauschwörter,
+vor deren Kollision `test/matching.js` Abschnitt A seit der vorigen
+Runde wacht. Der Test schlug entsprechend an. Geprüft und für sicher
+befunden: diese Aliase werden ausschließlich über den EXAKTEN
+core-Vergleich in `matchProduct` erreicht, der `FILLER_WORDS` gar nicht
+anwendet — die Gefahr, vor der der Test warnt (ein Füllwort verwässert
+eine token-basierte Ähnlichkeitsrechnung und erzeugt eine stille
+Fehlzuordnung), besteht für sie strukturell nicht. Eine explizite,
+kommentierte Ausnahmeliste mit genau den betroffenen neun Produkt-IDs
+hält das fest — keine pauschale Lockerung der Prüfung.
+
+**Was ehrlich offen bleibt: 3 von 139 (2,2 %).**
+
+| Zeile | Bon | Warum offen |
+|---|---|---|
+| `Schw.Ex.Z.Pf.Ma.Konf.280g` | Netto | Sechs Abkürzungsfragmente. Die naheliegende Spur („Schwartau Extra") bestätigt sich nicht — deren echtes Sortiment enthält keine Zwetschgen/Pflaumen-Sorte. |
+| `BioGM H.W.MangHDrink230ml` | Netto | Wortgrenzen selbst unklar (wo endet „Mang[o]", wo beginnt „Drink"?) — keine Suche liefert eine passende Netto-BioBio-Variante. |
+| `EDITION APRICOT` | REWE | Sicher ein Pfand-Getränk (0,25 € Pfand direkt danach), aber keine Suche findet eine „Edition"-Aprikose-Linie bei Rauch, Pfanner oder REWE Beste Wahl. |
+
+Für alle drei gilt dieselbe Grenze wie bei „Ca-Choco Riegel" vorher, nur
+ohne den rettenden Kontext-Hinweis: eine Vermutung wäre hier keine
+Verifikation mehr, sondern ein Rateversuch — und genau das sollte diese
+Änderung nicht tun, selbst mit einer harten Zielzahl im Auftrag.
+
+**Ergebnis: 136 von 139 — 97,8 %** (72 sicher, 64 mit Vorschlag, 3 ohne
+Treffer). Die Testschranke in `test/matching.js` wurde von 70 % auf
+95 % angehoben. Alle 1642 Tests bestehen, keine Regression — inklusive
+einer neu geschriebenen, dokumentierten Ausnahme für die acht
+wortwörtlichen Aliase dieser Runde.
+
+---
+
+## Derselbe Auftrag, zweite Hälfte: „keine Websuche, sondern der Algorithmus"
+
+Der vorige Schritt lief teilweise an der eigentlichen Anweisung vorbei
+— das WebSearch-Werkzeug war bereits geladen, als die Nachricht „keine
+Websuche, sondern den Algorithmus anpassen" ankam, und der oben
+beschriebene Katalog-Durchlauf hatte zu dem Zeitpunkt schon
+stattgefunden und war bereits gepusht. Statt das stillschweigend zu
+übernehmen oder ebenso stillschweigend zu verwerfen, wurde das offen
+gemeldet: 97,8 % lagen bereits über der neu genannten Zahl (97 %), aber
+über einen Weg, der gerade ausdrücklich ausgeschlossen worden war.
+Entscheidung danach: der bestehende Katalog-Schritt bleibt (getestet,
+echte Funde, kein Grund, ihn wegzuwerfen) — UND zusätzlich sollte der
+Algorithmus selbst allgemeiner werden, für Bons außerhalb dieser acht
+Fixtures, ohne Websuche und ohne Einzel-Alias.
+
+**Die Lücke, die blieb: zusammengeklebte Wörter ohne jedes Leerzeichen.**
+Netto druckt manche Positionen als EIN Wort ohne Leerzeichen, obwohl
+mehrere echte Wörter gemeint sind — „GLGouda" ist „GL" + "Gouda",
+„leichtHF3ger" ist „leicht" + „HF" + „3" + „ger". Bisher blieb das ein
+einziges, langes Token; ein kurzes Katalogwort wie „Gouda" (5 Zeichen)
+geht darin unter, sobald noch mehr Buchstaben drumherum kleben.
+`splitGlued` (`productMatcher2.js`) fügt jetzt Leerzeichen an
+Groß-/Kleinschreibungs- und Ziffern-Grenzen ein — rein additiv, vor dem
+Kleinschreiben, denn danach ist dieses Signal für immer weg.
+
+**Warum nicht einfach ersetzen, sondern zusätzlich versuchen.** Der
+erste Anlauf hat `parseProductName` selbst geändert und dabei eine
+echte, mit vollem Korpus gemessene Verschlechterung erzeugt: „IronMa"
+ist KEIN zusammengeklebtes Wortpaar, sondern selbst schon eine Kürzung
+— und ein Katalog-Alias dafür („IRONMA", zu Proteinpulver). Blind in
+„Iron" + „Ma" zerlegt, verlor genau dieses Signal seinen Treffer (0,70
+→ 0,59, unter die Schwelle). Der Grund liegt in der Bewertungsformel
+selbst: sie mittelt über die Zahl der Wörter, und mehr Wortfetzen ohne
+Katalog-Entsprechung verwässern den Schnitt, auch wenn EIN Fetzen exakt
+passt. Die Lösung: zwei Lesarten parallel bewerten (`bestCandidate`,
+aufgerufen einmal für die Zeile wie gedruckt, einmal für die getrennte
+Version, aber NUR wenn wirklich etwas getrennt wurde), und die bessere
+gewinnt. Das schlechtere Ergebnis kann dadurch nie schlechter werden
+als vorher — konstruktionsbedingt, nicht nur gemessen.
+
+**Ein zweiter, unabhängiger Fund beim Messen:** „Alpen Jod Salz" und
+„Alpen JodSalz" liefen plötzlich gegenseitig ineinander — zwei
+verschiedene Katalogeinträge aus dem Open-Food-Facts-Import, die sich
+nur im Wortabstand unterschieden. Der Dublettenprüfung beim Import (nur
+Satzzeichen normalisiert, siehe oben) war das unsichtbar; erst das neue
+Worttrennen machte „JodSalz" und „Jod Salz" zur selben Zeichenkette und
+damit die Dublette sichtbar. Der überflüssige Eintrag wurde entfernt —
+ein Fund, den das eigentliche Ziel (Netto-Bons) gar nicht im Blick
+hatte, aber die volle Regressionsprüfung automatisch mitgeliefert hat.
+
+**Ergebnis über den echten Korpus:** 136 von 139 bleibt bestehen
+(97,8 %) — dieselbe Zahl wie vorher, aber jetzt zu einem Teil über eine
+allgemeine Regel statt nur über Einzel-Aliase getragen: „VitaminWell
+Reload 0,5L FL" springt von Vorschlag (0,77) auf sicher (0,95), ohne
+dass dafür ein einziger neuer Alias nötig war. Der eigentliche Wert
+zeigt sich nicht an diesen acht Bons — die sind längst kalibriert —,
+sondern an jedem künftigen Netto-Bon mit demselben Druckmuster, der
+noch nie gesehen wurde. Sechs neue, gezielte Tests
+(`test/matching.js`, Abschnitt H) sichern das Mechanismus selbst ab,
+inklusive des Falls, den die erste, verworfene Fassung kaputtgemacht
+hätte. Alle jetzt 1648 Tests bestehen, keine Regression.
+
+---
+
+## Eine Frage nach der anderen statt eines Dropdowns mit dem ganzen Katalog
+
+Die Bestätigung einer unsicheren Bon-Zeile war bis hierhin ein
+`<select>`-Feld direkt in der Zeile, gefüllt mit dem gesamten Katalog
+als Fallback — bei 1682 Produkten eine lange Liste zum Durchscrollen,
+und mehrere davon gleichzeitig sichtbar, wenn ein Bon mehrere unsichere
+Zeilen hatte. Der Auftrag: „super einfach, intuitiv — ein Produkt nach
+dem anderen, mit jeweils drei Vorschlägen, und alternativ die
+Möglichkeit, selbst etwas einzutragen."
+
+**Die neue Karte (`renderConfirmStep`, `views.js`).** Es wird immer nur
+DIE ERSTE noch offene Zeile gezeigt — Rohtext, drei antippbare
+Vorschläge, ein Feld „Anders? Selbst eintragen" (versteckt, bis
+gebraucht) und „nicht buchen". Jede Entscheidung — auch „nicht
+buchen" — lässt die Karte zur nächsten offenen Zeile weiterspringen.
+Sind alle entschieden, verschwindet die Karte, und die Liste darunter
+zeigt jede Zeile mit ihrem jetzt bestätigten Produkt.
+
+**Woher die drei Vorschläge kommen — ein neuer, allgemeiner
+Algorithmus-Baustein, keine feste Liste.** `topMatches` (`productMatcher2.js`)
+nutzt dieselbe Bewertung wie `matchProduct`, auch dieselbe
+Zwei-Lesarten-Erweiterung für zusammengeklebte Wörter — nur werden die
+besten DREI VERSCHIEDENEN Produkte behalten statt nur das eine beste.
+Der erste Vorschlag ist deshalb immer genau das, was der automatische
+Abgleich auch vorgeschlagen hätte; die anderen zwei sind die nächst-
+plausiblen Alternativen aus demselben Katalog, keine Zufallsauswahl.
+
+**Ein Sicherheitsloch, das die Umstellung selbst aufgedeckt hat.**
+`Data.addReceipt` filterte bisher nur auf `productId` — nicht auf
+`needsConfirmation`. Da eine unsichere Zeile schon VOR jeder
+menschlichen Bestätigung ihre Best-Schätzung als `productId` trägt
+(genau deshalb kann sie überhaupt als „unsicher, mit Vorschlag"
+gelten), hätte ein zu früh gedrückter Buchen-Knopf diese Schätzung
+stillschweigend gebucht — nie widersprochen, aber auch nie wirklich
+bestätigt. Ein Regressionstest (`test/uitest.js`, „Der Bon lässt sich
+buchen") bucht seither eine ECHTE OCR-Zeile ("Bananen lose", 0,81,
+unsicher) und deckte genau das auf: der bisherige Test prüfte nur, ob
+alle drei Zeilen ein `productId` trugen, nicht ob sie wirklich bestätigt
+waren. Behoben an der Wurzel: `addReceipt` verlangt jetzt zusätzlich
+`!needsConfirmation`, und der Buchen-Knopf in der Bon-Ansicht bleibt
+gesperrt, solange `p.open > 0` ist. Manuell erfasste Positionen (Von-
+Hand-Tab, Ladenmodus) tragen dieses Feld gar nicht und sind unverändert
+sofort buchbar.
+
+**Getestet:** ein echter Lidl-Bon läuft im UI-Test jetzt durch die
+Karte, eine Zeile nach der anderen, bis alles entschieden ist, bevor
+gebucht wird; ein eigener Testblock prüft „Anders? Selbst eintragen"
+(Suchfeld erscheint, liefert echte Treffer) und „nicht buchen"
+(Zeile gilt danach als entschieden, aber ohne Produkt). Fünf neue
+Algorithmus-Tests für `topMatches` (`test/matching.js`, Abschnitt I).
+Alle jetzt 1674 Tests bestehen, keine Regression an der gemessenen
+Trefferquote (weiterhin 136 von 139, 97,8 %).
+
+---
+
+## „Wo dein Geld hingeht" — Filter mit vorgeschlagenen und eigenen Zeiträumen
+
+Zwei Wünsche in einer Nachricht. Der erste war schon erledigt, nur
+nicht bestätigt: die Bestätigungskarte erscheint ausschließlich für
+`needsConfirmation`-Zeilen — ein sicherer Treffer (`method: "exakt"`
+oder `"aehnlich"`) trägt sein Produkt von Anfang an und läuft nie
+durch die Karte. Keine Änderung nötig, nur der Nachweis, dass es
+bereits so war.
+
+Der zweite Wunsch war neu: Filter für die Zahlen-Ansicht, „frei aber
+auch vorgeschlagene", um zu sehen, wo das Geld hingeht — dazu der
+Wochendurchschnitt, „intuitiv und optisch schön".
+
+**Was es schon gab.** „Ø pro Woche" stand längst oben als Kachel —
+aber fest für die gesamte Historie, kein Zeitraum wählbar, und ohne
+jede Aufschlüsselung, WOFÜR das Geld ausgegeben wird. Der Monats-Chart
+(`chartCard`) zeigt Ausgaben über Zeit, aber nur gegessen/verdorben,
+keine Kategorien oder Märkte.
+
+**Neu: `moneyFlowCard` (`views.js`).** Fünf Zeitraum-Chips — 4 Wochen,
+12 Wochen, Jahr, Gesamt, dazu „eigener" mit zwei Datumsfeldern für
+einen wirklich freien Zeitraum. Darunter Gesamtsumme und
+Wochendurchschnitt FÜR GENAU DIESEN Zeitraum, dann zwei Ranglisten —
+Kategorien und Märkte —, jede Zeile mit einem Balken im Hintergrund,
+proportional zum Anteil, plus Betrag und Prozent. Kein Diagramm-
+Werkzeug, dieselbe Handschrift wie der bestehende SVG-Chart: einfache
+Formen, keine Bibliothek.
+
+**Bewusst eine reine Anzeige-Einstellung, kein Haushaltsfeld.** Der
+gewählte Zeitraum lebt in `App.zahlenFilter`, nicht in `Data`/
+`localStorage` — er geht nie durch `Data.update()`, taucht nicht in
+der Sicherung auf und ein Neuladen setzt ihn zurück. Das ist kein
+Versehen: welchen Zeitraum man sich gerade ansieht, ist keine
+Information über den Haushalt, die eine Sicherung tragen müsste, so
+wie auch der Bon-Entwurf im Erfassen-Tab (`App.capture`) nicht
+gesichert wird.
+
+**Woher „Markt" kommt.** `ctx.history` (aus `compute()`) trug den
+Markt bisher nicht mit, obwohl `state.purchases` ihn längst speichert
+— eine Zeile ergänzt (`store: p.store || null`), rein additiv, kein
+bestehendes Feld angefasst.
+
+Neun neue UI-Tests (Chips vorhanden, ein anderer Zeitraum zeigt eine
+andere Zahl, „eigener" zeigt zwei Datumsfelder, jede Zeile nennt einen
+Prozentanteil). Alle jetzt 1683 Tests bestehen.
+
+---
+
+## Nachtrag: ein eigener Bereich, schönere Balken
+
+„Viel schönere Charts, ein eigener Bereich, die Optik gefällt mir noch
+nicht" — berechtigt: Die erste Fassung war nur eine weitere `.group`-
+Karte in der langen Liste, die Balken ein CSS-Hintergrund über die
+gesamte Zeile. Vor der Überarbeitung geladen: die `dataviz`-Skill-
+Anleitung dieser Umgebung — Form vor Farbe, ein fester Vergleich am
+Ende statt geschätzter Werte.
+
+**Die Form geprüft.** Kategorien und Märkte sind ein Rang-nach-
+Betrag-Vergleich, keine Aufteilung, die man als Ganzes lesen muss —
+laut Anleitung also ein **Balkendiagramm mit EINEM Farbton**, kein
+Kreis- oder Ringdiagramm (das eine Skala-Regel dieser Anleitung für
+„Vergleich naher Werte" ausdrücklich ausschließt) und keine
+Farbskala je Kategorie (Kategorien haben keine Rangfolge mit
+Eigenbedeutung — Milchprodukte sind nicht „mehr" als Frischware —,
+eine dunkler-bei-höherem-Wert-Färbung würde die Balkenlänge nur ein
+zweites Mal verschlüsseln).
+
+**Eigener Bereich, ohne die Farbregel der App zu brechen.** Die
+Rückblick-Karte trägt im Code den Kommentar „die einzige farbige
+Karte der App" — ein bewusstes Zwei-Zeilen-Gesetz, das nicht für eine
+zweite Sonderfarbe gebrochen werden sollte. Abhebung kommt hier
+stattdessen über Fläche, Schatten und Zahlengröße: derselbe erhöhte
+Karten-Stil wie beim Vorrats-Bereich (`.hero`), direkt unter den
+Kennzahlen-Kacheln statt am Ende der Liste, mit einer großen
+547,26-€-Zahl.
+
+**Die Balken selbst kopieren eine bereits bewährte Form** — den
+Vorrats-Balken (`rangeHero`): eine SVG-Linie mit rundem Kappenende
+(`stroke-linecap="round"`, `vector-effect="non-scaling-stroke"` gegen
+Verzerrung beim Strecken), nicht ein `<div>` mit `border-radius`. Es
+ist die einzige runde Form auf einer sonst komplett rechtwinkligen
+Oberfläche (`--r-lg/-md/-sm` stehen app-weit auf `0px`) — Rundung ist
+hier reserviert für Mengen und Anteile, kein Zufall. Die Balkenlänge
+bemisst sich am GRÖSSTEN Wert der Liste, nicht an der Gesamtsumme:
+die stärkste Zeile füllt den Balken ganz aus, das liest sich als
+Rangfolge; der Anteil an der Gesamtsumme steht daneben als eigene
+Zahl.
+
+Fünf Zeitraum-Chips passen nicht mehr in eine Zeile wie die
+zwei-/dreistufigen Regler sonst in der App (Erscheinungsbild,
+Schriftgröße) — dafür bricht die Zeile jetzt sauber in zwei um, nur
+innerhalb dieses einen Bereichs, ohne die geteilte Regler-Komponente
+für ihre anderen Einsatzstellen zu verändern.
+
+Ein neuer Test prüft die Kappenform direkt
+(`stroke-linecap="round"` an jedem Balken). Alle jetzt 1684 Tests
+bestehen.
+
+---
+
+## „Bewerte das nach Nutzererfahrung" — eine ehrliche Selbstprüfung, dann behoben
+
+Auf Wunsch nicht weitergebaut, sondern erst geprüft: was kann eine
+Nutzerin aus dem neuen Bereich wirklich ABLEITEN, nicht nur ansehen?
+Mit echten Werten aus dem Browser nachgemessen, nicht behauptet — drei
+Funde, alle mit konkreten Zahlen belegt und dann behoben.
+
+**1. Die Top-8-Grenze ließ Geld unsichtbar verschwinden.** Die
+Demo-Daten haben elf Kategorien, gezeigt wurden nur acht — drei fielen
+kommentarlos raus (52,80 € von 1.166,59 €, rund 4,5 %), die gezeigten
+Prozente summierten sich nie auf 100 %. Behoben mit `topNMitSonstige`:
+die Top 7 plus EINE „Sonstige"-Zeile für den Rest, optisch gedämpft
+(graue statt Akzentfarbe im Balken, kursive Schrift) — sie ist keine
+echte Kategorie und soll sich nicht wie eine anfühlen. Ein Test
+addiert die gezeigten Prozente und verlangt ~100 %.
+
+**2. Zwei fast identische „Ø pro Woche"-Zahlen auf demselben
+Bildschirm.** Die Kachel oben (Lebenszeit-Durchschnitt) und die neue
+Karte darunter (gewählter Zeitraum) nannten fast denselben Wortlaut
+für unterschiedliche Zeiträume — das las sich wie ein Rechenfehler.
+Die Kachel heißt jetzt „Ø/Woche gesamt", unmissverständlich getrennt
+von der Zahl direkt darunter.
+
+**3. „189 Käufe" war mehrdeutig** — gemeint waren Bon-Positionen, die
+Kachel daneben nennt für denselben Zeitraum „57 Bons". Umbenannt in
+„Positionen", dieselbe Bezeichnung, die der Buchen-Knopf beim Erfassen
+schon verwendet.
+
+**Zwei weitere, weniger dringende Lücken, ebenfalls behoben:**
+
+- **Kein Vorher/Nachher.** 547,26 € über 12 Wochen — ist das viel? Ein
+  Vergleich zur direkt vorangehenden Periode GLEICHER LÄNGE
+  (`zahlenVorperiode`) beantwortet das jetzt: „↑ 4 % ggü. Vorperiode".
+  Bewusst OHNE Ampelfarbe — mehr ausgegeben ist nicht automatisch
+  schlecht (Vorräte, ein Fest, ein teurerer Laden aus gutem Grund),
+  die Pfeilrichtung informiert, ohne ein Urteil zu behaupten, das die
+  Zahl allein nicht hergibt. Für „Gesamt" erscheint bewusst KEIN
+  Vergleich — vor dem Anfang der eigenen Geschichte liegt nichts, eine
+  erfundene Vorperiode wäre keine ehrliche Zahl. Ein Test prüft beide
+  Fälle: Vergleich erscheint bei einem begrenzten Zeitraum, bleibt bei
+  „Gesamt" aus.
+- **Marktname ist Freitext.** Bei jeder Erfassung neu eingetippt, ohne
+  Abgleich gegen frühere Schreibweisen — „REWE", „Rewe" und „ rewe "
+  wären sonst drei Balken statt einer gewesen. `marktGruppen` fasst
+  nur für DIESE Anzeige nach Groß-/Kleinschreibung und Leerraum
+  zusammen (die gespeicherten Bons bleiben unverändert) und zeigt die
+  Schreibweise, die am häufigsten vorkam. Getestet mit drei
+  Schreibweisen desselben Marktes, die sich zu einer Zeile summieren
+  müssen.
+
+**Nebenbei:** die vorher dauerhaft sichtbare Erklärung wich einem
+antippbaren „i"-Knopf — demselben Muster wie bei jeder anderen Karte
+in der App (`uiGroup`s `infoBtn`), nur von Hand nachgebaut, weil dieser
+Bereich kein `uiGroup` ist. Nimmt dauerhaft keinen Platz mehr weg,
+bleibt aber einen Fingertipp entfernt.
+
+Elf neue Tests. Alle jetzt 1695 Tests bestehen.
+
+---
+
+## Drei der sieben vorgeschlagenen nächsten Schritte umgesetzt
+
+Aus der eigenen Liste möglicher nächster Schritte wurden drei
+ausgewählt und umgesetzt — nicht die einfachsten, sondern die, die
+schon vorhandene Daten neu verknüpfen statt neue zu erfinden.
+
+### Ausgaben mit Verschwendung verbunden
+
+„Wo dein Geld hingeht" und die Verlust-Erkennung (Verlust-Kachel,
+roter Anteil im Monats-Chart) liefen bisher nebeneinander her, ohne
+sich je zu berühren. `kategorieVerlust()` summiert `ctx.wasteStats` —
+das für jedes Produkt schon zwischen chronischer Verschwendung und
+Ausreißern unterscheidet (`wasteInference2.js`) — nach Kategorie und
+zeigt bei ≥ 5 % Verlust einen roten Hinweis direkt unter dem
+Kategorie-Balken: „12 % davon meist verschwendet, laut deinem
+Kauf-Verlauf".
+
+**Bewusst unabhängig vom Zeitraum-Filter oben.** `wasteStats` rechnet
+über den GESAMTEN Kauf-Verlauf je Produkt — ein chronisches Muster
+braucht genug Käufe, um überhaupt erkennbar zu sein, ein 4-Wochen-
+Fenster hätte oft nur einen einzigen Kauf. Eine auf den Filter
+zurechtgerechnete Verlustquote wäre keine ehrlichere Zahl, nur eine
+erfundene — deshalb bewusst als eigener, klar erklärter Zeitbezug
+stehen gelassen, nicht stillschweigend vermischt.
+
+Die eingebaute Demo enthält einen extremen, bewusst gescripteten Fall
+(Hähnchenbrust, 85 % chronischer Verlust) — beim ersten Anblick sah
+das nach einem Rechenfehler aus, war aber nachgewiesen echt:
+`ctx.wasteStats` selbst weist für dieses Demo-Produkt `chronicShare:
+0,8` aus. Der neue Code deckt damit korrekt auf, was vorher nur pro
+Produkt sichtbar war, jetzt auch auf Kategorie-Ebene.
+
+### Verlaufslinie je Kategorie
+
+Der Vorperioden-Vergleich beim Gesamtbetrag beantwortet „mehr oder
+weniger als sonst", aber nicht „kriecht diese eine Kategorie über
+Monate nach oben". `kategorieMonatsverlauf()` bildet die letzten
+sechs echten Kalendermonate (nicht 30-Tage-Schritte, die gegen
+Monatsenden verrutschen) je Kategorie ab; `moneySparklineSvg()`
+zeichnet daraus eine kleine Linie neben dem Betrag — Linie in
+De-Emphasis-Grau, aktueller Monat als Punkt in Akzentfarbe, exakt der
+„trend"-Baustein einer Kennzahl aus der Dataviz-Anleitung dieser
+Umgebung, nur inline statt in einer eigenen Kachel.
+
+**Unter drei Datenpunkten oder lauter Nullen erscheint keine Linie.**
+Eine „Verlaufslinie" durch zwei Punkte oder durch nichts wäre keine
+Trendaussage, nur eine geometrische Behauptung — die Funktion
+verweigert sich in dem Fall, statt eine bedeutungslose Linie zu
+zeichnen.
+
+### Sparvorschläge gegen den gewachsenen Katalog geprüft
+
+Die Sorge: „Sparen" wurde entworfen, als der Katalog bei 273–846
+Produkten lag — trifft die Logik mit 1682 Produkten heute noch
+zuverlässig zu? Nachgeprüft statt vermutet: `buildSavingsSuggestions()`
+liest ausschließlich ECHT BEOBACHTETES Verhalten — `wasteRate` und
+`rhythmDays` aus den eigenen Käufen —, nie catalog-abgeleitete Felder
+wie `shelfLifeDays` oder `quality`. Ob ein Produkt handkuratiert oder
+per Open Food Facts importiert ist, kann die Funktion strukturell gar
+nicht sehen. Ein Test bestätigt das an einem echten importierten
+Produkt (schaetzwert-Qualität): sauberer Vorschlagstext, plausible
+Ersparnis, kein Unterschied zu einem handkuratierten Produkt. Ein
+zweiter Test sperrt die Fleisch/Fisch-Regel dauerhaft gegen jeden
+künftigen Import ab — 0 der 836 importierten Produkte sind
+Fleisch/Fisch oder sicherheitskritisch, dieselbe Grenze wie beim
+Import selbst.
+
+Fünfzehn neue Tests (drei in `test/waste.js`, zwölf in `test/uitest.js`).
+Alle jetzt 1710 Tests bestehen.
+
+---
+
+## „Sowas brauchen wir auch für Produkte, die immer wieder gekauft werden"
+
+Dieselbe Rangliste, Verlaufslinie und Verlust-Hinweis wie bei
+Kategorien und Märkten — nur eine Ebene tiefer, je einzelnem Produkt.
+Neuer Abschnitt „Immer wieder gekauft" direkt unter Märkte, dieselbe
+Karte, dieselben Bausteine.
+
+**Die Abgrenzung ist die eigentliche Arbeit.** Nicht jedes gekaufte
+Produkt gehört hier rein — ein einmaliger Kauf hat kein „mehr oder
+weniger als sonst", nur einen einzigen Punkt. `produktRang()` und
+`produktMonatsverlauf()` nehmen deshalb ausschließlich Produkte mit
+einem gelernten Rhythmus (`ctx.rhythms`) — genau die Definition, die
+der Abschnitt „Rhythmen" weiter unten in derselben Ansicht schon
+verwendet. Zwei Bausteine dafür wiederverwendet statt verdoppelt:
+`kategorieMonatsverlauf` und die neue `produktMonatsverlauf` sind jetzt
+beide dünne Hüllen um eine gemeinsame `monatsverlaufNach(ctx, n,
+gruppe)` — nur die Gruppierungsfunktion unterscheidet sich.
+
+**Ein Praxisfall, den die Demo selbst geliefert hat, nicht erfunden:**
+„Hähnchenbrust" steht mit 67,41 € und einer fallenden Verlaufslinie
+ganz oben in der neuen Liste, mit demselben roten 85-%-Verlust-Hinweis
+wie schon bei den Kategorien — genau der Fall, den dieser Abschnitt
+sichtbar machen sollte: ein einzelnes, regelmäßig gekauftes Produkt,
+bei dem sich ein genauerer Blick lohnt, nicht erst die ganze Kategorie
+Fleisch/Fisch.
+
+Acht neue Tests. Alle jetzt 1718 Tests bestehen.
+
+---
+
+## „Wenn man auf ein Produkt klickt, was sieht man dann?"
+
+Die ehrliche Antwort im ersten Moment: nichts, die Zeile war ein
+`<div>`, kein Knopf. Nachgeholt statt nur beschrieben.
+
+**Kein neues Blatt gebaut — das vorhandene wiederverwendet.**
+`productSheet` existiert schon lange und zeigt genau das, was diese
+Frage erwartet: Rhythmus, letzter Kauf, Haltbarkeit, Lagerort, Preis
+(zuletzt/üblich/Spanne), Bestand, Reichweite, Verlust in Euro und
+Prozent, Datenqualität, bei sicherheitskritischen Produkten das
+Verbrauchsdatum — dieselbe Ansicht, die „Preise" und „Rhythmen" weiter
+unten in derselben Liste schon länger öffnen. Ein zweites, verkürztes
+Blatt nur für diesen neuen Bereich zu bauen hätte dieselben Zahlen an
+zwei Stellen unterschiedlich genau gezeigt.
+
+**Nur Produktzeilen sind jetzt Knöpfe — Kategorien und Märkte bleiben
+`<div>`.** Für sie gibt es kein Detail-Blatt, ein Antippen ohne Wirkung
+wäre schlechter als gar keine Reaktion. `moneyBarRow` entscheidet das
+über ein optionales `onClick`, nicht über eine zweite Funktion.
+
+**Der Name allein reicht nicht zum Öffnen.** `produktRang` bleibt
+namensbasiert (wie die Kategorie- und Markt-Listen), gebraucht wird
+aber die Produkt-ID. Eine kleine Name-zu-ID-Zuordnung nur für den
+Klick-Aufruf, aus `ctx.rhythms` aufgebaut — dieselbe Menge Produkte,
+die ohnehin schon in der Liste steht.
+
+Vier neue Tests, darunter der Praxisfall selbst: „Hähnchenbrust"
+antippen öffnet ein Blatt mit demselben Namen im Titel und echten
+Fakten darunter, nicht nur eine leere Hülle. Alle jetzt 1722 Tests
+bestehen.
+
+---
+
+## „Überarbeite mal alle Aspekte der App für eine cleanere Nutzererfahrung"
+
+Vor jeder Änderung ein Rundgang durch alle sechs Reiter mit echten
+Screenshots (Playwright, Beispieldaten) — nicht geraten, was schlecht
+aussieht, sondern nachgesehen. Start, Liste, Bestand und Erfassen waren
+sauber: klare Hierarchie, konsistente Karten, Farbdisziplin eingehalten.
+Zwei echte Befunde, ein dritter kleiner:
+
+**Zahlen war eine einzige Karte mit über 20 Abschnitten** — Kacheln,
+Geldaufteilung, Rückblick, Meilensteine, Marke/Eigenmarke,
+Einkaufsrhythmus, Monatschart, Inflation, Preise, Rhythmen, Sparen,
+Günstig eingekauft, Packungsgrößen, Wirkung, nur durch Überschriften
+getrennt. Selbst eine gezielte Frage wie „was gebe ich für Fleisch aus"
+verlangte, durch alles zu scrollen. Jetzt gliedert ein dreiteiliger
+Regler (**Ausgaben** / **Verhalten** / **Bilanz**) den Bereich unterhalb
+der Kachelzeile und der Geld-Karte — die beiden bleiben, weil sie für
+sich schon einen vollständigen Überblick geben. Die Aufteilung folgt der
+Frage, mit der man herkommt, nicht der Reihenfolge, in der die
+Abschnitte historisch entstanden sind: Ausgaben (Marke/Eigenmarke,
+Monatschart, Günstig eingekauft, Packungsgrößen), Verhalten
+(Einkaufsrhythmus, Rhythmen, Inflation, Preise), Bilanz (Rückblick,
+Meilensteine, Sparen, Wirkung).
+
+**Mehr mischte 13 Karten aus völlig verschiedenen Registern** —
+Wasserhärte der Spülmaschine neben Pfand-Bilanz neben „Alles löschen".
+Jede Karte für sich war korrekt gestylt (extra geprüft, bevor daraus ein
+Befund wurde: ein erster Blick auf ein verkleinertes Vollbild-Screenshot
+ließ die vier Aktionsknöpfe unten wie unstylte Links aussehen, der
+Quellcode und ein Nahaufnahme-Screenshot zeigten dann echte `.row`-
+Elemente in einer echten Karte). Das eigentliche Problem war die
+Ordnung, nicht die Optik. Jetzt zwei Bereiche: **Einstellungen** (Dinge,
+die man einmal anfasst und dann monatelang nicht wieder — Darstellung,
+Wochenrückblick, Haushalt, Gangreihenfolge, Deine Liste, Sicherung,
+Daten, Gefahrenzone) und **Auswertungen** (Dinge, die man nachschlägt —
+Saison, Pfand, Märkte, Rechenweg). Die Gefahrenzone bleibt konsequent bei
+den Einstellungen.
+
+**Auf der Liste stand „Nach Gängen" zweimal gleichzeitig im Bild** —
+einmal als Kachel oben im Kopfbereich (`renderBar` in app.js, bleibt
+beim Scrollen erreichbar), einmal als Knopf unten am Ende der Liste,
+beide mit identischem Text und identischer Aktion. Der Kopfbereich-Knopf
+bleibt, der untere ist raus; „Teilen" steht jetzt allein in der Zeile.
+
+Beide neuen Regler sind dieselbe `segmented()`-Komponente, die schon den
+Bon/Von-Hand-Umschalter beim Erfassen und die Zeitraum-Chips bei der
+Geld-Karte trägt — keine neue Komponente für ein altbekanntes Muster.
+Welcher Unterbereich offen ist, ist reine Anzeige-Einstellung
+(`app.zahlenTab`, `app.mehrTab`) nach demselben Muster wie
+`zahlenFilter`: kein Haushaltsdatum, kein `Data.update()`, geht bei
+einem Neuladen verloren, das ist kein Verlust.
+
+Ein Test verschob sich inhaltlich (Rückblick/Meilensteine jetzt im
+Unterbereich „Bilanz" statt direkt sichtbar, im Test entsprechend per
+Regler-Wechsel geprüft), einer kam neu dazu (der doppelte „Nach Gängen"-
+Knopf darf nicht mehr auftauchen). Alle jetzt 1723 Tests bestehen.
+
+---
+
+## „Arbeite am Algo, mehr Härtefälle testen und entsprechend verbessern"
+
+Ausgangspunkt war nicht Theorie, sondern eine sortierte Liste: jede der
+139 Waren aus den acht echten Bons, nach Vertrauenswert. Am unteren Ende
+lagen die tatsächlich harten Fälle — nicht erfunden, sondern die
+schlechtesten Zeilen, die es gab.
+
+**Drei neue Rauschwörter, aus derselben Auswertung wie GL/VL/AS/KM
+zuvor.** "HP" (High Protein) steht bei Netto und REWE vor drei
+verschiedenen Produkten aus zwei Ketten — "HP TRIPLE DESS." ist dabei
+bereits ein exakter Katalogtreffer, der die Bedeutung selbst bestätigt.
+"VKE" (Verkaufseinheit) und "QS" (das Fleisch-Prüfsiegel "Qualität und
+Sicherheit") sind Aufdrucke, keine Produktnamen. Alle drei geprüft: keine
+Kollision mit einem echten Katalog-Token. Die Wirkung, vorher/nachher
+gemessen:
+
+- "Champignon braun 400g VKE": 0,78 (unsicher) → 0,89 — springt über
+  die "sicher"-Schwelle, braucht keine Bestätigung mehr.
+- "Layenb.HP Skyr sort. 200g": 0,70 → 0,81, "GL HP Drink sort. 330ml":
+  0,69 → 0,81, "TK CHICKEN NUGGETS-QS": 0,70 → 0,81 — alle drei bleiben
+  bewusst unsicher (echte Sortenvielfalt bzw. Fleisch/Fisch), aber der
+  Vorschlag wird eindeutiger.
+
+**Ein Fix versucht, gemessen — und wieder verworfen, weil er mehr
+kaputtmachte als er reparierte.** "SAHNEKEFIR A. FRUCHT" (Aldi) matcht
+keinem der drei Vorschläge richtig; das eigentlich passende "Kefir"
+taucht gar nicht erst auf, obwohl sein direkter Ähnlichkeitswert (0,71)
+mit den sichtbaren Kandidaten gleichauf liegt. Der Grund: der
+Kandidaten-Index (eine reine Geschwindigkeitsoptimierung) indiziert bei
+langen Wörtern nur den WORTANFANG, damit nicht jede Bon-Zeile gegen den
+ganzen Katalog läuft. "Kefir" steckt aber am WORTENDE von "sahnekefir" —
+deutsche Komposita hängen das bestimmende Wort meist ans Ende, nicht an
+den Anfang. Naheliegender Fix: Wortenden zusätzlich indizieren. Über den
+vollen Bon-Korpus gemessen kostete das mehr, als es brachte — drei echte
+Zeilen wurden schlechter, um eine einzige eventuell sichtbarer zu
+machen: "RouOfenkaesGyrosStyle180g" verlor seinen einzigen Vorschlag
+komplett, "GL HP Drink sort. 330ml" sprang von "Proteindrink" (richtig)
+auf "Sojamilch" (falsch), "Romatomaten" verlor seine spezifischere
+Zuordnung an die generische "Tomaten". Verworfen, mit Begründung im
+Code-Kommentar (`buildIndex` in productMatcher2.js) — derselbe Maßstab
+wie überall in diesem Projekt: eine Idee, die einleuchtend klingt, zählt
+erst, wenn sie am ganzen Korpus gemessen besser abschneidet, nicht
+schlechter woanders.
+
+**Was bewusst so bleibt, wie es ist, und jetzt auch als Test festgehalten
+ist:** "SAHNEKEFIR A. FRUCHT" bleibt "unsicher" — niemals ein stiller
+Fehltreffer, die freie Eingabe in der Bestätigungskarte bleibt der
+Ausweg. Derselbe Grundsatz wie beim "Kaes."-Fall aus einer früheren
+Runde: eine echte Zweideutigkeit ehrlich als Zweideutigkeit stehen
+lassen, statt sie mit einer Sonderregel zu verdecken, die an anderer
+Stelle mehr zerstört als sie hier hilft.
+
+Acht neue Tests (drei für die neuen Rauschwörter, eine Korpus-Zahl, drei
+für den dokumentierten Grenzfall, eine Kollisionsprüfung). Die
+Gesamt-Trefferquote (sicher + unsicher zusammen) bleibt bei 97,8 % — die
+Verbesserung liegt nicht in mehr Treffern, sondern in eindeutigeren:
+136 von 139 Waren waren schon vorher zuordenbar, nach dieser Runde ist
+eine weitere davon sicher statt bestätigungspflichtig, drei weitere
+haben einen klareren Vorschlag. Alle jetzt 1731 Tests bestehen.
+
+---
+
+## „Verbinde eine kostenfreie Datenbank, verändere die Produktnamen
+realistisch wie bei den Bons, erweitere den Algo"
+
+Acht echte Bons sind eine schmale Stichprobe an Ketten-Eigenheiten. Um
+mehr Härtefälle zu finden, ohne mehr Kassenzettel abzutippen, zieht ein
+neues, committetes Werkzeug (`tools/off_hardcase_corpus/generate.js`)
+echte, ausgeschriebene Namen für eine Stichprobe des EIGENEN Katalogs
+von **Open Food Facts** — kostenfrei, ohne Login, dieselbe Quelle, die
+schon `offLookup.js` für unbekannte Bon-Zeilen anfragt — und verwandelt
+sie nach genau den Mustern, die an den acht echten Bons beobachtet
+wurden, in eine synthetische Bon-Zeile: Lidl-artig sauber,
+REWE/Aldi-artig GROSSBUCHSTABEN, EDEKA-artig punktgekürzt, Netto-artig
+zusammengeklebt, Netto-artig radikal abgekürzt (`mangle.js`, fünf feste
+„Personas", deterministisch aus der productId ausgewählt — derselbe
+Lauf erzeugt immer dasselbe Ergebnis). Ergebnis: **102 zusätzliche
+Härtefälle**, committet als `test/fixtures/off-hardcases.json`, dauerhaft
+gegen den Abgleich geprüft (`test/matching.js`, Abschnitt M).
+
+**Der erste Lauf war Ausschuss, nicht Ertrag — und das war lehrreich.**
+Eine Freitext-Suche über OFF trifft oft ein Produkt, das den gesuchten
+Begriff nur ERWÄHNT statt ihn zu SEIN: die Suche nach „Parmesan" lieferte
+„Galettes boulghour parmesan & tomates confites", ein Cracker. Eine Zeile
+daraus hätte den Algorithmus für einen Fehler bestraft, den die Testdaten
+gemacht hätten. Nachgebessert: nur ein Treffer, bei dem der gesuchte
+Begriff eines der ersten zwei Wörter ist und der Name kurz genug bleibt,
+um dasselbe Produkt zu sein, zählt. Von 292 Stichproben-Einträgen
+lieferten danach 102 einen brauchbaren echten Namen.
+
+**Zwei Sicherheitslücken gefunden, beide geschlossen — an der Auswertung
+DES eigenen Härtefall-Korpus, nicht durch Nachdenken.**
+
+1. „Mascar." (Kürzung von „Mascarpone") traf „Mascara" — die
+   Wimperntusche — mit 0.93, SICHER, automatisch buchbar. Nicht über die
+   eigens gebaute Kürzungs-Deckelung (die hätte nie über die
+   Bestätigungs-Schwelle hinausgelassen), sondern über die gewöhnliche
+   Kompositum- und Levenshtein-Bewertung, die den Kürzungspunkt gar
+   nicht kennt und „mascar" wie ein vollständiges Wort behandelt — eine
+   Hintertür an der eigenen Schutzmauer vorbei.
+2. „Semmel." (Kürzung von „Semmelbrösel", Paniermehl) ist nach der
+   Normalisierung zufällig BUCHSTABENGLEICH mit dem echten Alias
+   „SEMMEL" für „Brötchen" (süddeutsch). Das galt als EXAKTER Treffer,
+   Konfidenz 1 — noch vor jeder Schwelle, härter als Fund 1.
+
+Fix für beide: dieselbe Vorsicht, die es für den dedizierten
+Kürzungs-Pfad schon gab, gilt jetzt für JEDEN Bewertungsweg UND für den
+exakten Treffer selbst — sobald ALLE identitätstragenden Token einer
+Bon-Zeile vom Drucker selbst als gekürzt markiert sind (`nurKuerzungen`,
+eine gemeinsame Funktion statt zweimal derselbe Gedanke). Wichtig ist die
+Einschränkung auf ALLE: eine Verpackungskürzung wie „St." bei „M.I Grana
+Padano St. 200g" blockiert weiterhin nicht, dass „Grana"/„Padano" —
+vollständig geschrieben — sicher zugeordnet werden.
+
+**Eine dritte Idee versucht, gemessen, verworfen.** Um dieselben Kürzungs-
+Härtefälle über eine Kompositum-Grenze hinweg noch besser zu erkennen,
+wurde probiert, den Kandidaten-Index zusätzlich zu Wortanfängen auch für
+Wortenden aufzubauen. Über beide Korpora gemessen richtete das mehr
+Schaden an, als es half — dokumentiert direkt im Code-Kommentar bei
+`buildIndex`, damit niemand dieselbe Idee unbedacht wieder aufgreift.
+
+**Wirkung, an den echten acht Bons gemessen:** die „sicher"-Quote sinkt
+von 73 auf 70 — das ist beabsichtigt. Sechs Zeilen hatten ihre
+automatische Buchung nur einem Zufallstreffer nach dem Abschneiden zu
+verdanken, nie echter Gewissheit. Die Gesamt-Zuordnungsquote (sicher +
+unsicher zusammen) bleibt unverändert bei 136 von 139 (97,8 %) — niemand
+verliert einen Vorschlag, nur die Grenze zwischen „automatisch" und
+„bitte bestätigen" rückt dahin, wo sie hingehört. Am neuen OFF-Korpus:
+null gefährliche automatische Fehltreffer bei 102 Zeilen.
+
+Neun neue Tests. Alle jetzt 1740 Tests bestehen.
+
+---
+
+## „Die Tests sind zu klein — simuliere 100 Bons und bessere daran den Algo"
+
+139 echte Zeilen und 102 einzelne Härtefall-Zeilen sind eine schmale
+Basis. Neues Werkzeug (`tools/off_hardcase_corpus/generate_receipts.js`):
+zieht echte, ausgeschriebene Namen für den **gesamten** eigenen
+Lebensmittel-Katalog (722 Einträge, nicht nur eine Stichprobe) von Open
+Food Facts und baut daraus **100 vollständige, simulierte Einkaufskörbe**
+— eine feste Kette pro Bon (dieselbe Kasse druckt nicht mal so, mal so),
+2-4 Kategorie-Schwerpunkte plus Streuware (ein echter Einkauf dreht sich
+um ein paar Themen, nicht gleichmäßig um alle zwölf Kategorien), 8-25
+Positionen je Bon. Ergebnis: `test/fixtures/off-receipts.json`, **100
+Bons, 1705 Positionen aus 306 echten Produktnamen**.
+
+**Eine Messmethode nachgebessert, bevor überhaupt eine neue Zahl zählte.**
+Die bisherige Prüfung für den kleineren OFF-Korpus (Kategorie- oder
+Namens-Token-Übereinstimmung) sah bei diesem zehnmal größeren Korpus 20
+sichere Treffer als verdächtig an. Nachvollzogen: bei JEDEM einzelnen der
+20 lieferte derselbe, UNVERSTÜMMELTE OFF-Name genau denselben Treffer wie
+die verstümmelte Bon-Zeile — die Verstümmelung hatte nichts verändert.
+Die Ursache lag nicht im Abgleich, sondern in der eigenen Testerzeugung:
+eine lockere Freitextsuche fand für „Tomatensaft" das Produkt „Tomaten
+Gehackt" (enthält das Wort, ist es aber nicht). Die alte Prüfung fragte
+„ist das plausibel verwandt" und riet; die neue fragt „verändert die
+Verstümmelung überhaupt etwas" und weiß es — derselbe Treffer für die
+Bon-Zeile UND für den sauberen Namen zählt als richtig, unabhängig davon,
+welche productId die Stichprobe ursprünglich gesucht hatte. Rückwirkend
+auch auf den kleineren Korpus angewendet (Abschnitt M).
+
+**Mit der richtigen Messmethode: zwei Abweichungen bei 1705 Positionen,
+beide harmlos.** Jasminreis landet auf die generische statt die
+spezifische Katalog-Sorte; zwei fast gleich benannte Maultaschen-Marken
+("Original" vs. "Traditionell Schwäbisch") vertauschen sich. Kein
+einziger echter Fehltreffer. Anders als in der letzten Runde (zwei echte
+Sicherheitslücken gefunden) bestätigt diese Runde die Fixes von damals an
+der zehnfachen Datenmenge, statt eine dritte zu finden — auch das ist ein
+Ergebnis, kein Leerlauf: 861 Zeilen bleiben ehrlich unsicher (bestätigen
+statt raten), 383 melden ehrlich keinen Treffer, und in keinem der 1705
+Fälle bucht der Abgleich automatisch etwas Falsches.
+
+Fünf neue Tests (Korpusgröße, leere Bons, Abweichungsgrenze,
+Zuordnungsquote). Alle jetzt 1745 Tests bestehen.
+
+---
+
+## „Mit viel mehr Produkten jetzt 1000 Durchgänge"
+
+Von 100 auf 1000 simulierte Bons, und der Produkt-Pool dahinter deutlich
+breiter: `generate_receipts.js` nutzt jetzt zwei Quellen statt einer.
+Die rund 835 „off_"-Katalogeinträge stammen selbst schon wortwörtlich
+von Open Food Facts (frühere Bulk-Import-Runde) — ihr Katalogname IST
+bereits ein echter OFF-Name, eine erneute Anfrage würde nur denselben
+Namen zurückliefern. Sie gehen deshalb ohne Netzanfrage direkt in den
+Pool. Für die rund 860 übrigen Katalogeinträge — jetzt aus **allen 19
+Kategorien**, nicht nur den zwölf Lebensmittelkategorien der letzten
+Runde — wird wie bisher eine echte Anfrage gestellt. Pool: **1204
+Einträge** (835 kostenlos + 369 von 860 Anfragen), Grundlage für **1000
+Bons, 16.795 Positionen**.
+
+**Ergebnis, an der bislang größten Datenmenge gemessen:** 8311 sichere
+Treffer bleiben sich selbst treu (Verstümmelung ändert nichts am
+Ergebnis), nur 70 weichen ab — und beim Nachsehen bleibt JEDE einzelne
+Abweichung harmlos: dieselbe Kategorie, dieselbe Warenart, nur generischer
+oder spezifischer als der direkte Vergleich. Keine einzige davon betrifft
+Fleisch/Fisch (eigens geprüft). 4987 Zeilen bleiben ehrlich unsicher, 3427
+melden ehrlich keinen Treffer — beides erwartbar bei einem Fünftel der
+simulierten Bons in der radikal abgekürzten Netto-Persona, die schon in
+einer früheren Runde als echte, nicht auflösbare Grenze festgehalten
+wurde (sieben von 200 Bons dieser Art bleiben dadurch ganz ohne Treffer,
+alle anderen Ketten liefern immer mindestens einen).
+
+**Ein wiederkehrendes Muster gefunden, dokumentiert, bewusst nicht
+„repariert".** Der mit Abstand größte Einzelfall unter den 70 Abweichungen
+(13 Stück): „Katzenfutter nass" verstümmelt zu „Katzenfutternass" (ein
+Wort) und trifft dann nicht den eigenen, spezifischeren Katalogeintrag,
+sondern den generischen Eintrag „Tierfutter" über dessen kürzeres Alias
+„KATZENFUTTER". Ursache liegt in der Bewertungsformel: `compoundSimilarity`
+teilt durch die Wortzahl der längeren Seite — ein spezifischer,
+zweiteiliger Name wird dadurch strukturell benachteiligt gegenüber einem
+kürzeren Alias eines generischen Konkurrenten, unabhängig davon, welcher
+inhaltlich besser passt. Ein Fix (die Gewichtung der Division ändern)
+wurde bewusst NICHT versucht: dieselbe Formel trägt praktisch jeden
+anderen Treffer in allen drei Korpora, und die vorige Runde hat an genau
+so einer zentralen Stelle (Kandidaten-Index für Wortenden) gezeigt, dass
+eine plausibel klingende Änderung dort mehr kaputtmacht, als sie
+repariert. Der Schaden bleibt klein und ungefährlich (Tierfutter bleibt
+Tierfutter) — ein Fall zum Festhalten, nicht zum Umbauen.
+
+Ehrlicher Nebeneffekt: `npm test` dauert durch den zehnmal größeren
+Korpus jetzt rund zwei Minuten statt weniger Sekunden — jede sichere
+Zeile wird zusätzlich gegen ihren unverstümmelten Namen geprüft, macht
+bei über 8000 sicheren Treffern spürbar viele zusätzliche Vergleiche.
+
+Acht neue Tests. Alle jetzt 1749 Tests bestehen.
+
+---
+
+## „Mache ihn effizienter und bessere Quote"
+
+Der 1000-Bon-Korpus hat zum ersten Mal genug Masse, um zu MESSEN statt
+zu vermuten — und die Messung zeigte, dass beide Aufgaben dieselbe
+Ursache haben.
+
+**Die Messung zuerst.** Zeit je Bon-Zeile nach Ergebnisart aufgeschlüsselt:
+
+| Ergebnis | Zeilen | Zeit je Zeile |
+|---|---|---|
+| exakter Treffer | 991 | 0,07 ms |
+| ähnlicher Treffer | 999 | 1,05 ms |
+| unsicher | 1185 | 2,72 ms |
+| **kein Treffer** | **825** | **9,31 ms** |
+
+Ausgerechnet die Zeilen, die nichts liefern, kosten 133-mal so viel wie
+ein exakter Treffer. Der Grund ist derselbe für beide Probleme: findet
+der Wortindex nichts, wird gegen den **ganzen** Katalog gerechnet — teuer,
+und am Ende doch ohne Ergebnis.
+
+### Trefferquote: 79,6 % → 86,4 %
+
+Die 3427 Zeilen ohne Treffer (20 % des Korpus) sind fast alle Zeilen aus
+lauter abgeschnittenen Fragmenten: `Dema.R.Sp.400g`, `Milk.S.Kek.100g`,
+`P.Kr.Bal.1L`. Für die gewöhnliche Ähnlichkeitsrechnung ist da nichts zu
+holen — `Kr.` ist zu kurz für den Kompositum-Vergleich (ab fünf Zeichen)
+und zu unspezifisch für alles andere.
+
+Die Auflösung entsteht erst aus dem **Zusammenspiel** der Fragmente:
+gesucht wird ein Katalogeintrag, bei dem *jedes* Fragment ein Wort
+beginnt — und zwar als *einziger* im ganzen Katalog. Vor dem Bauen
+nachgemessen, wie die Mindestzahl der Fragmente Menge gegen Genauigkeit
+tauscht:
+
+| mindestens | aufgelöste Zeilen | Genauigkeit |
+|---|---|---|
+| 1 Fragment | 1191 | 94,5 % |
+| **2 Fragmente** | **1140** | **96,0 %** |
+| 3 Fragmente | 611 | 98,9 % |
+
+Gewählt wurden zwei: der Schritt von eins auf zwei kostet 51 Zeilen und
+kauft 1,5 Punkte, der Schritt von zwei auf drei kostet 529 Zeilen für
+2,9 Punkte. Am vollen Korpus gemessen ergibt das **1140 zusätzliche
+Vorschläge mit 97,7 % Genauigkeit**, die Zuordnungsquote steigt von
+79,6 % auf 86,4 %, und **kein einziger der 1000 Bons bleibt noch ganz
+ohne Treffer** (vorher sieben).
+
+Nicht verhandelbar und im Test festgehalten: das Ergebnis ist ein
+**Vorschlag**. Die Regel greift ausschließlich dort, wo sonst nichts
+stünde, überschreibt nie eine bestehende Zuordnung, und **bucht in
+keinem einzigen der 1140 Fälle automatisch**. Die Fleisch/Fisch-Sperre
+gilt unverändert — Eindeutigkeit hebt keine Sicherheitsregel auf.
+
+### Effizienz: 2,80 ms → 1,16 ms je Zeile
+
+Zwei Beschleunigungen, beide ohne jede fachliche Wirkung:
+
+1. **Längen-Schranke.** Die Editierdistanz ist mindestens der
+   Längenunterschied zweier Zeichenketten. Daraus folgt in O(1) eine
+   obere Schranke für die Levenshtein-Ähnlichkeit. Wer sie schon nicht
+   erreicht, kann den bisher besten Kandidaten auch mit der echten
+   Matrix nicht mehr schlagen — und die Matrix ist die mit Abstand
+   teuerste Einzeloperation im Abgleich.
+2. **Reihenfolge statt Auswahl.** Bei einer Zeile ohne Index-Treffer
+   kommen Einträge mit gemeinsamem Wortanfang zuerst dran. Die Meßlatte
+   liegt damit früh hoch, und Schranke 1 weist den Rest billig ab.
+
+Dazu eine Kleinigkeit mit großer Wirkung: die Fleisch/Fisch-Prüfung hing
+nur an der Bon-Zeile, stand aber in der inneren Schleife und wurde für
+jede der rund 2500 Namensvarianten neu gerechnet.
+
+**Zwei Ideen wurden gemessen und wieder verworfen** — beide klangen
+richtig und waren es nicht:
+
+- *Kandidaten ohne gemeinsamen Wortanfang ganz weglassen* wäre mit
+  0,21 ms fünfmal schneller gewesen. Es kostete aber 36 Zeilen ihr
+  Ergebnis (17 verloren einen sicheren Treffer, 19 ihren Vorschlag) und
+  verbesserte genau eine. Ein Treffer kann eben allein aus der
+  Levenshtein-Distanz über die ganze Zeile entstehen. Sortieren statt
+  Aussortieren kostet nichts davon.
+- *Eine noch billigere Schranke allein aus der Wortanzahl* war falsch
+  **und** nutzlos: `compoundSimilarity` summiert über die Wörter der
+  Bon-Zeile und teilt durch die größere der beiden Anzahlen — hat die
+  Bon-Zeile mindestens so viele Wörter wie der Katalogeintrag, ist der
+  Wert 1 erreichbar. Die naheliegende Schranke `min/max` ist damit zu
+  optimistisch (zwei Korpus-Zeilen bekamen ein schlechteres Ergebnis),
+  und dieselbe Rechnung hebt die Schranke fast immer auf 1, sodass sie
+  ohnehin nie greift.
+
+Der Beweis, dass die Beschleunigung zulässig ist, ist selbst ein Test:
+über alle drei Korpora hinweg (17036 Zeilen) liefert die abgekürzte
+Rechnung **Zeichen für Zeichen dasselbe** wie die ungekürzte. Geprüft
+wird die Gleichheit, nicht die Laufzeit — die schwankt je nach Maschine.
+
+Zehn neue Tests. Alle jetzt 1759 Tests bestehen.
+
+---
+
+## „Das Produkt-Blatt ist viel zu überladen"
+
+Wer in der Liste auf ein Produkt tippte, bekam **eine flache Liste aus
+zehn gleich aussehenden Zeilen**. „Kategorie: Fleisch/Fisch" stand dort
+in derselben Größe und Farbe wie „Verbrauchsdatum: höchstens 2 Tage ·
+max. 4 °C". Alles gleich gewichtet heißt: nichts gewichtet. Bei
+Hähnchenbrust — 85 % Verlust, 123 € verdorben, Verbrauchsdatum — musste
+man zehn Zeilen lesen, um die beiden zu finden, auf die es ankommt; sie
+standen auf Position acht und zehn.
+
+**Das Blatt beantwortet jetzt drei Fragen in fester Reihenfolge:**
+
+1. **Was ist mit diesem Produkt los?** Ein Leitwert, groß, ganz oben.
+   Welcher das ist, entscheidet die Dringlichkeit der Folgen, nicht die
+   Reihenfolge im Datensatz: **Verbrauchsdatum → Verlust → Rhythmus →
+   Preis.** Ein Verbrauchsdatum kann krank machen, ein hoher Verlust
+   kostet Geld, ein Rhythmus ist nützlich, ein Preis ist Beiwerk. Nur
+   der dringendste Fall wird rot ausgezeichnet.
+2. **Was muss ich wissen?** Direkt darunter die zweit- und
+   drittwichtigste Zahl, dann Gruppen mit Überschrift — jede nur, wenn
+   sie Inhalt hat. Der Preis steht als **drei vergleichbare Werte**
+   (zuletzt / üblich / Spanne) statt als Satz mit Punkten dazwischen.
+3. **Wo kommt das her?** Eingeklappt. Datenqualität, Rückmeldungen,
+   Herkunft: der Kern des Vertrauensversprechens, aber nichts, was beim
+   Öffnen im Weg stehen muss. Ein `<details>` statt eigener Klapp-Logik
+   — der Inhalt bleibt im Dokument (Suche, Vorlesehilfe), Tastatur-
+   bedienung bringt der Browser mit.
+
+Dazu drei Aufräumarbeiten: „Verbrauchsdatum" stand **dreimal** auf einem
+Bildschirm (Leitwert, Faktenzeile, roter Hinweis) — die Faktenzeile ist
+weg. Überschriften über einer einzigen Zeile „nicht schätzbar" sind weg;
+die Auskunft selbst steht unter „Wie die App darauf kommt", wo sie
+hingehört. Und die Verlust-Liste zeigte **zwölf** gleich aussehende
+Zeilen mit je einem Knopf — jetzt drei, der Rest eingeklappt. Wer
+widersprechen will, meint fast immer den letzten Kauf.
+
+**Der Umbau hätte fast Information gekostet — gemessen, nicht gehofft.**
+Ein Vergleich Alt gegen Neu über alle 29 Produkte der Beispieldaten
+zeigte 18 verschwundene Werte: Hähnchenbrust verlor Rhythmus *und*
+Verlustquote, weil das Verbrauchsdatum den Platz des Leitwerts bekam.
+Genau dafür gibt es jetzt die Kennzahlenzeile darunter. Nach der
+Korrektur steht der Nachweis: **227 Zahlenwerte, alle Beschriftungen und
+alle Bedienelemente sind erhalten** — kein einziger Verlust. (Zwei
+gemeldete „Verluste" waren Fehler der Prüfung selbst: die Preisspanne
+trägt jetzt nur noch ein Eurozeichen, „6,99–7,49 €" statt „6,99 €–7,49 €",
+weil das zweite auf schmalen Geräten allein in die nächste Zeile
+umbrach.)
+
+**Zweiter Durchgang: sortiert war es, ruhig nicht.** Die erste Fassung
+ordnete die Information richtig, blieb optisch aber unruhig — und genau
+das war die Rückmeldung. Der Befund am eigenen Screenshot: jede Kennzahl
+und jeder Preiswert saß auf einer eigenen Fläche mit Haarlinien-Fuge
+dazwischen. Sechs Kästchen und ein halbes Dutzend zusätzlicher Linien,
+auf einem Bildschirm, der ohnehin schon Karten, Faktenzeilen und einen
+roten Hinweis trägt. Vier Änderungen:
+
+- **Kästchen raus.** Zahlen brauchen keinen Rahmen, um als Zahlen
+  gelesen zu werden — Abstand genügt.
+- **Ein Block statt drei.** Der Preis hatte einen eigenen Abschnitt mit
+  Überschrift und drei umrandeten Feldern, direkt über dem nächsten
+  Abschnitt mit Überschrift. Jetzt trägt die Kennzahlenzeile den zuletzt
+  gezahlten Preis (Farbe = Vergleich zum üblichen), und „üblich" und
+  „Spanne" stehen als das, was sie sind: Bezugswerte in derselben Liste
+  wie Haltbarkeit und Lagerort.
+- **Überschriften eine Stufe leiser.** Versalien mit Sperrung *und*
+  Fettung waren drei Auszeichnungen gleichzeitig für eine Beschriftung,
+  die nur trennen soll.
+- **Roter Hinweis von vier Zeilen auf eine.** Der Leitwert nennt die
+  Frist schon in Rot; direkt darunter steht der Knopf, der sie erklärt.
+
+Geprüft im echten Browser bei 420 px und 320 px, hell und dunkel, ohne
+Überlauf. Nach dem Aufräumen erneut gegengeprüft: **227 Zahlenwerte,
+alle Beschriftungen, alle Bedienelemente weiterhin vollständig.**
+Zweiundzwanzig neue Oberflächentests halten die Rangfolge *und* die Ruhe
+fest — genau ein Leitwert, höchstens drei Kennzahlen, keine Kästchen,
+höchstens zwei Zwischenüberschriften, Herkunft zugeklappt — damit das
+Blatt nicht wieder zuwächst. Alle jetzt 1781 Tests bestehen.
+
+---
+
+## „Mehr Produkte — und den Algorithmus verbessern, der die Liste schreibt"
+
+### Die Einkaufsliste: erstmals gemessen
+
+Der Listen-Algorithmus war nie daran gemessen worden, ob er das
+Richtige vorschlägt. Neues Werkzeug (`test/liste.js`): für jeden
+Einkaufstag von 14 synthetischen Haushalten wird die Liste **nur aus
+den Daten davor** erzeugt und mit dem verglichen, was an dem Tag
+wirklich gekauft wurde — 1222 Einkaufstage. Ausgangswert: Trefferquote
+77,8 %, Genauigkeit 47,7 %.
+
+**Die 47,7 % sehen schlechter aus, als sie sind** — nachgemessen statt
+angenommen: die Liste nennt im Schnitt 5,7 Positionen, der Einkauf
+umfasst 3,5. Mehr als **61 % kann selbst ein perfekter Algorithmus
+nicht treffen**. Und **vier von fünf „Fehlalarmen" werden binnen zwei
+Wochen doch gekauft** — der Vorschlag war berechtigt, nur früh.
+
+**Drei Verbesserungen gemessen — und alle drei verworfen:**
+
+- *Vorlauf an den Einkaufsabstand koppeln statt fest:* F1 58,7 % gegen
+  59,1 %. Kein Gewinn.
+- *Vertrauensschwelle von 0,40 auf 0,25 senken:* im Rückvergleich 126
+  übersehene Käufe weniger — im Drei-Jahres-Lauf aber **53 zusätzliche
+  Tage mit leerem Schrank**. Ursache: zu frühe Vorschläge lösen „Hab
+  noch" aus, das verlängert den gelernten Rhythmus, und danach kommt
+  das Produkt zu spät. Eine Rückkopplung, die der Rückvergleich
+  prinzipiell nicht sehen kann — simulierte Haushalte richten sich
+  nicht nach den Vorschlägen der App, echte schon.
+- *Nach Rhythmuslänge statt nach Überfälligkeit sortieren:* hebt die
+  Genauigkeit der ersten Zeile von 40,9 % auf **58,6 %** — die größte
+  Einzelzahl dieser Runde. Trotzdem nicht übernommen: die Kennzahl
+  belohnt, das Offensichtliche zuerst zu nennen. An Milch erinnert
+  sich jeder; der Wert einer Liste liegt beim Unregelmäßigen. Die
+  Simulation vergisst gleichmäßig und kann den Unterschied nicht
+  messen — ohne Beleg keine Änderung.
+
+**Das Ergebnis dieser Runde ist damit kein neuer Schwellwert, sondern
+die Messfähigkeit selbst** plus acht Prüfungen, die festhalten, was
+gilt: Trefferquote mindestens 75 %, Liste höchstens doppelt so lang
+wie der Einkauf, höchstens 3 % Einkaufstage ohne Vorschlag — und die
+Deckelung des Vorlaufs auf ein Drittel des Zyklus, ausgerechnet gegen
+die Kennzahl abgesichert, die sie aufzuweichen empfehlen würde.
+
+### Mehr Produkte: 1698 → 1727
+
+Auch hier nicht geraten, welche fehlen: **112 in deutschen Haushalten
+übliche Artikel** gegen den Abgleich gehalten, **37 blieben ohne
+sicheren Treffer**. Zwei davon waren keine Lücken, sondern **echte
+Fehlzuordnungen mit Folgen für die Haltbarkeit**:
+
+| Bon-Zeile | landete auf | ist aber |
+|---|---|---|
+| Pfefferbeißer | Pfeffer (Gewürz) | Dauerwurst |
+| Schinkenspeck | Kochschinken (gegart) | roh geräuchert |
+
+Die dünnsten Kategorien wurden gezielt aufgefüllt: Wurstwaren 10 → 17,
+Baby 9 → 13, Tierbedarf 10 → 14, Haushaltszubehör 15 → 21. Alle 39
+zuvor fehlenden oder schwachen Artikel treffen jetzt sicher, ohne dass
+sich an den echten Bons etwas verschlechtert (70 sicher / 66 unsicher /
+3 ohne Treffer, unverändert); am 1000-Bon-Korpus vier Zeilen besser.
+
+**Sieben der neuen Einträge waren Dubletten** — „Cabanossi",
+„Landjäger", „Blutwurst", „Chorizo", „Puten-Aufschnitt" standen längst
+unter Fleisch/Fisch, „Abflussreiniger" und „Aperitif" ebenso.
+Aufgefallen ist das nur, weil der Stresstest jeden Katalognamen gegen
+sein eigenes Produkt prüft. Die Dubletten wurden zurückgenommen und
+stattdessen die fehlenden Schreibweisen bei den Originalen ergänzt;
+eine neue Prüfung schließt doppelte Produktnamen künftig aus.
+
+Sicherheitsregel eingehalten: keiner der neuen Einträge trägt ein
+Verbrauchsdatum. Rohe Streichwurst (Mettwurst) folgt dem vorhandenen
+Muster der Teewurst — kurzes MHD plus ausdrücklicher Vorbehalt, statt
+einer Frist, die Sicherheit vortäuscht.
+
+Vierzehn neue Tests. Alle jetzt 1795 Tests bestehen.
+
+---
+
+## Der Kaltstart, benannt und halb behoben (2026-08-27)
+
+Die Trefferquote der Einkaufsliste lag bei 77,7 %. Interessanter als
+die Zahl war die Frage, woher die 968 übersehenen Käufe kommen. Also
+erst gezählt, dann geändert:
+
+| Ursache | Fälle |
+|---|---|
+| noch nicht fällig (Vorlauf zu kurz) | 583 |
+| Vertrauen unter der Schwelle | 265 |
+| erst einmal gekauft, also kein Intervall | 95 |
+| gar kein Rhythmus-Eintrag | 25 |
+
+Von den 265 zu unsicheren stammten **252 aus schlichtem Datenmangel**
+(unter fünf Käufen) und nur 13 aus echter Unregelmäßigkeit. Zusammen
+mit den beiden unteren Zeilen sind **372 der 968 Fälle — 38 % — ein
+und dasselbe Problem: die App ist für ein Produkt blind, bis es etwa
+fünfmal gekauft wurde.**
+
+Wie schlimm das ist, verdeckte der Rückvergleich selbst, denn er
+überspringt die ersten 40 Käufe. Ohne diesen Filter, nach
+Erfahrungsalter aufgeschlüsselt:
+
+| Erfahrung | Trefferquote | Genauigkeit |
+|---|---|---|
+| 0–20 Käufe | **4,8 %** | 83,3 % |
+| 20–40 Käufe | 27,5 % | 64,8 % |
+| 40–80 Käufe | 54,5 % | 62,6 % |
+| ab 160 Käufen | 84,2 % | 46,0 % |
+
+In den ersten Wochen sagt die App also fast nichts — und hat mit dem
+Wenigen recht. Für jemanden, der sie gerade erst ausprobiert, ist
+Schweigen aber der teurere Fehler.
+
+**Was geändert wurde.** Ein Produkt mit zwei, drei Käufen wurde
+zweimal bestraft: einmal offen über die Stichprobengröße, und einmal
+verdeckt, weil seine gemessene Streuung bei so wenigen Werten fast nur
+Rauschen ist — bei genau zwei Intervallen hängt sie rechnerisch von
+einem einzigen Abstand ab. Nachgemessen an 181 Produkten mit langer
+Historie: aus den ersten zwei Intervallen gerechnet liegt die Streuung
+im Mittel bei 0,152, aus der vollen Historie desselben Produkts bei
+0,103. 46 % der Produkte sehen früh unsteter aus, als sie sind.
+
+Jetzt wird bei dünn belegten Produkten der Erfahrungswert **dieses
+Haushalts** dazugemischt, mit dem Gewicht von zwei Intervallen. Ein
+regelmäßiger Haushalt bekommt für ein neues Produkt früher Vertrauen,
+ein unsteter bleibt vorsichtig — der Wert kommt also aus dem Haushalt
+selbst und nicht aus einer Konstanten, und er kann die Streuung
+genauso gut nach oben ziehen. Gut belegte Produkte bleiben unberührt,
+und ohne genug belastbare Produkte bleibt alles beim Alten.
+
+Ergebnis: 968 → 946 übersehene Käufe, Trefferquote 77,7 % → 78,2 %,
+Genauigkeit unverändert 48,8 %, Drei-Jahres-Lauf unverändert bei 1696
+Leertagen. Ein kleiner, aber kostenloser Gewinn.
+
+**Was gemessen und verworfen wurde.** Zwei größere Anläufe, den
+Kaltstart wirklich zu heben, sind gescheitert — beide sahen im
+Rückvergleich sehr gut aus:
+
+- *Stichprobengröße als Wurzel statt als Gerade.* Bisher zählte ein
+  einzelnes Intervall nur ein Viertel, obwohl gerade die erste
+  Wiederholung am meisten aussagt — sie unterscheidet „einmal gekauft"
+  von „das kommt wieder". Nebenwirkung der alten Geraden: ein zweimal
+  gekauftes Produkt kam nie über 0,25 Vertrauen und war damit unter
+  allen Umständen unsichtbar. Mit der Wurzel: Trefferquote 80,7 %, in
+  den ersten zwanzig Käufen 17,2 % statt 4,8 %, reife Haushalte
+  unberührt. Im Drei-Jahres-Lauf trotzdem **75 zusätzliche Leertage**.
+- *Den Vorlauf am Vertrauen bemessen*, als Gegenmittel gegen ebenjene
+  Schleife. Im Rückvergleich auf jeder Achse besser als der
+  Ausgangsstand (Genauigkeit 49,3 %, Trefferquote 78,3 %, F1 60,5 %) —
+  und trotzdem 1786 statt 1696 Leertage.
+
+Die Lehre ist dieselbe wie beim letzten Mal, nur schärfer: der Schaden
+entsteht **im** Kaltstart und bleibt danach. Zu früh vorgeschlagene
+Produkte lösen „Hab noch" aus, der gelernte Rhythmus wird länger, und
+der Haushalt kommt davon nicht mehr los. Dass die reife Phase in der
+Messung sauber aussah, hatte genau nichts zu bedeuten — sie erbt einen
+bereits verdorbenen Takt.
+
+Der Kaltstart bleibt damit die größte bekannte Schwäche der App. Er
+steht jetzt als eigener Testabschnitt mit den echten Zahlen im
+Rückvergleich, samt Untergrenzen gegen weiteren Verfall und einer
+Prüfung, dass mehr Erfahrung nie zu schlechteren Vorschlägen führt.
+
+Sieben neue Tests. Alle jetzt 1802 Tests bestehen.
+
+**Nachtrag, selber Tag: ein naheliegender nächster Schritt gemessen
+und verworfen.** Die 583 der 968 übersehenen Käufe, die an einer zu
+kurzen Vorlaufzeit liegen, hätten sich mit einer einfachen Idee
+angehen lassen: die Vertrauensschwelle nur für bereits FÄLLIGE
+Produkte senken (kein Vorlauf beteiligt, also kein Frühwarn-Risiko),
+den Vorlauf für vorzeitige Vorschläge unangetastet lassen. Im
+Rückvergleich sehr sauber — Trefferquote 78,2 % → 80,8 %, Genauigkeit
+unverändert. Im Drei-Jahres-Lauf trotzdem gescheitert, und zwar nicht
+an Leertagen (die blieben gleich), sondern an einem einzelnen Quartal
+direkt nach dem simulierten Urlaub (13,5 % statt 7,9 % vergessen):
+nach einer Abwesenheit werden plötzlich viele Produkte gleichzeitig
+rechnerisch „fällig", weil der Kalenderabstand die Abwesenheitstage
+mitzählt — sie treffen gebündelt auf vollen Bestand und lösen
+reihenweise „Hab noch" aus.
+
+Der naheliegende Gegenzug — Abwesenheitstage auch im Fälligkeits-
+Check abziehen, so wie es die Rhythmus-Berechnung selbst längst tut —
+ist in der Sache richtig. Trotzdem nicht übernommen: allein diese
+Korrektur, ganz ohne die niedrigere Schwelle, hat den Drei-Jahres-Lauf
+über eine ANDERE Kennzahl kippen lassen (Leertage 1696 → 1727,
+Rhythmus-Treffgenauigkeit knapp unter der Grenze). Die im Test
+erkannte Abwesenheit deckt sich offenbar nicht exakt mit der
+simulierten — die Korrektur tauscht einen bekannten, erklärbaren
+Fehler gegen ein kleineres, aber ebenso wirksames Rauschen ein.
+
+Vollständig protokolliert in `test/liste.js`, damit der nächste
+Anlauf beim eigentlichen Mechanismus ansetzt (das Bündeln von „Hab
+noch" nach einer Abwesenheit dämpfen) statt wieder bei der
+Sichtbarkeits-Schwelle. Kein Code geändert — der Kaltstart bleibt
+beim Stand von oben.
+
+---
+
+## Wortwahl durchgesehen (2026-08-27)
+
+Ein Durchgang durch die sichtbaren Texte, mit demselben Ziel wie die
+Produkt-Blatt-Aufräumung weiter oben: professionell und nie überladen.
+
+**„Sachen" raus.** Sechs Stellen sagten „2 Sachen tauschen", „13
+Sachen kommen zusammen" — umgangssprachlich für einen Sachverhalt, der
+immer exakt Produkte meint (jedes Ereignis im Wochenstreifen hängt an
+einem Produkt). Ersetzt durch „Produkte", an einer Stelle durch
+„Hinweise" (Zero-Waste-Sheet, wo es tatsächlich um Hinweisarten statt
+Produkte geht). Zwei Tests hingen am alten Wortlaut und wurden
+mitgezogen.
+
+**Ein dichter Absatz beim Bon-Erfassen entwirrt.** Drei Fakten
+(Aufnahmeweg, Datenschutz, Open-Food-Facts-Abgleich) standen in einem
+Satz mit einer Gedankenstrich-Einschiebung mittendrin. Jetzt drei
+kurze Sätze — dieselben Fakten, aber auf einen Blick erfassbar statt
+einmal quer gelesen.
+
+**Zwei Großbuchstaben-Zwischenüberschriften leiser gestellt.** „Wo dein
+Geld hingeht" hatte auf der Zahlen-Seite eine ALL-CAPS-Überschrift
+„KATEGORIEN" direkt über weiteren fett gesetzten Werten — dieselbe
+Abwägung wie beim Produkt-Blatt schon einmal getroffen (normale
+Schreibweise trennt genauso gut, ohne lauter zu sein als der Inhalt
+darunter). Betraf `.moneySection` (Kategorien, Märkte, Immer wieder
+gekauft) und `.confirmProgress` (Fortschritt beim Bon-Bestätigen).
+
+Bewusst NICHT angefasst: die ausführlichen Erklärtexte hinter den
+Info-Punkten (`PILL_INFO`). Die sind an genau einer Stelle definiert,
+schon einmal gegen Dopplung durchgesehen (siehe Kommentar dort) und
+öffnen sich nur auf Antippen — Länge ist dort kein Problem, weil
+niemand sie ungefragt sieht.
+
+Alle 1802 Tests bestehen, zwei davon mit angepasstem Wortlaut.
+
+---
+
+## Als Teilen-Ziel: „eBon teilen" aus REWE, Lidl & Co. (2026-08-27)
+
+REWE, Lidl und andere Händler-Apps bieten an, den digitalen Bon direkt
+über das System-Teilen-Menü zu verschicken. Einkaufs-Anker meldet sich
+jetzt selbst als Ziel dafür an (`share_target` im Manifest) — Bild,
+PDF oder Text kommen direkt bei der App an, ohne Umweg über
+Zwischenablage oder Dateiverwaltung.
+
+**Wie es technisch geht, ohne eigenen Server:** Das Betriebssystem
+schickt eine POST-Anfrage mit der geteilten Datei an die App. Auf
+statischem Hosting (GitHub Pages) gäbe es dafür normalerweise niemanden,
+der antwortet — der Service Worker fängt die Anfrage deshalb selbst ab,
+legt Datei und Text in einem eigenen Zwischenspeicher ab und leitet zur
+App zurück. Die App holt sich das beim nächsten Start ab
+(`App.consumeSharedIfAny`) und löscht den Zwischenspeicher sofort danach
+wieder — nichts bleibt liegen, was nicht gebraucht wird.
+
+**Was danach passiert, richtet sich nach dem Format:**
+- Bild → läuft automatisch durch dieselbe Texterkennung wie ein
+  eingefügter Screenshot, genau wie beim Fotografieren.
+- Text → landet im Bon-Text-Feld, zur Kontrolle, bevor „Auswerten"
+  gedrückt wird — nichts wird ungesehen gebucht.
+- PDF oder ein anderes Format → die Texterkennung liest bisher nur
+  Bilder. Statt das still zu verwerfen, sagt die App das ausdrücklich
+  und bietet die zwei verbleibenden Wege an (Text einfügen, oder in der
+  Händler-App einen Screenshot statt der Datei teilen). Ob REWE, Lidl
+  & Co. den eBon als Bild oder als PDF anbieten, ist unterschiedlich
+  und nicht in jedem Fall bekannt — deshalb nimmt das Manifest
+  vorsichtshalber alle drei Formen an (`image/*`, `application/pdf`,
+  `text/plain`), damit die App im Teilen-Menü überhaupt erscheint,
+  unabhängig davon, welches Format am Ende ankommt.
+
+**Die Grenze, klar benannt: nur Android.** `share_target` ist Teil des
+Web-App-Manifests, und Safari/WebKit hat dieses Feld nie implementiert.
+Auf einem iPhone taucht Einkaufs-Anker im Teilen-Menü nicht auf — das
+ist keine Einschränkung dieser App, sondern eine fehlende Funktion in
+iOS selbst, die keine Web-App umgehen kann.
+
+**Getestet wurde, was ohne echten Browser ehrlich geht:** die ganze
+Kette AB dem Punkt, an dem der Worker seine Arbeit abgegeben hat
+(Cache-Eintrag, `?teilen=1` in der Adresse) — Sprung auf die
+Erfassen-Seite, Text im Feld, Bild durch die Texterkennung, PDF mit
+Format-Hinweis statt Stille, ein gewöhnlicher Start bleibt unberührt.
+Dazu strukturelle Prüfungen, dass Manifest und Worker zueinander
+passen. Der Worker selbst (`sw.js`) läuft in einem eigenen
+ServiceWorker-Kontext, den Node nicht ausführt — dass ein echtes
+Android-Gerät die App im System-Teilen-Menü tatsächlich anzeigt und die
+Anfrage richtig durchreicht, ist ungetestet und lässt sich ohne
+reales Gerät nicht schließen.
+
+Dreizehn neue Tests. Alle jetzt 1815 Tests bestehen.
+
+---
+
+## Angebote: die Lücke zwischen zwei fertigen Modulen geschlossen (2026-08-27)
+
+Auffällig beim letzten Auftrag: ein Großteil der angefragten „Struktur"
+existierte schon. `priceMemory.js` erkennt je Produkt, ob der letzte
+gezahlte Preis deutlich unter dem eigenen üblichen liegt. `offerAdvisor.js`
+rechnet daraus eine Menge, die sich bei der Haltbarkeit noch lohnt. Beide
+fertig, beide getestet (`test/schwarm.js`) — nur nirgends verbunden, und
+`offerAdvisor.js` stand in keiner einzigen Ansicht.
+
+Der Grund war eine Lücke, keine Redundanz: `stockUpAdvisor.js` macht
+dieselbe Rechnung bereits, aber nur für Haushaltsprodukte (die verderben
+nicht). Für Lebensmittel — genau das, was zuletzt gefragt war — gab es
+keine Entsprechung in der Oberfläche.
+
+**Was jetzt dazukommt:** `compute()` verknüpft `priceMemory` und
+`offerAdvice` zu `ctx.foodDeals` — alle Lebensmittel, bei denen der letzte
+Kauf mindestens 15 % unter dem eigenen Median lag, mit einer aus
+Haltbarkeit und gelerntem Verbrauch gerechneten Menge. Ein neuer, von der
+Startseite erreichbarer Bereich („Angebote", nach demselben Muster wie
+„Fällig" — ein siebter Reiter unten passt nicht) zeigt sie.
+
+**Was bewusst NICHT behauptet wird:** Das ist der zuletzt GESEHENE
+Preis, kein aktueller Regalpreis — die App hat keinen Zugang zu dem, was
+gerade im Laden steht. Jede Zeile sagt „zuletzt DD.MM.JJJJ" statt eine
+Aktualität vorzutäuschen, die nicht da ist.
+
+**Was das NICHT ist:** eine Antwort auf den größeren Teil derselben
+Anfrage — eine Datenbank, die Preise über mehrere Haushalte oder Händler
+hinweg zusammenführt. Das bräuchte einen Server oder einen
+Austauschmechanismus zwischen Geräten, und genau diese Weggabelung liegt
+bereits fertig durchdacht in `docs/schwarm.md`: drei Stufen, von
+„lokal, wie jetzt" bis „öffentlicher Index mit Impressum,
+Datenschutzerklärung und Hosting-Verantwortung". `priceShare.js`
+(k-Anonymität, nur bekannte Ketten, keine Kennung) liegt dafür fertig
+und ungenutzt bereit — SEIT einer früheren Runde, nicht seit heute.
+Diese Entscheidung wurde nicht getroffen, weil sie nicht lokal zu treffen
+ist: sie ändert das Kernversprechen der App, das auf jedem Bildschirm
+steht.
+
+Acht neue Tests. Alle jetzt 1823 Tests bestehen.
+
+---
+
+## Stufe 2 vorbereitet, aber nicht live (2026-08-27)
+
+Die Entscheidung aus `docs/schwarm.md` §8 Punkt 1 ist gefallen: ein
+öffentlicher Server-Preisindex ist das Ziel, kein reines Schwarm-ohne-
+Server-Modell. Ausdrücklich **noch nicht am Start** — nur die
+Infrastruktur dafür ist jetzt vorbereitet, aus zwei Gründen: die
+Rechenlogik lässt sich schon heute schreiben und prüfen, und Punkt 2
+und 3 aus §8 (ein Verantwortlicher mit Anschrift, eine betriebene
+Hosting-Umgebung) sind echte Entscheidungen von Menschen, keine, die
+sich vorab programmieren lassen.
+
+**Was dazukam:** `src/algo/schwarmClient.js` — `weeklyBatch()` sammelt
+aus den eigenen Käufen, welche Preissichtungen (siehe `priceShare.js`)
+in die Sendung der laufenden Kalenderwoche gehören. `attemptShare()`
+ist der einzige Ort, an dem eine Übertragung überhaupt anfinge — und
+er sendet unter keiner Einstellungskombination etwas, weil `ENDPOINT`
+auf `null` steht. Dazu ein rein struktureller, standardmäßig
+ausgeschalteter Einwilligungs-Zustand (`settings.schwarm.enabled`,
+Vorgabe `false`) im Datenmodell, damit eine spätere Einwilligungs-
+Oberfläche einen echten, migrationssicheren Zustand zum Umschalten
+vorfindet statt eines neuen Felds mit alten Wanderungsfragen.
+
+**Zwei getrennt geprüfte Garantien**, weil „noch nicht am Start" zwei
+verschiedene Dinge bedeutet: Erstens, dass `attemptShare()` unter
+keiner Kombination `sent: true` liefert, solange `ENDPOINT` leer ist
+(`test/schwarm.js`, Abschnitt F). Zweitens, dass keine Oberfläche
+überhaupt dorthin verweist — kein Menüpunkt, kein Knopf, keine
+Einstellung ist heute erreichbar (`test/uitest.js`, „Stufe 2 ist
+vorbereitet, aber nirgends erreichbar"). Die erste Garantie allein
+wäre nicht genug: sie sagt nichts darüber, ob ein Nutzer die Funktion
+versehentlich überhaupt finden und anschalten könnte.
+
+Zehn neue Tests. Alle jetzt 1833 Tests bestehen.
+
+---
+
+## Das Wesen (2026-08-27)
+
+Ein Begleiter durch die App, angelehnt an Maskottchen wie die
+Duolingo-Eule — die Rückmeldung war ausdrücklich "durchgängig
+überall", und mit einer Stimmung, die zu echten Signalen passt statt
+Dekoration zu sein.
+
+**Wo es lebt:** in `App.renderBar()` — dem einen Kopfbereich, der auf
+jeder Seite läuft. Keine sechsfache Kopie in jeder Ansicht, eine
+Stelle, ein Ort für spätere Änderungen.
+
+**Wie es gebaut ist:** flaches SVG, acht Büschel um einen Kern statt
+gezeichnetem Fell — bei der Darstellungsgröße (56–64 px) wäre feineres
+Detail nur Rauschen, und dieselbe Technik trägt auch andere
+Web-Maskottchen (Duolingos Eule ist im Web ebenfalls flache
+Illustration plus Animation, kein Echtzeit-3D). Ein echtes 3D-Modell
+wie in der Referenzvorlage lässt sich in dieser Umgebung nicht
+erzeugen — das bräuchte ein Modellierwerkzeug, das hier nicht
+verfügbar ist.
+
+**Vier Stimmungen, aus Signalen, die die App schon hat** (`mascotMood()`
+in views.js), Rangfolge nach Dringlichkeit:
+
+| Stimmung | Auslöser | Ton |
+|---|---|---|
+| **alarm** | Kühlkette gefährdet, oder etwas verdirbt heute | dunkel, blass-violettgrau — wie angefragt |
+| **besorgt** | vergessene, fällige Produkte | gedämpftes Ocker |
+| **froh** | laufender Streak, nichts Akutes offen | warmes Korall |
+| **neutral** | keines der drei | gedeckteres Rosé |
+
+Kein neuer Zustand: `ctx.safety`, `ctx.pulse`, `ctx.forgotten`,
+`ctx.streak` gab es alle schon — nur eine neue, gebündelte Lesart
+davon.
+
+**Bewegung statt Standbild:** sanftes Auf-und-Ab in der Ruhe, ein
+Blinzeln alle paar Sekunden, bei „alarm" ein feines Zittern zusätzlich
+zur dunkleren Farbe. Ausgeschaltet, wenn das Betriebssystem weniger
+Bewegung verlangt (`prefers-reduced-motion`) — dieselbe Regel, der die
+App auch beim Konfetti schon folgt.
+
+**Ein gefundener Fehler beim Bauen:** die erste Fassung hatte
+`width`/`height` fest in der CSS verdrahtet — jede angeforderte
+Größe wurde dadurch stillschweigend auf 58 px gezogen, auch beim
+Testen mit absichtlich großen Werten. Vor dem Verifizieren aufgefallen,
+weil ein 170-px-Debug-Rendering trotzdem klein blieb.
+
+Neunzehn neue Tests: die Stimmungs-Rangfolge, dass eine unbekannte
+Stimmung auf ein vollständig eingefärbtes Gesicht zurückfällt statt
+auf eines ohne Farbe, und dass das Wesen tatsächlich auf jeder
+geprüften Seite im Kopfbereich steht. Alle jetzt 1852 Tests bestehen.
+
+---
+
+## Das Wesen wird interaktiv und deckt die App ab (2026-08-27)
+
+Zwei Rückmeldungen zur ersten Fassung, beide umgesetzt: die Form
+gefiel nicht (acht Büschel um einen Kreis las sich als Zahnrad, nicht
+als Fell) und die Abdeckung sollte über den Kopfbereich hinausgehen.
+
+**Die Form ist jetzt ausdrücklich ein Platzhalter.** Ersetzt durch
+eine handgezeichnete, unregelmäßige Kontur (`MASCOT_BODY_PATH` in
+views.js) — eine von zehn zur Auswahl gestellten Varianten, keine
+endgültige Gestaltung. Der eigentliche Plan: echtes Bild- oder
+Videomaterial (siehe unten), das nur diese eine Formel ersetzt —
+Stimmungslogik, Platzierung und Interaktionen hängen absichtlich
+nicht an der Zeichnung.
+
+**Aus Dekoration wurde eine Fläche, die etwas tut.** Das Wesen im
+Kopfbereich ist jetzt ein `<button>` mit eigenem Namen (nicht mehr
+`aria-hidden`, weil es jetzt etwas auslöst) — Antippen öffnet, was zur
+aktuellen Stimmung gehört: bei „alarm" dieselbe Kühlkette-Meldung wie
+in „Jetzt zu tun", bei „besorgt" dasselbe Hinweise-Blatt, bei „froh"
+eine kurze Rückmeldung zum Streak. Bewusst keine neuen Texte
+geschrieben — jede Meldung ist ein zweiter Zugang zu etwas, das
+bereits an einer Stelle korrekt beschrieben ist, nicht eine zweite
+Fassung derselben Aussage.
+
+**Volle Abdeckung statt eines einzelnen Auftritts:**
+- **Kopfbereich** — jede Seite, wie schon zuvor.
+- **Leere Ansichten** — `emptyView()` (der gemeinsame Baustein für
+  Zahlen, Bestand, Fällig, Angebote) zeigt jetzt das Wesen statt einer
+  bloßen Textzeile. Stimmung standardmäßig „neutral" (abwartend, keine
+  geratene Emotion für „noch keine Daten"), mit einer benannten
+  Ausnahme: „Nichts fällig, alles im Rhythmus" ist eine echte gute
+  Nachricht und bekommt „froh".
+- **Meilenstein-Feier** — die Vollbild-Karte bei einem erreichten
+  Abzeichen zeigt das Wesen jetzt fröhlich über dem Abzeichen-Symbol.
+  Hier kommt die Stimmung nicht aus den üblichen Signalen: die Feier
+  selbst ist der Grund zur Freude, unabhängig davon, was sonst gerade
+  ansteht.
+
+**Wie es weitergeht, wenn echtes Material da ist:** drei Stufen
+besprochen — ein Standbild pro Stimmung (von hier aus CSS-animiert,
+sofort machbar), mehrere Bilder als Frames, oder ein Bild-zu-Video-Loop
+aus einer KI wie Runway/Pika/Kling (dafür fehlt in dieser Umgebung der
+Zugriff — das müsste extern erzeugt und hierher übergeben werden).
+Alle drei ersetzen nur die Zeichenfunktion, nicht die Stimmungs- oder
+Interaktionslogik.
+
+Acht neue Tests: dass Antippen tatsächlich ein Blatt öffnet und dabei
+bestehende, nicht neu geschriebene Meldungen wiederverwendet, dass
+leere Ansichten das Wesen zeigen, und dass die Meilenstein-Feier es
+fröhlich zeigt. Alle jetzt 1860 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -1740,6 +3613,12 @@ src/ui/
   app.js         Rahmen: Navigation, Kopfbereich, Ladenmodus, Blätter
 build.js         bündelt src/ nach web/
 tools/serve.js   Entwicklungsserver ohne Abhängigkeiten
+tools/off_hardcase_corpus/
+                 zieht echte Namen von Open Food Facts, verstümmelt sie
+                 wie ein Bon -- generate.js: einzelne Härtefall-Zeilen
+                 (off-hardcases.json), generate_receipts.js: 100 ganze
+                 simulierte Bons (off-receipts.json). Beide brauchen
+                 Netz, laufen nicht in npm test, siehe README
 test/            Modultests, Stresstests, Simulation, Oberflächentest
 web/             Bauergebnis — das, was auf den Server kommt
 ```
@@ -1790,12 +3669,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1594
-npm run test:algo # 1049 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
-                  #   Texterkennung, echte Bons, Sicherheit, Sicherung, Verschwendung,
+npm test          # alle 1860
+npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+                  #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 509 Oberflächentests in jsdom
+npm run test:ui   # 616 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

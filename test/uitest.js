@@ -63,6 +63,23 @@ window.scrollTo = () => {};
 window.URL.createObjectURL = () => "blob:test";
 window.URL.revokeObjectURL = () => {};
 
+// Cache Storage: jsdom kennt sie nicht (kein Service Worker). Ein
+// simples In-Memory-Double reicht, um App.consumeSharedIfAny() zu
+// prüfen — den eigentlichen Worker (sw.js, läuft in einem eigenen
+// Kontext, den Node nicht ausführt) deckt das nicht ab, siehe unten.
+const cacheStores = new Map();
+window.caches = {
+  open: async (name) => {
+    if (!cacheStores.has(name)) cacheStores.set(name, new Map());
+    const store = cacheStores.get(name);
+    return {
+      match: async (key) => store.get(key) || undefined,
+      put: async (key, res) => { store.set(key, res); },
+      delete: async (key) => store.delete(key)
+    };
+  }
+};
+
 const origWarn = window.console && window.console.warn;
 window.console = {
   ...console,
@@ -94,7 +111,9 @@ try {
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
     " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
-    " zahlwort, tage, tagen, alleTage };"
+    " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
+    " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
+    " mascotSvg, mascotMood, mascotTap };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -114,7 +133,7 @@ const ready = new Promise((res) => {
   else window.addEventListener("load", () => res());
 });
 
-ready.then(() => {
+ready.then(async () => {
 
 console.log("\n--- Start ---");
 ok("App startet ohne Laufzeitfehler", errors.length === 0, errors[0]);
@@ -558,14 +577,66 @@ if (ta) {
   ok("Auswerten rendert das Ergebnis", errors.length === b4 && $("main").querySelectorAll(".matchRow").length > 0,
     errors[b4]);
 
+  // Unsicheres läuft jetzt über die Bestätigungskarte, eine Zeile
+  // nach der anderen — hier wird die Buchen-Sperre erst geprüft,
+  // dann jede Karte durch Antippen des ersten Vorschlags aufgelöst.
+  const saveBtnVorher = [...$("main").querySelectorAll("button.cta")].find((b) => /buchen$/.test(b.textContent));
+  ok("Buchen ist gesperrt, solange unsichere Zeilen offen sind",
+    !!saveBtnVorher && saveBtnVorher.disabled, saveBtnVorher && saveBtnVorher.disabled);
+
+  let runden = 0;
+  while ($("main").querySelector(".confirmCard") && runden < 30) {
+    const wahl = $("main").querySelector(".confirmChoice");
+    ok("Bestätigungskarte zeigt mindestens einen Vorschlag", !!wahl);
+    click(wahl);
+    runden++;
+  }
+  ok("Alle unsicheren Zeilen sind irgendwann aufgelöst",
+    !$("main").querySelector(".confirmCard") && runden > 0, runden);
+
   const before = D.get().purchases.length;
   const saveBtn = [...$("main").querySelectorAll("button.cta")].find((b) => /buchen$/.test(b.textContent));
-  ok("Buchen-Knopf ist vorhanden", !!saveBtn, saveBtn && saveBtn.textContent);
+  ok("Buchen-Knopf ist jetzt frei", !!saveBtn && !saveBtn.disabled, saveBtn && saveBtn.disabled);
   if (saveBtn && !saveBtn.disabled) {
     click(saveBtn);
     ok("Bon-Positionen landen in der Historie", D.get().purchases.length > before,
       `${before} -> ${D.get().purchases.length}`);
   }
+}
+
+console.log("\n--- Bestätigungskarte: Alternative Wege ---");
+App.goto("erfassen");
+App.capture.tab = "scan";
+App.capture.text = "Layenb.HP Skyr sort. 200g    1,49 A";
+App.capture.parsed = D.parseReceiptText(App.capture.text);
+App.render();
+
+const card = $("main").querySelector(".confirmCard");
+ok("Bestätigungskarte erscheint für eine einzelne unsichere Zeile", !!card);
+if (card) {
+  const choiceCount = $("main").querySelectorAll(".confirmChoice").length;
+  ok("Zeigt zwischen einem und drei Vorschlägen", choiceCount > 0 && choiceCount <= 3, choiceCount);
+
+  const altBtn = $("main").querySelector(".confirmAlt");
+  const searchWrap = $("main").querySelector(".confirmSearchWrap");
+  ok("„Anders? Selbst eintragen“ ist da, Suchfeld zunächst versteckt",
+    !!altBtn && searchWrap.classList.contains("hide"));
+  click(altBtn);
+  ok("Antippen zeigt das Suchfeld", !searchWrap.classList.contains("hide"));
+
+  const inp = searchWrap.querySelector("input");
+  inp.value = "Joghurt";
+  inp.dispatchEvent(new window.Event("input", { bubbles: true }));
+  ok("Die eigene Suche liefert Ergebnisse", searchWrap.querySelectorAll(".results button").length > 0);
+
+  // "nicht buchen" statt eines Vorschlags: die Zeile gilt als
+  // entschieden, aber ohne Produkt -- kein Rateergebnis wird gebucht.
+  const skip = $("main").querySelector(".confirmSkip");
+  ok("„nicht buchen“ ist da", !!skip);
+  click(skip);
+  ok("Danach ist keine Karte mehr offen", !$("main").querySelector(".confirmCard"));
+  ok("Die Zeile hat kein Produkt bekommen, wurde aber entschieden",
+    App.capture.parsed.rows[0].productId === null && !App.capture.parsed.rows[0].needsConfirmation);
 }
 
 console.log("\n--- Von Hand erfassen ---");
@@ -1325,12 +1396,22 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
   D.reset();
   D.loadDemo("full");
   App.goto("zahlen");
-  const txt = $("main").textContent;
-  ok("Zahlen zeigt den Rückblick", /Rückblick/.test(txt));
-  ok("Zahlen zeigt die Meilensteine", /Erreicht/.test(txt));
-  ok("Zahlen zeigt den Streak", /Am Stück/.test(txt));
+  ok("Zahlen zeigt den Streak", /Am Stück/.test($("main").textContent));
+
+  // Rückblick und Meilensteine stehen im Unterbereich "Bilanz", nicht im
+  // vorausgewählten "Ausgaben" -- die drei Unterbereiche existieren genau
+  // deshalb, damit nicht alles gleichzeitig auf einer Seite steht.
+  App.zahlenTab = "bilanz";
+  App.render();
+  const txtBilanz = $("main").textContent;
+  ok("Zahlen zeigt den Rückblick", /Rückblick/.test(txtBilanz));
+  ok("Zahlen zeigt die Meilensteine", /Erreicht/.test(txtBilanz));
+
+  App.zahlenTab = "ausgaben";
+  App.render();
 
   /* --- Marke gegen Eigenmarke --- */
+  const txt = $("main").textContent;
   ok("Zahlen zeigt den Eigenmarken-Vergleich", /Marke oder Eigenmarke/.test(txt));
   const b = App.ctx.brands;
   ok("Die Demo liefert einen belegten Fall", b.belegt.length > 0,
@@ -1373,6 +1454,191 @@ console.log("\n--- Rückblick, Streak, Meilensteine ---");
     click($("sheetCancel"));
     return /keine echte Push|KEINE echte Push/i.test(t);
   })());
+}
+
+console.log("\n--- Wo dein Geld hingeht ---");
+{
+  D.reset();
+  D.loadDemo("full");
+  App.zahlenFilter = { range: "12w", from: null, to: null };
+  App.goto("zahlen");
+  const txt = $("main").textContent;
+  ok("Zahlen zeigt die Geldaufteilung", /Wo dein Geld hingeht/.test(txt));
+  ok("Mit Kategorien und Märkten", /Kategorien/.test(txt) && /Märkte/.test(txt));
+
+  const rows = $("main").querySelectorAll(".moneyBarRow");
+  ok("Zeigt mindestens eine Zeile", rows.length > 0, rows.length);
+  ok("Jede Zeile nennt einen Anteil in Prozent",
+    [...rows].every((r) => /\d+ %/.test(r.textContent)), rows[0] && rows[0].textContent);
+  ok("Jede Zeile zeichnet einen Balken mit rundem Kappenende",
+    [...rows].every((r) => r.querySelector(".moneyBarSvg line[stroke-linecap='round']")));
+
+  const woReihe = () => $("main").querySelector(".moneyTotal .sub");
+  const vorher = woReihe() ? woReihe().textContent : null;
+  ok("Zeigt den Wochendurchschnitt für den gewählten Zeitraum", !!vorher && /Ø .*\/Woche/.test(vorher), vorher);
+
+  const chips = () => [...$("main").querySelectorAll(".segmented button")];
+  const chip4w = chips().find((b) => b.textContent === "4 Wochen");
+  ok("Zeitraum-Chips sind da (4 Wochen, 12 Wochen, Jahr, Gesamt, eigener)", chips().length >= 5, chips().length);
+  if (chip4w) {
+    click(chip4w);
+    const nachher = woReihe() ? woReihe().textContent : null;
+    ok("Ein anderer Zeitraum zeigt eine andere Zahl, keine feste Anzeige",
+      nachher !== vorher, `${vorher} -> ${nachher}`);
+  }
+
+  const chipEigen = chips().find((b) => b.textContent === "eigener");
+  ok("„eigener“ Zeitraum ist eine Option", !!chipEigen);
+  if (chipEigen) {
+    click(chipEigen);
+    const datumsfelder = $("main").querySelectorAll('input[type="date"]');
+    ok("Zeigt zwei Datumsfelder (Von/Bis) für einen freien Zeitraum", datumsfelder.length >= 2, datumsfelder.length);
+  }
+
+  App.zahlenFilter = { range: "12w", from: null, to: null };
+  App.render();
+
+  // --- Nachschärfung nach dem Nutzungs-Feedback ---
+
+  ok("Positionen statt des mehrdeutigen „Käufe“", /Positionen/.test($("main").textContent),
+    "erwartet z. B. „189 Positionen“, nicht „189 Käufe“ — das klang nach Einkaufsfahrten, meint aber Bon-Zeilen");
+
+  ok("Die Kachel oben nennt den Zeitraum „gesamt“, damit sie sich vom Filter unten unterscheidet",
+    /Ø\/Woche gesamt/.test($("main").textContent));
+
+  /* Die Demo hat mehr als sieben Kategorien (siehe README) -- "Sonstige"
+     muss auftauchen und die Prozente müssen sich wieder zu ~100 % summieren,
+     statt eine stille Lücke zu lassen. */
+  const sonstZeile = [...$("main").querySelectorAll(".moneyBarRow")].find((r) => /Sonstige/.test(r.textContent));
+  ok("„Sonstige“ fasst den Rest zusammen, statt ihn kommentarlos zu kappen", !!sonstZeile);
+  if (sonstZeile) {
+    ok("„Sonstige“ ist optisch gedämpft, keine echte Kategorie", sonstZeile.classList.contains("muted"));
+  }
+  const prozente = [...$("main").querySelectorAll(".moneyBarRow")]
+    .filter((r) => r.closest(".moneyHero") && r.textContent.includes("%"))
+    .map((r) => parseInt((r.textContent.match(/(\d+) %/) || [])[1], 10))
+    .filter((n) => Number.isFinite(n));
+  const kategorieSumme = prozente.slice(0, 8).reduce((a, b) => a + b, 0);
+  ok("Kategorien-Prozente summieren sich auf ~100 %, keine stille Lücke mehr",
+    kategorieSumme >= 96 && kategorieSumme <= 104, kategorieSumme);
+
+  /* Vorperiode: für einen echten Zeitraum (nicht "Gesamt") mit Daten
+     davor muss ein Vergleich erscheinen -- für "Gesamt" darf keiner
+     erfunden werden, weil es keine Vorperiode gibt. */
+  ok("Ein begrenzter Zeitraum zeigt einen Vergleich zur Vorperiode",
+    /ggü\. Vorperiode/.test($("main").querySelector(".moneyTotal").textContent));
+  const chipsJetzt = () => [...$("main").querySelectorAll(".segmented button")];
+  const chipGesamt = chipsJetzt().find((b) => b.textContent === "Gesamt");
+  click(chipGesamt);
+  ok("„Gesamt“ erfindet KEINEN Vergleich (keine Vorperiode existiert)",
+    !/ggü\. Vorperiode/.test($("main").querySelector(".moneyTotal").textContent));
+  App.zahlenFilter = { range: "12w", from: null, to: null };
+
+  /* Marktnamen: Groß-/Kleinschreibung und Leerraum werden nur für DIESE
+     Ansicht zusammengefasst, die gespeicherten Bons bleiben unverändert. */
+  const testRows = [
+    { store: "REWE", unitPrice: 10, quantity: 1 },
+    { store: "Rewe", unitPrice: 5, quantity: 1 },
+    { store: "  rewe  ", unitPrice: 3, quantity: 1 },
+    { store: "Lidl", unitPrice: 7, quantity: 1 }
+  ];
+  const gruppiert = T.marktGruppen(testRows);
+  ok("Groß-/klein- und leerraum-verschiedene Marktnamen werden zu einer Zeile zusammengefasst",
+    gruppiert.size === 2, [...gruppiert.entries()]);
+  ok("Der Betrag der zusammengefassten Zeile stimmt", gruppiert.get("REWE") === 18, gruppiert.get("REWE"));
+
+  // Die antippbare Erklärung ersetzt den vorher dauerhaft sichtbaren Text.
+  App.goto("zahlen");
+  const infoBtn = $("main").querySelector(".moneyHeroHead .infoBtn");
+  ok("Die Erklärung ist antippbar statt dauerhaft im Weg", !!infoBtn);
+  if (infoBtn) {
+    click(infoBtn);
+    ok("Öffnet ein Blatt mit der Erklärung", /Sonstige.*sieben|sieben.*Sonstige/s.test($("sheetOpts").textContent));
+    ok("Erklärt auch den Verlust-Hinweis als zeitraum-unabhängig",
+      /Verlust.*GESAMTEN|GESAMTEN.*Verlust/s.test($("sheetOpts").textContent));
+    App.closeSheet();
+  }
+
+  // --- Ausgaben mit Verschwendung verbunden (Punkt 4) ---
+  const wasteRows = [...$("main").querySelectorAll(".moneyWaste")];
+  ok("Mindestens eine Kategorie zeigt einen Verlust-Hinweis (Demo enthält chronische Verschwendung)",
+    wasteRows.length > 0, wasteRows.length);
+  ok("Der Hinweis nennt einen Prozentsatz", wasteRows.every((r) => /\d+ %/.test(r.textContent)));
+  ok("„Sonstige“ bekommt nie einen Verlust-Hinweis (keine echte Kategorie)",
+    !$("main").querySelector(".moneyBarRow.muted .moneyWaste"));
+
+  const verlust = T.kategorieVerlust(App.ctx);
+  ok("kategorieVerlust() liefert einen Anteil zwischen 0 und 1 für jede Kategorie",
+    [...verlust.values()].every((v) => v >= 0 && v <= 1), [...verlust.entries()]);
+
+  // --- Verlaufslinie je Kategorie (Punkt 5) ---
+  const sparklines = $("main").querySelectorAll(".moneySparklineWrap svg");
+  ok("Kategorien mit genug Monaten zeigen eine Verlaufslinie", sparklines.length > 0, sparklines.length);
+  ok("Verlaufslinien haben einen betonten letzten Punkt in Akzentfarbe",
+    [...sparklines].every((s) => !!s.querySelector("circle")));
+  ok("„Sonstige“ bekommt keine Verlaufslinie (keine echte Kategorie)",
+    !$("main").querySelector(".moneyBarRow.muted .moneySparklineWrap"));
+
+  ok("Zu wenige Datenpunkte (< 3) liefern keine Linie, statt eine bedeutungslose zu zeichnen",
+    T.moneySparklineSvg([5, 8]) === "");
+  ok("Lauter Nullen liefern ebenfalls keine Linie", T.moneySparklineSvg([0, 0, 0, 0]) === "");
+  ok("Genug echte Punkte liefern eine Linie", T.moneySparklineSvg([1, 5, 3, 8, 2, 9]).includes("<svg"));
+
+  const verlauf = T.kategorieMonatsverlauf(App.ctx, 6);
+  ok("kategorieMonatsverlauf() liefert genau 6 Monatswerte je Kategorie",
+    [...verlauf.values()].every((arr) => arr.length === 6));
+
+  // --- "Immer wieder gekauft": dieselbe Rangliste je Produkt ---
+  App.goto("zahlen");
+  const produktSection = [...$("main").querySelectorAll(".moneySection")]
+    .find((s) => s.textContent === "Immer wieder gekauft");
+  ok("Zeigt einen eigenen Bereich für regelmäßig gekaufte Produkte", !!produktSection);
+  ok("Hähnchenbrust (die Demo-Verschwendung) taucht darin auf",
+    /Hähnchenbrust/.test($("main").textContent));
+
+  const produktZeilen = produktSection
+    ? [...produktSection.parentElement.children].slice([...produktSection.parentElement.children].indexOf(produktSection))
+    : [];
+  const produktRows = produktZeilen.filter((el) => el.classList && el.classList.contains("moneyBarRow"));
+  ok("Zeigt mindestens eine Produktzeile", produktRows.length > 0, produktRows.length);
+  ok("Mindestens eine Produktzeile trägt eine Verlaufslinie",
+    produktRows.some((r) => r.querySelector(".moneySparklineWrap svg")));
+
+  const rang = T.produktRang(App.ctx, App.ctx.history);
+  ok("produktRang() nimmt NUR Produkte mit gelerntem Rhythmus",
+    [...rang.keys()].every((name) => [...App.ctx.rhythms.keys()].some((pid) => (T.byId(pid) || {}).name === name)));
+
+  const pVerlust = T.produktVerlust(App.ctx);
+  ok("produktVerlust() liefert einen Anteil zwischen 0 und 1 je Produkt",
+    [...pVerlust.values()].every((v) => v >= 0 && v <= 1));
+
+  const pVerlauf = T.produktMonatsverlauf(App.ctx, 6);
+  ok("produktMonatsverlauf() liefert genau 6 Monatswerte je Produkt",
+    [...pVerlauf.values()].every((arr) => arr.length === 6));
+  ok("Ein einmalig gekauftes Produkt (kein Rhythmus) taucht NICHT im Produkt-Verlauf auf", (() => {
+    // Irgendein Produkt aus der Historie suchen, das KEINEN Rhythmus hat.
+    const einmalig = App.ctx.history.find((h) => h.productId && !App.ctx.rhythms.has(h.productId));
+    if (!einmalig) return true; // Demo hat evtl. keinen solchen Fall -- kein Widerspruch
+    const p = T.byId(einmalig.productId);
+    return !p || !pVerlauf.has(p.name);
+  })());
+
+  // --- Antippen öffnet dasselbe Detail-Blatt wie "Preise"/"Rhythmen" ---
+  const produktRow = produktRows[0];
+  ok("Eine Produktzeile ist ein Knopf (Kategorien/Märkte sind es nicht)",
+    produktRow && produktRow.tagName === "BUTTON", produktRow && produktRow.tagName);
+  const kategorieRow = $("main").querySelector(".moneyBarRow");
+  ok("Eine Kategorie-Zeile bleibt ein unklickbares div", kategorieRow && kategorieRow.tagName === "DIV",
+    kategorieRow && kategorieRow.tagName);
+  if (produktRow) {
+    const name = produktRow.querySelector(".moneyBarLabel").textContent;
+    click(produktRow);
+    ok("Öffnet das Detail-Blatt des angetippten Produkts",
+      $("sheetTitle").textContent === name, `${name} -> ${$("sheetTitle").textContent}`);
+    ok("Das Blatt zeigt echte Fakten (Rhythmus, Preis, …), nicht nur den Namen",
+      $("sheetOpts").querySelectorAll(".facts dt").length > 3);
+    App.closeSheet();
+  }
 }
 
 console.log("\n--- Die Übersicht ---");
@@ -1453,6 +1719,118 @@ console.log("\n--- Die Übersicht ---");
   ok("Nachts nicht mit „Morgen“", !/Morgen/.test(App.greeting(2)), App.greeting(2));
 }
 
+console.log("\n--- Das Produkt-Blatt: ein Leitwert, dann Gruppen ---");
+{
+  /* Das Blatt war eine flache Liste aus zehn gleich aussehenden
+     Zeilen -- „Kategorie: Fleisch/Fisch" so groß wie „Verbrauchs-
+     datum: höchstens 2 Tage". Alles gleich gewichtet heißt nichts
+     gewichtet. Diese Prüfungen halten die neue Rangfolge fest, damit
+     das Blatt nicht wieder zuwächst. */
+  D.reset();
+  D.loadDemo("full");
+  App.goto("bestand");
+
+  productSheetFor("haehnchen");
+  const blatt = $("sheetOpts");
+
+  ok("Das Blatt führt mit genau EINEM Leitwert",
+    blatt.querySelectorAll(".pLead").length === 1,
+    blatt.querySelectorAll(".pLead").length);
+
+  /* Die Rangfolge ist eine Rangfolge der FOLGEN, nicht der
+     Reihenfolge im Datensatz: ein Verbrauchsdatum kann krank machen
+     und schlägt deshalb alles andere. */
+  ok("Bei einem Verbrauchsdatum-Produkt führt das Verbrauchsdatum",
+    /Verbrauchsdatum/.test(blatt.querySelector(".pLead").textContent),
+    blatt.querySelector(".pLead").textContent.slice(0, 60));
+  ok("Und ist als dringend gekennzeichnet, nicht nur größer gesetzt",
+    blatt.querySelector(".pLead").classList.contains("red"));
+
+  /* Der Leitwert kann nur EINE Sache zeigen -- die zweitwichtigste
+     darf dadurch nicht verschwinden. Genau das war beim Umbau
+     zuerst passiert: Hähnchenbrust verlor Rhythmus UND Verlustquote,
+     weil das Verbrauchsdatum den Platz bekam. */
+  const kennzahlen = blatt.querySelector(".pStats");
+  ok("Die zweitwichtigsten Zahlen stehen daneben, nicht im Nichts", !!kennzahlen);
+  if (kennzahlen) {
+    ok("Der Rhythmus bleibt sichtbar, obwohl er nicht der Leitwert ist",
+      /Rhythmus/.test(kennzahlen.textContent), kennzahlen.textContent);
+    ok("Die Verlustquote ebenso",
+      /Verlust/.test(kennzahlen.textContent), kennzahlen.textContent);
+    ok("Höchstens drei Kennzahlen — sonst ist es wieder eine Liste",
+      kennzahlen.querySelectorAll(".pStat").length <= 3);
+  }
+
+  /* Der Preis war ein Satz: „zuletzt 7,49 € · üblich 7,24 € · Spanne
+     6,99 €–7,49 €" -- auf schmalen Geräten mit Umbruch mitten in der
+     Zahl. Er ist jetzt aufgeteilt nach Bedeutung: der zuletzt
+     gezahlte Preis ist eine KENNZAHL (mit Farbe als Vergleich zum
+     üblichen), „üblich" und „Spanne" sind BEZUGSWERTE in der
+     Faktenliste. Ein eigener Abschnitt mit Überschrift und drei
+     umrandeten Kästchen war für vier Zahlen zu viel Apparat. */
+  ok("Der zuletzt gezahlte Preis steht als Kennzahl, nicht in einem Satz",
+    kennzahlen && /zuletzt/.test(kennzahlen.textContent), kennzahlen && kennzahlen.textContent);
+  ok("Die Bezugswerte stehen als eigene Faktenzeilen",
+    /üblicher Preis/.test(blatt.textContent) && /Preisspanne/.test(blatt.textContent));
+  ok("Die Spanne trägt nur EIN Eurozeichen (sonst bricht sie um)",
+    !/€\s*–/.test(blatt.textContent),
+    (blatt.textContent.match(/.{0,15}€\s*–.{0,15}/) || [""])[0]);
+
+  /* Der eigentliche Befund nach der ersten Fassung: sortiert war sie,
+     ruhig nicht. Kästchen mit Haarlinien-Fugen für jede Kennzahl und
+     jeden Preiswert ergaben ein halbes Dutzend zusätzlicher Linien
+     auf einem Bildschirm, der schon Karten und Faktenzeilen trägt. */
+  ok("Kennzahlen stehen ohne Kästchen -- Abstand statt Rahmen",
+    !blatt.querySelector(".pPrice") && !blatt.querySelector(".pPriceCell"));
+  ok("Höchstens eine Zwischenüberschrift im sichtbaren Teil über der Verlust-Karte",
+    [...blatt.querySelectorAll(".sheetGroupTitle")].length <= 2,
+    [...blatt.querySelectorAll(".sheetGroupTitle")].map((x) => x.textContent).join(" | "));
+
+  /* Herkunft und Datenqualität sind der Kern des Vertrauens-
+     versprechens und dürfen nicht verschwinden -- aber sie müssen
+     beim Öffnen nicht im Weg stehen. */
+  const herkunft = [...blatt.querySelectorAll("details")]
+    .find((d) => /Wie die App darauf kommt/.test(d.textContent));
+  ok("Die Herkunft der Zahlen ist eingeklappt erreichbar", !!herkunft);
+  if (herkunft) {
+    ok("Und beim Öffnen des Blattes zugeklappt", !herkunft.open);
+    ok("Der Inhalt bleibt trotzdem im Dokument (Suche, Vorlesehilfe)",
+      /Datenqualität/.test(herkunft.textContent));
+  }
+
+  /* Kein Abschnitt, der nur mitteilt, dass nichts bekannt ist.
+     „Bestand: nicht schätzbar" stand vorher als eigene Zeile ganz
+     oben zwischen den echten Angaben. */
+  const ueberschriften = [...blatt.querySelectorAll(".sheetGroupTitle")].map((x) => x.textContent);
+  ok("Kein leerer Abschnitt mehr im sichtbaren Teil",
+    !ueberschriften.includes("Vorrat") || /Bestand|Reichweite/.test(blatt.textContent));
+  ok("Die Auskunft „nicht schätzbar“ ist trotzdem noch da, nur weiter unten",
+    !herkunft || /nicht schätzbar|Bestand/.test(blatt.textContent));
+
+  App.closeSheet();
+
+  /* Ohne Verbrauchsdatum und ohne hohen Verlust führt der Rhythmus. */
+  productSheetFor("milch_vollmilch");
+  const b2 = $("sheetOpts");
+  ok("Ohne Dringlichkeit führt der Rhythmus das Blatt an",
+    /Tage/.test(b2.querySelector(".pLead").textContent),
+    b2.querySelector(".pLead").textContent.slice(0, 40));
+  ok("Und ohne rote Kennzeichnung",
+    !b2.querySelector(".pLead").classList.contains("red"));
+  ok("Das Wort „Rhythmus“ bleibt im Blatt, auch wenn der Leitwert es umschreibt",
+    /Rhythmus/.test(b2.textContent));
+  App.closeSheet();
+
+  /* Ein Haushaltsprodukt rechnet anders und zeigt deshalb andere
+     Gruppen -- aber denselben Aufbau. */
+  productSheetFor("waschmittel");
+  const b3 = $("sheetOpts");
+  ok("Auch ein Haushaltsprodukt bekommt einen Leitwert", !!b3.querySelector(".pLead"));
+  ok("Und seine eigenen Gruppen statt der Lebensmittel-Gruppen",
+    /Verbrauch/.test(b3.textContent) && !/Frische & Lagerung/.test(b3.textContent));
+  App.closeSheet();
+}
+
 console.log("\n--- Die Startseite bleibt aufgeräumt ---");
 {
   D.reset();
@@ -1469,7 +1847,9 @@ console.log("\n--- Die Startseite bleibt aufgeräumt ---");
 
   ok("Die Liste ist da", !!main.querySelector(".items"));
   ok("Der Weg in die Gangansicht ist da",
-    [...main.querySelectorAll("button")].some((b) => b.textContent === "Nach Gängen"));
+    [...$("appbar").querySelectorAll("button")].some((b) => b.textContent === "Nach Gängen"));
+  ok("Und steht nur dort, nicht ein zweites Mal unten in der Liste",
+    ![...main.querySelectorAll("button")].some((b) => b.textContent === "Nach Gängen"));
   ok("Und das Hinzufügen", !!main.querySelector(".addRow"));
 
   /* Was umgezogen ist, ist NICHT verschwunden. */
@@ -1731,7 +2111,9 @@ console.log("\n--- Einkauf aus einem Bild ---");
   App.render();
   const txt = $("main").textContent;
   ok("Mit Texterkennung erscheint der Bildweg", /fotografieren|Bild wählen/.test(txt));
-  ok("Und sagt, wo das Bild bleibt", /bleibt auf dem Gerät/.test(txt));
+  ok("Und sagt, wo Bild und Bon-Text bleiben", /bleiben auf dem Gerät/.test(txt));
+  ok("Und sagt ehrlich, was NICHT auf dem Gerät bleibt",
+    /Open Food Facts/.test(txt) && /reiner Name, ohne Preis, Datum oder Markt/.test(txt), txt);
   const knopf = [...$("main").querySelectorAll("button")].find((b) => /Bild wählen/.test(b.textContent));
   ok("Es gibt eine Schaltfläche zum Wählen", !!knopf);
   const kamera = [...$("main").querySelectorAll("input[type=file]")].find((i) => i.hasAttribute("capture"));
@@ -1755,12 +2137,20 @@ console.log("\n--- Einkauf aus einem Bild ---");
     p.rows.every((r) => !/summe/i.test(r.raw)), p.rows.map((r) => r.raw).join(" | "));
   ok("Die Gegenprobe gegen die aufgedruckte Summe geht auf",
     p.printedTotal === 3.77 && p.totalOk === true, `${p.printedTotal} / ${p.totalOk}`);
-  ok("Und die sicheren sind wirklich sicher",
-    p.rows.filter((r) => r.productId).length === 3,
-    p.rows.map((r) => r.raw + "->" + r.productId).join(" | "));
+
+  // Nicht alle drei sind schon sicher -- "Bananen lose" braucht eine
+  // Bestätigung (0.81, unter der sicher-Schwelle). addReceipt bucht
+  // unbestätigte Zeilen NICHT automatisch (siehe Kommentar dort);
+  // hier wird die Bestätigung darum wie in der Oberfläche nachgeholt,
+  // bevor gebucht wird.
+  ok("Zwei Zeilen sind sofort sicher, eine braucht eine Bestätigung",
+    p.rows.filter((r) => r.productId && !r.needsConfirmation).length === 2 &&
+    p.rows.filter((r) => r.needsConfirmation).length === 1,
+    p.rows.map((r) => `${r.raw}->${r.productId}${r.needsConfirmation ? " (unsicher)" : ""}`).join(" | "));
+  p.rows.forEach((r) => { if (r.needsConfirmation) r.needsConfirmation = false; });
 
   const res = D.addReceipt({ date: gelesen.date, store: gelesen.store, items: p.rows });
-  ok("Der Bon lässt sich buchen", res.count === 3, res.count);
+  ok("Der Bon lässt sich buchen, sobald alles bestätigt ist", res.count === 3, res.count);
   ok("Und steht in der Historie", D.get().receipts.length === vorher + 1);
 
   // Aus dem Bild kommt die Bonzeile — und damit die Marke. Ohne sie
@@ -1786,6 +2176,264 @@ console.log("\n--- Einkauf aus einem Bild ---");
   App.goto("liste");
   ok("Kein Hörer bleibt nach dem Wechsel hängen",
     !App._cleanup || App._cleanup.length === 0, App._cleanup && App._cleanup.length);
+}
+
+console.log("\n--- Aus dem Teilen-Menü (REWE, Lidl & Co. → „eBon teilen“) ---");
+{
+  /* Was hier NICHT geprüft wird, und warum: den eigentlichen Worker
+     (sw.js) führt Node nicht aus — er läuft in einem eigenen
+     ServiceWorker-Kontext, den weder jsdom noch dieser Testlauf
+     nachbildet. Geprüft wird deshalb die Kette AB dem Punkt, an dem
+     der Worker seine Arbeit abgegeben hat: eine Datei im
+     Cache-Speicher, `?teilen=1` in der Adresse. Dass der Worker
+     selbst korrekt daraus einen Cache-Eintrag macht, hält Abschnitt
+     „Ein Ding, ein Name“ unten als Quelltext-Prüfung fest — mehr geht
+     ohne echten Browser nicht ehrlich zu behaupten. */
+  const legeInCache = async (text, datei) => {
+    const cache = await window.caches.open("einkaufsanker-geteilt");
+    await cache.put("./geteilt-text", { text: async () => text });
+    if (datei) await cache.put("./geteilt-datei", { blob: async () => datei });
+    else await cache.delete("./geteilt-datei");
+  };
+
+  D.reset();
+  D.loadDemo("full");
+  // App.capture überlebt D.reset() -- das ist Oberflächenzustand, kein
+  // Haushaltszustand. Ohne diese Zeile träfe der erste Fall hier auf
+  // Text, der von einem früheren Testabschnitt übrig ist.
+  App.capture.text = "";
+
+  // --- Nur Text (z. B. eine Bon-Zusammenfassung ohne Bilddatei) ---
+  await legeInCache("Vollmilch 3,5% 1,29\nNaturjoghurt 0,59", null);
+  window.history.pushState(null, "", "/?teilen=1#start");
+  await App.consumeSharedIfAny();
+
+  ok("Springt auf die Erfassen-Seite", App.tab === "erfassen", App.tab);
+  ok("Und dorthin, wo der Bon-Text steht", App.capture.tab === "scan", App.capture.tab);
+  ok("Die Adresse ist wieder sauber", !window.location.search.includes("teilen"), window.location.search);
+  App.render();
+  ok("Der geteilte Text steht im Feld",
+    $("main").querySelector("textarea").value.includes("Naturjoghurt"),
+    $("main").querySelector("textarea").value);
+
+  // --- Bild, mit Texterkennung: läuft automatisch durch, wie beim
+  //     Einfügen oder Ablegen eines Bildes auch. ---
+  App.capture.text = "";
+  T.OCR.engine = () => "REWE\nBrot 2,19\nSUMME 2,19";
+  await legeInCache("", { type: "image/jpeg" });
+  window.history.pushState(null, "", "/?teilen=1#start");
+  await App.consumeSharedIfAny();
+  App.render();
+  // OCR.read() hängt an einem Versprechen -- eine echte Wartezeit statt
+  // einer geratenen Anzahl Microtask-Runden, sonst wird der Test genauso
+  // brüchig wie das, was er prüfen soll.
+  await new Promise((res) => setTimeout(res, 20));
+  ok("Ein geteiltes Bild läuft von selbst durch die Texterkennung",
+    /Brot/.test(App.capture.text || ""), App.capture.text);
+
+  // --- PDF (manche Händler-Apps bieten den eBon so an): ehrlich
+  //     sagen, dass das noch nicht geht, statt es stillschweigend
+  //     zu verwerfen. ---
+  App.capture.text = "";
+  T.OCR.engine = null;
+  await legeInCache("", { type: "application/pdf" });
+  window.history.pushState(null, "", "/?teilen=1#start");
+  await App.consumeSharedIfAny();
+  App.render();
+  ok("Ein PDF wird nicht stillschweigend verworfen",
+    /Texterkennung.*noch nicht|noch nicht.*Texterkennung/i.test($("sheetTitle").textContent) ||
+    /Screenshot/.test($("sheetOpts").textContent),
+    $("sheetTitle").textContent + " | " + $("sheetOpts").textContent);
+  App.closeSheet();
+
+  // --- Ohne "?teilen=1" passiert nichts — ein gewöhnlicher Start
+  //     darf den Cache nicht anfassen. ---
+  App.pendingShare = null;
+  window.history.pushState(null, "", "/#start");
+  await App.consumeSharedIfAny();
+  ok("Ohne Markierung in der Adresse bleibt alles unberührt", App.pendingShare === null);
+
+  /* Die Gegenseite: dass der Worker (sw.js) aus einer geteilten
+     Anfrage tatsächlich einen Cache-Eintrag macht und dahin
+     umleitet, wo App.consumeSharedIfAny() oben es erwartet. Node
+     führt sw.js nicht aus (eigener ServiceWorker-Kontext) — geprüft
+     wird deshalb der Quelltext, nicht das Verhalten. Das ist bewusst
+     schwächer als ein echter Testlauf und wird hier auch so benannt. */
+  const swSrc = fs.readFileSync(path.join(WEB, "sw.js"), "utf8");
+  ok("Der Worker fängt POST-Anfragen ans Teilen-Ziel ab",
+    /method === "POST"/.test(swSrc) && /searchParams\.has\("teilen"\)/.test(swSrc));
+  ok("Und legt Datei und Text in einem eigenen Zwischenspeicher ab",
+    /geteilt-text/.test(swSrc) && /geteilt-datei/.test(swSrc));
+  ok("Und leitet danach zur App zurück",
+    /Response\.redirect/.test(swSrc));
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(WEB, "manifest.webmanifest"), "utf8"));
+  const ziel = manifest.share_target || {};
+  ok("Das Manifest meldet ein Teilen-Ziel", !!manifest.share_target);
+  ok("POST mit Formulardaten, wie es der Worker erwartet",
+    ziel.method === "POST" && ziel.enctype === "multipart/form-data");
+  ok("Nimmt Bilder, PDFs und reinen Text an",
+    !!(ziel.params && ziel.params.files && ziel.params.files[0] &&
+      ["image/*", "application/pdf", "text/plain"]
+        .every((t) => ziel.params.files[0].accept.includes(t))));
+}
+
+console.log("\n--- Angebote: die Lebensmittel-Entsprechung zu \"Günstig bevorraten\" ---");
+{
+  D.reset();
+  App.goto("start");
+  App.render();
+  ok("Ohne Historie keine Angebote", App.ctx.foodDeals.length === 0);
+
+  // Fünf Käufe zu üblichem Preis, damit Rhythmus UND Preisgedächtnis
+  // etwas zu arbeiten haben -- dann einer deutlich billiger.
+  const kauf = (tag, preis) => D.addReceipt({
+    date: tag, store: "Test", items: [{ productId: "kaffee", quantity: 1, unitPrice: preis }]
+  });
+  kauf("2026-06-01", 6.49);
+  kauf("2026-06-15", 6.49);
+  kauf("2026-06-29", 6.49);
+  kauf("2026-07-13", 6.49);
+  kauf("2026-07-27", 4.99);   // gut 23 % unter dem üblichen Preis
+  App.render();
+
+  const deal = App.ctx.foodDeals.find((d) => d.productId === "kaffee");
+  ok("Der günstige Kauf wird als Angebot erkannt", !!deal, JSON.stringify(App.ctx.foodDeals));
+  ok("Der Nachlass stimmt ungefähr",
+    !!deal && deal.nachlass > 0.20 && deal.nachlass < 0.26, deal && deal.nachlass);
+
+  ok("Erscheint in \"Jetzt zu tun\"",
+    /Angebot/.test($("main").textContent) && /Kaffee/.test($("main").textContent));
+
+  App.goto("angebote");
+  App.render();
+  ok("Die Angebote-Seite zeigt das Produkt", /Kaffee/.test($("main").textContent));
+  // "zuletzt DD.MM.JJJJ" statt eines aktuellen Preises -- die Zeile
+  // behauptet an keiner Stelle, das gelte im Laden gerade jetzt.
+  ok("Und sagt ehrlich, dass es der letzte GESEHENE Preis ist, kein Regalpreis",
+    /zuletzt \d\d\.\d\d\.\d{4}/.test($("main").textContent), $("main").textContent);
+
+  // Zurück zu leer: ohne Treffer bleibt die Seite verständlich, keine
+  // leere Fläche.
+  D.reset();
+  App.goto("start");
+  App.render();
+  ok("Ohne Angebote verschwindet die Zeile aus \"Jetzt zu tun\"",
+    !/Angebot erkannt|Angebote erkannt/.test($("main").textContent));
+  App.goto("angebote");
+  App.render();
+  ok("Und die Seite selbst erklärt das Fehlen statt leer zu bleiben",
+    /Gerade keine Angebote erkannt/.test($("main").textContent));
+  App.goto("start");
+}
+
+console.log("\n--- Zweite Stufe: Open Food Facts als Übersetzer ---");
+{
+  /* T.OffLookup.fetcher ersetzt fetch() — genau das Muster von
+     T.OCR.engine. Kein Testlauf hier geht jemals ins echte Internet. */
+  window.localStorage.removeItem(T.OffLookup.CACHE_KEY);
+
+  let anfragen;
+  const antwortMit = (name) => {
+    anfragen = [];
+    T.OffLookup.fetcher = (url) => {
+      anfragen.push(url);
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ products: name ? [{ product_name_de: name }] : [] })
+      });
+    };
+  };
+
+  antwortMit("Naturjoghurt");
+  const treffer = await T.OffLookup.find("GL Proteinjogh.sort.200g");
+  ok("Ein Treffer liefert den ausgeschriebenen Namen", treffer === "Naturjoghurt", treffer);
+  ok("Genau eine Anfrage wurde gestellt", anfragen.length === 1, anfragen.length);
+
+  const url = new URL(anfragen[0]);
+  const params = url.searchParams;
+  ok("Es geht nur der bereinigte Name raus, kein Preis/Datum/Markt",
+    !/\d/.test(params.get("search_terms") || "") &&
+    !/[0-9]{1,2}[.\/][0-9]{1,2}/.test(anfragen[0]) &&
+    !anfragen[0].includes("Netto") && !anfragen[0].includes("REWE"),
+    anfragen[0]);
+  ok("Die Anfrage geht an Open Food Facts, sonst nirgendwohin",
+    url.hostname === "world.openfoodfacts.org", url.hostname);
+
+  antwortMit("sollte nie gerufen werden");
+  const zweitesMal = await T.OffLookup.find("GL Proteinjogh.sort.200g");
+  ok("Dieselbe Schreibweise wird kein zweites Mal gefragt",
+    zweitesMal === "Naturjoghurt" && anfragen.length === 0, `${zweitesMal}, ${anfragen.length} Anfragen`);
+
+  antwortMit(null);
+  const keinTreffer = await T.OffLookup.find("Vollkommen Erfundenes Produkt XYZ");
+  ok("Kein Treffer ist kein Fehler", keinTreffer === null);
+  antwortMit("sollte wieder nie gerufen werden");
+  await T.OffLookup.find("Vollkommen Erfundenes Produkt XYZ");
+  ok("Auch ein Fehlschlag wird nicht zweimal gefragt", anfragen.length === 0, anfragen.length);
+
+  window.localStorage.removeItem(T.OffLookup.CACHE_KEY);
+  const urspruenglichOnline = window.navigator.onLine;
+  Object.defineProperty(window.navigator, "onLine", { value: false, configurable: true });
+  antwortMit("sollte offline nie gerufen werden");
+  const ohneNetz = await T.OffLookup.find("Ganz Neuer Name");
+  ok("Ohne Netz wird gar nicht erst gefragt",
+    ohneNetz === null && anfragen.length === 0, anfragen.length);
+  Object.defineProperty(window.navigator, "onLine", { value: urspruenglichOnline, configurable: true });
+
+  window.localStorage.removeItem(T.OffLookup.CACHE_KEY);
+  T.OffLookup.fetcher = () => Promise.reject(new Error("Netzwerk weg"));
+  const beiFehler = await T.OffLookup.find("Wieder Ein Neuer Name");
+  ok("Ein Netzwerkfehler wirft nicht, sondern zählt als kein Treffer", beiFehler === null);
+
+  // ---------------------------------------------------------------
+  // Data.enrichUnmatched: der Umweg bucht nie automatisch
+  // ---------------------------------------------------------------
+  window.localStorage.removeItem(T.OffLookup.CACHE_KEY);
+
+  const ohneUnbekannte = D.parseReceiptText("Vollmilch 3,5%  1,29 A");
+  const vorherOffen = ohneUnbekannte.open;
+  T.OffLookup.fetcher = () => { throw new Error("Es hätte gar nicht erst gefragt werden dürfen"); };
+  const nichtsZuTun = await D.enrichUnmatched(ohneUnbekannte);
+  ok("Ein Bon voller sicherer Treffer verursacht keinen einzigen Netzwerkversuch",
+    nichtsZuTun === false && ohneUnbekannte.open === vorherOffen);
+
+  /* "Vollmilch" ausgeschrieben würde inzwischen schon lokal genügen
+     (0.70, über der Bestätigungs-Schwelle) — dieser Test soll aber
+     den Umweg über Open Food Facts prüfen, also eine Zeile, die
+     lokal wirklich unter der Schwelle bleibt (0.62). */
+  antwortMit("Vollmilch");
+  const mitUnbekannter = D.parseReceiptText("Xyzabc Vollm FH 1L  1,29 A");
+  const zeileVorher = mitUnbekannter.rows[0];
+  const geaendert = await D.enrichUnmatched(mitUnbekannter);
+  const zeileNachher = mitUnbekannter.rows[0];
+  ok("Eine unbekannte Zeile bekommt über den Umweg einen Vorschlag",
+    geaendert === true && !!zeileNachher.productId, JSON.stringify(zeileNachher));
+  ok("Der Vorschlag bleibt IMMER zu bestätigen, nie automatisch sicher",
+    zeileNachher.needsConfirmation === true, JSON.stringify(zeileNachher));
+  ok("Die Herkunft ist am Weg erkennbar (für die Anzeige „über Internet-Abgleich“)",
+    String(zeileNachher.method || "").startsWith("extern:"), zeileNachher.method);
+  ok("sure/open werden nach der Ergänzung neu gezählt",
+    mitUnbekannter.open === mitUnbekannter.rows.filter((r) => r.needsConfirmation).length);
+
+  antwortMit(null);
+  const bleibtOffen = D.parseReceiptText("Voellig Unbekanntes Zeug Ohne Treffer XQ9  1,29 A");
+  await D.enrichUnmatched(bleibtOffen);
+  ok("Kein Treffer bei Open Food Facts lässt die Zeile ehrlich offen, statt zu raten",
+    bleibtOffen.rows[0].productId === null);
+
+  /* An der echten Schnittstelle beobachtet, nicht ausgedacht: manche
+     Open-Food-Facts-Einträge hängen die Barcode-Nummer direkt hinter
+     den Namen — „Milsani Joghurt mild 3,5 % Fett 4061458028820".
+     Eine 13-stellige Ziffernfolge im Rückabgleich verdünnt nur das
+     Ergebnis, kein echter Produktname enthält so etwas. */
+  ok("Eine angehängte Barcode-Nummer wird entfernt",
+    T.OffLookup._bereinigt("Milsani Joghurt mild 3,5 % Fett 4061458028820") ===
+      "Milsani Joghurt mild 3,5 % Fett");
+  ok("Eine kurze, plausible Zahl im Namen bleibt unangetastet",
+    T.OffLookup._bereinigt("Produkt 12345") === "Produkt 12345");
+
+  T.OffLookup.fetcher = null;
 }
 
 console.log("\n--- Marken erklären sich ---");
@@ -2263,6 +2911,117 @@ console.log("\n--- Ein Ding, ein Name ---");
   // und auch nicht „alle 1 Tag“.
   ok("Ein Tagesrhythmus heißt täglich",
     T.alleTage(1) === "täglich" && T.alleTage(3) === "alle 3 Tage", T.alleTage(1));
+}
+
+console.log("\n--- Stufe 2 ist vorbereitet, aber nirgends erreichbar ---");
+{
+  /* schwarmClient.js ist gebaut und im Bündel (siehe test/schwarm.js
+     für die Garantie, dass er trotzdem nichts sendet). Diese Prüfung
+     hält die ZWEITE Garantie fest, die für "noch nicht am Start"
+     nötig ist: keine Oberfläche verweist darauf. Kein Menüpunkt, kein
+     Knopf, keine Einstellung -- ein Nutzer, der die App heute
+     bedient, kann diese Funktion gar nicht finden, geschweige denn
+     anschalten. */
+  const v = fs.readFileSync(path.join(WEB, "views.js"), "utf8");
+  const a = fs.readFileSync(path.join(WEB, "app.js"), "utf8");
+  ok("Kein Menüpunkt oder Knopf verweist auf die Schwarm-Einwilligung",
+    !/schwarm/i.test(v) && !/schwarm/i.test(a));
+  ok("data.js liest oder schreibt die Einwilligung dort dennoch nicht aktiv um",
+    !/settings\.schwarm\.enabled\s*=/.test(fs.readFileSync(path.join(WEB, "data.js"), "utf8")));
+}
+
+console.log("\n--- Das Wesen ---");
+{
+  /* Reihenfolge ist Dringlichkeit -- ein akutes Risiko schlägt einen
+     guten Streak. Jeder Fall baut nur die Signale, die er braucht,
+     der Rest bleibt bei "nichts los". */
+  const leer = { safety: null, pulse: { days: [{ events: [] }] }, forgotten: [], streak: { weeks: 0 } };
+
+  ok("Kühlkette schlägt alles", T.mascotMood({ ...leer, safety: { message: "x" }, streak: { weeks: 5 } }) === "alarm");
+  ok("Verderb heute ist genauso ein Alarm", T.mascotMood({
+    ...leer, pulse: { days: [{ events: [{ kind: "verderb" }] }] }, streak: { weeks: 5 }
+  }) === "alarm");
+  ok("Vergessenes ohne akutes Risiko macht es nur besorgt", T.mascotMood({
+    ...leer, forgotten: [{ productId: "x" }], streak: { weeks: 5 }
+  }) === "besorgt");
+  ok("Guter Streak ohne offene Sorgen ist froh", T.mascotMood({ ...leer, streak: { weeks: 3 } }) === "froh");
+  ok("Ohne jedes Signal bleibt es neutral", T.mascotMood(leer) === "neutral");
+
+  // Die vier bekannten Stimmungen tragen ihre eigene Klasse (Farbe
+  // kommt darüber aus app.css) und ein eigenes Gesicht.
+  ["froh", "neutral", "besorgt", "alarm"].forEach((m) => {
+    const svg = T.mascotSvg(m, 40);
+    ok(`mascotSvg("${m}") trägt die passende Klasse`, new RegExp(`class="mascot ${m}"`).test(svg), svg.slice(0, 60));
+    ok(`mascotSvg("${m}") hat Augen, Brauen und einen Mund`,
+      /mascotEyeWhite/.test(svg) && /mascotBrow/.test(svg) && /mascotMouth/.test(svg));
+  });
+
+  // Eine unbekannte Stimmung darf nicht mit einem Gesicht ohne Farbe
+  // enden -- app.css kennt nur die vier benannten Klassen.
+  ok("Unbekannte Stimmung fällt auf neutral zurück, nicht auf eine Klasse ohne Farbe",
+    /class="mascot neutral"/.test(T.mascotSvg("erfunden", 40)));
+
+  // Und im echten Kopfbereich: dieselbe Stelle läuft auf jeder Seite.
+  D.reset(); D.loadDemo("full");
+  ["start", "liste", "bestand", "zahlen", "mehr"].forEach((tab) => {
+    App.goto(tab);
+    ok(`Das Wesen steht im Kopfbereich von "${tab}"`, !!$("largeTitle").querySelector("svg.mascot"));
+  });
+
+  /* --- Antippen: dasselbe Wesen ist jetzt eine Fläche, die etwas
+     öffnet -- keine Dekoration mehr. Geprüft wird dieselbe
+     Rangfolge wie bei mascotMood, aber am Ergebnis der Handlung,
+     nicht nur an der Farbe. */
+  ok("mascotTap greift bei Kühlkette auf die bestehende Meldung zurück, schreibt keine neue", () => {
+    const gesehen = [];
+    const app = { notice: (t, x) => gesehen.push([t, x]) };
+    T.mascotTap({ safety: { message: "Hähnchenbrust direkt kühlen", source: "BZfE" } }).run(app);
+    return gesehen.length === 1 && gesehen[0][1].includes("Hähnchenbrust") && gesehen[0][1].includes("BZfE")
+      ? true : JSON.stringify(gesehen);
+  });
+  ok("Ohne jedes Signal öffnet es eine ruhige Meldung, keinen Fehler", () => {
+    let gesehen = null;
+    T.mascotTap({ safety: null, pulse: { days: [{ events: [] }] }, forgotten: [], streak: { weeks: 0 } })
+      .run({ notice: (t, x) => { gesehen = [t, x]; } });
+    return Array.isArray(gesehen) ? true : gesehen;
+  });
+
+  App.goto("start");
+  const btn = $("largeTitle").querySelector(".mascotBtn");
+  ok("Das Wesen im Kopfbereich ist jetzt eine Schaltfläche mit Namen",
+    !!btn && btn.tagName === "BUTTON" && !!btn.getAttribute("aria-label"));
+  click(btn);
+  ok("Antippen öffnet tatsächlich ein Blatt", !$("sheet").hidden);
+  App.closeSheet();
+
+  /* --- Leere Ansichten: dasselbe Wesen statt einer bloßen Textzeile.
+     "Nichts fällig, alles im Rhythmus" ist die eine Stelle mit einer
+     echten guten Nachricht -- deshalb dort ausdrücklich "froh". */
+  D.reset();
+  App.goto("zahlen");
+  ok("Die leere Zahlen-Seite zeigt das Wesen (neutral, keine Daten)",
+    !!$("main").querySelector(".emptyMascot svg.mascot.neutral"));
+
+  App.goto("faellig");
+  ok("Die leere Fällig-Seite ohne Haushaltsprodukte zeigt es ebenfalls neutral",
+    !!$("main").querySelector(".emptyMascot svg.mascot.neutral"));
+
+  // "Nichts fällig, alles im Rhythmus" (die Stelle, die "froh" statt
+  // "neutral" übergibt) tritt nur bei genau passender Datenlage ein
+  // und lässt sich nicht zuverlässig über Beispieldaten erzwingen --
+  // geprüft wird deshalb direkt, dass mascotSvg("froh", ...) tut, was
+  // diese Aufrufstelle von ihm erwartet.
+  ok("emptyView() mit \"froh\" trägt tatsächlich die froh-Klasse",
+    /class="mascot froh"/.test(T.mascotSvg("froh", 52)));
+  D.loadDemo("full");
+
+  /* --- Meilenstein-Feier: dieselbe Stimmung "froh" wie ein guter
+     Streak, unabhängig davon, was sonst gerade ansteht. */
+  App.celebrate({ id: "bons", icon: "receipt", level: 2, maxLevel: 5,
+    title: "Zehn Bons erfasst", note: "Weiter so." });
+  ok("Die Meilenstein-Feier zeigt das Wesen, fröhlich",
+    /class="mascot froh"/.test($("partyMascot").innerHTML));
+  App.closeParty();
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

@@ -255,7 +255,7 @@ t("mehrere Verderbliche werden gezählt, nicht aufgezählt", () => {
       { productId: "salat", name: "Salat", daysLeft: 0 }
     ]
   }, HEUTE);
-  return /2 Sachen/.test(p.headline) ? true : p.headline;
+  return /2 Produkte/.test(p.headline) ? true : p.headline;
 });
 
 t("Einkaufstag heute wird gesagt", () => {
@@ -276,7 +276,7 @@ t("bis zum Einkaufstag wird zusammengezählt", () => {
     ],
     pattern: { favouriteDay: 6 }   // Samstag = Tag 2
   }, HEUTE);
-  return /Samstag/.test(p.headline) && /2 Sachen/.test(p.headline) ? true : p.headline;
+  return /Samstag/.test(p.headline) && /2 Produkte/.test(p.headline) ? true : p.headline;
 });
 
 t("nichts heute: der nächste Tag wird genannt", () => {

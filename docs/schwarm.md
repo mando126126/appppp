@@ -1,10 +1,18 @@
 # Schwarm-Preisindex — Entwurf
 
-> Stand: 19.08.2026 · **Nicht gebaut.** Gebaut sind die beiden
-> Module, die die Entscheidungen dieses Entwurfs tragen
-> (`src/algo/priceShare.js`, `src/algo/offerAdvisor.js`) samt
-> 38 Prüfungen. Was fehlt, ist ein Server — und die Entscheidung,
-> ob es ihn geben soll.
+> Stand: 27.08.2026 · **Die Entscheidung aus §8 Punkt 1 ist gefallen:**
+> ein öffentlicher Server-Index ist das Ziel. Gebaut ist seitdem
+> `src/algo/schwarmClient.js` — die Rechnung, welche Sichtungen die
+> laufende Woche gehören, und die eine Stelle, an der eine
+> Übertragung überhaupt anfinge. Absichtlich UNTÄTIG: `ENDPOINT`
+> ist `null`, keine Oberfläche verweist darauf, und beides ist
+> testgesichert (`test/schwarm.js` Abschnitt F, `test/uitest.js`
+> „Stufe 2 ist vorbereitet, aber nirgends erreichbar"). Offen sind
+> weiterhin Punkt 2 und 3 aus §8 — beides Formsachen laut diesem
+> Dokument, aber echte, von einem Menschen zu treffende: ein
+> Verantwortlicher mit Anschrift, und eine betriebene
+> Hosting-Umgebung. Ohne beides bleibt es bei der vorbereiteten
+> Infrastruktur, die nichts überträgt.
 
 ## Worum es geht
 
