@@ -88,6 +88,11 @@ const App = {
   // Unterbereich gerade offen ist -- kein Haushaltsdatum, kein Data.update().
   zahlenTab: "ausgaben",
   mehrTab: "einstellungen",
+  // Wie oft die Sprechblase je Reiter schon geöffnet wurde -- steuert
+  // nur, welche der zutreffenden Aussagen als Nächstes dran ist
+  // (mascotMessage() rotiert reihum, nicht zufällig). Reine
+  // Anzeige-Einstellung wie zahlenFilter, kein Haushaltsdatum.
+  mascotTapCount: {},
 
   /* ---------- Zustand ändern ---------- */
   set(fn) { Data.update(fn); },
@@ -212,6 +217,7 @@ const App = {
   },
 
   goto(tab) {
+    App.closeMascotBubble();
     App.tab = tab;
     if (location.hash !== "#" + tab) location.hash = tab;
     window.scrollTo(0, 0);
@@ -517,6 +523,35 @@ const App = {
     yes.focus();
   },
   closeSheet() { document.getElementById("sheet").hidden = true; },
+
+  /* ---------- Das Wesen: Sprechblase ---------- */
+  /**
+   * Antippen öffnet oder schließt die Sprechblase -- kein Blatt, kein
+   * Vollbild, nichts, was den Rest der Seite blockiert. Der Text kommt
+   * aus mascotMessage(): regelbasiert, für den gerade offenen Reiter.
+   * Ein Zähler je Reiter sorgt dafür, dass wiederholtes Antippen durch
+   * die zutreffenden Aussagen rotiert statt jedes Mal dieselbe zu
+   * zeigen -- deterministisch, nicht zufällig, damit es sich prüfen
+   * lässt.
+   */
+  toggleMascotBubble() {
+    const bubble = document.getElementById("mascotBubble");
+    if (!bubble.hidden) { App.closeMascotBubble(); return; }
+    const seed = App.mascotTapCount[App.tab] || 0;
+    App.mascotTapCount[App.tab] = seed + 1;
+    bubble.textContent = mascotMessage(App.ctx, App.tab, seed);
+    bubble.hidden = false;
+    document.getElementById("mascotFab").setAttribute("aria-expanded", "true");
+    document.getElementById("mascotFab").setAttribute("aria-label", "Hinweis vom Wesen schließen");
+  },
+  closeMascotBubble() {
+    const bubble = document.getElementById("mascotBubble");
+    if (bubble.hidden) return;
+    bubble.hidden = true;
+    const fab = document.getElementById("mascotFab");
+    fab.setAttribute("aria-expanded", "false");
+    fab.setAttribute("aria-label", "Hinweis vom Wesen anzeigen");
+  },
 
   /**
    * Liste als Text weitergeben. Web Share, wo es das gibt, sonst
@@ -828,18 +863,19 @@ const App = {
       sub.append(tag);
     }
     textBlock.append(sub);
-    // Das Wesen: derselbe Ort auf jeder Seite, weil renderBar() auf
-    // jeder Seite läuft. Die Stimmung kommt aus mascotMood(ctx), das
-    // Antippen aus mascotTap(ctx) -- beide lesen nur Signale, die es
-    // schon gibt. Ein <button>, kein bloßes SVG: es tut jetzt etwas,
-    // also muss es auch mit der Tastatur erreichbar sein und einen
-    // Namen tragen, der sagt, was passiert -- nicht nur, dass dort
-    // ein Bild ist.
-    const tap = mascotTap(ctx);
-    const mascotBtn = el("button", "mascotBtn", mascotSvg(mascotMood(ctx)));
-    mascotBtn.setAttribute("aria-label", tap.label);
-    mascotBtn.addEventListener("click", () => tap.run(App));
-    large.append(mascotBtn);
+
+    // Das Wesen: fest positioniert außerhalb von largeTitle (siehe
+    // index.html, app.css .mascotFab) -- renderBar() aktualisiert nur
+    // sein Aussehen, nie seinen Ort im DOM, damit es auch beim
+    // Scrollen an derselben Bildschirmstelle bleibt. Die Stimmung
+    // kommt aus mascotMood(ctx), beide lesen nur Signale, die es
+    // schon gibt.
+    const fab = document.getElementById("mascotFab");
+    fab.innerHTML = mascotSvg(mascotMood(ctx), 46);
+    const offen = !document.getElementById("mascotBubble").hidden;
+    fab.setAttribute("aria-expanded", String(offen));
+    fab.setAttribute("aria-label", offen ? "Hinweis vom Wesen schließen" : "Hinweis vom Wesen anzeigen");
+    fab.onclick = () => App.toggleMascotBubble();
   },
 
   renderNav() {
@@ -1015,6 +1051,15 @@ function boot() {
     if (e.key !== "Escape") return;
     if (!document.getElementById("sheet").hidden) App.closeSheet();
     else if (App.storeOpen) App.closeStore();
+    else if (!document.getElementById("mascotBubble").hidden) App.closeMascotBubble();
+  });
+  // Sprechblase ist absichtlich kein Blatt -- also schließt sie auch
+  // nicht wie eines, sondern wie jedes andere Popover: ein Tipp
+  // irgendwo sonst auf der Seite räumt sie weg.
+  document.addEventListener("click", (e) => {
+    if (document.getElementById("mascotBubble").hidden) return;
+    if (e.target.closest("#mascotBubble, #mascotFab")) return;
+    App.closeMascotBubble();
   });
 
   /* ---------- Sicherung ----------

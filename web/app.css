@@ -352,10 +352,7 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 }
 .barBtn.filled:active{transform:scale(.94)}
 
-.largeTitle{
-  padding:2px var(--pad) 0;display:flex;align-items:flex-start;
-  justify-content:space-between;gap:10px;
-}
+.largeTitle{padding:2px var(--pad) 0}
 .largeTitleText{flex:1;min-width:0}
 .largeTitle h1{font-size:1.94rem;line-height:1.14;letter-spacing:-.016em}
 .largeTitle .sub{
@@ -366,28 +363,66 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 /* ================================================================
    Das Wesen
    ================================================================
-   Ein Begleiter statt ein Symbol -- deshalb an der einen Stelle, die
-   auf jeder Seite läuft (App.renderBar(), nicht pro Ansicht), und
-   deshalb mit einer Stimmung statt nur einer Pose. Die Stimmung
-   kommt aus genau den Signalen, die die App ohnehin schon hat
-   (Kühlkette, Verderb heute, Streak) -- siehe mascotMood() in
-   views.js. Kein neuer Zustand, nur eine neue Lesart des alten.
+   Ein Begleiter statt ein Symbol -- deshalb an einer festen
+   Bildschirmstelle (position:fixed, siehe .mascotFab), die auch beim
+   Scrollen nicht wandert, und deshalb mit einer Stimmung statt nur
+   einer Pose. Die Stimmung kommt aus genau den Signalen, die die App
+   ohnehin schon hat (Kühlkette, Verderb heute, Streak) -- siehe
+   mascotMood() in views.js. Kein neuer Zustand, nur eine neue Lesart
+   des alten.
+
+   Lebt bewusst außerhalb von .shell/.largeTitle (siehe index.html) --
+   ein fest positioniertes Element bliebe sonst von einem Vorfahren
+   mit eigenem Stacking-Context abhängig. App.renderBar() aktualisiert
+   nur sein Aussehen (Stimmung, Beschriftung), nicht seinen Ort im DOM.
+
+   Antippen öffnet keine neue Fensterebene, sondern .mascotBubble
+   daneben -- eine leicht durchsichtige Sprechblase, die den Rest der
+   Seite nicht blockiert. Ihr Text kommt aus mascotMessage() in
+   views.js: regelbasiert, je Reiter, aus vorhandenen ctx-Daten.
 
    Absichtlich flache SVG-Form statt echtem 3D: dieselbe Technik, mit
    der auch Maskottchen wie das von Duolingo im Web laufen. Die Form
    selbst ist Platzhalter (siehe Kommentar bei MASCOT_BODY_PATH in
    views.js) -- was hier bleibt, auch wenn sie ersetzt wird, ist die
    Bewegung, die Stimmungsfarben und die Antippbarkeit. */
-.mascotBtn{
-  flex:0 0 auto;padding:0;border:none;background:none;line-height:0;
+.mascotFab{
+  /* Knapp unter der Kopfleiste statt darin: die Leiste trägt rechts
+     schon eigene Knöpfe („Nach Gängen“, „Erfassen“) -- ein Stück
+     tiefer kollidiert das Wesen nicht mit ihnen und bleibt trotzdem
+     an derselben Bildschirmstelle, egal was darunter scrollt. */
+  position:fixed;z-index:45;
+  top:calc(var(--safe-top) + 60px);right:14px;
+  padding:0;border:none;background:none;line-height:0;
   transition:transform .16s var(--spring);
 }
-.mascotBtn:active{transform:scale(.9)}
+.mascotFab:active{transform:scale(.9)}
+
+.mascotBubble{
+  position:fixed;z-index:44;
+  top:calc(var(--safe-top) + 114px);right:14px;
+  max-width:min(76vw,290px);
+  padding:12px 14px;
+  background:var(--material);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);
+  border:1px solid var(--hairline-strong);
+  box-shadow:var(--lift);
+  font-size:0.86rem;line-height:1.42;color:var(--ink);
+  animation:bubbleIn .22s var(--spring);
+}
+.mascotBubble::before{
+  content:"";position:absolute;top:-7px;right:20px;
+  width:11px;height:11px;background:var(--material);
+  border-left:1px solid var(--hairline-strong);border-top:1px solid var(--hairline-strong);
+  transform:rotate(45deg);
+}
+@keyframes bubbleIn{from{opacity:0;transform:translateY(-6px) scale(.96)}to{opacity:1;transform:none}}
+
 .mascot{
   /* Größe kommt vom width/height-Attribut (mascotSvg()-Parameter),
      absichtlich nicht hier fest verdrahtet -- sonst überschreibt
      diese Regel jede andere Größe, in der das Wesen einmal auftaucht. */
-  flex:0 0 auto;margin-top:2px;
+  display:block;
   animation:mascotBob 3.2s var(--ease) infinite;
 }
 .mascotBody{fill:var(--m-body);transition:fill .6s var(--ease)}

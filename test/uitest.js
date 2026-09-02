@@ -113,7 +113,7 @@ try {
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
-    " mascotSvg, mascotMood, mascotTap };"
+    " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -2961,38 +2961,103 @@ console.log("\n--- Das Wesen ---");
   ok("Unbekannte Stimmung fällt auf neutral zurück, nicht auf eine Klasse ohne Farbe",
     /class="mascot neutral"/.test(T.mascotSvg("erfunden", 40)));
 
-  // Und im echten Kopfbereich: dieselbe Stelle läuft auf jeder Seite.
+  // Fest positioniert außerhalb von largeTitle -- derselbe Ort läuft
+  // auf jeder Seite, weil renderBar() ihn nur aktualisiert, nie neu
+  // anlegt (siehe app.js, App.renderBar()).
   D.reset(); D.loadDemo("full");
-  ["start", "liste", "bestand", "zahlen", "mehr"].forEach((tab) => {
+  ok("Das Wesen lebt außerhalb des großen Titels", !$("largeTitle").querySelector("svg.mascot"));
+  ok("Das Wesen lebt außerhalb des Inhaltsbereichs", !$("main").querySelector("#mascotFab svg.mascot"));
+  ["start", "liste", "bestand", "zahlen", "mehr", "faellig", "angebote"].forEach((tab) => {
     App.goto(tab);
-    ok(`Das Wesen steht im Kopfbereich von "${tab}"`, !!$("largeTitle").querySelector("svg.mascot"));
+    ok(`Das Wesen steht an fester Stelle auf "${tab}"`, !!$("mascotFab").querySelector("svg.mascot"));
   });
 
-  /* --- Antippen: dasselbe Wesen ist jetzt eine Fläche, die etwas
-     öffnet -- keine Dekoration mehr. Geprüft wird dieselbe
-     Rangfolge wie bei mascotMood, aber am Ergebnis der Handlung,
-     nicht nur an der Farbe. */
-  ok("mascotTap greift bei Kühlkette auf die bestehende Meldung zurück, schreibt keine neue", () => {
-    const gesehen = [];
-    const app = { notice: (t, x) => gesehen.push([t, x]) };
-    T.mascotTap({ safety: { message: "Hähnchenbrust direkt kühlen", source: "BZfE" } }).run(app);
-    return gesehen.length === 1 && gesehen[0][1].includes("Hähnchenbrust") && gesehen[0][1].includes("BZfE")
-      ? true : JSON.stringify(gesehen);
-  });
-  ok("Ohne jedes Signal öffnet es eine ruhige Meldung, keinen Fehler", () => {
-    let gesehen = null;
-    T.mascotTap({ safety: null, pulse: { days: [{ events: [] }] }, forgotten: [], streak: { weeks: 0 } })
-      .run({ notice: (t, x) => { gesehen = [t, x]; } });
-    return Array.isArray(gesehen) ? true : gesehen;
-  });
+  {
+    const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+    const block = (sel) => {
+      const i = css.indexOf("\n" + sel + "{");
+      return i < 0 ? null : css.slice(i + sel.length + 2, css.indexOf("}", i));
+    };
+    ok("Das Wesen ist per CSS fest positioniert, nicht nur optisch mittig",
+      /position:fixed/.test(block(".mascotFab") || ""));
+    ok("Die Sprechblase ist ebenfalls fest positioniert", /position:fixed/.test(block(".mascotBubble") || ""));
+  }
 
+  /* --- Antippen: dasselbe Wesen öffnet jetzt eine kleine Sprechblase
+     daneben, kein Blatt -- siehe App.toggleMascotBubble() in app.js.
+     Ihr Text kommt aus mascotMessage(), regelbasiert je Reiter. */
   App.goto("start");
-  const btn = $("largeTitle").querySelector(".mascotBtn");
-  ok("Das Wesen im Kopfbereich ist jetzt eine Schaltfläche mit Namen",
-    !!btn && btn.tagName === "BUTTON" && !!btn.getAttribute("aria-label"));
-  click(btn);
-  ok("Antippen öffnet tatsächlich ein Blatt", !$("sheet").hidden);
-  App.closeSheet();
+  const fab = $("mascotFab");
+  ok("Das Wesen ist eine Schaltfläche mit Namen",
+    !!fab && fab.tagName === "BUTTON" && !!fab.getAttribute("aria-label"));
+  ok("Sie ist zunächst zugeklappt", fab.getAttribute("aria-expanded") === "false");
+  ok("Die Sprechblase ist zunächst verborgen", $("mascotBubble").hidden);
+
+  click(fab);
+  ok("Antippen öffnet die Sprechblase, kein Blatt", !$("mascotBubble").hidden && $("sheet").hidden);
+  ok("Sie trägt einen Text", $("mascotBubble").textContent.trim().length > 0);
+  ok("Die Schaltfläche weiß jetzt, dass sie offen ist", fab.getAttribute("aria-expanded") === "true");
+
+  click(fab);
+  ok("Erneutes Antippen schließt sie wieder", $("mascotBubble").hidden);
+
+  click(fab);
+  doc.body.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  ok("Ein Klick irgendwo sonst schließt die Sprechblase", $("mascotBubble").hidden);
+
+  click(fab);
+  doc.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  ok("Escape schließt die Sprechblase ebenfalls", $("mascotBubble").hidden);
+
+  click(fab);
+  $("mascotBubble").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  ok("Ein Tipp auf die Sprechblase selbst schließt sie NICHT", !$("mascotBubble").hidden);
+
+  App.goto("liste");
+  ok("Der Reiterwechsel schließt sie", $("mascotBubble").hidden);
+  App.goto("start");
+
+  /* --- mascotMessage(): regelbasiert, je Reiter, mindestens 150
+     Aussagen insgesamt -- siehe MASCOT_RULES in views.js. */
+  const alleTabs = ["start", "liste", "bestand", "erfassen", "zahlen", "mehr", "faellig", "angebote"];
+  ok("MASCOT_RULES kennt jeden Reiter", alleTabs.every((t) => Array.isArray(T.MASCOT_RULES[t])));
+  const gesamtzahl = alleTabs.reduce((a, t) => a + T.MASCOT_RULES[t].length, 0);
+  ok("Mindestens 150 Aussagen insgesamt", gesamtzahl >= 150, `${gesamtzahl} Regeln`);
+  ok("Jede Regel hat eine Bedingung und einen Text",
+    alleTabs.every((t) => T.MASCOT_RULES[t].every((r) => typeof r.when === "function" && typeof r.say === "function")));
+
+  // Mit vollen Beispieldaten UND mit ganz leerer Historie muss jeder
+  // Reiter mindestens eine zutreffende Aussage haben -- das ist der
+  // Sinn der abschließenden Regel ohne Bedingung in jeder Liste.
+  [["Beispieldaten", () => D.loadDemo("full")], ["leerer Zustand", () => D.reset()]].forEach(([label, setup]) => {
+    setup();
+    const c = D.compute();
+    alleTabs.forEach((tab) => {
+      const text = T.mascotMessage(c, tab, 0);
+      ok(`"${tab}" hat eine Aussage bei ${label}`, typeof text === "string" && text.length > 0, text);
+    });
+  });
+  D.loadDemo("full");
+
+  // Reihum, nicht zufällig: mit gleichbleibendem ctx liefert derselbe
+  // Zähler immer dasselbe Ergebnis, und nach so vielen Antippen wie
+  // es zutreffende Regeln gibt, beginnt die Reihe wieder von vorn.
+  {
+    const c = D.compute();
+    const eligible = T.MASCOT_RULES.start.filter((r) => { try { return !!r.when(c); } catch (e) { return false; } });
+    ok("Genug zutreffende Regeln auf dem Start für einen Rotationstest", eligible.length >= 2, eligible.length);
+    const erste = T.mascotMessage(c, "start", 0);
+    const zweite = T.mascotMessage(c, "start", 1);
+    ok("Zwei aufeinanderfolgende Zähler liefern denselben Text wie beim ersten Mal (deterministisch)",
+      T.mascotMessage(c, "start", 0) === erste && T.mascotMessage(c, "start", 1) === zweite);
+    ok("Nach einer vollen Runde beginnt die Reihe wieder von vorn",
+      T.mascotMessage(c, "start", eligible.length) === erste);
+  }
+
+  // Ein unbekannter Reiter fällt auf die Start-Regeln zurück statt zu
+  // brechen -- derselbe Rückfall wie bei einer unbekannten Stimmung.
+  ok("Unbekannter Reiter bricht mascotMessage() nicht",
+    typeof T.mascotMessage(D.compute(), "erfunden", 0) === "string");
 
   /* --- Leere Ansichten: dasselbe Wesen statt einer bloßen Textzeile.
      "Nichts fällig, alles im Rhythmus" ist die eine Stelle mit einer

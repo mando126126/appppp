@@ -35,6 +35,14 @@
   </div>
 </div>
 
+<!-- Das Wesen: fest an einer Bildschirmstelle, unabhängig vom Scrollen
+     (siehe app.css, .mascotFab). Liegt bewusst außerhalb von .shell,
+     damit kein Vorfahre mit eigenem Stacking-Context dazwischenfunkt.
+     Antippen zeigt die Sprechblase daneben -- kein Blatt, kein
+     Vollbild, nichts, was den Rest der Seite blockiert. -->
+<button class="mascotFab" id="mascotFab" aria-haspopup="true" aria-expanded="false"></button>
+<div class="mascotBubble" id="mascotBubble" role="status" hidden></div>
+
 <!-- Ladenmodus: Vollbild, große Ziele, eine Hand -->
 <!-- Diese Ansicht hieß an vier Stellen anders: der Knopf sagte „Nach
      Gängen“, die Überschrift „Im Laden“, die Vorlesehilfe
@@ -88,7 +96,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script>window.__BUILD__ = "rp9xk9";</script>
+<script>window.__BUILD__ = "1vqqekx";</script>
 
 <!-- Algorithmen: gebündelt aus src/algo, nicht von Hand abgeschrieben -->
 <script src="bundle.js"></script>

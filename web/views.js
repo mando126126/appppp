@@ -183,40 +183,364 @@ function mascotMood(ctx) {
   return "neutral";
 }
 
+/* ================================================================
+   Das Wesen — was es sagt, wenn man es antippt
+   ================================================================
+   Kein Blatt, keine zweite Erklärseite: eine kleine Sprechblase neben
+   dem Wesen (siehe App.toggleMascotBubble() in app.js). Ihr Inhalt
+   kommt aus MASCOT_RULES — je Reiter eine Liste von Aussagen, jede an
+   eine Bedingung geknüpft, die nur liest, was ctx ohnehin schon hat.
+   Keine Zahl wird hier neu geschätzt; jede kommt aus Data.compute()
+   oder aus Text, der an anderer Stelle in der App bereits so steht
+   (z. B. ctx.streak.message, ctx.brandHeadline.text) — dieselbe Regel
+   wie bei PILL_INFO und collectHints(): eine Erklärung, ein Ort.
+
+   mascotMessage() sammelt die zutreffenden Regeln des aktuellen
+   Reiters und wählt reihum eine aus, gesteuert vom `seed`, den
+   App.toggleMascotBubble() mitgibt (ein Zähler je Reiter, kein
+   Zufall) — wiederholtes Antippen zeigt so nacheinander verschiedene,
+   aber immer nachvollziehbare Aussagen. Jede Liste endet mit einer
+   Regel ohne Bedingung, damit die Sprechblase nie leer bleibt. */
+const MASCOT_RULES = {
+  start: [
+    { when: (ctx) => !!ctx.safety, say: (ctx) => ctx.safety.short },
+    { when: (ctx) => ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
+        ctx.pulse.days[0].events.some((e) => e.kind === "verderb"),
+      say: (ctx) => ctx.pulse.headline },
+    { when: (ctx) => ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
+        !ctx.pulse.days[0].events.some((e) => e.kind === "verderb") &&
+        ctx.pulse.days[0].events.some((e) => e.kind === "tausch"),
+      say: () => "Heute steht laut deinem Rhythmus ein Austausch an." },
+    { when: (ctx) => ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
+        !ctx.pulse.days[0].events.some((e) => e.kind === "verderb") &&
+        ctx.pulse.days[0].events.some((e) => e.kind === "einkauf"),
+      say: () => "Heute ist laut deinem Rhythmus ein guter Einkaufstag." },
+    { when: (ctx) => ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] && ctx.pulse.days[0].count === 0,
+      say: () => "Für heute steht nach deinem Rhythmus nichts Bestimmtes an." },
+    { when: (ctx) => ctx.forgotten && ctx.forgotten.length > 0,
+      say: (ctx) => `${zahlwort(ctx.forgotten.length, "vergessenes Produkt", "vergessene Produkte")} — unter den Hinweisen zu finden.` },
+    { when: (ctx) => ctx.freeze && ctx.freeze.length > 0,
+      say: (ctx) => `${zahlwort(ctx.freeze.length, "Produkt lohnt", "Produkte lohnen")} sich einzufrieren, bevor es verdirbt.` },
+    { when: (ctx) => (ctx.hoards || []).some((h) => h.kind === "zuviel"),
+      say: () => "Von etwas liegt gerade mehr da, als bis zur Haltbarkeit aufgebraucht wird." },
+    { when: (ctx) => ctx.backup && ctx.backup.urgent, say: (ctx) => ctx.backup.message },
+    { when: (ctx) => ctx.swapsDue && ctx.swapsDue.some((x) => x.due),
+      say: (ctx) => `${zahlwort(ctx.swapsDue.filter((x) => x.due).length, "Produkt ist", "Produkte sind")} zum Tauschen fällig.` },
+    { when: (ctx) => ctx.foodDeals && ctx.foodDeals.length > 0,
+      say: (ctx) => `${zahlwort(ctx.foodDeals.length, "Lebensmittel war", "Lebensmittel waren")} beim letzten Kauf spürbar günstiger als sonst.` },
+    { when: (ctx) => ctx.review && ctx.review.due, say: () => "Dein Wochenrückblick ist fertig." },
+    { when: (ctx) => ctx.streak && ctx.streak.weeks > 0, say: (ctx) => ctx.streak.message },
+    { when: (ctx) => ctx.streak && ctx.streak.weeks === 0 && ctx.history.length > 0,
+      say: () => "Noch kein Lauf am Stück — der nächste vollständige Einkauf startet einen." },
+    { when: (ctx) => ctx.badges && ctx.badges.nextUp,
+      say: (ctx) => `Auf dem Weg zu „${ctx.badges.nextUp.nextTitle}“: ${Math.round(ctx.badges.nextUp.progress * 100)} %.` },
+    { when: (ctx) => ctx.items && ctx.items.some((i) => i.on),
+      say: (ctx) => {
+        const on = ctx.items.filter((i) => i.on);
+        const sum = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+        return `Auf deiner Liste stehen ${zahlwort(on.length, "Position", "Positionen")} für ${eur(sum)}.`;
+      } },
+    { when: (ctx) => ctx.items && !ctx.items.some((i) => i.on) && ctx.history.length > 0,
+      say: () => "Auf deiner Liste steht gerade nichts." },
+    { when: (ctx) => ctx.history.length === 0,
+      say: () => "Noch keine Einkäufe erfasst — der erste Bon reicht schon für die ersten Zahlen." },
+    { when: (ctx) => ctx.history.length > 0 && ctx.stage && ctx.stage.stage < 3,
+      say: () => "Die App lernt deinen Rhythmus noch — je mehr Bons, desto genauer wird die Liste." },
+    { when: (ctx) => ctx.totals && ctx.totals.receipts > 0,
+      say: (ctx) => `Bislang ${zahlwort(ctx.totals.receipts, "Bon", "Bons")} erfasst.` },
+    { when: (ctx) => ctx.review && !ctx.review.due && ctx.streak && ctx.streak.weeks === 0 &&
+        (!ctx.forgotten || !ctx.forgotten.length),
+      say: () => "Ein ruhiger Moment — nichts Dringendes gerade." },
+    { when: () => true, say: () => "Gerade steht nichts Dringendes an." }
+  ],
+
+  liste: [
+    { when: (ctx) => !!ctx.safety, say: (ctx) => ctx.safety.short },
+    { when: (ctx) => ctx.budgetResult && ctx.budgetResult.removed.length > 0,
+      say: (ctx) => `${zahlwort(ctx.budgetResult.removed.length, "Position wurde", "Positionen wurden")} wegen deines Budgets gestrichen.` },
+    { when: (ctx) => ctx.vacation && ctx.vacation.skip && ctx.vacation.skip.length > 0,
+      say: (ctx) => `Wegen deines Urlaubs sind ${zahlwort(ctx.vacation.skip.length, "Position", "Positionen")} zurückgestellt — das spart ${eur(ctx.vacation.savedEuros)}.` },
+    { when: (ctx) => ctx.duplicates && ctx.duplicates.length > 0,
+      say: (ctx) => `${zahlwort(ctx.duplicates.length, "Position könnte", "Positionen könnten")} doppelt gekauft werden — vielleicht ist noch etwas da.` },
+    { when: (ctx) => ctx.items && ctx.items.filter((i) => !i.on).length > 0,
+      say: (ctx) => `${zahlwort(ctx.items.filter((i) => !i.on).length, "Position steht", "Positionen stehen")} unter „Nicht diese Woche“.` },
+    { when: (ctx) => ctx.items && ctx.items.some((i) => i.on && i.riskFlag),
+      say: (ctx) => `${zahlwort(ctx.items.filter((i) => i.on && i.riskFlag).length, "Position bleibt", "Positionen bleiben")} öfter übrig — halbe Menge könnte sich lohnen.` },
+    { when: (ctx) => ctx.items && ctx.items.some((i) => i.on && i.basis === "manuell"),
+      say: (ctx) => `${zahlwort(ctx.items.filter((i) => i.on && i.basis === "manuell").length, "Position hast", "Positionen hast")} du selbst ergänzt.` },
+    { when: (ctx) => ctx.items && ctx.items.some((i) => i.on && i.dueIn !== null && i.dueIn < 0),
+      say: (ctx) => `${zahlwort(ctx.items.filter((i) => i.on && i.dueIn !== null && i.dueIn < 0).length, "Position ist", "Positionen sind")} schon überfällig.` },
+    { when: (ctx) => ctx.stage && ctx.stage.stage <= 1 && ctx.history.length > 0,
+      say: (ctx) => `${zahlwort(ctx.totals.receipts, "Bon", "Bons")} erfasst — ab dem zweiten Kauf je Produkt lernt die App deinen Rhythmus.` },
+    { when: (ctx) => ctx.stage && ctx.stage.stage <= 1 && ctx.history.length === 0,
+      say: () => "Noch keine Einkäufe erfasst — bis dahin ist das hier deine ganz normale Einkaufsliste." },
+    { when: (ctx) => ctx.items && ctx.items.filter((i) => i.on).length > 0,
+      say: (ctx) => {
+        const on = ctx.items.filter((i) => i.on);
+        const sum = on.reduce((a, i) => a + (i.halved ? i.price / 2 : i.price), 0);
+        return `${zahlwort(on.length, "Position", "Positionen")} im Wert von ${eur(sum)}.`;
+      } },
+    { when: (ctx) => ctx.items && ctx.items.length === 0,
+      say: () => "Die Liste ist leer — unten lässt sich etwas hinzufügen." },
+    { when: (ctx) => ctx.forgotten && ctx.forgotten.length > 0,
+      say: (ctx) => `${zahlwort(ctx.forgotten.length, "Produkt fehlt", "Produkte fehlen")} dir vielleicht — sieh bei den Hinweisen nach.` },
+    { when: (ctx) => ctx.freeze && ctx.freeze.length > 0,
+      say: () => "Einfrieren rettet manches, das sonst verdirbt, bevor es wieder auf die Liste kommt." },
+    { when: (ctx) => ctx.season && ctx.season.length > 0,
+      say: (ctx) => `${ctx.season[0].name} hat gerade keine Saison hier — Importware.` },
+    { when: (ctx) => !!ctx.ethylene,
+      say: () => "Manches auf deiner Liste lässt anderes schneller reifen — getrennt lagern hilft." },
+    { when: (ctx) => ctx.pattern && ctx.pattern.dayName,
+      say: (ctx) => `Du kaufst meist ${ctx.pattern.dayName} ein.` },
+    { when: (ctx) => ctx.items && ctx.items.some((i) => i.on) && (!ctx.duplicates || !ctx.duplicates.length) && !ctx.safety,
+      say: () => "Auf den ersten Blick nichts Auffälliges auf der Liste." },
+    { when: (ctx) => !!ctx.store, say: (ctx) => `Zuletzt bei ${ctx.store} eingekauft — „Nach Gängen“ sortiert danach.` },
+    { when: (ctx) => !ctx.store, say: () => "Noch kein Markt bekannt — „Nach Gängen“ sortiert, sobald einer feststeht." },
+    { when: () => true, say: () => "Was hier steht, kommt aus deinem gelernten Rhythmus oder von dir selbst." }
+  ],
+
+  bestand: [
+    { when: (ctx) => (!ctx.inventory || !ctx.inventory.length) && (!ctx.supplies || !ctx.supplies.length),
+      say: () => "Noch kein Bestand zu schätzen." },
+    { when: (ctx) => ctx.opened && ctx.opened.some((o) => o.expired),
+      say: (ctx) => `${zahlwort(ctx.opened.filter((o) => o.expired).length, "angebrochene Packung ist", "angebrochene Packungen sind")} über der Frist.` },
+    { when: (ctx) => ctx.opened && ctx.opened.some((o) => !o.expired && o.urgent),
+      say: (ctx) => `${zahlwort(ctx.opened.filter((o) => !o.expired && o.urgent).length, "angebrochene Packung wird", "angebrochene Packungen werden")} bald knapp.` },
+    { when: (ctx) => ctx.opened && ctx.opened.length === 0 && ctx.inventory && ctx.inventory.length > 0,
+      say: () => "Gerade nichts angebrochen." },
+    { when: (ctx) => ctx.opened && ctx.opened.length > 0,
+      say: (ctx) => `${zahlwort(ctx.opened.length, "Packung ist", "Packungen sind")} gerade angebrochen markiert.` },
+    { when: (ctx) => ctx.inventory && ctx.inventory.some((i) => i.daysLeft <= 2),
+      say: (ctx) => `${zahlwort(ctx.inventory.filter((i) => i.daysLeft <= 2).length, "Produkt hält", "Produkte halten")} vermutlich nur noch kurz.` },
+    { when: (ctx) => ctx.range && ctx.range.days !== null,
+      say: (ctx) => `Dein Vorrat reicht geschätzt noch ${tage(Math.round(ctx.range.days))}.` },
+    { when: (ctx) => ctx.range && ctx.range.days !== null && ctx.range.days < 3,
+      say: () => "Dein Vorrat wird knapp." },
+    { when: (ctx) => ctx.supplies && ctx.supplies.some((s) => s.dueForPurchase),
+      say: (ctx) => `${zahlwort(ctx.supplies.filter((s) => s.dueForPurchase).length, "Haushaltsprodukt geht", "Haushaltsprodukte gehen")} bald aus.` },
+    { when: (ctx) => ctx.supplies && ctx.supplies.length > 0 && !ctx.supplies.some((s) => s.dueForPurchase),
+      say: () => "Bei den Haushaltsprodukten ist gerade nichts fällig." },
+    { when: (ctx) => ctx.inventory && ctx.inventory.length > 0,
+      say: (ctx) => `Dein geschätzter Bestand ist gerade ${eur(ctx.inventory.reduce((a, i) => a + i.value, 0))} wert.` },
+    { when: (ctx) => ctx.swapsDue && ctx.swapsDue.some((x) => x.due),
+      say: () => "Ein paar Haushaltsprodukte sind zum Tauschen fällig — unter „Fällig“." },
+    { when: (ctx) => (ctx.hoards || []).some((h) => h.kind === "zuviel"),
+      say: () => "Von etwas liegt mehr da, als bis zur Haltbarkeit aufgebraucht wird." },
+    { when: () => Data.get().settings.vacation.active,
+      say: () => "Urlaubsmodus ist an — was bis zur Rückkehr verderben würde, steht unter „Vor der Abreise“." },
+    { when: (ctx) => ctx.chronic && ctx.chronic.length > 0,
+      say: (ctx) => `${zahlwort(ctx.chronic.length, "Produkt bleibt", "Produkte bleiben")} bei dir öfter übrig, als es müsste.` },
+    { when: (ctx) => ctx.range && ctx.range.byProduct && ctx.range.byProduct.length > 0,
+      say: () => "Jedes Produkt im Bestand hat sein eigenes Detail-Blatt mit Reichweite und Sicherheit." },
+    { when: (ctx) => ctx.knownItems && ctx.knownItems.filter((i) => i.on).length > 0,
+      say: () => "Unter „Kochen“ stehen Rezepte, sortiert nach gerettetem Betrag, nicht nach Geschmack." },
+    { when: () => true,
+      say: () => "Der Bestand hier ist eine Schätzung — Einkauf minus gelernten Verbrauch, kein gezählter Kühlschrank." }
+  ],
+
+  erfassen: [
+    { when: (ctx) => ctx.history.length === 0, say: () => "Dein erster Bon macht sofort deine Ausgaben sichtbar." },
+    { when: (ctx) => ctx.history.length > 0 && ctx.totals.receipts < 5,
+      say: (ctx) => `Bislang ${zahlwort(ctx.totals.receipts, "Bon", "Bons")} erfasst — je mehr, desto genauer wird der Rhythmus.` },
+    { when: (ctx) => ctx.totals && ctx.totals.receipts >= 5,
+      say: (ctx) => `${zahlwort(ctx.totals.receipts, "Bon", "Bons")} sind schon erfasst.` },
+    { when: (ctx) => ctx.stage && ctx.stage.stage >= 3,
+      say: () => "Dein Rhythmus ist gelernt — jeder neue Bon schärft ihn weiter nach." },
+    { when: () => Data.get().settings.demo,
+      say: () => "Das sind erzeugte Beispieldaten. Ein eigener Bon ersetzt sie." },
+    { when: (ctx) => !!ctx.safety, say: (ctx) => ctx.safety.short },
+    { when: (ctx) => ctx.backup && ctx.backup.urgent, say: (ctx) => ctx.backup.message },
+    { when: () => OCR.supported(), say: () => "Ein Foto des Bons reicht — Beträge und Mengen liest die App direkt heraus." },
+    { when: () => !OCR.supported(), say: () => "Dieser Browser liest Fotos nicht automatisch — von Hand eintragen geht trotzdem." },
+    { when: (ctx) => ctx.rhythms && ctx.rhythms.size > 0,
+      say: (ctx) => `Für ${zahlwort(ctx.rhythms.size, "Produkt", "Produkte")} hat die App schon einen Rhythmus gelernt.` },
+    { when: (ctx) => ctx.streak && ctx.streak.weeks > 0, say: (ctx) => ctx.streak.message },
+    { when: (ctx) => ctx.duplicates && ctx.duplicates.length > 0,
+      say: () => "Nach dem Erfassen lohnt sich ein Blick auf die Liste — manches könnte doppelt gekauft werden." },
+    { when: (ctx) => ctx.forgotten && ctx.forgotten.length > 0,
+      say: (ctx) => `${zahlwort(ctx.forgotten.length, "Produkt fehlt", "Produkte fehlen")} dir vielleicht schon.` },
+    { when: (ctx) => ctx.review && ctx.review.due, say: () => "Dein Wochenrückblick wartet schon — er läuft nicht weg." },
+    { when: (ctx) => ctx.totals && ctx.totals.spendPerWeek > 0,
+      say: (ctx) => `Im Schnitt gibst du ${eur(ctx.totals.spendPerWeek)} pro Woche aus.` },
+    { when: () => true, say: () => "Jeder Bon zählt — die App merkt sich Preise, Rhythmus und Menge daraus." }
+  ],
+
+  zahlen: [
+    { when: (ctx) => ctx.history.length === 0, say: () => "Noch keine Zahlen — der erste Bon reicht für die ersten." },
+    { when: (ctx) => ctx.totals && ctx.totals.receipts > 0,
+      say: (ctx) => `Im Schnitt gibst du ${eur(ctx.totals.spendPerWeek)} pro Woche aus, über ${zahlwort(ctx.totals.receipts, "Bon", "Bons")}.` },
+    { when: (ctx) => ctx.savings && ctx.savings.length > 0,
+      say: (ctx) => `Unter „Sparen“ stehen ${eur(ctx.savings.reduce((a, x) => a + x.estimatedWeeklySaving, 0))} pro Woche zum Mitnehmen — ohne Verzicht.` },
+    { when: (ctx) => ctx.savings && ctx.savings.length === 0 && ctx.history.length > 0,
+      say: () => "Gerade keine Sparvorschläge — nichts Auffälliges in deinen Zahlen." },
+    { when: (ctx) => ctx.totals && ctx.totals.wastedPerWeek > 0,
+      say: (ctx) => `Geschätzter Verlust: ${eur(ctx.totals.wastedPerWeek)} pro Woche, ${de(ctx.impact.kg)} kg insgesamt.` },
+    { when: (ctx) => ctx.totals && ctx.totals.wastedPerWeek === 0 && ctx.history.length > 0,
+      say: () => "Gerade kein geschätzter Verlust in deinen Zahlen." },
+    { when: (ctx) => ctx.rhythms && ctx.rhythms.size > 0,
+      say: (ctx) => `Für ${[...ctx.rhythms.values()].filter((r) => r.confidence >= 0.4).length} von ${ctx.rhythms.size} Produkten ist der Rhythmus schon gut belegt.` },
+    { when: (ctx) => ctx.rhythms && ctx.rhythms.size === 0, say: () => "Noch keine Rhythmen gelernt." },
+    { when: (ctx) => ctx.streak && ctx.streak.weeks > 0, say: (ctx) => ctx.streak.message },
+    { when: (ctx) => ctx.badges && ctx.badges.total > 0,
+      say: (ctx) => `${ctx.badges.count} von ${ctx.badges.total} Meilensteinen erreicht.` },
+    { when: (ctx) => ctx.badges && ctx.badges.count === ctx.badges.total && ctx.badges.total > 0,
+      say: () => "Alle bisherigen Meilensteine erreicht." },
+    { when: (ctx) => ctx.badges && ctx.badges.nextUp,
+      say: (ctx) => `Bis „${ctx.badges.nextUp.nextTitle}“ fehlen noch ${100 - Math.round(ctx.badges.nextUp.progress * 100)} %.` },
+    { when: (ctx) => ctx.review && !ctx.review.quiet, say: (ctx) => ctx.review.short },
+    { when: (ctx) => ctx.review && ctx.review.quiet, say: () => "In der aktuellen Woche ist bisher nichts erfasst." },
+    { when: (ctx) => ctx.pattern && ctx.pattern.dayName,
+      say: (ctx) => `Du kaufst am häufigsten ${ctx.pattern.dayName} ein, im Schnitt für ${eur(ctx.pattern.avgBasket)}.` },
+    { when: (ctx) => ctx.inflation && ctx.inflation.productsCompared,
+      say: (ctx) => `Dein Warenkorb hat sich um ${sign(ctx.inflation.changePercent)} % verändert, über ${zahlwort(ctx.inflation.productsCompared, "Produkt", "Produkte")}.` },
+    { when: (ctx) => ctx.prices && [...ctx.prices.values()].some((m) => m.verdict === "günstig"),
+      say: (ctx) => `${zahlwort([...ctx.prices.values()].filter((m) => m.verdict === "günstig").length, "Produkt lag", "Produkte lagen")} zuletzt unter deinem üblichen Preis.` },
+    { when: (ctx) => ctx.prices && [...ctx.prices.values()].some((m) => m.verdict === "teuer"),
+      say: (ctx) => `${zahlwort([...ctx.prices.values()].filter((m) => m.verdict === "teuer").length, "Produkt lag", "Produkte lagen")} zuletzt über deinem üblichen Preis.` },
+    { when: (ctx) => !!ctx.brandHeadline, say: (ctx) => ctx.brandHeadline.text },
+    { when: (ctx) => ctx.nonFoodSaved && ctx.nonFoodSaved.total > 0,
+      say: (ctx) => `Bei Haushaltsprodukten hast du schon ${eur(ctx.nonFoodSaved.total)} unter deinem üblichen Grundpreis bezahlt.` },
+    { when: (ctx) => ctx.packs && ctx.packs.length > 0,
+      say: () => "Bei ein paar Packungsgrößen lohnt sich ein zweiter Blick auf den Grundpreis." },
+    { when: (ctx) => ctx.impact && ctx.impact.byProduct && ctx.impact.byProduct.length > 0,
+      say: (ctx) => `${ctx.impact.byProduct[0].name} steht oben in der Verschwendungsschätzung.` },
+    { when: () => true, say: () => "Alle Zahlen hier kommen aus deinen eigenen Bons, nicht aus allgemeinen Schätzwerten." }
+  ],
+
+  mehr: [
+    { when: (ctx) => ctx.backup && ctx.backup.urgent, say: (ctx) => ctx.backup.message },
+    { when: (ctx) => ctx.backup && !ctx.backup.urgent, say: (ctx) => ctx.backup.title },
+    { when: () => Data.get().settings.demo,
+      say: () => "Das ist erzeugte Beispieldaten-Historie. Unter „Daten“ lässt sie sich ersetzen." },
+    { when: () => Data.get().review.notify, say: () => "Die Erinnerung an den Wochenrückblick ist an." },
+    { when: () => !Data.get().review.notify,
+      say: () => "Ohne echte Push-Nachrichten meldet sich der Rückblick erst beim nächsten Öffnen." },
+    { when: () => Data.get().settings.vacation.active,
+      say: () => "Urlaubsmodus ist an — die Liste stellt zurück, was bis zur Rückkehr verderben würde." },
+    { when: () => !Data.get().settings.vacation.active, say: () => "Urlaubsmodus ist aus." },
+    { when: () => Data.get().settings.budget > 0,
+      say: () => `Dein Budget für die Liste steht auf ${eur(Data.get().settings.budget)}.` },
+    { when: () => Data.get().settings.budget === 0,
+      say: () => "Für die Liste ist kein Budget gesetzt — nichts wird deswegen gestrichen." },
+    { when: () => Data.get().settings.household > 1,
+      say: () => `Die Mengen sind auf ${Data.get().settings.household} Personen skaliert.` },
+    { when: () => Data.get().purchases.length > 0,
+      say: () => `${zahlwort(Data.get().purchases.length, "Kauf", "Käufe")} gespeichert, nur auf diesem Gerät.` },
+    { when: () => Object.keys(Data.get().aliases).length > 0,
+      say: () => `${zahlwort(Object.keys(Data.get().aliases).length, "Schreibweise hat", "Schreibweisen hat")} die App schon gelernt.` },
+    { when: (ctx) => ctx.seasonNow && ctx.seasonNow.length > 0,
+      say: (ctx) => `Gerade Saison: ${ctx.seasonNow.map((x) => x.name).join(", ")}.` },
+    { when: (ctx) => ctx.deposit && ctx.deposit.byType && ctx.deposit.byType.length > 0,
+      say: (ctx) => `Noch offenes Pfand: ${eur(ctx.deposit.byType.reduce((a, t) => a + t.amount, 0))}.` },
+    { when: (ctx) => ctx.deposit && (!ctx.deposit.byType || !ctx.deposit.byType.length),
+      say: () => "Gerade kein offenes Pfand." },
+    { when: (ctx) => archiveStats(ctx.archive).stores.length > 0,
+      say: (ctx) => `Du kaufst bei ${zahlwort(archiveStats(ctx.archive).stores.length, "einem Markt", "verschiedenen Märkten")}.` },
+    { when: (ctx) => expiringWarranties(ctx.archive, ctx.ref, 800).length > 0,
+      say: (ctx) => `${zahlwort(expiringWarranties(ctx.archive, ctx.ref, 800).length, "Gewährleistungsfrist läuft", "Gewährleistungsfristen laufen")} bald aus.` },
+    { when: () => Data.get().household.hasCoffeeMachine,
+      say: () => "Für die Kaffeemaschine rechnet die App mit deiner eingestellten Wasserhärte." },
+    { when: () => !Data.get().household.hasCoffeeMachine,
+      say: () => "Ohne eingetragene Kaffeemaschine schlägt die App auch keinen Entkalker vor." },
+    { when: () => Data.get().household.hasWashingMachine,
+      say: () => "Für die Waschmaschine berücksichtigt die App ebenfalls deine Wasserhärte." },
+    { when: () => Data.get().household.hasDishwasher,
+      say: () => "Für die Spülmaschine gilt dieselbe Rechnung wie bei der Waschmaschine — nur eine eigene Rate." },
+    { when: (ctx) => relevantAisles(ctx.aisleList, ctx.items).length > 1,
+      say: () => "Die Gangreihenfolge unter „Nach Gängen“ merkt sich die App je Markt." },
+    { when: () => true, say: () => "Alles hier liegt nur auf diesem Gerät — kein Konto, kein Server." }
+  ],
+
+  faellig: [
+    { when: (ctx) => !ctx.swapsDue.length && !ctx.supplies.some((x) => x.dueForPurchase),
+      say: (ctx) => (ctx.nonFoodEntries.length ? "Nichts fällig. Alles im Rhythmus." : "Noch keine Haushaltsprodukte erfasst.") },
+    { when: (ctx) => ctx.swapsDue.some((x) => x.due),
+      say: (ctx) => `${zahlwort(ctx.swapsDue.filter((x) => x.due).length, "Produkt ist", "Produkte sind")} zum Tauschen fällig.` },
+    { when: (ctx) => ctx.swapsDue.filter((x) => x.due).length > 1,
+      say: (ctx) => ctx.swapsDue.filter((x) => x.due).slice(0, 3).map((x) => x.name).join(", ") },
+    { when: (ctx) => ctx.swapsDue.some((x) => !x.due),
+      say: (ctx) => `${zahlwort(ctx.swapsDue.filter((x) => !x.due).length, "Produkt wird", "Produkte werden")} demnächst zum Tauschen fällig.` },
+    { when: (ctx) => ctx.supplies.some((x) => x.dueForPurchase),
+      say: (ctx) => `${zahlwort(ctx.supplies.filter((x) => x.dueForPurchase).length, "Haushaltsprodukt geht", "Haushaltsprodukte gehen")} aus.` },
+    { when: (ctx) => ctx.stockUp.length > 0,
+      say: (ctx) => `${zahlwort(ctx.stockUp.length, "Produkt lohnt", "Produkte lohnen")} sich gerade zu bevorraten.` },
+    { when: (ctx) => ctx.stockUp.length === 0 && ctx.supplies.length > 0,
+      say: () => "Gerade keine Bevorratungs-Empfehlung — Preis oder Verbrauchsrate sind dafür noch nicht belastbar genug." },
+    { when: (ctx) => ctx.stockUp.some((a) => a.cycleLearned),
+      say: () => "Bei manchen Bevorratungs-Vorschlägen kennt die App schon deinen eigenen Aktionszyklus." },
+    { when: (ctx) => ctx.stockUp.some((a) => !a.cycleLearned) && ctx.stockUp.length > 0,
+      say: () => "Manche Bevorratungs-Vorschläge rechnen noch mit einem Vorgabewert, nicht mit deiner eigenen Historie." },
+    { when: (ctx) => ctx.stockUp.some((a) => a.cappedByLimit),
+      say: () => "Bei manchen Vorschlägen begrenzt dein Lagerplatz die empfohlene Menge." },
+    { when: (ctx) => ctx.nonFoodEntries.length > 0,
+      say: (ctx) => `Für ${zahlwort(ctx.nonFoodEntries.length, "Haushaltsprodukt", "Haushaltsprodukte")} hat die App Kaufhistorie.` },
+    { when: (ctx) => ctx.supplies.some((s) => s.confidence === "UNSICHER"),
+      say: () => "Bei manchen Haushaltsprodukten ist der Verbrauch noch zu unregelmäßig für eine Reichweite." },
+    { when: (ctx) => !ctx.swapsDue.length && !ctx.stockUp.length && ctx.nonFoodEntries.length > 0,
+      say: () => "Bei deinen Haushaltsprodukten ist gerade nichts zu tun." },
+    { when: (ctx) => ctx.swapsDue.filter((x) => x.due).length + ctx.supplies.filter((x) => x.dueForPurchase).length > 3,
+      say: () => "Einiges steht hier gerade an — am besten der Reihe nach." },
+    { when: (ctx) => ctx.supplies.length > 0,
+      say: () => "Austausch läuft nach Zeit, Nachschub nach geschätztem Verbrauch — zwei verschiedene Uhren." },
+    { when: (ctx) => ctx.swapsDue.length > 0 && ctx.stockUp.length === 0,
+      say: () => "Austausch steht an, Bevorratung gerade nicht — zwei unabhängige Listen hier." },
+    { when: (ctx) => ctx.nonFoodEntries.length === 0,
+      say: () => "Noch keine Haushaltsprodukte erfasst — Austausch und Nachschub brauchen erst Kaufhistorie." },
+    { when: () => true,
+      say: () => "Austausch, Nachschub und günstige Bevorratung — alles zu Haushaltsprodukten, nicht zu Lebensmitteln." }
+  ],
+
+  angebote: [
+    { when: (ctx) => !ctx.foodDeals.length,
+      say: () => "Gerade keine Angebote erkannt — das braucht noch etwas mehr Preisgeschichte je Produkt." },
+    { when: (ctx) => ctx.foodDeals.length > 0,
+      say: (ctx) => `${zahlwort(ctx.foodDeals.length, "Lebensmittel war", "Lebensmittel waren")} beim letzten Einkauf mindestens 15 % günstiger als sonst.` },
+    { when: (ctx) => ctx.foodDeals.some((d) => d.kind === "vorrat"),
+      say: (ctx) => `Bei ${ctx.foodDeals.find((d) => d.kind === "vorrat").name} könnte sich eine kleine Vorratsmenge lohnen.` },
+    { when: (ctx) => ctx.foodDeals.some((d) => d.kind !== "vorrat"),
+      say: (ctx) => `${zahlwort(ctx.foodDeals.filter((d) => d.kind !== "vorrat").length, "Angebot passt", "Angebote passen")} zu deiner Haltbarkeit, ohne Vorratsmenge.` },
+    { when: (ctx) => ctx.foodDeals.length > 0,
+      say: (ctx) => {
+        const best = [...ctx.foodDeals].sort((a, b) => b.nachlass - a.nachlass)[0];
+        return `${best.name} lag ${Math.round(best.nachlass * 100)} % unter deinem üblichen Preis.`;
+      } },
+    { when: (ctx) => ctx.foodDeals.length > 0, say: (ctx) => `Zuletzt gekauft: ${deDate(ctx.foodDeals[0].lastDate)}.` },
+    { when: (ctx) => ctx.foodDeals.length === 1,
+      say: (ctx) => `Nur ${ctx.foodDeals[0].name} ist gerade auffällig günstig.` },
+    { when: (ctx) => ctx.foodDeals.length >= 3, say: () => "Gleich mehrere Angebote gerade — ein guter Moment für einen Blick." },
+    { when: (ctx) => ctx.stockUp && ctx.stockUp.length > 0,
+      say: () => "Bei Haushaltsprodukten heißt die entsprechende Seite „Fällig“, nicht „Angebote“ — die verderben ja nicht." },
+    { when: (ctx) => ctx.foodDeals.length > 0,
+      say: () => "Die Menge ist immer durch die Haltbarkeit begrenzt — nie mehr, als bis dahin aufgebraucht wäre." },
+    { when: (ctx) => ctx.foodDeals.filter((d) => d.kind === "vorrat").length > 1,
+      say: (ctx) => `${zahlwort(ctx.foodDeals.filter((d) => d.kind === "vorrat").length, "Angebot lohnt", "Angebote lohnen")} sich als kleine Vorratsmenge.` },
+    { when: (ctx) => ctx.history.length === 0,
+      say: () => "Ohne erfasste Einkäufe hat die App noch keinen üblichen Preis zum Vergleichen." },
+    { when: (ctx) => ctx.foodDeals.length > 0 && ctx.rhythms && ctx.rhythms.size > 0,
+      say: () => "Ein Angebot erscheint hier nur bei Lebensmitteln mit gelernter Preisgeschichte." },
+    { when: () => true,
+      say: () => "Grundlage ist immer dein zuletzt gezahlter Preis, nicht ein aktueller Regalpreis — den kennt die App nicht." }
+  ]
+};
+
 /**
- * Was passiert, wenn man das Wesen antippt — eine antippbare Fläche
- * statt Dekoration. Öffnet an jeder Stelle etwas, das es schon gibt
- * (dieselbe Kühlkette-Meldung wie in "Jetzt zu tun", dasselbe
- * Sammelblatt wie bei den Hinweisen), statt eine zweite Fassung
- * derselben Aussage zu schreiben — genau die Fehlerklasse, die
- * PILL_INFO oben im Kopf schon einmal vermeiden wollte.
+ * Der Text der Sprechblase für den aktuellen Reiter.
  *
- * @returns {{label:string, run:function(app)}}
+ * Sammelt die zutreffenden Regeln aus MASCOT_RULES[tab] und wählt
+ * reihum eine aus (`seed` kommt von App.toggleMascotBubble() — ein
+ * Zähler je Reiter, kein Zufall, damit sich das prüfen lässt). Jede
+ * Liste endet mit einer Regel ohne Bedingung, daher ist `eligible`
+ * praktisch nie leer -- der Rückfalltext greift trotzdem, falls eine
+ * neue Liste diese Regel einmal vergessen sollte.
  */
-function mascotTap(ctx) {
-  if (ctx.safety) {
-    return {
-      label: "Kühlkette ansehen",
-      run: (app) => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
-    };
-  }
-  const heuteVerdirbt = ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
-    ctx.pulse.days[0].events.some((e) => e.kind === "verderb");
-  if (heuteVerdirbt) {
-    return { label: "Was heute ansteht ansehen", run: (app) => app.notice("Heute", ctx.pulse.headline) };
-  }
-  if (ctx.forgotten && ctx.forgotten.length) {
-    return { label: `${zahlwort(ctx.forgotten.length, "vergessenes Produkt", "vergessene Produkte")} ansehen`,
-      run: (app) => hintsSheet(ctx, app) };
-  }
-  if (ctx.streak && ctx.streak.weeks > 0) {
-    return {
-      label: "Streak ansehen",
-      run: (app) => app.notice("Weiter so",
-        `${zahlwort(ctx.streak.weeks, "Woche", "Wochen")} am Stück ohne vergessenen Einkauf.`)
-    };
-  }
-  return { label: "Nichts Dringendes", run: (app) => app.notice("Alles ruhig", "Gerade steht nichts Dringendes an.") };
+function mascotMessage(ctx, tab, seed = 0) {
+  const rules = MASCOT_RULES[tab] || MASCOT_RULES.start;
+  const eligible = rules.filter((r) => {
+    try { return !!r.when(ctx); } catch (e) { return false; }
+  });
+  if (!eligible.length) return "Gerade nichts Besonderes hier.";
+  const idx = ((seed % eligible.length) + eligible.length) % eligible.length;
+  return eligible[idx].say(ctx);
 }
 
 /* ================================================================

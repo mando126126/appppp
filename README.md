@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1860 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1896 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3601,6 +3601,67 @@ fröhlich zeigt. Alle jetzt 1860 Tests bestehen.
 
 ---
 
+## Das Wesen bleibt an Ort und Stelle und bekommt eine eigene Stimme (2026-09-02)
+
+Zwei konkrete Rückmeldungen zur letzten Fassung: das Wesen soll
+„immer exakt an einer Stelle" stehen, auch beim Scrollen — und
+Antippen soll „entsprechenden Kontext zu dem, was gerade auf dem
+Bildschirm ist" liefern, in einer „kleinen, etwas transparenten
+Sprechblase", ohne ein separates Fenster zu öffnen.
+
+**Fest statt scrollend.** Das Wesen saß bislang im großen Titel
+(`#largeTitle`) — und der fällt beim Scrollen in die Kopfleiste
+zusammen, verschwindet also. Es lebt jetzt als eigenes,
+`position:fixed`-Element außerhalb von `.shell` (siehe `index.html`,
+`.mascotFab` in `app.css`), unterhalb der Kopfleiste, damit es nicht
+mit deren eigenen Knöpfen kollidiert. `App.renderBar()` aktualisiert
+nur noch sein Aussehen — Stimmung, Beschriftung —, nie mehr seinen Ort
+im DOM. Ergebnis: dieselbe Bildschirmstelle, auf jeder Seite, bei
+jeder Scrollposition.
+
+**Eine Sprechblase statt eines Blatts.** Antippen öffnete bisher
+`app.notice()` oder das Hinweise-Sammelblatt — beides das bestehende
+`.sheet`-System mit Hintergrund und Vollbild-Anmutung. Jetzt öffnet es
+`.mascotBubble`: ein kleines, leicht durchsichtiges Feld direkt neben
+dem Wesen, mit Sprechblasen-Spitze, ohne Hintergrund-Abdunkelung —
+der Rest der Seite bleibt bedienbar. Sie schließt sich beim erneuten
+Antippen, bei einem Tipp irgendwo sonst auf der Seite, mit Escape oder
+beim Wechsel des Reiters; ein Tipp auf die Blase selbst schließt sie
+nicht.
+
+**155 kontextbezogene Aussagen, regel- und datenbasiert.** `mascotTap()`
+ist komplett ersetzt durch `MASCOT_RULES` (`views.js`): eine Tabelle je
+Reiter, jeder Eintrag ein Paar aus `when(ctx)` und `say(ctx)`. Jede
+Bedingung liest ausschließlich, was `Data.compute()` ohnehin liefert —
+keine Zahl wird neu geschätzt oder erfunden, mehrere Aussagen greifen
+sogar auf bereits vorhandenen Text zurück (`ctx.streak.message`,
+`ctx.brandHeadline.text`) statt ihn ein zweites Mal zu formulieren.
+`mascotMessage(ctx, tab, seed)` sammelt die gerade zutreffenden Regeln
+und wählt reihum eine aus — der `seed` ist ein Zähler je Reiter
+(`App.mascotTapCount`), kein Zufall, damit sich das Verhalten prüfen
+lässt: wiederholtes Antippen zeigt nacheinander verschiedene, aber
+immer nachvollziehbare Aussagen und beginnt nach einer vollen Runde
+wieder von vorn. Jede Liste endet mit einer Regel ohne Bedingung,
+damit die Blase nie leer bleibt.
+
+Verteilung über die acht Reiter: Start 22, Liste 21, Bestand 18,
+Erfassen 16, Zahlen 23, Mehr 23, Fällig 18, Angebote 14 — 155 insgesamt,
+mehr als die verlangten 150.
+
+Der Testabschnitt „Das Wesen" prüft jetzt (36 statt vorher 17):
+dass das Wesen außerhalb von großem Titel und Inhaltsbereich liegt und
+auf jedem Reiter an derselben Stelle steht, dass `.mascotFab` und
+`.mascotBubble` in app.css tatsächlich `position:fixed` tragen, das
+vollständige Öffnen-/Schließen-Verhalten der Sprechblase (Antippen,
+erneutes Antippen, Klick außerhalb, Escape, Klick auf die Blase
+selbst, Reiterwechsel), dass `MASCOT_RULES` jeden Reiter kennt und
+insgesamt mindestens 150 Regeln zählt, dass jeder Reiter sowohl mit
+vollen Beispieldaten als auch im ganz leeren Zustand eine Aussage
+liefert, und dass die Rotation deterministisch ist statt zufällig.
+Alle jetzt 1896 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3669,12 +3730,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1860
-npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
-                  #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
+npm test          # alle 1896
+npm run test:algo # 1158 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+                  #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Liste, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 616 Oberflächentests in jsdom
+npm run test:ui   # 702 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
