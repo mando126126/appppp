@@ -1626,6 +1626,15 @@ function viewListe(ctx, app) {
         onClick: () => app.notice("Budget", ctx.budgetResult.advice +
           " Brot, Milch und Eier bleiben immer auf der Liste.")
       }));
+    // Nicht nur sagen, was fehlt -- auch, womit es sich ersetzen
+    // ließe. cheaperAlternatives() lag bislang ungenutzt in
+    // budgetOptimizer.js; Streichen war nie der eigentliche Wunsch,
+    // Tauschen ist es (siehe Kommentar dort).
+    ctx.budgetResult.removed.forEach((removed) => {
+      if (!removed.productId) return;
+      const alts = cheaperAlternatives(removed);
+      alts.forEach((alt) => list.body.append(budgetSwapRow(removed, alt, ctx, app)));
+    });
   }
   if (ctx.vacation && ctx.vacation.skip.length) {
     list.body.append(uiRow(`Urlaub: ${ctx.vacation.skip.length} zurückgestellt`,
@@ -2766,6 +2775,25 @@ function supplyText(sup) {
  * Eine Austauschzeile. Der Name führt zum Detail-Blatt, rechts steht
  * die eine Handlung, um die es geht.
  */
+/** Eine günstigere Alternative zu einer wegen Budget gestrichenen
+ *  Position -- Tauschen statt nur Streichen (siehe budgetOptimizer.js). */
+function budgetSwapRow(removed, alt, ctx, app) {
+  const r = el("div", "row");
+  const main = el("div", "rowMain");
+  main.innerHTML =
+    `<div class="rowTitle">${esc(alt.name)} ${esc(eur(alt.price))}</div>` +
+    `<div class="rowSub">statt ${esc(removed.name)} &middot; ${esc(eur(alt.saving))} sparen</div>`;
+  r.append(main);
+
+  const swap = el("button", "pillBtn swapBtn", "Tauschen");
+  swap.addEventListener("click", () => {
+    Data.addManual({ productId: alt.productId, week: ctx.weekKey });
+    app.toast(`${alt.name} statt ${removed.name}`);
+  });
+  r.append(swap);
+  return r;
+}
+
 function swapRow(x, ctx, app) {
   const r = el("div", "row");
   const main = el("button", "rowMain plainBtn");
@@ -2800,6 +2828,30 @@ function viewBestand(ctx, app) {
     return c;
   }
 
+  const S = Data.get();
+  const urlaub = S.settings.vacation;
+  const urlaubAktiv = urlaub.active && !!urlaub.from;
+
+  // Drei Unterbereiche statt einer Einzelseite, die mit Beispieldaten
+  // auf über 2300px Höhe kommt, nur durch Überschriften getrennt --
+  // dasselbe Symptom, das "Zahlen" und "Mehr" mit einem Segment schon
+  // einmal gelöst haben (siehe deren Kommentare). "Reise" erscheint
+  // nur, wenn wirklich etwas dagegen abzuwägen ist.
+  const tabs = [["vorrat", "Vorrat"], ["kueche", "Küche"]];
+  if (urlaubAktiv) tabs.push(["reise", "Reise"]);
+  const nav = el("div", "group");
+  nav.append(segmented(tabs, app.bestandTab, (k) => { app.bestandTab = k; app.render(); }, "Bereich"));
+  c.append(nav);
+
+  if (app.bestandTab === "kueche") renderBestandKueche(c, ctx, app);
+  else if (app.bestandTab === "reise" && urlaubAktiv) renderBestandReise(c, ctx, urlaub);
+  else renderBestandVorrat(c, ctx, app);
+
+  return c;
+}
+
+/** Unterbereich "Vorrat": Reichweite, Angebrochenes, was vermutlich noch da ist. */
+function renderBestandVorrat(c, ctx, app) {
   if (ctx.range.days !== null) c.append(rangeHero(ctx, app));
 
   /* --- Angebrochen --- */
@@ -2836,7 +2888,7 @@ function viewBestand(ctx, app) {
     "Geschätzt aus Einkauf minus Verbrauch, ohne dass du etwas pflegst. Die Zahl vor dem „×“ ist ein " +
     "Vielfaches deiner zuletzt gekauften Menge — „0,6×“ heißt: etwa 60 % von dem, was du beim letzten " +
     "Mal mitgenommen hast. Die Sicherheitsangabe steht im Detail-Blatt jeder Zeile.");
-  ctx.inventory.slice(0, 20).forEach((i) => {
+  const renderInvRow = (i) => {
     const p = byId(i.productId) || {};
     const longLived = !p.isFood || i.daysLeft > 120;
     const flagCls = i.daysLeft <= 2 ? "f-miss" : i.daysLeft <= 5 ? "f-gold" : "f-ok";
@@ -2856,13 +2908,27 @@ function viewBestand(ctx, app) {
     });
     r.append(el("div", "chev"));
     r.addEventListener("click", () => productSheet(i.productId, ctx));
-    inv.body.append(r);
-  });
-  c.append(inv);
+    return r;
+  };
+  // Vorher schnitt die Liste bei 20 Positionen kommentarlos ab. Jetzt
+  // dasselbe "Alle N ansehen"-Muster wie in moneyBarSection() --
+  // dieselbe Kante, dieselbe Beschriftung, nicht neu erfunden.
+  const INV_VISIBLE = 20;
+  ctx.inventory.slice(0, INV_VISIBLE).forEach((i) => inv.body.append(renderInvRow(i)));
+  const invRest = ctx.inventory.slice(INV_VISIBLE);
+  if (invRest.length) {
+    const btn = el("button", "moneyMore", `Alle ${ctx.inventory.length} ansehen`);
+    btn.addEventListener("click", () => {
+      invRest.forEach((i) => btn.before(renderInvRow(i)));
+      btn.remove();
+    });
+    inv.body.append(btn);
+  }
 
   /* --- Haushaltsprodukte: eigene Rechnung, eigene Gruppe --- */
+  let hh = null;
   if (ctx.supplies.length) {
-    const g = uiGroup("Haushalt",
+    hh = uiGroup("Haushalt",
       "Andere Rechnung als bei Lebensmitteln: Haushaltsprodukte verderben nicht, also entspricht die " +
       "gekaufte Menge der verbrauchten. Deshalb eine Verbrauchsrate statt eines Kaufrhythmus.\n\n" +
       "Der Punkt hinter der Zahl zeigt, worauf sie beruht: gefüllt heißt aus deinen Käufen gelernt, " +
@@ -2877,7 +2943,7 @@ function viewBestand(ctx, app) {
       r.append(supplyValue(sup));
       r.append(el("div", "chev"));
       r.addEventListener("click", () => productSheet(sup.productId, ctx));
-      g.body.append(r);
+      hh.body.append(r);
     });
 
     /* Der Weg zu „Fällig“.
@@ -2886,16 +2952,34 @@ function viewBestand(ctx, app) {
      * Startseite nur dorthin, wenn wirklich etwas zu tauschen ist.
      * Ohne diese Zeile wäre sie an ruhigen Tagen nur noch über die
      * Adresse erreichbar — und „Demnächst“, „Geht aus“ und
-     * „Günstig bevorraten“ wären damit verschwunden statt umgezogen. */
+     * „Günstig bevorraten“ wären damit verschwunden statt umgezogen.
+     * (Ein zweiter, dauerhafter Weg steht seither auch unter
+     * Mehr → Auswertungen, für den Fall, dass auch das nicht zutrifft.) */
     if (ctx.swapsDue.length || ctx.stockUp.length) {
       const offen = ctx.swapsDue.filter((x) => x.due).length;
-      g.body.append(uiRow("Austausch und Nachschub",
+      hh.body.append(uiRow("Austausch und Nachschub",
         offen ? `${offen} ${offen === 1 ? "Produkt ist" : "Produkte sind"} fällig` : "nichts fällig",
         null, { onClick: () => app.goto("faellig") }));
     }
-    c.append(g);
   }
 
+  // Auf dem Rechner nebeneinander statt untereinander: zwei
+  // unabhängige, gleich aufgebaute Listen -- ein Lehrbuchfall für die
+  // vorbereitete .cards2-Regel aus app.css, die vorher in keiner
+  // Ansicht verwendet wurde. Auf dem Telefon bewirkt .cards2 nichts
+  // (die Regel steht nur im ≥900px-Media-Query), beide bleiben also
+  // wie gewohnt untereinander.
+  if (hh) {
+    const pair = el("div", "cards2");
+    pair.append(inv, hh);
+    c.append(pair);
+  } else {
+    c.append(inv);
+  }
+}
+
+/** Unterbereich "Küche": Rezeptvorschläge und Einräumhilfe. */
+function renderBestandKueche(c, ctx, app) {
   /* --- Rezepte --- */
   const rec = suggestRecipes(toRecipeStock(ctx.inventory), { maxResults: 5 });
   const g = uiGroup("Kochen", "Sortiert nach gerettetem Betrag, nicht nach Geschmack. Bewusst ohne Nährwerte.");
@@ -2937,19 +3021,16 @@ function viewBestand(ctx, app) {
     guide.forEach((z) => s.body.append(uiRow(z.zone.split("(")[0].trim(), z.items.map((i) => i.name).join(", "))));
     c.append(s);
   }
+}
 
-  /* --- Urlaub --- */
-  const S = Data.get();
-  if (S.settings.vacation.active && S.settings.vacation.from) {
-    const v = S.settings.vacation;
-    const plan = useUpPlan(ctx.inventory, v.from, v.to, ctx.ref);
-    const p = uiGroup("Vor der Abreise", plan.summary);
-    plan.mustUse.forEach((x) => p.body.append(uiRow(x.name, `noch ${tage(x.daysLeft)}`, el("span", "flag f-gold", "aufbrauchen"))));
-    plan.freeze.forEach((x) => p.body.append(uiRow(x.name, eur(x.value), el("span", "flag f-new", "einfrieren"))));
-    if (!plan.mustUse.length && !plan.freeze.length) p.body.append(el("p", "empty", "Nichts gefährdet."));
-    c.append(p);
-  }
-  return c;
+/** Unterbereich "Reise": was vor der Abreise noch aufgebraucht werden sollte. */
+function renderBestandReise(c, ctx, urlaub) {
+  const plan = useUpPlan(ctx.inventory, urlaub.from, urlaub.to, ctx.ref);
+  const p = uiGroup("Vor der Abreise", plan.summary);
+  plan.mustUse.forEach((x) => p.body.append(uiRow(x.name, `noch ${tage(x.daysLeft)}`, el("span", "flag f-gold", "aufbrauchen"))));
+  plan.freeze.forEach((x) => p.body.append(uiRow(x.name, eur(x.value), el("span", "flag f-new", "einfrieren"))));
+  if (!plan.mustUse.length && !plan.freeze.length) p.body.append(el("p", "empty", "Nichts gefährdet."));
+  c.append(p);
 }
 
 /* ================================================================
@@ -3132,9 +3213,9 @@ function ocrPicker(box, cap, app) {
   if (bildhaft) lies(geteilt.datei);
 
   const knoepfe = el("div", "shotRow");
-  const foto = el("button", "cta", "Fotografieren");
+  const foto = el("button", "cta shotFoto", "Fotografieren");
   foto.addEventListener("click", () => kamera.click());
-  const waehlen = el("button", "cta light", "Bild wählen");
+  const waehlen = el("button", "cta light shotWaehlen", "Bild wählen");
   waehlen.addEventListener("click", () => input.click());
   knoepfe.append(foto, waehlen);
 
@@ -3491,15 +3572,15 @@ function viewZahlen(ctx, app) {
     `von ${ctx.rhythms.size}`));
   c.append(s);
 
-  c.append(moneyFlowCard(ctx, app));
-
   // Drei Unterbereiche statt eines endlosen Scrolls: hier standen über
   // 20 Abschnitte hintereinander, nur durch Überschriften getrennt. Die
   // Aufteilung folgt der Frage, mit der man herkommt -- "wofür gebe ich
   // aus", "wie kaufe ich ein", "was bringt mir das" -- statt der
-  // Reihenfolge, in der die Abschnitte entstanden sind. Die Kachelzeile
-  // und "Wo dein Geld hingeht" bleiben oben immer sichtbar, weil sie
-  // schon für sich einen vollständigen Überblick geben.
+  // Reihenfolge, in der die Abschnitte entstanden sind. Das Segment
+  // steht direkt unter der Kachelzeile: wer zu "Verhalten" oder
+  // "Bilanz" will, braucht so einen Tipp statt eines langen Scrolls.
+  // "Wo dein Geld hingeht" ist selbst eine Ausgaben-Frage und steht
+  // deshalb nur noch im Ausgaben-Tab, nicht mehr vor allen dreien.
   const nav = el("div", "group");
   nav.append(segmented(
     [["ausgaben", "Ausgaben"], ["verhalten", "Verhalten"], ["bilanz", "Bilanz"]],
@@ -3508,7 +3589,7 @@ function viewZahlen(ctx, app) {
 
   if (app.zahlenTab === "bilanz") renderZahlenBilanz(c, ctx, app);
   else if (app.zahlenTab === "verhalten") renderZahlenVerhalten(c, ctx, app);
-  else renderZahlenAusgaben(c, ctx, app);
+  else { c.append(moneyFlowCard(ctx, app)); renderZahlenAusgaben(c, ctx, app); }
 
   return c;
 }
@@ -4185,77 +4266,13 @@ function renderMehrEinstellungen(c, ctx, app) {
   look.body.append(uiRow("Schriftgröße", null,
     segmented([[1, "Normal"], [1.15, "Groß"], [1.3, "Sehr groß"]], S.settings.textScale,
       (v) => app.set((s) => { s.settings.textScale = v; }), "Schriftgröße"), { stacked: true }));
-  c.append(look);
-
-  /* --- Rückblick --- */
-  const rv = uiGroup("Wochenrückblick",
-    "Der Rückblick erscheint ab Sonntagabend oben auf der Liste und bleibt bis Dienstag abrufbar.\n\n" +
-    "Die Erinnerung ist ausdrücklich KEINE echte Push-Nachricht: ohne Server kann niemand die App von " +
-    "außen wecken, und einen Server hat diese App bewusst nicht. Die Meldung erscheint deshalb beim " +
-    "nächsten Öffnen, wenn der Rückblick fällig ist.");
-  rv.body.append(uiRow("Erinnern", "beim nächsten Öffnen",
-    toggle(!!S.review.notify, (on) => app.askNotify(on), "Erinnerung an den Wochenrückblick")));
-  rv.body.append(uiRow("Diese Woche ansehen", null, null, { onClick: () => reviewSheet(ctx, app) }));
-  c.append(rv);
-
-  /* --- Haushalt: bestimmt Verbrauchsraten und filtert Produkte --- */
-  const hh = uiGroup("Haushalt",
-    "Diese Angaben steuern die Verbrauchsraten der Haushaltsprodukte. Fehlt ein Gerät, verschwinden " +
-    "die zugehörigen Produkte ganz — ein Entkalker-Vorschlag ohne Kaffeemaschine kostet mehr Vertrauen als er nützt.\n\n" +
-    "Die Wasserhärte steht auf der Rechnung deines Wasserversorgers. Sie ist in Deutschland gesetzlich in " +
-    "drei Bereiche eingeteilt und bestimmt, wie oft entkalkt und wie hoch dosiert werden muss.");
-  hh.body.append(uiRow("Wasserhärte", HARDNESS_LABEL[S.household.waterHardness],
-    segmented([["weich", "Weich"], ["mittel", "Mittel"], ["hart", "Hart"]], S.household.waterHardness,
-      (v) => app.set((st) => { st.household.waterHardness = v; }), "Wasserhärte"), { stacked: true }));
-  [
-    ["hasWashingMachine", "Waschmaschine"],
-    ["hasDishwasher", "Spülmaschine"],
-    ["hasCoffeeMachine", "Kaffeemaschine"],
-    ["hasWaterFilter", "Wasserfilter"]
-  ].forEach(([key, label]) => {
-    hh.body.append(uiRow(label, null,
-      toggle(S.household[key], (on) => app.set((st) => { st.household[key] = on; }), label)));
-  });
-  c.append(hh);
-
-  /* --- Gangreihenfolge --- */
-  const aisles = relevantAisles(ctx.aisleList, ctx.items);
-  if (aisles.length > 1) {
-    /* Heißt wie der Knopf, der dorthin führt. „Ladenweg“ als
-       Überschrift und „Nach Gängen“ als Knopf waren zwei Namen für
-       dieselbe Reihenfolge — man sucht die Einstellung dann dort,
-       wo sie nicht steht. */
-    const g = uiGroup("Nach Gängen" + (ctx.store ? ` · ${ctx.store}` : ""),
-      "Die Reihenfolge, in der die Liste beim Einkaufen durchlaufen wird. Sie wird je Markt gemerkt. " +
-      "Der Griff links lässt sich ziehen -- schneller als die Pfeile, wenn viele Gänge umsortiert werden sollen.");
-    aisles.forEach((aisle, i) => {
-      const r = el("div", "row aisleRow");
-      const handle = el("span", "aisleHandle",
-        '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="6" cy="5" r="1.5"/><circle cx="14" cy="5" r="1.5"/>' +
-        '<circle cx="6" cy="10" r="1.5"/><circle cx="14" cy="10" r="1.5"/><circle cx="6" cy="15" r="1.5"/><circle cx="14" cy="15" r="1.5"/></svg>');
-      handle.setAttribute("aria-hidden", "true");
-      r.append(handle);
-      r.append(el("div", "rowMain", `<div class="rowTitle">${esc(aisle)}</div>`));
-      const acts = el("div", "rowActions");
-      [["↑", -1, i === 0], ["↓", 1, i === aisles.length - 1]].forEach(([sym, dir, disabled]) => {
-        const b = el("button", "pillBtn", sym);
-        b.setAttribute("aria-label", `${aisle} nach ${dir < 0 ? "oben" : "unten"}`);
-        b.disabled = disabled;
-        if (!disabled) b.addEventListener("click", () => app.moveAisle(aisle, dir));
-        acts.append(b);
-      });
-      r.append(acts);
-      g.body.append(r);
-      attachAisleDrag(handle, r, g.body, i, aisle, app);
-    });
-    c.append(g);
-  }
 
   /* --- Einstellungen für die Liste ---
-     Standen bis hierher unten auf der Startseite. Sie sind
-     Einstellungen: man fasst sie einmal an und danach monatelang
-     nicht mehr — auf der Seite, die man täglich öffnet, waren sie
-     vier Blöcke Ballast. */
+     Standen früher unten auf der Startseite, dann ganz unten hier.
+     Beides falsch: es sind die vier Werte mit der höchsten
+     Handlungsdichte in "Mehr" -- wer öfter am Budget dreht, sollte
+     nicht an Wochenrückblick, Haushaltsgeräten und einer potenziell
+     langen Gangreihenfolge vorbeiscrollen müssen. */
   const wl = uiGroup("Deine Liste",
     "Diese vier Werte steuern, was auf der Einkaufsliste landet.\n\n" +
     "Das Budget streicht die teuersten entbehrlichen Positionen — Brot, Milch und Eier bleiben immer drauf. " +
@@ -4298,7 +4315,81 @@ function renderMehrEinstellungen(c, ctx, app) {
     });
     wl.body.append(f);
   }
-  c.append(wl);
+
+  // Auf dem Rechner nebeneinander statt untereinander: zwei kurze,
+  // unabhängige Gruppen -- dieselbe vorbereitete .cards2-Regel wie in
+  // "Bestand", die vorher in keiner Ansicht verwendet wurde. Auf dem
+  // Telefon bewirkt .cards2 nichts (Regel nur im ≥900px-Media-Query),
+  // beide bleiben also wie gewohnt untereinander.
+  const lookWl = el("div", "cards2");
+  lookWl.append(look, wl);
+  c.append(lookWl);
+
+  /* --- Rückblick --- */
+  const rv = uiGroup("Wochenrückblick",
+    "Der Rückblick erscheint ab Sonntagabend oben auf der Liste und bleibt bis Dienstag abrufbar.\n\n" +
+    "Die Erinnerung ist ausdrücklich KEINE echte Push-Nachricht: ohne Server kann niemand die App von " +
+    "außen wecken, und einen Server hat diese App bewusst nicht. Die Meldung erscheint deshalb beim " +
+    "nächsten Öffnen, wenn der Rückblick fällig ist.");
+  rv.body.append(uiRow("Erinnern", "beim nächsten Öffnen",
+    toggle(!!S.review.notify, (on) => app.askNotify(on), "Erinnerung an den Wochenrückblick")));
+  rv.body.append(uiRow("Diese Woche ansehen", null, null, { onClick: () => reviewSheet(ctx, app) }));
+
+  /* --- Haushalt: bestimmt Verbrauchsraten und filtert Produkte --- */
+  const hh = uiGroup("Haushalt",
+    "Diese Angaben steuern die Verbrauchsraten der Haushaltsprodukte. Fehlt ein Gerät, verschwinden " +
+    "die zugehörigen Produkte ganz — ein Entkalker-Vorschlag ohne Kaffeemaschine kostet mehr Vertrauen als er nützt.\n\n" +
+    "Die Wasserhärte steht auf der Rechnung deines Wasserversorgers. Sie ist in Deutschland gesetzlich in " +
+    "drei Bereiche eingeteilt und bestimmt, wie oft entkalkt und wie hoch dosiert werden muss.");
+  hh.body.append(uiRow("Wasserhärte", HARDNESS_LABEL[S.household.waterHardness],
+    segmented([["weich", "Weich"], ["mittel", "Mittel"], ["hart", "Hart"]], S.household.waterHardness,
+      (v) => app.set((st) => { st.household.waterHardness = v; }), "Wasserhärte"), { stacked: true }));
+  [
+    ["hasWashingMachine", "Waschmaschine"],
+    ["hasDishwasher", "Spülmaschine"],
+    ["hasCoffeeMachine", "Kaffeemaschine"],
+    ["hasWaterFilter", "Wasserfilter"]
+  ].forEach(([key, label]) => {
+    hh.body.append(uiRow(label, null,
+      toggle(S.household[key], (on) => app.set((st) => { st.household[key] = on; }), label)));
+  });
+
+  const rvHh = el("div", "cards2");
+  rvHh.append(rv, hh);
+  c.append(rvHh);
+
+  /* --- Gangreihenfolge --- */
+  const aisles = relevantAisles(ctx.aisleList, ctx.items);
+  if (aisles.length > 1) {
+    /* Heißt wie der Knopf, der dorthin führt. „Ladenweg“ als
+       Überschrift und „Nach Gängen“ als Knopf waren zwei Namen für
+       dieselbe Reihenfolge — man sucht die Einstellung dann dort,
+       wo sie nicht steht. */
+    const g = uiGroup("Nach Gängen" + (ctx.store ? ` · ${ctx.store}` : ""),
+      "Die Reihenfolge, in der die Liste beim Einkaufen durchlaufen wird. Sie wird je Markt gemerkt. " +
+      "Der Griff links lässt sich ziehen -- schneller als die Pfeile, wenn viele Gänge umsortiert werden sollen.");
+    aisles.forEach((aisle, i) => {
+      const r = el("div", "row aisleRow");
+      const handle = el("span", "aisleHandle",
+        '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="6" cy="5" r="1.5"/><circle cx="14" cy="5" r="1.5"/>' +
+        '<circle cx="6" cy="10" r="1.5"/><circle cx="14" cy="10" r="1.5"/><circle cx="6" cy="15" r="1.5"/><circle cx="14" cy="15" r="1.5"/></svg>');
+      handle.setAttribute("aria-hidden", "true");
+      r.append(handle);
+      r.append(el("div", "rowMain", `<div class="rowTitle">${esc(aisle)}</div>`));
+      const acts = el("div", "rowActions");
+      [["↑", -1, i === 0], ["↓", 1, i === aisles.length - 1]].forEach(([sym, dir, disabled]) => {
+        const b = el("button", "pillBtn", sym);
+        b.setAttribute("aria-label", `${aisle} nach ${dir < 0 ? "oben" : "unten"}`);
+        b.disabled = disabled;
+        if (!disabled) b.addEventListener("click", () => app.moveAisle(aisle, dir));
+        acts.append(b);
+      });
+      r.append(acts);
+      g.body.append(r);
+      attachAisleDrag(handle, r, g.body, i, aisle, app);
+    });
+    c.append(g);
+  }
 
   /* --- Daten --- */
   const dat = uiGroup("Daten",
@@ -4387,6 +4478,24 @@ function attachAisleDrag(handle, row, list, startIndex, aisle, app) {
 
 /** Unterbereich "Auswertungen": Dinge, die man nachschlägt statt anfasst. */
 function renderMehrAuswertungen(c, ctx, app) {
+  /* --- Fällig & Angebote: dauerhafter Einstiegspunkt ---
+     Beide Seiten haben seit der Startseiten-Umstellung keinen eigenen
+     Reiter mehr und hängen sonst nur an bedingten Zeilen auf Start
+     (nur bei wirklich Fälligem bzw. erkannten Angeboten) und Bestand
+     (nur bei Austausch- oder Nachschubbedarf). Sind alle diese
+     Bedingungen gleichzeitig falsch, verschwindet jeder Weg dorthin
+     komplett -- diese Gruppe bleibt immer da, bewusst unauffällig
+     (kein Flag, keine Zahl in der Ruhe), wenn gerade nichts ansteht. */
+  const goto2 = uiGroup("Fällig & Angebote");
+  const faelligOffen = ctx.swapsDue.filter((x) => x.due).length;
+  goto2.body.append(uiRow("Fällig",
+    faelligOffen ? zahlwort(faelligOffen, "Produkt", "Produkte") : "nichts offen",
+    null, { onClick: () => app.goto("faellig") }));
+  goto2.body.append(uiRow("Angebote",
+    ctx.foodDeals.length ? zahlwort(ctx.foodDeals.length, "Angebot", "Angebote") + " erkannt" : "keine erkannt",
+    null, { onClick: () => app.goto("angebote") }));
+  c.append(goto2);
+
   /* --- Saison --- */
   if (ctx.seasonNow.length) {
     const g = uiGroup("Jetzt Saison", "Saisonkalender des BZfE. Anregung, kein Vorschlag.");

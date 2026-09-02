@@ -109,7 +109,7 @@ try {
     "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
-    " pickBetter, receiptSheet, wasteSummary," +
+    " pickBetter, receiptSheet, wasteSummary, cheaperAlternatives," +
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
@@ -3224,6 +3224,277 @@ console.log("\n--- UX-Testbericht: zweite Umsetzungsrunde ---");
     /width:11px;height:11px/.test(block(".dot") || ""));
 
   D.loadDemo("full");
+}
+
+console.log("\n--- UX-Testbericht: dritte Umsetzungsrunde ---");
+{
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+  const block = (sel) => {
+    const i = css.indexOf("\n" + sel + "{");
+    if (i < 0) return null;
+    return css.slice(i + sel.length + 2, css.indexOf("}", i));
+  };
+
+  /* --- Zahlen: die fünfte Kachel zog sich auf dem Rechner über die
+     volle Breite, weil flex:1 den Rest der Zeile an das einzige
+     Element vergab. flex:0 lässt jede Kachel bei ihrer eigenen
+     Breite, auch wenn sie allein umbricht. */
+  const desktopBlock = css.slice(css.indexOf("min-width:900px"));
+  ok("Kachel wächst auf dem Rechner nicht mehr in die Zeile hinein",
+    /\.tile\{flex:0 1 200px\}/.test(desktopBlock));
+
+  /* --- Liste: cheaperAlternatives() war fertig und ungenutzt --
+     jetzt an eine echte Handlung angeschlossen. */
+  D.reset();
+  D.loadDemo("full");
+  D.update((s) => { s.settings.budget = 15; });
+  App.goto("liste");
+  const b4 = errors.length;
+  ok("Ein enges Budget rendert ohne Fehler", errors.length === b4, errors[b4]);
+  ok("Etwas wurde wegen des Budgets gestrichen", App.ctx.budgetResult.removed.length > 0,
+    App.ctx.budgetResult.removed.length);
+
+  const erwarteteAlternativen = App.ctx.budgetResult.removed
+    .filter((r) => r.productId)
+    .flatMap((r) => T.cheaperAlternatives(r).map((a) => ({ removed: r, alt: a })));
+
+  if (erwarteteAlternativen.length) {
+    const tauschZeilen = [...$("main").querySelectorAll(".row")]
+      .filter((r) => /Tauschen/.test(r.textContent));
+    ok("Für jede gefundene Alternative steht eine Tauschen-Zeile da",
+      tauschZeilen.length === erwarteteAlternativen.length,
+      `${tauschZeilen.length} Zeilen, ${erwarteteAlternativen.length} Alternativen`);
+
+    const erste = erwarteteAlternativen[0];
+    ok("Die Zeile nennt den Namen der Alternative und was sie kostet",
+      tauschZeilen.some((r) => r.textContent.includes(erste.alt.name)));
+    ok("Und was sie ersetzt",
+      tauschZeilen.some((r) => r.textContent.includes(erste.removed.name)));
+
+    const manualVorher = D.get().manual.length;
+    const tauschBtn = tauschZeilen[0].querySelector("button");
+    click(tauschBtn);
+    ok("Tauschen legt die Alternative als eigene Position an",
+      D.get().manual.length === manualVorher + 1);
+    ok("Mit der richtigen Produktkennung",
+      D.get().manual[D.get().manual.length - 1].productId === erwarteteAlternativen[0].alt.productId);
+  } else {
+    ok("Keine Alternativen in den Beispieldaten gefunden -- übersprungen", true);
+    ok("Keine Alternativen in den Beispieldaten gefunden -- übersprungen", true);
+    ok("Keine Alternativen in den Beispieldaten gefunden -- übersprungen", true);
+    ok("Keine Alternativen in den Beispieldaten gefunden -- übersprungen", true);
+  }
+
+  D.reset();
+  D.loadDemo("full");
+
+  /* --- Mehr: "Deine Liste" stand an fünfter von sechs Stellen, obwohl
+     sie die Gruppe mit der höchsten Handlungsdichte ist. Jetzt direkt
+     nach "Darstellung". */
+  App.goto("mehr");
+  const gruppenTitel = [...$("main").querySelectorAll(".groupTitle span")].map((s) => s.textContent);
+  const iDarstellung = gruppenTitel.indexOf("Darstellung");
+  const iDeineListe = gruppenTitel.indexOf("Deine Liste");
+  const iRueckblick = gruppenTitel.indexOf("Wochenrückblick");
+  ok("Alle drei Gruppen stehen da", iDarstellung >= 0 && iDeineListe >= 0 && iRueckblick >= 0,
+    gruppenTitel.join(", "));
+  ok("\"Deine Liste\" steht jetzt direkt nach \"Darstellung\", vor dem Rückblick",
+    iDeineListe === iDarstellung + 1 && iDeineListe < iRueckblick,
+    gruppenTitel.join(", "));
+
+  /* --- Zahlen: das Segment stand hinter der langen Geld-Karte, wer zu
+     "Verhalten"/"Bilanz" wollte, musste daran vorbeiscrollen.
+     "Wo dein Geld hingeht" ist selbst eine Ausgaben-Frage und gehört
+     nur noch in den Ausgaben-Tab. */
+  App.goto("zahlen");
+  App.zahlenTab = "ausgaben";
+  App.render();
+  const kinderVonMain = [...$("main").children];
+  const iScroller = kinderVonMain.findIndex((k) => k.classList.contains("scroller"));
+  const iSegment = kinderVonMain.findIndex((k) => k.querySelector && k.querySelector('[role="tablist"], .segmented'));
+  const iGeldKarte = kinderVonMain.findIndex((k) => /Wo dein Geld hingeht/.test(k.textContent));
+  ok("Kachelzeile, Segment und Geld-Karte stehen alle da",
+    iScroller >= 0 && iSegment >= 0 && iGeldKarte >= 0,
+    `${iScroller}, ${iSegment}, ${iGeldKarte}`);
+  ok("Das Segment steht jetzt direkt unter der Kachelzeile, vor der Geld-Karte",
+    iSegment === iScroller + 1 && iSegment < iGeldKarte,
+    `Kacheln ${iScroller}, Segment ${iSegment}, Geld-Karte ${iGeldKarte}`);
+
+  App.zahlenTab = "verhalten";
+  App.render();
+  ok("Im Verhalten-Tab steht \"Wo dein Geld hingeht\" nicht mehr da",
+    !/Wo dein Geld hingeht/.test($("main").textContent));
+  App.zahlenTab = "bilanz";
+  App.render();
+  ok("Im Bilanz-Tab auch nicht",
+    !/Wo dein Geld hingeht/.test($("main").textContent));
+  App.zahlenTab = "ausgaben";
+  App.render();
+
+  /* --- Ladenmodus: kein Weg, eine ungeplante Position hinzuzufügen --
+     man musste den Ladenmodus verlassen. Jetzt ein "+"-Knopf, der
+     addSheet() als Blatt darüber öffnet. */
+  D.reset();
+  D.loadDemo("full");
+  App.goto("liste");
+  App.openStore();
+  const b4Store = errors.length;
+  const aufListe = new Set(App.ctx.items.filter((i) => i.on).map((i) => i.productId));
+  const neu = T.FOOD_DATABASE.find((p) => p.isFood && !aufListe.has(p.id));
+  ok("Es gibt ein Produkt, das noch nicht auf der Liste steht", !!neu);
+
+  const storeAdd = doc.getElementById("storeAdd");
+  ok("Der Ladenmodus hat einen \"+\"-Knopf", !!storeAdd);
+  const vorherImLaden = doc.getElementById("storeBody").querySelectorAll(".sItem").length;
+
+  click(storeAdd);
+  ok("Er öffnet ein Blatt, ohne den Ladenmodus zu schließen",
+    $("sheet").hidden === false && doc.getElementById("store").hidden === false);
+
+  if (neu) {
+    const feld = $("sheetOpts").querySelector("input");
+    feld.value = neu.name;
+    feld.dispatchEvent(new window.Event("input", { bubbles: true }));
+    const treffer = [...$("sheetOpts").querySelectorAll(".results li button")]
+      .find((b) => b.textContent.includes(neu.name));
+    ok("Der Katalog findet es", !!treffer, neu.name);
+    if (treffer) click(treffer);
+
+    ok("Läuft ohne Fehler", errors.length === b4Store, errors[b4Store]);
+    const nachherImLaden = doc.getElementById("storeBody").querySelectorAll(".sItem").length;
+    ok("Die neue Position erscheint im Ladenmodus, ohne ihn zu verlassen",
+      nachherImLaden === vorherImLaden + 1, `${vorherImLaden} -> ${nachherImLaden}`);
+    ok("Der Ladenmodus ist immer noch offen", doc.getElementById("store").hidden === false);
+  }
+  App.closeSheet();
+  App.closeStore();
+
+  /* --- Fällig/Angebote: permanenter Einstiegspunkt unter Mehr ->
+     Auswertungen, auch wenn gerade nichts ansteht. */
+  D.reset();
+  D.loadDemo("full");
+  App.goto("mehr");
+  App.mehrTab = "auswertungen";
+  App.render();
+  const auswertTitel = [...$("main").querySelectorAll(".groupTitle span")].map((s) => s.textContent);
+  ok("\"Fällig & Angebote\" steht dauerhaft unter Auswertungen", auswertTitel.includes("Fällig & Angebote"),
+    auswertTitel.join(", "));
+  const goFaellig = [...$("main").querySelectorAll(".row")].find((r) => /^Fällig/.test(r.textContent));
+  const goAngebote = [...$("main").querySelectorAll(".row")].find((r) => /^Angebote/.test(r.textContent));
+  ok("Beide Zeilen stehen da, mit Zustand statt Stille", !!goFaellig && !!goAngebote,
+    `${!!goFaellig}, ${!!goAngebote}`);
+  if (goFaellig) {
+    click(goFaellig);
+    ok("Die Fällig-Zeile führt tatsächlich dorthin", App.tab === "faellig", App.tab);
+  }
+  App.goto("mehr");
+  App.mehrTab = "auswertungen";
+  App.render();
+  const goAngebote2 = [...$("main").querySelectorAll(".row")].find((r) => /^Angebote/.test(r.textContent));
+  if (goAngebote2) {
+    click(goAngebote2);
+    ok("Die Angebote-Zeile führt tatsächlich dorthin", App.tab === "angebote", App.tab);
+  }
+
+  /* --- Bestand: 2335px hohe Einzelseite ohne Gliederung -- jetzt
+     Segmente wie bei Zahlen/Mehr, plus .cards2 auf dem Rechner für
+     zwei unabhängige, gleich aufgebaute Listen. */
+  D.reset();
+  D.loadDemo("full");
+  App.goto("bestand");
+  App.bestandTab = "vorrat";
+  App.render();
+  const bestandTitel1 = () => [...$("main").querySelectorAll(".groupTitle span")].map((s) => s.textContent);
+  ok("Es gibt ein Segment Vorrat/Küche", $("main").querySelector(".segmented"));
+  ok("Im Vorrat-Tab steht \"Vermutlich noch da\", nicht \"Kochen\"",
+    bestandTitel1().includes("Vermutlich noch da") && !bestandTitel1().includes("Kochen"),
+    bestandTitel1().join(", "));
+
+  const cardsWrap = [...$("main").querySelectorAll(".cards2")][0];
+  if (cardsWrap) {
+    ok("\"Vermutlich noch da\" und \"Haushalt\" stehen nebeneinander in .cards2 (nur ≥900px sichtbar)",
+      [...cardsWrap.children].filter((k) => k.classList.contains("group")).length === 2);
+  } else {
+    ok("Keine zwei unabhängigen Gruppen in den Beispieldaten -- .cards2 übersprungen", true);
+  }
+
+  App.bestandTab = "kueche";
+  App.render();
+  const bestandTitel2 = bestandTitel1();
+  ok("Im Küche-Tab steht \"Kochen\", nicht \"Vermutlich noch da\"",
+    bestandTitel2.includes("Kochen") && !bestandTitel2.includes("Vermutlich noch da"),
+    bestandTitel2.join(", "));
+
+  App.bestandTab = "vorrat";
+  App.render();
+  const invGroup = [...$("main").querySelectorAll(".group")]
+    .find((g) => /Vermutlich noch da/.test((g.querySelector(".groupTitle") || {}).textContent || ""));
+  const invRowsVorher = invGroup.querySelectorAll(".row").length;
+  const mehrBtn = invGroup.querySelector(".moneyMore");
+  if (App.ctx.inventory.length > 20) {
+    ok("Über 20 Positionen bekommen ein \"Alle N ansehen\" statt stillem Abschneiden", !!mehrBtn);
+    if (mehrBtn) {
+      click(mehrBtn);
+      const invRowsNachher = invGroup.querySelectorAll(".row").length;
+      ok("Antippen zeigt den Rest, ohne Fehler",
+        invRowsNachher === App.ctx.inventory.length && errors.length === 0,
+        `${invRowsVorher} -> ${invRowsNachher} von ${App.ctx.inventory.length}`);
+    }
+  } else {
+    ok("Bei höchstens 20 Positionen (Beispieldaten) bleibt \"Alle ansehen\" weg, nichts wird abgeschnitten",
+      !mehrBtn && invRowsVorher === App.ctx.inventory.length,
+      `${invRowsVorher} von ${App.ctx.inventory.length}`);
+  }
+
+  // Urlaub aktiv: "Reise" taucht als dritte Option auf.
+  D.update((s) => {
+    s.settings.vacation = { active: true, from: D.plusDays(D.today(), 2), to: D.plusDays(D.today(), 9) };
+  });
+  App.bestandTab = "vorrat";
+  App.render();
+  const segLabels = [...$("main").querySelectorAll(".segmented button")].map((b) => b.textContent);
+  ok("Bei aktivem Urlaub kommt \"Reise\" als dritte Option dazu", segLabels.includes("Reise"), segLabels.join(", "));
+  App.bestandTab = "reise";
+  App.render();
+  ok("Der Reise-Tab zeigt \"Vor der Abreise\"", bestandTitel1().includes("Vor der Abreise"), bestandTitel1().join(", "));
+
+  D.reset();
+  D.loadDemo("full");
+
+  /* --- Mehr: dieselbe .cards2-Regel für "Darstellung"+"Deine Liste"
+     und "Wochenrückblick"+"Haushalt". */
+  App.goto("mehr");
+  App.mehrTab = "einstellungen";
+  App.render();
+  const mehrCards2 = [...$("main").querySelectorAll(".cards2")];
+  ok("Mehr hat zwei .cards2-Paare", mehrCards2.length === 2, mehrCards2.length);
+  if (mehrCards2.length === 2) {
+    const titelIn = (wrap) => [...wrap.querySelectorAll(".groupTitle span")].map((s) => s.textContent);
+    ok("Erstes Paar: Darstellung + Deine Liste",
+      titelIn(mehrCards2[0]).includes("Darstellung") && titelIn(mehrCards2[0]).includes("Deine Liste"),
+      titelIn(mehrCards2[0]).join(", "));
+    ok("Zweites Paar: Wochenrückblick + Haushalt",
+      titelIn(mehrCards2[1]).includes("Wochenrückblick") && titelIn(mehrCards2[1]).includes("Haushalt"),
+      titelIn(mehrCards2[1]).join(", "));
+  }
+
+  /* --- Erfassen: "Fotografieren" blieb auf dem Rechner der volltonig
+     grüne, dominante Knopf -- ohne Rückkamera in Bon-Haltung ist
+     "Bild wählen" dort naheliegender. Beide Knöpfe stehen unverändert
+     im DOM (dieselbe Bedienbarkeit); nur Farbe und Reihenfolge tauschen
+     per CSS ab ≥900px. */
+  const engineVorher = T.OCR.engine;
+  T.OCR.engine = () => "";
+  App.goto("erfassen");
+  App.render();
+  ok("Beide Knöpfe tragen ihre eigene Klasse für die Rechner-Gewichtung",
+    !!$("main").querySelector("button.shotFoto") && !!$("main").querySelector("button.shotWaehlen"));
+  T.OCR.engine = engineVorher;
+  const desktopCss = css.slice(css.indexOf("min-width:900px"));
+  ok("Auf dem Rechner wird \"Fotografieren\" zur Kontur",
+    /\.shotFoto\{background:var\(--fill\)/.test(desktopCss));
+  ok("Und \"Bild wählen\" zur vollen Fläche",
+    /\.shotWaehlen\{background:var\(--accent-strong\)/.test(desktopCss));
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

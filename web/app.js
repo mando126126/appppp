@@ -88,6 +88,7 @@ const App = {
   // Unterbereich gerade offen ist -- kein Haushaltsdatum, kein Data.update().
   zahlenTab: "ausgaben",
   mehrTab: "einstellungen",
+  bestandTab: "vorrat",
   // Wie oft die Sprechblase je Reiter schon geöffnet wurde -- steuert
   // nur, welche der zutreffenden Aussagen als Nächstes dran ist
   // (mascotMessage() rotiert reihum, nicht zufällig). Reine
@@ -1088,6 +1089,12 @@ function boot() {
   }
 
   document.getElementById("storeClose").addEventListener("click", () => App.closeStore());
+  // Ohne diesen Knopf musste man den Ladenmodus verlassen, um eine
+  // ungeplante Position zu ergänzen -- ein Bruch mitten im eigentlichen
+  // Zweck der Ansicht. addSheet() öffnet als Blatt ÜBER dem Ladenmodus
+  // (höherer z-index, siehe app.css), ohne ihn zu schließen; renderStore()
+  // erkennt die neue Position beim nächsten Neuzeichnen von selbst.
+  document.getElementById("storeAdd").addEventListener("click", () => addSheet(App.ctx, App));
   document.getElementById("sheetCancel").addEventListener("click", () => App.closeSheet());
   document.getElementById("sheet").addEventListener("click", (e) => {
     if (e.target.id === "sheet") App.closeSheet();

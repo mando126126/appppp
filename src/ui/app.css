@@ -1137,6 +1137,11 @@ button.row.action,label.row.action{cursor:pointer}
 }
 .storeTop h2{font-size:1.09rem;flex:0 0 auto}
 .storeTop .prog{flex:1;font-size:0.85rem;color:var(--ink-2)}
+.storeTop .add{
+  color:var(--accent);font-size:1.3rem;font-weight:650;line-height:1;
+  width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+  background:var(--fill);flex:0 0 auto;
+}
 .storeTop .close{color:var(--accent);font-size:1rem;font-weight:650;padding:6px 2px;min-height:38px}
 .storeBody{flex:1;overflow-y:auto;padding:6px var(--pad) 18px;-webkit-overflow-scrolling:touch}
 .aisle{font-size:0.82rem;font-weight:600;color:var(--ink-2);margin:18px 4px 7px}
@@ -1666,9 +1671,22 @@ button.row.action,label.row.action{cursor:pointer}
   .largeTitle{padding:2px 32px 0;max-width:840px}
   main{padding:6px 32px 56px;max-width:840px}
   .scroller{margin:14px 0 0;padding:2px 0 4px;flex-wrap:wrap}
-  .tile{flex:1 1 160px}
+  /* flex:1 ließ die letzte Kachel einer Zeile (z.B. die fünfte, wenn
+     vier in die erste Zeile passen) allein umbrechen und sich dabei
+     über die volle Restbreite ziehen -- eine fast leere, sehr breite
+     Fläche. flex:0 1 hält jede Kachel bei ihrer eigenen Breite, auch
+     wenn sie allein in ihrer Zeile steht. */
+  .tile{flex:0 1 200px}
   .cards2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
   .cards2 .card + .card{margin-top:0}
+  /* Erfassen: "Fotografieren" blieb auch auf dem Rechner der
+     volltonig grüne, optisch dominante Knopf -- ohne Rückkamera in
+     Bon-Haltung ist dort "Bild wählen" oder eingefügter Text (die
+     Fläche direkt darunter) der naheliegendere Weg. Reine Gewichtung,
+     kein Eingriff in die Erkennung: Farbe und Reihenfolge tauschen,
+     beide Knöpfe bleiben gleich groß und gleich bedienbar. */
+  .shotRow .shotFoto{background:var(--fill);color:var(--accent-ink);box-shadow:none;order:2}
+  .shotRow .shotWaehlen{background:var(--accent-strong);color:var(--on-accent);box-shadow:var(--lift);order:1}
   .sheet{align-items:center}
   .sheetBody{max-width:560px;padding-bottom:20px;animation:zoom .26s var(--spring)}
   @keyframes zoom{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
