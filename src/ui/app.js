@@ -745,9 +745,6 @@ const App = {
           }))
         });
         if (App.storeOpen) App.closeStore();
-        // Jetzt ist der Haushalt erkennbar aktiv — der Moment, in dem
-        // ein Gesuch um dauerhaften Speicher Aussicht auf Erfolg hat.
-        App.askPersist();
         // Sicherheitshinweis im richtigen Moment: beim Verlassen des
         // Ladens, nicht drei Tage später in einer Liste.
         if (alert) App.notice("Kühlkette", alert.message);
@@ -1027,50 +1024,6 @@ const App = {
     App.checkBadges(first);
   },
 
-  /* ---------- Sicherung ---------- */
-  /**
-   * Erinnern — aber selten.
-   *
-   * Nur wenn der Zustand wirklich gefährdet ist, und höchstens einmal
-   * pro Woche. Eine Meldung, die bei jedem Start erscheint, wird nach
-   * dem dritten Mal weggetippt, ohne gelesen zu werden — und fehlt
-   * dann an dem Tag, an dem sie zählt.
-   */
-  maybeRemindBackup() {
-    const S = Data.get();
-    const h = App.ctx.backup;
-    const bak = S.backup || {};
-    if (!shouldRemind(h, bak.lastNag, Data.today())) return;
-    Data.update((st) => { st.backup = { ...(st.backup || {}), lastNag: Data.today() }; });
-    App.confirm(h.title, h.message + "\n\nEine Datei herunterzuladen dauert einen Wimpernschlag.",
-      () => {
-        const ok = Backup.download(Data.exportJson(), backupFileName(Data.today()));
-        if (ok) Data.noteBackup("datei");
-        App.toast(ok ? "Gesichert" : "Nicht möglich");
-      },
-      "Jetzt sichern");
-  },
-
-  /**
-   * Dauerhaften Speicher erbitten — nach dem ersten erfassten
-   * Einkauf, nicht beim ersten Start.
-   *
-   * Browser entscheiden das nach Nutzungssignalen. Ein zu früh
-   * gestelltes Gesuch wird abgelehnt, und abgelehnt heißt: nicht
-   * wieder fragen. Der erste gebuchte Bon ist der früheste Zeitpunkt,
-   * an dem die Antwort gut ausgehen kann.
-   */
-  askPersist() {
-    if (App._persistAsked) return;
-    App._persistAsked = true;
-    Backup.refresh().then((env) => {
-      if (env.persisted) return null;
-      return Backup.requestPersist();
-    }).then((granted) => {
-      if (granted) App.render();
-    });
-  },
-
   /* ---------- Wochenrückblick ---------- */
   /**
    * Erinnerung am Sonntagabend.
@@ -1157,25 +1110,6 @@ function boot() {
     App.closeMascotBubble();
   });
 
-  /* ---------- Sicherung ----------
-     Drei Dinge beim Start, in dieser Reihenfolge:
-     den Speicherzustand erfragen, einen gemerkten Dateigriff
-     zurückholen und melden, falls die Schattenkopie einspringen
-     musste. Alles asynchron und ohne den Start aufzuhalten — die App
-     ist auch ohne Antwort benutzbar. */
-  Backup.refresh().then(() => App.render());
-  Backup.loadHandle().then((h) => { if (h) App.render(); });
-
-  // Beim Verlassen alles Anstehende noch wegschreiben. `pagehide` und
-  // nicht `beforeunload`: auf Telefonen wird eine Seite meist nicht
-  // geschlossen, sondern in den Hintergrund geschoben, und nur
-  // `pagehide` und `visibilitychange` feuern dort zuverlässig.
-  const wegschreiben = () => { if (Backup.handle) Backup.flush(() => Data.exportJson()); };
-  window.addEventListener("pagehide", wegschreiben);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") wegschreiben();
-  });
-
   Data.subscribe(() => App.render());
   App.render();
   App.consumeSharedIfAny();
@@ -1185,10 +1119,9 @@ function boot() {
     App.notice(rec.level === "gerettet" ? "Stand wiederhergestellt" : "Daten verloren",
       rec.message + (rec.level === "gerettet"
         ? "\n\nEs kann sein, dass die letzten Änderungen fehlen. Sieh die letzten Bons durch."
-        : "\n\nWenn du eine Sicherungsdatei hast, lässt sie sich unter „Mehr“ einlesen."));
+        : ""));
   } else {
     App.maybeNotifyReview();
-    App.maybeRemindBackup();
   }
 
   /* Service Worker: macht die App offline nutzbar. Fehlschlag ist

@@ -263,11 +263,6 @@ const GEDIMMT = [
   // [Name, Deckkraft, Schrifttoken, Flächentoken]
   ["Abgewählte Position", 0.62, "ink", "surface"],
   ["Artikel im Wagen", 0.62, "ink", "surface"]
-  /* Der ruhige Tag im Wochenstreifen steht bewusst NICHT hier: dort
-     wird die Säule gedimmt und nicht der Wochentag. „Do“ bei .72
-     ergäbe 3,08:1 — und damit müsste die Deckkraft auf .91 steigen,
-     was kein Dimmen mehr wäre. Den Inhalt zu dimmen, den man gar
-     nicht meint, ist die falsche Lösung für ein echtes Problem. */
 ];
 
 function dimContrast(werte, deckkraft, textToken, flaecheToken) {
@@ -296,8 +291,7 @@ t("Die Deckkraft im Stil stimmt mit der geprüften überein", () => {
      und meldet weiter „lesbar“. */
   const paare = [
     [/\.item\.off \.top\{opacity:\.(\d+)\}/, 62, "Abgewählte Position"],
-    [/\.sItem\.done\{opacity:\.(\d+)\}/, 62, "Artikel im Wagen"],
-    [/\.pDay\.quiet \.pCol\{opacity:\.(\d+)\}/, 72, "Ruhiger Tag"]
+    [/\.sItem\.done\{opacity:\.(\d+)\}/, 62, "Artikel im Wagen"]
   ];
   for (const [re, soll, name] of paare) {
     const m = CSS.match(re);
@@ -305,13 +299,6 @@ t("Die Deckkraft im Stil stimmt mit der geprüften überein", () => {
     if (Number(m[1]) !== soll) return `${name}: ${m[1]} im Stil, ${soll} geprüft`;
   }
   return true;
-});
-
-t("Der Wochentag wird nicht mitgedimmt", () => {
-  // Die Regel muss auf .pCol zielen. Steht sie auf .pDay.quiet
-  // selbst, erwischt sie Zahl und Wochentag mit.
-  if (/\.pDay\.quiet\{[^}]*opacity/.test(CSS)) return "Deckkraft liegt auf der ganzen Spalte";
-  return /\.pDay\.quiet \.pCol\{opacity/.test(CSS) ? true : "Regel nicht gefunden";
 });
 
 t("Kein Dimmen legt sich über eine ganze Listenzeile", () => {

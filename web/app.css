@@ -1367,69 +1367,6 @@ button.row.action,label.row.action{cursor:pointer}
   width:5px;height:5px;border-radius:50%;background:var(--accent);
 }
 
-.pulse{background:var(--surface);padding:15px 14px 13px}
-.pulseHead{
-  font-size:1.02rem;font-weight:600;letter-spacing:-.01em;
-  line-height:1.35;padding:0 3px 14px;color:var(--ink);
-}
-.pulseDays{display:flex;gap:5px;align-items:flex-end}
-/* Eine leichte Fläche unter jedem Tag. Ohne sie standen dort sieben
-   Säulen, die aussahen wie eine Grafik — und niemand tippt auf eine
-   Grafik. Mit ihr sind es sieben Schaltflächen, und der Inhalt jedes
-   Tages ist auffindbar statt zufällig entdeckbar. */
-.pDay{
-  flex:1 1 0;min-width:0;background:var(--fill);border:none;padding:7px 0 5px;
-  display:flex;flex-direction:column;align-items:center;gap:5px;
-  transition:background .14s linear;
-}
-.pDay:active{background:var(--fill)}
-/* Der Boden liegt für alle Tage gleich, damit die Säulen vergleichbar
-   sind — deshalb feste Höhe statt „so hoch wie nötig“. */
-.pCol{
-  height:calc(var(--rows) * 13px + 6px);
-  min-height:19px;width:100%;max-width:34px;
-  display:flex;flex-direction:column-reverse;justify-content:flex-start;
-  gap:3px;
-}
-.pSeg{display:block;height:10px;background:var(--fill-2)}
-.pSeg.k-red{background:var(--red)}
-.pSeg.k-amber{background:var(--amber)}
-.pSeg.k-green{background:var(--accent)}
-/* Ein ruhiger Tag ist nicht leer, er ist ruhig — ein Strich sagt das
-   besser als nichts, das wie ein Fehler aussieht. */
-.pFlat{display:block;height:3px;background:var(--fill-2)}
-.pNum{
-  font-size:0.7rem;color:var(--ink-2);height:0.95rem;line-height:0.95rem;
-  font-variant-numeric:tabular-nums;font-weight:600;
-}
-.pName{font-size:0.72rem;color:var(--ink-2);letter-spacing:-.005em;white-space:nowrap}
-.pDay.today .pNum{color:var(--accent-ink)}
-.pDay.today .pName{color:var(--accent-ink);font-weight:650}
-/* Heute ist eine getönte Fläche, keine Linie. Eine grüne Linie unter
-   der Säule sah aus wie ein weiteres Feld — dieselbe Farbe, dieselbe
-   Form, direkt darunter. Die Fläche umfasst dagegen die ganze Spalte
-   und kann mit nichts verwechselt werden. */
-.pDay.today{background:var(--accent-soft)}
-.pDay.today:active{background:var(--accent-soft)}
-/* Der gelernte Einkaufstag: ein Punkt unter dem Namen. Ein Ring UM
-   den Namen kollidierte mit der Hervorhebung für heute — und wenn
-   beides auf denselben Tag fällt, sah man nur noch eines. */
-.pShop{height:8px;display:flex;align-items:center;justify-content:center}
-.pShop i{width:4px;height:4px;border-radius:99px;background:var(--ink-3);display:block}
-/* Gedimmt wird die SÄULE, nicht der Wochentag. Auf dem Namen ergab
-   .72 einen Kontrast von 3,08:1 — und „Do“ muss auch an einem ruhigen
-   Tag lesbar sein, sonst fehlt der Bezugspunkt für die Tage daneben.
-   Derselbe Fehler wie bei der abgewählten Position: ein Dimmen, das
-   über den Inhalt hinweggeht, den es gar nicht meint. */
-.pDay.quiet .pCol{opacity:.72}
-.pLegend{display:flex;flex-wrap:wrap;gap:9px 11px;padding:15px 3px 0}
-.pLegend span{display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--ink-2)}
-.pLegend i{width:9px;height:9px;display:block;background:var(--fill-2)}
-.pLegend i.k-red{background:var(--red)}
-.pLegend i.k-amber{background:var(--amber)}
-.pLegend i.k-green{background:var(--accent)}
-.pLegend .legShop i{width:4px;height:4px;border-radius:99px;background:var(--ink-3);margin:0 2.5px}
-
 /* Die Liste als ein Feld: eine Zeile, die aussieht, als könne man
    sie drücken — weil man genau das tun soll. */
 .bigAction{

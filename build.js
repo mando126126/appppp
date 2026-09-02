@@ -93,7 +93,7 @@ const MODULES = [
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt
 // index.html für die <script>-Zeilen und sw.js für den Cache.
-const UI_SCRIPTS = ["bundle.js", "backup.js", "offLookup.js", "data.js", "ocr.js", "views.js", "app.js"];
+const UI_SCRIPTS = ["bundle.js", "offLookup.js", "data.js", "ocr.js", "views.js", "app.js"];
 const UI_ASSETS = ["index.html", "app.css", "manifest.webmanifest", "sw.js"];
 const ICONS = ["icon-180.png", "icon-192.png", "icon-512.png"];
 

@@ -109,7 +109,7 @@ try {
     "\n;window.__T = { Data, App, byId, suggestRecipes, toRecipeStock, FOOD_DATABASE, productSheet," +
     " reviewCard, reviewSheet, streakStrip, badgeScroller, weeklyReview, weekRangeFor, milestoneState," +
     " brandOf, brandSwapCandidates, brandSheet, PILL_INFO, pill, OCR, readReceiptImage," +
-    " Backup, backupHealth, backupFileName, pickBetter, receiptSheet, wasteSummary," +
+    " pickBetter, receiptSheet, wasteSummary," +
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
@@ -1661,36 +1661,7 @@ console.log("\n--- Die Übersicht ---");
   ok("Die Übersicht hat höchstens vier Blöcke", bloecke.length <= 4, bloecke.length);
 
   ok("Die Liste ist NICHT der erste Reiter", T.NAV[0].id === "start", T.NAV[0].id);
-  ok("Und die Woche steht ganz oben", !!main.querySelector(".pulse"));
-
-  /* Der Wochenstreifen: sieben Tage, heute zuerst. */
-  const tage = main.querySelectorAll(".pDay");
-  ok("Sieben Tage", tage.length === 7, tage.length);
-  ok("Heute ist markiert", main.querySelectorAll(".pDay.today").length === 1);
-  ok("Und steht vorn", tage[0].classList.contains("today"));
-  ok("Der Streifen sagt einen Satz", /\S/.test(main.querySelector(".pulseHead").textContent));
-
-  /* Die Felder sind Ereignisse, keine erfundene Höhe: so viele
-     Felder wie der Streifen Ereignisse hat (bis zur Kappung bei 5). */
-  const felder = main.querySelectorAll(".pSeg").length;
-  const erwartet = App.ctx.pulse.days.reduce((a, d) => a + Math.min(5, d.count), 0);
-  ok("Ein Feld je Ereignis", felder === erwartet, `${felder} statt ${erwartet}`);
-
-  /* Ein Tag lässt sich öffnen und zeigt, was dahintersteckt. */
-  const voll = [...tage].find((t) => t.querySelectorAll(".pSeg").length > 0);
-  ok("Es gibt einen Tag mit Inhalt", !!voll);
-  if (voll) {
-    click(voll);
-    ok("Der Tag öffnet ein Blatt", !!$("sheetTitle").textContent);
-    ok("Und nennt die Sachen beim Namen", $("sheetOpts").querySelectorAll(".row").length > 0);
-    App.closeSheet();
-  }
-  const leer = [...tage].find((t) => t.querySelectorAll(".pSeg").length === 0);
-  if (leer) {
-    click(leer);
-    ok("Ein ruhiger Tag sagt das auch", /nichts an/.test($("sheetOpts").textContent));
-    App.closeSheet();
-  }
+  ok("Und die Liste steht ganz oben", main.firstElementChild && !!main.firstElementChild.querySelector(".bigAction"));
 
   /* Die Liste bleibt einen Tipp entfernt. */
   const gross = main.querySelector(".bigAction");
@@ -1974,62 +1945,10 @@ console.log("\n--- Einen Bon korrigieren ---");
   App.closeSheet();
 }
 
-console.log("\n--- Sicherung ---");
+console.log("\n--- Wiederherstellung ---");
 {
   D.reset();
   D.loadDemo("full");
-
-  // Der Browser wird ersetzt, nicht die Logik: Datei-Auswahl,
-  // Schreiben und dauerhafter Speicher laufen gegen einen Doppelgänger,
-  // alles andere ist echt.
-  T.Backup.adapter = {
-    persisted: false, installed: false, webkit: false,
-    supportsAutoFile: true, grantPersist: true, handle: null
-  };
-  T.Backup._persisted = false;
-  T.Backup.handle = null;
-
-  App.goto("mehr");
-  const txt = () => $("main").textContent;
-  ok("Mehr zeigt die Sicherung", /Sicherung/.test(txt()));
-  ok("Und sagt beim ersten Mal, dass nichts gesichert ist",
-    /Noch nie gesichert/.test(txt()), txt().slice(0, 120));
-  ok("Der Zustand steht auch im Kontext", App.ctx.backup.level === "gefaehrdet", App.ctx.backup.level);
-
-  /* --- Dauerhafter Speicher --- */
-  const persistBtn = [...$("main").querySelectorAll("button")]
-    .find((b) => /Dauerhaften Speicher erlauben/.test(b.textContent));
-  ok("Es gibt einen Weg zum dauerhaften Speicher", !!persistBtn);
-
-  /* --- Herunterladen --- */
-  const dlBtn = [...$("main").querySelectorAll("button")]
-    .find((b) => /herunterladen/i.test(b.textContent));
-  ok("Und einen zum Herunterladen", !!dlBtn);
-  click(dlBtn);
-  ok("Die Datei wird erzeugt", !!T.Backup.adapter.lastDownload,
-    JSON.stringify(T.Backup.adapter.lastDownload && T.Backup.adapter.lastDownload.filename));
-  ok("Sie trägt das Datum im Namen",
-    T.Backup.adapter.lastDownload.filename === T.backupFileName(D.today()),
-    T.Backup.adapter.lastDownload.filename);
-  ok("Und enthält die Käufe",
-    JSON.parse(T.Backup.adapter.lastDownload.text).purchases.length === D.get().purchases.length);
-  ok("Die Sicherung ist vermerkt", D.get().backup.lastDate === D.today(), JSON.stringify(D.get().backup));
-  App.goto("mehr");
-  ok("Danach meldet die App nicht mehr „nie gesichert“", !/Noch nie gesichert/.test(txt()));
-
-  /* --- Automatische Datei --- */
-  ok("Wo der Browser es kann, wird die Automatik angeboten",
-    [...$("main").querySelectorAll("button")].some((b) => /Datei wählen und automatisch/.test(b.textContent)));
-
-  /* --- Wo der Browser es NICHT kann, wird das gesagt --- */
-  T.Backup.adapter.supportsAutoFile = false;
-  T.Backup.handle = null;
-  App.goto("mehr");
-  ok("Ohne Dateizugriff steht kein toter Knopf da",
-    ![...$("main").querySelectorAll("button")].some((b) => /automatisch sichern/.test(b.textContent)));
-  ok("Stattdessen wird erklärt, warum es beim Erinnern bleibt",
-    /kann keine Datei automatisch fortschreiben/.test(txt()));
-  T.Backup.adapter.supportsAutoFile = true;
 
   /* --- Die Schattenkopie springt ein --- */
   {
@@ -2055,31 +1974,6 @@ console.log("\n--- Sicherung ---");
   }
   D.reset();
   D.loadDemo("full");
-
-  /* --- Die Erinnerung bleibt selten --- */
-  {
-    D.update((st) => { st.backup = { lastDate: null, lastKind: null, receiptsAt: 0, lastNag: null }; });
-    App.render();
-    const h = App.ctx.backup;
-    ok("Ohne Sicherung ist der Zustand dringend", h.urgent === true, h.level);
-    App.maybeRemindBackup();
-    ok("Es wird einmal erinnert", !$("sheet").hidden);
-    click($("sheetCancel"));
-    const nag = D.get().backup.lastNag;
-    ok("Und der Zeitpunkt festgehalten", nag === D.today(), nag);
-    App.maybeRemindBackup();
-    ok("Beim nächsten Start nicht sofort wieder", $("sheet").hidden);
-  }
-
-  /* --- Die Automatik zuletzt: ihre Kette läuft über Versprechen, und
-     alles, was danach synchron am Zustand dreht, käme ihr zuvor. Genau
-     das ist beim ersten Anlauf passiert — der Test setzte den
-     Dateigriff zurück, bevor geschrieben war, und prüfte dann, warum
-     nichts geschrieben wurde. --- */
-  App.goto("mehr");
-  const autoBtn = [...$("main").querySelectorAll("button")]
-    .find((b) => /Datei wählen und automatisch/.test(b.textContent));
-  click(autoBtn);
 }
 
 console.log("\n--- Einkauf aus einem Bild ---");
@@ -2670,23 +2564,10 @@ console.log("\n--- Selbst etwas hinzufügen ---");
   ok("Sie bleibt aber gespeichert", D.get().manual.length === 1);
 }
 
-/* Der Weg über die Datei-Automatik läuft über Versprechen. Er steht
-   deshalb hier unten: erst wenn alle Mikroaufgaben abgearbeitet sind,
-   lässt sich prüfen, ob wirklich geschrieben wurde. */
-/* Kurz warten statt Mikroaufgaben zählen: die Kette aus Auswahl,
-   Schreiben und Neuzeichnen ist mehrere Versprechen tief, und eine
-   feste Anzahl `then` zu raten wäre ein Test, der bei der nächsten
-   Änderung stillschweigend zu früh prüft. */
+// Kurz warten, damit alle Mikroaufgaben aus den vorigen Abschnitten
+// abgearbeitet sind, bevor es weitergeht -- der Rest der Suite läuft
+// deshalb strukturell in diesem Rückruf weiter.
 setTimeout(() => {
-  const ad = T.Backup.adapter;
-  ok("Die Automatik hat ein Ziel gewählt", !!(ad && ad.handle), JSON.stringify(ad && ad.handle && ad.handle.name));
-  ok("Und sofort einmal geschrieben", !!(ad && ad.lastWrite), typeof (ad && ad.lastWrite));
-  ok("Was geschrieben wurde, ist ein gültiger Stand", (() => {
-    try { return JSON.parse(ad.lastWrite).schema === D.SCHEMA; } catch (e) { return false; }
-  })());
-  T.Backup.adapter = null;
-  T.Backup.handle = null;
-
   console.log("\n--- Bedienbarkeit: sichtbar und anfassbar ---");
 {
   const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
@@ -2712,13 +2593,6 @@ setTimeout(() => {
   ok("Jede Position trägt einen Winkel",
     zeilen.every((z) => !!z.querySelector(".top > .chev")),
     zeilen.filter((z) => !z.querySelector(".top > .chev")).length + " ohne");
-
-  App.goto("start");
-  const tage = [...$("main").querySelectorAll(".pDay")];
-  ok("Die Tage der Woche sind Schaltflächen",
-    tage.length === 7 && tage.every((t) => t.tagName === "BUTTON"), tage.length);
-  ok("Und sie tragen eine eigene Fläche",
-    /\.pDay\{[^}]*background:var\(--fill\)/.test(css));
 
   /* Kein Kürzel auf der einzigen rechtlich harten Marke. */
   App.goto("liste");
@@ -2777,7 +2651,7 @@ console.log("\n--- Kanten: Flächen eckig, Punkte rund ---");
   [".baGo", ".pill", ".box", ".sDot", ".infoBtn"].forEach((sel) =>
     ok(`${sel} bleibt rund`, /99px|50%/.test(radius(sel)), radius(sel)));
 
-  [".pSeg", ".cta", ".barBtn", ".pillBtn", ".toast"].forEach((sel) =>
+  [".groupBody", ".cta", ".barBtn", ".pillBtn", ".toast"].forEach((sel) =>
     ok(`${sel} ist eckig`, radius(sel) === "keine" || /var\(/.test(radius(sel)), radius(sel)));
 }
 

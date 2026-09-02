@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1951 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1900 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -26,7 +26,7 @@ Vier Dinge fehlten, damit daraus eine benutzbare App wird:
 | | vorher | jetzt |
 |---|---|---|
 | **Eigene Daten** | nicht möglich | Bon einlesen oder von Hand erfassen (`Erfassen`) |
-| **Bleiben die Daten?** | nein, alles im Quelltext | `localStorage`, mit Sicherung als Datei |
+| **Bleiben die Daten?** | nein, alles im Quelltext | `localStorage` dieses Browsers |
 | **Heute** | fest auf 2026‑08‑08 | echtes Datum, Demo-Historie relativ dazu erzeugt |
 | **Bildschirmgrößen** | zwei getrennte Fassungen | eine, ab 900 px mit Seitenleiste |
 
@@ -3878,6 +3878,54 @@ offen, bis das explizit entschieden ist.
 17 neue Tests decken die sieben umgesetzten Punkte ab. Alle jetzt
 1951 Tests bestehen.
 
+## Sicherung entfernt, "Deine Woche" entfernt (2026-09-02)
+
+Zwei gezielte Änderungen auf ausdrücklichen Wunsch, nicht aus einem
+eigenen Testbericht:
+
+**„Deine Woche" ist weg.** Der Wochenstreifen auf der Startseite
+(sieben Tage, jedes Feld ein Ereignis) ist ersatzlos entfernt — Titel,
+Info-Icon, Tagesspalten, Tages-Detailblatt. Die Startseite beginnt
+jetzt direkt mit der Einkaufsliste. Die zugrundeliegende Fachlogik
+(`weekPulse.js`) bleibt bestehen und unverändert — sie speist
+weiterhin die Sprechblase des Wesens (z. B. „Heute ist laut deinem
+Rhythmus ein guter Einkaufstag").
+
+**Die Sicherung ist weg.** Die gesamte lokale Backup-/Export-Funktion
+ist aus der Oberfläche entfernt: die Warnkarte („Noch nie gesichert",
+dauerhafter Speicher, automatische Datei, Herunterladen) unter „Mehr",
+ebenso „Sicherung herunterladen"/„Sicherung einlesen" unter
+„Mehr → Daten". Grund: die künftige Datenhaltung ist serverseitig
+geplant; eine lokale Backup-Funktion als Nutzerfunktion soll es bis
+dahin nicht mehr geben, und es wurde bewusst keine Ersatzlösung
+gebaut.
+
+Wichtig zur Abgrenzung, weil beide „Sicherung" heißen, aber
+verschiedene Dinge meinen: die **interne Schattenkopie** gegen einen
+abgebrochenen Schreibvorgang (halbe Datei durch volle Quote oder
+Absturz mitten im Speichern) bleibt bestehen — sie schützt nicht gegen
+ein gelöschtes `localStorage`, sondern gegen den häufigeren Fall der
+kaputten, halb geschriebenen Datei. `backupGuard.js` (Algo-Schicht)
+ist entsprechend aufgeteilt: `backupHealth`/`storageRisk`/
+`shouldRemind`/`backupFileName` (die Nutzerfunktion) sind entfernt,
+`validateSnapshot`/`pickBetter` (die Schattenkopie-Urteilslogik)
+bleiben unverändert und weiterhin unter `test/backup.js` geprüft
+(jetzt kürzer und unter „WIEDERHERSTELLUNG" statt „SICHERUNG").
+
+Damit einher geht ein realer Verlust, ehrlich benannt: ohne
+Export/Import gibt es aktuell keinen Weg mehr, die eigenen Daten
+außerhalb des Browsers zu sichern oder auf ein neues Gerät zu
+übertragen. Browserdaten löschen oder ein iOS-Aufräumvorgang nach
+Wochen ohne Nutzung kostet die Historie ersatzlos — bis die geplante
+Server-Anbindung steht.
+
+Kein eigener Testbericht diesmal; die Änderung wurde anhand konkreter,
+extern vorgegebener Screenshots umgesetzt. Geprüft trotzdem: neue und
+angepasste Tests bestätigen, dass beide Bereiche verschwunden sind und
+die Schattenkopie weiterhin greift; die Prüfungen, die nur die jetzt
+entfernte Oberfläche betrafen (Sicherungskarte, Wochenstreifen-
+Rendering), sind mit ihr gegangen. Alle jetzt 1900 Tests bestehen.
+
 ---
 
 ## Aufbau
@@ -3915,13 +3963,13 @@ gehört `npm run build` in denselben Commit.
 
 | Bereich | Was drin steckt |
 |---|---|
-| **Start** | Wochenstreifen (sieben Tage, jedes Feld ein Ereignis), die Liste als ein Feld, „Jetzt zu tun“, die Wochenreihe |
+| **Start** | die Liste als ein Feld, „Jetzt zu tun“, die Wochenreihe |
 | **Liste** | Wochenrückblick (ab Sonntagabend), Wagen mit Buchen-Leiste, eigene Positionen ergänzen, Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
 | **Fällig** | kein eigener Reiter mehr — erreichbar über „Start“ und „Bestand“: Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
 | **Bestand** | geschätzter Vorrat, Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
 | **Zahlen** | Streak und Rückblick, Meilensteine, eigener Einkaufsrhythmus, Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
-| **Mehr** | Erscheinungsbild, Schriftgröße, Rückblick-Erinnerung, Haushaltsprofil (Wasserhärte, Geräte), Ladenweg je Markt, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Sicherung/Export, Löschen |
+| **Mehr** | Erscheinungsbild, Schriftgröße, Rückblick-Erinnerung, Haushaltsprofil (Wasserhärte, Geräte), Ladenweg je Markt, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Beispieldaten, Löschen |
 
 Dazu der **Ladenmodus** als Vollbild: nach Gängen sortiert, große
 Ziele, am Ende ein Knopf, der den Einkauf in die Historie schreibt.
@@ -3931,9 +3979,11 @@ Ziele, am Ende ein Knopf, der den Einkauf in die Historie schreibt.
 Im `localStorage` dieses Browsers. Kein Server, kein Konto, keine
 Übertragung. Das heißt auch: Browserdaten löschen löscht die App-Daten
 mit, und iOS räumt den Speicher von Web-Apps auf, die wochenlang
-ungenutzt bleiben. Deshalb gibt es unter **Mehr → Deine Daten** eine
-Sicherung als JSON-Datei. Ein Import prüft die Schemafassung und lehnt
-Fremdformate ab.
+ungenutzt bleiben. Eine Schattenkopie im selben Speicher fängt
+abgebrochene Schreibvorgänge ab (siehe `backupGuard.js`), schützt aber
+nicht gegen ein gelöschtes `localStorage` selbst — dafür gibt es
+aktuell keine eingebaute Sicherungsfunktion mehr in der Oberfläche
+(Details und Grund: Abschnitt „Sicherung entfernt" unten).
 
 ## Als App installieren
 
@@ -3948,12 +3998,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1951
-npm run test:algo # 1158 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
-                  #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Liste, Verschwendung,
-                  #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
+npm test          # alle 1900
+npm run test:algo # 1137 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+                  #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
+                  #   Verschwendung, Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 757 Oberflächentests in jsdom
+npm run test:ui   # 727 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

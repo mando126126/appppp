@@ -248,23 +248,6 @@ function save() {
       // Kein Drama: die Schattenkopie ist ein Extra, kein Muss.
     }
   }
-  if (typeof Backup !== "undefined" && Backup.handle) {
-    Backup.schedule(() => exportJson(), (ok) => { if (ok) noteBackup("auto"); });
-  }
-}
-
-/** Eine erfolgte Sicherung festhalten. */
-function noteBackup(kind) {
-  state.backup = {
-    ...(state.backup || {}),
-    lastDate: today(),
-    lastKind: kind,
-    receiptsAt: state.receipts.length
-  };
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(state));
-  } catch (e) { /* dann eben beim nächsten Mal */ }
-  listeners.forEach((l) => l());
 }
 
 function recoveryNotice() { return lastRecovery; }
@@ -885,18 +868,23 @@ function loadDemo(kind = "full") {
   });
 }
 
-/* ---------- Sichern und Zurückholen ---------- */
+/* ---------- Zustand als JSON ----------
+   Kein Nutzerweg mehr dahinter — es gibt keine Sicherung/Export-
+   Funktion in der Oberfläche mehr. Bleibt intern für den Schema-
+   Wechsel-Test: alte Zustände müssen beim Einlesen weiterhin die
+   Vorgaben für neue Felder bekommen, und das lässt sich nur über
+   einen echten Hin- und Rückweg prüfen. */
 function exportJson() {
   return JSON.stringify({ ...state, exportedAt: new Date().toISOString() }, null, 2);
 }
 
 function importJson(text) {
   const parsed = JSON.parse(text);
-  if (!parsed || typeof parsed !== "object") throw new Error("Keine gültige Sicherung.");
-  if (parsed.schema !== SCHEMA) throw new Error(`Sicherung hat Fassung ${parsed.schema}, erwartet ${SCHEMA}.`);
-  if (!Array.isArray(parsed.purchases)) throw new Error("Sicherung enthält keine Käufe.");
+  if (!parsed || typeof parsed !== "object") throw new Error("Kein gültiger Zustand.");
+  if (parsed.schema !== SCHEMA) throw new Error(`Fassung ${parsed.schema} statt ${SCHEMA}.`);
+  if (!Array.isArray(parsed.purchases)) throw new Error("Enthält keine Käufe.");
   state = merge(parsed);
-  // Eine eingelesene Sicherung bringt fertige Zähler mit. Was darin
+  // Ein eingelesener Zustand bringt fertige Zähler mit. Was darin
   // schon erreicht war, wurde nicht jetzt erreicht — also kein
   // Glückwunsch-Schwall nach dem Einlesen.
   state.badgesSeen = milestoneState({
@@ -1338,18 +1326,6 @@ function compute() {
   const brands = brandSwapCandidates(history, { dismissed: s.brandOff });
   const brandHeadline = swapHeadline(brands);
 
-  /* Wie gefährdet ist der Bestand? Die Frage gehört in jede
-     Neuzeichnung, nicht in eine Einstellung, die niemand aufsucht. */
-  const bak = s.backup || {};
-  const backup = backupHealth({
-    receipts: s.receipts.length,
-    receiptsAtBackup: bak.receiptsAt || 0,
-    lastBackupDate: bak.lastDate || null,
-    today: ref,
-    auto: typeof Backup !== "undefined" && !!Backup.handle,
-    env: typeof Backup !== "undefined" ? Backup.envSync() : {}
-  });
-
   const badges = milestoneState({ ...s.lifetime, wochen: streak.weeks });
   const freshBadges = newMilestones(badges, s.badgesSeen);
 
@@ -1375,7 +1351,7 @@ function compute() {
     profile, nonFoodEntries, nonFoodRates, supplies, swapsDue, nonFoodSaved, stockUp, pausedDays, basePrices,
     changes, feedbackLog: s.feedbackLog, absences,
     actions: s.actions, review, streak, streakWeeks, badges, freshBadges, pulse, hoards,
-    brands, brandHeadline, backup, recovery: lastRecovery,
+    brands, brandHeadline, recovery: lastRecovery,
     store, aisleList,
     ethylene: checkEthyleneConflicts(known.filter((i) => i.on)),
     packs: comparePackSizes(history, wasteStats),
@@ -1630,7 +1606,7 @@ const Data = {
   load, save, get, update, subscribe, reset,
   addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
   toggleEaten, toggleNoChronic,
-  toggleBrandOff, setUseBy, noteBackup, recoveryNotice,
+  toggleBrandOff, setUseBy, recoveryNotice,
   addManual, removeManual,
   logAction, recordRescue, seedBadges, markBadgesSeen, markReviewSeen, markReviewNotified,
   loadDemo, buildDemoHistory, buildFirstReceipt,

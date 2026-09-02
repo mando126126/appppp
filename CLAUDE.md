@@ -12,9 +12,9 @@ Es gibt drei Ebenen, in dieser Reihenfolge:
 
 1. `src/algo/` — die eigentliche Fachlogik (Rhythmus-Berechnung,
    Vorratsschätzung usw.), ca. 50 reine Node-Module, keine UI-Bezüge.
-2. `src/ui/` — die Quelldateien der Oberfläche (HTML/CSS/JS,
-   `backup.js`, `sw.js`, Icons, Fonts). `src/ui/index.html` enthält
-   den Platzhalter `%%BUILD%%` statt einer festen Build-Kennung.
+2. `src/ui/` — die Quelldateien der Oberfläche (HTML/CSS/JS, `sw.js`,
+   Icons, Fonts). `src/ui/index.html` enthält den Platzhalter
+   `%%BUILD%%` statt einer festen Build-Kennung.
 3. `web/` — **generierter Output**, gebaut von `build.js` aus 1+2.
    `build.js` bündelt `src/algo` zu `web/bundle.js`, kopiert die
    Oberfläche aus `src/ui` nach `web/`, und ersetzt `%%BUILD%%` durch
@@ -41,10 +41,11 @@ als native Hülle (siehe `capacitor.config.json`, `webDir: "web"`) —
 Änderungen an `web/` (bzw. nach `npm run build`): `npx cap copy ios`,
 dann in Xcode neu bauen.
 
-Natives Verhalten wird über `Backup.isNative()` (in `src/ui/backup.js`
-/ `web/backup.js`) unterschieden — prüft
-`window.Capacitor?.isNativePlatform?.()`. Damit z. B. die reine
-PWA-Speicherwarnung in der nativen App nicht fälschlich auftaucht.
+Es gibt aktuell keine eigene Unterscheidung natives-vs-PWA-Verhalten
+im Code mehr (die frühere `Backup.isNative()`-Prüfung fiel mit
+`src/ui/backup.js` weg, siehe README, Abschnitt „Sicherung entfernt").
+Sollte künftig wieder natives Sonderverhalten nötig werden, dafür neu
+auf `window.Capacitor?.isNativePlatform?.()` prüfen.
 
 ## Tests
 

@@ -246,7 +246,6 @@ const MASCOT_RULES = {
       say: (ctx) => `${zahlwort(ctx.freeze.length, "Produkt lohnt", "Produkte lohnen")} sich einzufrieren, bevor es verdirbt.` },
     { when: (ctx) => (ctx.hoards || []).some((h) => h.kind === "zuviel"),
       say: () => "Von etwas liegt gerade mehr da, als bis zur Haltbarkeit aufgebraucht wird." },
-    { when: (ctx) => ctx.backup && ctx.backup.urgent, say: (ctx) => ctx.backup.message },
     { when: (ctx) => ctx.swapsDue && ctx.swapsDue.some((x) => x.due),
       say: (ctx) => `${zahlwort(ctx.swapsDue.filter((x) => x.due).length, "Produkt ist", "Produkte sind")} zum Tauschen fällig.` },
     { when: (ctx) => ctx.foodDeals && ctx.foodDeals.length > 0,
@@ -375,7 +374,6 @@ const MASCOT_RULES = {
     { when: () => Data.get().settings.demo,
       say: () => "Das sind erzeugte Beispieldaten. Ein eigener Bon ersetzt sie." },
     { when: (ctx) => !!ctx.safety, say: (ctx) => ctx.safety.short },
-    { when: (ctx) => ctx.backup && ctx.backup.urgent, say: (ctx) => ctx.backup.message },
     { when: () => OCR.supported(), say: () => "Ein Foto des Bons reicht — Beträge und Mengen liest die App direkt heraus." },
     { when: () => !OCR.supported(), say: () => "Dieser Browser liest Fotos nicht automatisch — von Hand eintragen geht trotzdem." },
     { when: (ctx) => ctx.rhythms && ctx.rhythms.size > 0,
@@ -434,8 +432,6 @@ const MASCOT_RULES = {
   ],
 
   mehr: [
-    { when: (ctx) => ctx.backup && ctx.backup.urgent, say: (ctx) => ctx.backup.message },
-    { when: (ctx) => ctx.backup && !ctx.backup.urgent, say: (ctx) => ctx.backup.title },
     { when: () => Data.get().settings.demo,
       say: () => "Das ist erzeugte Beispieldaten-Historie. Unter „Daten“ lässt sie sich ersetzen." },
     { when: () => Data.get().review.notify, say: () => "Die Erinnerung an den Wochenrückblick ist an." },
@@ -674,16 +670,6 @@ const PILL_INFO = {
     "Alles, was die App zu sagen hat außer der Liste selbst: Kühlkette, vergessene Produkte, was sich " +
     "einzufrieren lohnt, Saison und Lagerhinweise.\n\nDiese Hinweise standen früher einzeln auf der " +
     "Startseite. Sie sind nicht weniger geworden — sie stehen nur nicht mehr im Weg."],
-
-  gesichert: ["Sicherung",
-    "Zeigt, ob die Daten außerhalb dieses Browsers liegen.\n\nEine Sicherungsdatei ist das Einzige, " +
-    "was „Browserdaten löschen“, ein neues Gerät oder einen kaputten Speicher überlebt. Die App hat " +
-    "keinen Server, der einspringen könnte — das ist Absicht und deshalb deine Datei."],
-
-  gefaehrdet: ["Nicht gesichert",
-    "Alles Gelernte liegt nur in diesem Browser: Rhythmen, Rückmeldungen, Meilensteine.\n\nEs gibt " +
-    "kein Konto, mit dem sich das wiederherstellen ließe. Eine Datei herunterzuladen dauert einen " +
-    "Wimpernschlag und ist der Unterschied zwischen einem Ärgernis und drei verlorenen Jahren."],
 
   tauschen: ["Zum Tauschen fällig",
     "Manche Haushaltsprodukte werden nach Zeit gewechselt, nicht nach Verbrauch — Zahnbürste, " +
@@ -1388,16 +1374,13 @@ function productSheet(productId, ctx) {
 
    Diese Seite beantwortet sie in dieser Reihenfolge:
 
-     1. Die Woche      — sieben Tage, jede Sache ein Feld.
-                         Steigt die Säule, steht mehr an.
-     2. Die Liste      — ein Feld, ein Preis, ein Knopf.
-     3. Jetzt zu tun   — nur, was heute eine Handlung braucht.
-     4. Dein Lauf      — die Wochenreihe, sonst nichts.
+     1. Die Liste      — ein Feld, ein Preis, ein Knopf.
+     2. Jetzt zu tun   — nur, was heute eine Handlung braucht.
+     3. Dein Lauf      — die Wochenreihe, sonst nichts.
 
    WAS SIE AUSDRÜCKLICH NICHT IST: vier gleich große Kacheln mit
    Zahlen darin. Kacheln sehen nach Übersicht aus und sind keine —
-   sie zeigen alles gleich groß und beantworten damit nichts. Hier
-   ist genau eine Sache groß, und das ist die Woche.
+   sie zeigen alles gleich groß und beantworten damit nichts.
 
    Alles hier ist ANSICHT auf Vorhandenes. Keine Zahl entsteht auf
    dieser Seite, keine wird hier ein zweites Mal gezählt.
@@ -1429,7 +1412,6 @@ function viewStart(ctx, app) {
     return c;
   }
 
-  c.append(pulseCard(ctx, app));
   c.append(listCard(ctx, app));
 
   const todo = todoCard(ctx, app);
@@ -1437,115 +1419,6 @@ function viewStart(ctx, app) {
 
   if (ctx.stage.stage >= 2) c.append(runCard(ctx, app));
   return c;
-}
-
-/* Farbe je Ereignisart. Dieselben drei Farben wie überall sonst:
-   Korall heißt dringend, Bernstein heißt geschätzt oder fällig,
-   Grün heißt Einkauf. Eine eigene Palette für die Startseite hätte
-   die Bedeutungen auseinandergerissen. */
-const PULSE_KIND = {
-  verderb: ["k-red", "verdirbt"],
-  tausch: ["k-amber", "tauschen"],
-  einkauf: ["k-green", "einkaufen"]
-};
-
-/**
- * Die Woche als sieben Säulen.
- *
- * Jedes Feld ist EIN Ereignis — keine normierte Höhe, kein
- * Maßstab, der sich mit den Daten verschiebt. Damit ist Dienstag
- * genau dann höher als Mittwoch, wenn dienstags mehr ansteht, und
- * zwar auch im Vergleich zur Woche davor. Ein Balken, der sich
- * selbst normiert, sieht immer gleich aus, egal wie viel los ist.
- *
- * Über fünf Feldern wird abgeschnitten und die Zahl dazugeschrieben:
- * eine Säule, die alles zeigt, wäre bei zwölf Positionen einen
- * halben Bildschirm hoch.
- */
-function pulseCard(ctx, app) {
-  const p = ctx.pulse;
-  const g = uiGroup("Deine Woche",
-    "Sieben Tage ab heute. Jedes Feld ist eine Sache, die an diesem Tag ansteht: etwas verdirbt, " +
-    "etwas ist zu tauschen, etwas gehört eingekauft.\n\n" +
-    "Woher die Tage kommen: Verderbliches aus der Bestandsschätzung, Einkäufe aus deinem gelernten " +
-    "Kaufabstand, Austausch aus dem Intervall des Produkts. Überfälliges steht auf heute — " +
-    "nicht, weil es heute passiert, sondern weil es liegen geblieben ist.\n\n" +
-    "Was ausgeht, steht nur einmal da: als Einkauf. Eine Sache wird hier nie zweimal gezählt.");
-
-  const box = el("div", "pulse");
-  box.append(el("div", "pulseHead", esc(p.headline)));
-
-  const strip = el("div", "pulseDays");
-  const hoch = Math.min(5, Math.max(1, ...p.days.map((d) => d.count)));
-
-  p.days.forEach((d) => {
-    const b = el("button", "pDay" +
-      (d.isToday ? " today" : "") +
-      (d.isShoppingDay ? " shop" : "") +
-      (d.count ? "" : " quiet"));
-    b.setAttribute("aria-label",
-      `${d.name}, ${d.count === 0 ? "nichts" : d.count === 1 ? "ein Produkt" : d.count + " Produkte"}` +
-      (d.isShoppingDay ? ", dein Einkaufstag" : ""));
-
-    // Die Zahl steht ÜBER der Säule, nicht darunter: darunter steht
-    // der Wochentag, und zwei Angaben an derselben Kante lesen sich
-    // als eine. Sie steht immer da, wo etwas ansteht — sonst müsste
-    // man Felder zählen, und ab dem sechsten ginge das nicht mehr.
-    b.append(el("div", "pNum", d.count ? String(d.count) : ""));
-
-    const col = el("div", "pCol");
-    col.style.setProperty("--rows", String(hoch));
-    if (!d.count) col.append(el("i", "pFlat"));
-    d.events.slice(0, 5).forEach((e) => col.append(el("i", "pSeg " + PULSE_KIND[e.kind][0])));
-    b.append(col);
-
-    b.append(el("div", "pName", esc(d.isToday ? "heute" : d.short)));
-    b.append(el("div", "pShop", d.isShoppingDay ? "<i></i>" : ""));
-    b.addEventListener("click", () => daySheet(d, ctx, app));
-    strip.append(b);
-  });
-  box.append(strip);
-
-  // Die Legende steht nur da, wenn die Farben auch vorkommen.
-  const arten = new Set();
-  p.days.forEach((d) => d.events.forEach((e) => arten.add(e.kind)));
-  if (arten.size) {
-    const leg = el("div", "pLegend");
-    ["verderb", "tausch", "einkauf"].filter((k) => arten.has(k)).forEach((k) => {
-      leg.append(el("span", null, `<i class="${PULSE_KIND[k][0]}"></i>${PULSE_KIND[k][1]}`));
-    });
-    if (p.shoppingSlot !== null) leg.append(el("span", "legShop", "<i></i>Einkaufstag"));
-    box.append(leg);
-  }
-
-  g.body.append(box);
-  return g;
-}
-
-/** Was an einem Tag ansteht — mit Weg zu jedem einzelnen Produkt. */
-function daySheet(day, ctx, app) {
-  const body = frag();
-  if (!day.count) {
-    body.append(el("p", "empty", "An diesem Tag steht nichts an."));
-  } else {
-    ["verderb", "tausch", "einkauf"].forEach((kind) => {
-      const rows = day.events.filter((e) => e.kind === kind);
-      if (!rows.length) return;
-      const g = uiGroup(PULSE_KIND[kind][1].replace(/^./, (m) => m.toUpperCase()));
-      rows.forEach((e) => g.body.append(uiRow(e.name,
-        // Die Bemerkung nur, wenn sie etwas hinzufügt. Unter der
-        // Überschrift „Einkaufen“ noch einmal „einkaufen“ zu
-        // schreiben, füllt eine Zeile und sagt nichts; bei
-        // Verderblichem steht dort dagegen, woher das Datum kommt.
-        kind === "verderb" ? e.note : null, null,
-        e.productId && byId(e.productId)
-          ? { onClick: () => productSheet(e.productId, ctx) }
-          : {})));
-      body.append(g);
-    });
-  }
-  const sub = deDate(day.date) + (day.isShoppingDay ? " · dein Einkaufstag" : "");
-  app.sheet(day.isToday ? "Heute" : day.name, sub, body);
 }
 
 /**
@@ -1603,11 +1476,6 @@ function todoCard(ctx, app) {
   if (ctx.safety) {
     rows.push(["Kühlkette", ctx.safety.short, flag("kuehlen", "f-miss", "!"),
       () => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)]);
-  }
-
-  if (ctx.backup.urgent) {
-    rows.push(["Daten sichern", ctx.backup.title || "nur in diesem Browser",
-      flag("gefaehrdet", "f-miss", "!"), () => app.goto("mehr")]);
   }
 
   const faellig = ctx.swapsDue.filter((x) => x.due);
@@ -2331,112 +2199,6 @@ function reassignSheet(kauf, rec, app) {
     "Die Zuordnung gilt rückwirkend: der alte Rhythmus verliert diesen Kauf, der neue bekommt ihn."));
 
   app.sheet("Anders zuordnen", p ? p.name : null, body);
-}
-
-/* ================================================================
-   Sicherung
-   ================================================================
-   Der Text hier ist Teil der Funktion. Eine Zeile „nicht gesichert“
-   bewegt niemanden; „40 Bons und drei Jahre gelernter Rhythmus liegen
-   nur in diesem Browser“ schon. Deshalb nennt jede Meldung, was
-   konkret auf dem Spiel steht, und jede bietet den Handgriff daneben
-   an, statt ihn in eine zweite Ebene zu legen.
-   ================================================================ */
-function backupGroup(ctx, app) {
-  const S = Data.get();
-  const h = ctx.backup;
-  const g = uiGroup("Sicherung",
-    "Diese App hat keinen Server und kein Konto — das ist Absicht, und es hat einen Preis: die Daten " +
-    "liegen ausschließlich in diesem Browser.\n\n" +
-    "Browser dürfen ihren Speicher aufräumen. Auf iPhone und iPad löscht Safari die Daten einer nicht " +
-    "installierten Web-App nach sieben Tagen ohne Nutzung. Und „Browserdaten löschen“ trifft die App mit.\n\n" +
-    "Drei Stufen helfen dagegen, in dieser Reihenfolge: dauerhaften Speicher erlauben, die App zum " +
-    "Startbildschirm hinzufügen, und eine Sicherungsdatei außerhalb des Browsers halten. Nur die letzte " +
-    "überlebt wirklich alles.");
-
-  const klasse = { gesichert: "f-ok", ok: "f-ok", erinnerung: "f-gold", gefaehrdet: "f-miss", unkritisch: "" }[h.level] || "";
-  g.body.append(uiRow(h.title, h.message, flag(
-    h.level === "gefaehrdet" ? "gefaehrdet" : "gesichert",
-    klasse,
-    { gesichert: "sicher", ok: "sicher", erinnerung: "fällig", gefaehrdet: "Achtung", unkritisch: "—" }[h.level] || "—"
-  )));
-
-  /* Dauerhafter Speicher. Wenn der Browser ihn schon gewährt hat,
-     steht es da; sonst ist es ein Tippen. */
-  if (!h.risk.fluechtig) {
-    g.body.append(uiRow("Dauerhafter Speicher", "Der Browser räumt diese Daten nicht mehr weg.", null, { value: "an" }));
-  } else {
-    const b = el("button", "row action");
-    // Nicht denselben Satz wie oben: der Grund steht schon im
-    // Zustand darüber, und zweimal dasselbe zu lesen lässt beide
-    // Zeilen unwichtig wirken.
-    b.append(el("div", "rowMain",
-      '<div class="rowTitle">Dauerhaften Speicher erlauben</div>' +
-      '<div class="rowSub">Nimmt die Daten vom automatischen Aufräumen aus. Kostet nichts, hilft sofort.</div>'));
-    b.addEventListener("click", () => {
-      Backup.requestPersist().then((ok) => {
-        app.render();
-        app.notice(ok ? "Erlaubt" : "Nicht erlaubt", ok
-          ? "Der Browser räumt diese Daten jetzt nicht mehr von selbst weg. Gegen „Browserdaten löschen“ hilft trotzdem nur eine Datei."
-          : "Dieser Browser hat abgelehnt — das entscheidet er selbst, oft nach Nutzungsdauer. Umso wichtiger ist eine Sicherungsdatei; " +
-            "auf iPhone und iPad hilft zusätzlich, die App zum Startbildschirm hinzuzufügen.");
-      });
-    });
-    g.body.append(b);
-  }
-
-  /* Automatische Datei — der einzige Zustand, der ohne Disziplin
-     auskommt. Wo der Browser sie nicht kann, wird das gesagt statt
-     eine tote Schaltfläche zu zeigen. */
-  if (Backup.supportsAutoFile()) {
-    if (Backup.handle) {
-      const row = el("button", "row action");
-      row.append(el("div", "rowMain",
-        '<div class="rowTitle">Automatische Sicherung läuft</div>' +
-        `<div class="rowSub">${esc(Backup.handle.name || "gewählte Datei")} — wird bei jeder Änderung mitgeschrieben</div>`));
-      row.addEventListener("click", () => app.confirm("Automatik beenden?",
-        "Die Datei bleibt liegen, sie wird nur nicht mehr fortgeschrieben.",
-        () => { Backup.forgetTarget().then(() => { app.render(); app.toast("Beendet"); }); }, "Beenden"));
-      g.body.append(row);
-    } else {
-      const row = el("button", "row action");
-      row.append(el("div", "rowMain",
-        '<div class="rowTitle">Datei wählen und automatisch sichern</div>' +
-        '<div class="rowSub">Einmal auswählen, danach schreibt die App bei jeder Änderung selbst hinein</div>'));
-      row.addEventListener("click", () => {
-        Backup.chooseTarget(backupFileName(Data.today()))
-          .then(() => Backup.writeNow(Data.exportJson()))
-          .then((ok) => {
-            if (ok) Data.noteBackup("auto");
-            app.render();
-            app.toast(ok ? "Automatik läuft" : "Nicht geschrieben");
-          })
-          .catch(() => { /* abgebrochen — keine Meldung nötig */ });
-      });
-      g.body.append(row);
-    }
-  }
-
-  /* Der Weg, der überall geht. */
-  const dl = el("button", "row action");
-  dl.append(el("div", "rowMain",
-    '<div class="rowTitle">Sicherung jetzt herunterladen</div>' +
-    `<div class="rowSub">${zahlwort(S.purchases.length, "Kauf", "Käufe")}, ${zahlwort(S.receipts.length, "Bon", "Bons")}, alles Gelernte</div>`));
-  dl.addEventListener("click", () => {
-    const ok = Backup.download(Data.exportJson(), backupFileName(Data.today()));
-    if (ok) Data.noteBackup("datei");
-    app.render();
-    app.toast(ok ? "Gesichert" : "Nicht möglich");
-  });
-  g.body.append(dl);
-
-  if (!Backup.supportsAutoFile()) {
-    g.body.append(el("p", "srcnote",
-      "Dieser Browser kann keine Datei automatisch fortschreiben. Deshalb erinnert die App daran — " +
-      "und deshalb ist es hier wichtiger als anderswo, die Datei irgendwohin zu legen, wo sie gesichert wird."));
-  }
-
-  return g;
 }
 
 /* ================================================================
@@ -3611,7 +3373,6 @@ function renderScan(box, cap, app) {
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
     const res = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
-    app.askPersist();
     cap.parsed = null; cap.text = "";
     app.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
@@ -4395,7 +4156,6 @@ function chartCard(ctx) {
    ================================================================ */
 function viewMehr(ctx, app) {
   const c = frag();
-  if (ctx.backup.urgent) c.append(backupGroup(ctx, app));
 
   // Zwei Bereiche statt 13 Karten in einem Scroll: "Einstellungen" für
   // alles, was man einmal anfasst und dann lange nicht wieder, und
@@ -4491,14 +4251,6 @@ function renderMehrEinstellungen(c, ctx, app) {
     c.append(g);
   }
 
-  /* --- Sicherung ---
-     Steht normalerweise hier unten bei den Daten, wo man sie sucht.
-     Ist der Bestand aber wirklich gefährdet, wandert sie nach ganz
-     oben — eine Warnung, die man erst erscrollen muss, ist keine.
-     Der Zustand kommt aus backupGuard, die Handgriffe aus
-     ui/backup.js. */
-  if (!ctx.backup.urgent) c.append(backupGroup(ctx, app));
-
   /* --- Einstellungen für die Liste ---
      Standen bis hierher unten auf der Startseite. Sie sind
      Einstellungen: man fasst sie einmal an und danach monatelang
@@ -4550,46 +4302,13 @@ function renderMehrEinstellungen(c, ctx, app) {
 
   /* --- Daten --- */
   const dat = uiGroup("Daten",
-    "Alles liegt im Speicher dieses Browsers. Browserdaten löschen löscht die App-Daten mit — deshalb die Sicherung.");
+    "Alles liegt im Speicher dieses Browsers. Browserdaten löschen löscht die App-Daten mit.");
   dat.body.append(uiRow("Käufe", S.settings.demo ? "Beispieldaten" : null, null, { value: String(S.purchases.length) }));
   dat.body.append(uiRow("Bons", null, null, { value: String(S.receipts.length) }));
   dat.body.append(uiRow("Gelernte Schreibweisen", null, null, { value: String(Object.keys(S.aliases).length) }));
   c.append(dat);
 
   const actions = uiGroup();
-  const exp = el("button", "row action");
-  exp.append(el("div", "rowMain", '<div class="rowTitle">Sicherung herunterladen</div>'));
-  exp.addEventListener("click", () => {
-    const blob = new Blob([Data.exportJson()], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `einkaufsanker-${Data.today()}.json`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    app.toast("Gesichert");
-  });
-  actions.body.append(exp);
-
-  const impRow = el("label", "row action");
-  impRow.append(el("div", "rowMain", '<div class="rowTitle">Sicherung einlesen</div>'));
-  const impInput = el("input");
-  impInput.type = "file"; impInput.accept = "application/json,.json";
-  impInput.className = "hide";
-  impInput.addEventListener("change", () => {
-    const file = impInput.files && impInput.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try { app.toast(`${zahlwort(Data.importJson(String(reader.result)), "Kauf", "Käufe")} eingelesen`); }
-      catch (e) { app.toast("Nicht lesbar"); console.error(e); }
-    };
-    reader.readAsText(file);
-    impInput.value = "";
-  });
-  impRow.append(impInput);
-  actions.body.append(impRow);
-
   const demo = el("button", "row action");
   demo.append(el("div", "rowMain",
     `<div class="rowTitle">${S.settings.demo ? "Beispieldaten neu laden" : "Beispieldaten laden"}</div>`));
