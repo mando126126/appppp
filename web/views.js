@@ -1228,7 +1228,7 @@ function productSheet(productId, ctx) {
   if (!nf && (inv || range)) {
     const a = abschnitt("Vorrat");
     a.zeile("Bestand", inv
-      ? `${de(inv.remainingUnits.toFixed(1))} · noch ${tage(inv.daysLeft)} · Sicherheit ${pct(inv.confidence)}`
+      ? `${de(inv.remainingUnits.toFixed(1))}× · noch ${tage(inv.daysLeft)} · Sicherheit ${pct(inv.confidence)}`
       : null);
     a.zeile("Reichweite", range ? `${tage(range.days)} · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
     a.fertig();
@@ -1561,9 +1561,18 @@ function listCard(ctx, app) {
     ? `${on.length} ${on.length === 1 ? "Position" : "Positionen"} · ${eur(sum)}`
     : ctx.stage.stage <= 1 ? "wird noch gelernt" : "noch nichts drauf")));
   if (on.length) {
+    // Zwei Elemente statt eines: "und N weitere" ist die Auskunft, die
+    // zählt, und darf deshalb nie mitten im Wort abgeschnitten werden
+    // (bei 390px Breite und drei längeren Namen geschah genau das:
+    // "...und 10 weite…"). Nur die Namensliste selbst -- unbegrenzt
+    // lang, je nach Einkauf -- bekommt die Ellipse; der Zusatz bleibt
+    // als eigenes, nie schrumpfendes Element immer vollständig lesbar.
     const namen = on.slice(0, 3).map((i) => i.name).join(", ");
     const rest = on.length - 3;
-    main.append(el("div", "baPreview", esc(rest > 0 ? `${namen} und ${rest} weitere` : namen)));
+    const preview = el("div", "baPreview");
+    preview.append(el("span", "baNames", esc(namen)));
+    if (rest > 0) preview.append(el("span", "baRest", esc(`und ${rest} weitere`)));
+    main.append(preview);
   }
   b.append(main);
   b.append(el("div", "baGo", "→"));
@@ -3050,7 +3059,9 @@ function viewBestand(ctx, app) {
 
   /* --- Bestand --- */
   const inv = uiGroup("Vermutlich noch da",
-    "Geschätzt aus Einkauf minus Verbrauch, ohne dass du etwas pflegst. Die Sicherheitsangabe steht im Detail-Blatt jeder Zeile.");
+    "Geschätzt aus Einkauf minus Verbrauch, ohne dass du etwas pflegst. Die Zahl vor dem „×“ ist ein " +
+    "Vielfaches deiner zuletzt gekauften Menge — „0,6×“ heißt: etwa 60 % von dem, was du beim letzten " +
+    "Mal mitgenommen hast. Die Sicherheitsangabe steht im Detail-Blatt jeder Zeile.");
   ctx.inventory.slice(0, 20).forEach((i) => {
     const p = byId(i.productId) || {};
     const longLived = !p.isFood || i.daysLeft > 120;
@@ -3062,7 +3073,7 @@ function viewBestand(ctx, app) {
     r.setAttribute("tabindex", "0");
     r.append(el("div", "rowMain",
       `<div class="rowTitle">${esc(i.name)}${i.opened ? ' <span class="pill">offen</span>' : ""}</div>` +
-      `<div class="rowSub">${de(i.remainingUnits.toFixed(1))} · ${eur(i.value)}</div>`));
+      `<div class="rowSub">${de(i.remainingUnits.toFixed(1))}× · ${eur(i.value)}</div>`));
     r.append(flag(longLived ? "haltbar" : "rest", longLived ? "f-ok" : flagCls,
       longLived ? "haltbar" : `${i.daysLeft} T`));
     r.addEventListener("keydown", (ev) => {
@@ -3993,6 +4004,29 @@ function moneySparklineSvg(values) {
  *  macht die Zeile zum Knopf — bei Produkten öffnet das dasselbe
  *  Detail-Blatt wie bei „Preise“ und „Rhythmen“ weiter unten, statt
  *  eine zweite, verkürzte Ansicht für dieselben Fakten zu bauen. */
+/**
+ * Eine Rangliste in "Wo dein Geld hingeht", auf die ersten
+ * `visible` Zeilen begrenzt -- der Rest kommt erst nach einem
+ * Antippen dazu, statt die Karte, die laut eigenem Anspruch immer
+ * sichtbar bleiben soll, selbst zum endlosen Scroll zu machen (genau
+ * das Problem, das die drei Unterbereiche von "Zahlen" an anderer
+ * Stelle schon einmal gelöst haben). `items` ist bereits auf
+ * höchstens 7 plus "Sonstige" begrenzt (topNMitSonstige) -- hier wird
+ * nur noch die Voreinstellung kürzer gemacht, nichts an Daten fehlt.
+ */
+function moneyBarSection(h, title, items, renderRow, visible = 4) {
+  h.append(el("div", "moneySection", title));
+  const rest = items.slice(visible);
+  items.slice(0, visible).forEach((item) => h.append(renderRow(item)));
+  if (!rest.length) return;
+  const btn = el("button", "moneyMore", `Alle ${items.length} ansehen`);
+  btn.addEventListener("click", () => {
+    rest.forEach((item) => btn.before(renderRow(item)));
+    btn.remove();
+  });
+  h.append(btn);
+}
+
 function moneyBarRow(label, amount, share, frac, muted, wasteFrac, verlauf, onClick) {
   const r = el(onClick ? "button" : "div", "moneyBarRow" + (muted ? " muted" : ""));
   const spark = verlauf ? moneySparklineSvg(verlauf) : "";
@@ -4271,14 +4305,12 @@ function moneyFlowCard(ctx, app) {
 
   const verlustAnteil = kategorieVerlust(ctx);
   const monatsverlauf = kategorieMonatsverlauf(ctx, 6);
-  h.append(el("div", "moneySection", "Kategorien"));
-  kategorien.forEach(([label, amount, sonstige]) =>
-    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxCat > 0 ? amount / maxCat : 0,
-      sonstige, sonstige ? 0 : (verlustAnteil.get(label) || 0), sonstige ? null : monatsverlauf.get(label))));
+  moneyBarSection(h, "Kategorien", kategorien, ([label, amount, sonstige]) =>
+    moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxCat > 0 ? amount / maxCat : 0,
+      sonstige, sonstige ? 0 : (verlustAnteil.get(label) || 0), sonstige ? null : monatsverlauf.get(label)));
 
-  h.append(el("div", "moneySection", "Märkte"));
-  maerkte.forEach(([label, amount, sonstige]) =>
-    h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxStore > 0 ? amount / maxStore : 0, sonstige)));
+  moneyBarSection(h, "Märkte", maerkte, ([label, amount, sonstige]) =>
+    moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxStore > 0 ? amount / maxStore : 0, sonstige));
 
   /* Produkte, die immer wieder gekauft werden: dieselbe Rangliste wie
      oben, nur je Produkt statt je Kategorie/Markt — damit sichtbar
@@ -4296,12 +4328,11 @@ function moneyFlowCard(ctx, app) {
     const maxProdukt = Math.max(...produkte.map((x) => x[1]));
     const produktVerlustAnteil = produktVerlust(ctx);
     const produktVerlauf = produktMonatsverlauf(ctx, 6);
-    h.append(el("div", "moneySection", "Immer wieder gekauft"));
-    produkte.forEach(([label, amount, sonstige]) => {
+    moneyBarSection(h, "Immer wieder gekauft", produkte, ([label, amount, sonstige]) => {
       const pid = idByName.get(label);
-      h.append(moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxProdukt > 0 ? amount / maxProdukt : 0,
+      return moneyBarRow(label, amount, total > 0 ? amount / total : 0, maxProdukt > 0 ? amount / maxProdukt : 0,
         sonstige, sonstige ? 0 : (produktVerlustAnteil.get(label) || 0), sonstige ? null : produktVerlauf.get(label),
-        pid ? () => productSheet(pid, ctx) : null));
+        pid ? () => productSheet(pid, ctx) : null);
     });
   }
 

@@ -878,6 +878,10 @@ const App = {
     }
     rowEl.append(actions);
     bar.append(rowEl);
+    // Trägt die Leiste rechts einen Knopf, steht der Titel links von
+    // Anfang an da statt erst nach dem Scrollen -- sonst hinge der
+    // Knopf beim ersten Bild allein da, ohne irgendetwas links davon.
+    bar.classList.toggle("hasActions", actions.children.length > 0);
 
     // Großer Titel im Inhalt — fällt beim Scrollen in die Leiste zusammen.
     const large = document.getElementById("largeTitle");

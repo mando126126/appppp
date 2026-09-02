@@ -322,6 +322,12 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 
 /* ---------------- Gerüst ---------------- */
 .shell{min-height:100vh;display:flex;flex-direction:column}
+/* .col füllte die 100vh von .shell bislang nicht wirklich aus --
+   flex:1 auf main (weiter unten) griff mangels eines flex-gebenden
+   Vorfahren ins Leere, und ein kurzer Leerzustand (Willkommen, leere
+   Ansicht) blieb oben kleben, mit einer nicht anders erklärbaren
+   grauen Fläche bis zur unteren Leiste darunter. */
+.col{display:flex;flex-direction:column;flex:1;min-width:0}
 
 .appbar{
   position:sticky;top:0;z-index:40;
@@ -339,6 +345,13 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
   transition:opacity .18s var(--ease),transform .18s var(--ease);
 }
 .appbar.scrolled .barTitle{opacity:1;transform:none}
+/* Trägt die Leiste rechts einen Knopf (Nach Gängen/Erfassen), muss der
+   Titel schon vor dem Scrollen da sein -- sonst besteht die Zeile beim
+   ersten Bild nur aus einem einzelnen, unbeschrifteten Knopf rechts,
+   mit einer leeren Fläche links davon, wo der (unsichtbare, aber Platz
+   beanspruchende) Titel eigentlich schon steht. Ohne Knopf bleibt das
+   klassische Zusammenfallen des großen Titels beim Scrollen erhalten. */
+.appbar.hasActions .barTitle{opacity:1;transform:none}
 .barActions{display:flex;gap:9px;margin-left:auto}
 .barBtn{
   color:var(--accent-ink);font-size:0.94rem;font-weight:600;
@@ -493,6 +506,15 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 }
 
 main{flex:1;padding:4px var(--pad) calc(var(--nav-h) + var(--safe-bottom) + 30px);width:100%}
+/* Ein Leerzustand (Willkommen, "noch keine Angebote" ...) ist immer
+   genau eine einzelne .card als einziges Kind von main -- kein
+   anderer Bildschirm sieht so aus, uiGroup()-Abschnitte tragen eine
+   andere Klasse. Statt oben zu kleben und darunter eine unerklärte
+   graue Fläche bis zur Leiste offenzulassen, sitzt die Karte dann in
+   der Mitte des verfügbaren Raums. align-items bleibt beim
+   Vorgabewert (stretch), damit die Karte ihre volle Breite behält --
+   nur die Höhe wird zentriert. */
+main:has(> .card:only-child){display:flex;flex-direction:column;justify-content:center}
 
 /* ---------------- Tableiste ---------------- */
 .nav{
@@ -608,6 +630,15 @@ button.row:active,label.row:active{background:var(--fill)}
 button.moneyBarRow{transition:opacity .14s linear}
 button.moneyBarRow:active{opacity:.6}
 .moneyBarHead{display:flex;align-items:baseline;gap:9px;margin-bottom:7px}
+/* Öffnet die restlichen Zeilen einer Rangliste (siehe moneyBarSection()
+   in views.js) -- dieselbe Kante wie zwischen zwei Zeilen, damit sie
+   sich als Teil der Liste liest und nicht als loser Zusatz. */
+.moneyMore{
+  display:block;width:100%;text-align:left;position:relative;
+  padding:12px 0;color:var(--accent-ink);font-size:0.87rem;font-weight:600;
+}
+.moneyMore::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:var(--hairline)}
+.moneyMore:active{opacity:.55}
 .moneyBarLabel{flex:1 1 auto;font-size:0.92rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Kleine Verlaufslinie der letzten sechs Monate -- "trend"-Baustein
    einer Kennzahl, hier neben statt in einer eigenen Kachel, damit die
@@ -686,8 +717,12 @@ button.moneyBarRow:active{opacity:.6}
      sagt "hier geht's weiter", ohne ein eigenes Zeichen dafür zu
      brauchen. Fünf Kacheln passen auf Telefonbreite so gut wie nie
      ganz hin, der Rand ist also praktisch immer sichtbar begründet. */
-  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%);
-  mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent 100%);
+  /* 28px waren neben einer 138px breiten Kachel kaum wahrnehmbar --
+     die angeschnittene Kachel wirkte einfach abgeschnitten statt
+     einladend. Breiter gefadet liest sich derselbe Anschnitt als
+     Geste, nicht als Kante. */
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 52px),transparent 100%);
+  mask-image:linear-gradient(to right,#000 calc(100% - 52px),transparent 100%);
 }
 .scroller::-webkit-scrollbar{display:none}
 .tile{
@@ -757,7 +792,17 @@ button.moneyBarRow:active{opacity:.6}
   transition:transform .18s var(--spring),opacity .14s linear;
 }
 .cta:active{transform:scale(.975)}
-.cta:disabled{opacity:.35;cursor:default;transform:none;box-shadow:none}
+/* Kein pauschales opacity:.35 mehr -- das verblasste Fläche UND
+   weiße Schrift gemeinsam und ließ z. B. „Einkauf buchen" im
+   Ladenmodus vor dem ersten Häkchen kaum lesbar werden (blasses Weiß
+   auf blassem Grün). Eigene, geprüfte Farben statt einer
+   Deckkraft-Reduktion: dieselben Töne, die die App auch sonst für
+   „da, aber gerade nicht dran" verwendet (z. B. deaktivierte
+   Pfeil-Knöpfe bei der Gangreihenfolge). */
+.cta:disabled{
+  opacity:1;background:var(--fill-2);color:var(--ink-2);
+  cursor:default;transform:none;box-shadow:none;
+}
 .cta.light{background:var(--fill);color:var(--accent-ink);box-shadow:none}
 .cta.danger{background:var(--red-soft);color:var(--red-ink);box-shadow:none}
 .ctaRow{display:flex;gap:10px;margin-top:14px}
@@ -1348,8 +1393,13 @@ button.row.action,label.row.action{cursor:pointer}
 .baSub{font-size:0.92rem;color:var(--accent-ink);margin-top:3px;font-weight:560}
 .baPreview{
   font-size:0.79rem;color:var(--ink-2);margin-top:5px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  display:flex;gap:.3em;white-space:nowrap;min-width:0;
 }
+/* Nur die Namen dürfen weichen -- "und N weitere" ist fix und bleibt
+   deshalb ein eigenes, nicht schrumpfendes Element (siehe listCard()
+   in views.js). */
+.baNames{overflow:hidden;text-overflow:ellipsis;min-width:0;flex-shrink:1}
+.baRest{flex-shrink:0}
 .baGo{
   flex:0 0 auto;width:34px;height:34px;border-radius:99px;
   background:var(--accent-soft);color:var(--accent-ink);
@@ -1636,6 +1686,16 @@ button.row.action,label.row.action{cursor:pointer}
   .storeTop{padding:18px 32px 12px}
   .storeBody{padding:8px 32px 20px;max-width:840px;width:100%;margin:0 auto}
   .storeFoot{padding:14px 32px}
+  /* Ohne das hängt das Wesen am Fensterrand statt am Inhalt -- bei
+     248px Leiste + 840px Inhaltsspalte endet der Inhalt 1088px vom
+     linken Rand, aber .mascotFab bleibt bei right:14px relativ zum
+     GANZEN Fenster stehen. Auf einem breiten Bildschirm liegen dann
+     hunderte Pixel Leerraum zwischen Inhalt und Wesen, und der
+     namensgebende "immer an derselben Stelle"-Begleiter wirkt
+     losgelöst. max() lässt den Ursprungswert unangetastet, solange
+     die Inhaltsspalte den Rand ohnehin schon erreicht (900–1088px),
+     und verankert erst darüber an ihrer rechten Kante. */
+  .mascotFab,.mascotBubble{right:max(14px, calc(100vw - 1088px + 14px))}
 }
 
 @media (max-width:360px){

@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1914 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1931 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3706,6 +3706,107 @@ bestehen.
 
 ---
 
+## Ein UX-Testbericht, erste Umsetzungsrunde (2026-09-02)
+
+Ein Testerdurchlauf durch die ganze App — User Experience, Design,
+Bequemlichkeit — ergab 18 konkrete Befunde, priorisiert von P0
+(stört den ersten Eindruck oder eine tägliche Handlung) bis P2
+(Politur). Umgesetzt wurden die vier P0-Befunde und vier der acht
+P1-Befunde; der Rest (weitere Wesen-Feinheiten, kleinere
+Farb-/Kontrast-Fragen und eine echte Grundsatzfrage zu abgerundeten
+Overlays) steht noch aus.
+
+**Kopfzeile ohne Titel beim ersten Bild (P0).** Auf Liste, Bestand,
+Zahlen und Fällig zeigte die schmale Kopfleiste anfangs nur den
+rechten Aktions-Knopf — der Titel blieb bis zum Scrollen unsichtbar
+(`.barTitle{opacity:0}`), und die Zeile bestand damit aus einem
+einzelnen, unbeschrifteten Knopf mit viel Leerraum davor.
+`App.renderBar()` markiert die Leiste jetzt mit `.hasActions`, sobald
+sie rechts einen Knopf trägt, und genau dann steht der Titel von
+Anfang an da — ohne Knopf bleibt das gewohnte Zusammenfallen beim
+Scrollen erhalten.
+
+**Text bricht auf 390px mitten im Wort ab (P0).** „Vollkornbrot,
+Bananen, Tomaten und 10 weite…“ auf der Startseite, reproduzierbar
+auf der häufigsten iPhone-Breite. Ursache: `text-overflow:ellipsis`
+kürzte den ganzen String einschließlich des Zusatzes „und N weitere“.
+Jetzt zwei Elemente statt eines — `.baNames` (darf kürzen) und
+`.baRest` (schrumpft nie) —, sodass „und 10 weitere“ immer vollständig
+lesbar bleibt und nur die Namensliste selbst mit einer sauberen
+Ellipse endet.
+
+**„Wo dein Geld hingeht“ war selbst ein endloser Scroll (P0).** Die
+eine, immer sichtbare Geld-Karte auf „Zahlen“ zog sich mit
+Kategorien, Märkten und „Immer wieder gekauft“ (je bis zu acht
+Zeilen) über mehr als 2500 Pixel, bevor überhaupt die Wahl zwischen
+Ausgaben/Verhalten/Bilanz auftauchte. `moneyBarSection()` zeigt jetzt
+je Rangliste höchstens vier Zeilen, mit „Alle N ansehen“ darunter für
+den Rest — dieselben Daten (weiterhin höchstens sieben plus
+„Sonstige“), nur eingeklappt.
+
+**Das Wesen schwebte auf breiten Bildschirmen verwaist (P0).**
+`.mascotFab` hing an `right:14px` relativ zum Fenster, nicht an der
+840px breiten Inhaltsspalte — auf einem 1280px-Bildschirm blieben
+gut 400px Leerraum zwischen Inhalt und Wesen. Ab 900px Breite hängt
+es jetzt an der rechten Kante der Inhaltsspalte
+(`right:max(14px, calc(100vw - 1088px + 14px))`), genau daneben statt
+irgendwo im Leeren.
+
+**Leerzustände sammelten sich oben, mit unerklärter Fläche darunter
+(P1).** `.col` füllte die 100vh von `.shell` bislang nicht wirklich
+aus, `main{flex:1}` griff mangels flexgebenden Vorfahren ins Leere.
+Erststart und leere Ansichten (z. B. „Angebote“ ohne Treffer) klebten
+oben, mit einer großen grauen Fläche bis zur unteren Leiste. `.col`
+ist jetzt selbst ein Flex-Container, und `main:has(> .card:only-child)`
+zentriert eine einzelne Leerzustands-Karte in der verfügbaren Höhe —
+alle anderen Ansichten (mehrere `.group`-Abschnitte) bleiben unberührt.
+
+**Deaktivierter „Einkauf buchen“-Knopf kaum lesbar (P1).**
+`.cta:disabled{opacity:.35}` verblasste Fläche und weiße Schrift
+gemeinsam — vor dem ersten Häkchen im Ladenmodus stand blasses Weiß
+auf blassem Grün. Jetzt ein eigener, undurchsichtiger Farbsatz
+(`--fill-2`/`--ink-2`, mit 4,5:1 genau am Rand der eigenen
+Kontrastprüfung — `--ink-3` fiel dort mit 4,17:1 (hell) durch),
+dieselben Töne, die die App auch sonst für „da, aber gerade nicht
+dran“ verwendet.
+
+**Restmenge im Bestand ohne Einheit (P1).** „0,6 · 0,85 €“ nannte
+nirgends, wovon 0,6 die Rede war. Da der Katalog keine Verpackungs­
+einheit je Lebensmittel führt (und eine erfunden hätte werden
+müssen), trägt die Zahl jetzt ein „×“ — sie ist tatsächlich ein
+Vielfaches der zuletzt gekauften Menge, das war schon vorher so
+berechnet, nur nicht benannt. Die Erklärung dazu steht im (i) der
+Gruppe „Vermutlich noch da“.
+
+**Kachel-Scroller wirkte abgeschnitten (P1).** Der Fadeout am rechten
+Rand der Kennzahlen-Kacheln war mit 28px neben einer 138px breiten
+Kachel kaum wahrnehmbar. Jetzt 52px breit — der Anschnitt liest sich
+als Einladung, nicht als Kante.
+
+**Geprüft, nicht verändert: das US-Datumsformat beim Erfassen.** Das
+native Datumsfeld zeigte in dieser Testumgebung „09/02/2026“ statt
+des deutschen Formats — reproduzierbar auch mit explizit gesetzter
+`de-DE`-Locale im Testbrowser. Das bestätigt: es ist die UI-Sprache
+des Browsers selbst, die über die Anzeige entscheidet, nicht diese
+Seite (`lang="de"` steht bereits korrekt auf `<html>`). Ein eigenes
+Datumsfeld nur für dieses Detail zu bauen, hieße ein natives,
+zugängliches Element gegen ein selbst gepflegtes einzutauschen —
+das lohnt sich hier nicht.
+
+**Offen für die nächste Runde:** die Sprechblase des Wesens wiederholt
+sich im Alarmfall, zwei unterschiedlich gefärbte Wesen erscheinen
+gleichzeitig in Leerzuständen, die Alarm-Stimmung ist im Dunkelmodus
+schwer zu erkennen, die Gangreihenfolge lässt sich nur per Pfeiltasten
+verschieben, dazu einige Politur-Punkte bei Farbe und Form — siehe der
+volle Bericht.
+
+17 neue Tests decken die acht umgesetzten Punkte ab; zwei bestehende
+Prüfungen zu „Wo dein Geld hingeht“ wurden an die neue, eingeklappte
+Darstellung angepasst (dieselbe Rechnung, nur nach einem Antippen von
+„Alle ansehen“ geprüft). Alle jetzt 1931 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3774,12 +3875,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1914
+npm test          # alle 1931
 npm run test:algo # 1158 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Liste, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 720 Oberflächentests in jsdom
+npm run test:ui   # 737 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

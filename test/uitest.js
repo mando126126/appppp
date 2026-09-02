@@ -1508,7 +1508,12 @@ console.log("\n--- Wo dein Geld hingeht ---");
 
   /* Die Demo hat mehr als sieben Kategorien (siehe README) -- "Sonstige"
      muss auftauchen und die Prozente müssen sich wieder zu ~100 % summieren,
-     statt eine stille Lücke zu lassen. */
+     statt eine stille Lücke zu lassen. Seit moneyBarSection() nur die
+     ersten vier Zeilen zeigt, steht "Sonstige" (die achte) erst nach
+     einem Antippen von "Alle ansehen" im DOM -- dieselben Daten, nur
+     eingeklappt, siehe F2 im UX-Testbericht. */
+  const kategorienMore = [...$("main").querySelectorAll(".moneyMore")][0];
+  if (kategorienMore) click(kategorienMore);
   const sonstZeile = [...$("main").querySelectorAll(".moneyBarRow")].find((r) => /Sonstige/.test(r.textContent));
   ok("„Sonstige“ fasst den Rest zusammen, statt ihn kommentarlos zu kappen", !!sonstZeile);
   if (sonstZeile) {
@@ -3161,6 +3166,96 @@ console.log("\n--- Das Wesen ---");
   App.mascotSeenAlarm = null;
   D.loadDemo("full");
   App.render();
+}
+
+console.log("\n--- UX-Testbericht: erste Umsetzungsrunde ---");
+{
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+  const block = (sel) => {
+    const i = css.indexOf("\n" + sel + "{");
+    return i < 0 ? null : css.slice(i + sel.length + 2, css.indexOf("}", i));
+  };
+
+  /* --- F1: Kopfzeile trägt den Titel schon vor dem Scrollen, sobald
+     sie rechts einen Knopf zeigt -- sonst hinge der Knopf beim ersten
+     Bild allein da. */
+  D.reset(); D.loadDemo("full");
+  App.goto("liste");
+  ok("Die Kopfleiste weiß, dass sie rechts einen Knopf trägt",
+    $("appbar").classList.contains("hasActions"));
+  ok(".appbar.hasActions zeigt den Titel ohne zu scrollen (CSS)",
+    /opacity:1;transform:none/.test(block(".appbar.hasActions .barTitle") || ""));
+  App.goto("start");
+  ok("Ohne rechten Knopf bleibt die Kopfleiste ohne die hasActions-Klasse",
+    !$("appbar").classList.contains("hasActions"));
+
+  /* --- F9: "und N weitere" ist ein eigenes, nie schrumpfendes
+     Element -- nur die Namensliste selbst darf mit Ellipse enden. */
+  App.goto("start");
+  const baPreview = $("main").querySelector(".baPreview");
+  ok("Die Listenvorschau trennt Namen und „und N weitere“ in zwei Elemente",
+    !!baPreview && !!baPreview.querySelector(".baNames") && !!baPreview.querySelector(".baRest"));
+  ok("„und N weitere“ nennt tatsächlich die Restzahl",
+    /und \d+ weitere/.test(baPreview.querySelector(".baRest").textContent));
+
+  /* --- F13: kein pauschales opacity auf der ganzen Fläche mehr --
+     eigene, lesbare Farben für den deaktivierten Zustand. */
+  const disabledBlock = block(".cta:disabled") || "";
+  ok("Der deaktivierte Hauptknopf verblasst nicht mehr als Ganzes",
+    !/opacity:\.35/.test(disabledBlock));
+  ok("Er bekommt stattdessen einen eigenen, lesbaren Farbsatz",
+    /background:var\(--fill-2\)/.test(disabledBlock) && /color:var\(--ink-2\)/.test(disabledBlock));
+
+  /* --- F4: breiterer Fadeout am Kachel-Scroller. */
+  ok("Der Fadeout am Kachel-Scroller ist breiter als vorher (28px)",
+    /calc\(100% - 52px\)/.test(block(".scroller") || ""));
+
+  /* --- F5: das Wesen bleibt ab 900px an der Inhaltsspalte, nicht am
+     Fensterrand. */
+  const wideCss = css.slice(css.indexOf("@media (min-width:900px)"));
+  ok("Ab 900px ist das Wesen an der Inhaltsspalte verankert, nicht am Fensterrand",
+    /\.mascotFab,\.mascotBubble\{right:max\(14px, calc\(100vw - 1088px \+ 14px\)\)\}/.test(wideCss));
+
+  /* --- F10: die Restmenge im Bestand trägt jetzt ein "×" -- eine
+     nackte Zahl ohne jede Einheit stand vorher da. */
+  App.goto("bestand");
+  const bestandRow = [...$("main").querySelectorAll(".rowSub")].find((el) => /×/.test(el.textContent));
+  ok("Mindestens eine Bestand-Zeile zeigt die Restmenge als Vielfaches (×)", !!bestandRow, bestandRow && bestandRow.textContent);
+
+  /* --- F18: main zentriert eine einzelne Leerzustands-Karte statt
+     oben zu kleben und darunter eine unerklärte Fläche offenzulassen. */
+  ok("main zentriert eine einzelne Leerzustands-Karte (CSS)",
+    /justify-content:center/.test(block("main:has(> .card:only-child)") || ""));
+  D.reset();
+  App.goto("start");
+  ok("Der Erststart ist tatsächlich genau eine Karte als einziges Kind von main",
+    $("main").children.length === 1 && $("main").children[0].classList.contains("card"));
+  D.loadDemo("full");
+
+  /* --- F2: "Wo dein Geld hingeht" zeigt zunächst nur vier Zeilen je
+     Rangliste, mit "Alle N ansehen" für den Rest -- dieselben Daten,
+     nur eingeklappt. Die Demo hat mehr als vier Kategorien. */
+  App.zahlenFilter = { range: "12w", from: null, to: null };
+  App.goto("zahlen");
+  const kategorienHead = [...$("main").querySelectorAll(".moneySection")]
+    .find((s) => s.textContent === "Kategorien");
+  const zeilenBisZumKnopf = (() => {
+    let n = 0, el = kategorienHead.nextElementSibling;
+    while (el && el.classList.contains("moneyBarRow")) { n++; el = el.nextElementSibling; }
+    return { n, moreBtn: el && el.classList.contains("moneyMore") ? el : null };
+  })();
+  ok("Kategorien zeigen zunächst höchstens vier Zeilen", zeilenBisZumKnopf.n <= 4, zeilenBisZumKnopf.n);
+  ok("Bei mehr als vier Kategorien steht ein „Alle ansehen“-Knopf da", !!zeilenBisZumKnopf.moreBtn);
+  if (zeilenBisZumKnopf.moreBtn) {
+    const vorher = errors.length;
+    click(zeilenBisZumKnopf.moreBtn);
+    ok("Antippen blendet den Rest ein, ohne Fehler", errors.length === vorher, errors[vorher]);
+    let n2 = 0, el2 = kategorienHead.nextElementSibling;
+    while (el2 && el2.classList.contains("moneyBarRow")) { n2++; el2 = el2.nextElementSibling; }
+    ok("Danach stehen mehr als vier Kategorie-Zeilen da", n2 > 4, n2);
+    ok("Der „Alle ansehen“-Knopf ist danach verschwunden",
+      !(el2 && el2.classList.contains("moneyMore")));
+  }
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");
