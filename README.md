@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1931 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1951 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3801,9 +3801,82 @@ verschieben, dazu einige Politur-Punkte bei Farbe und Form — siehe der
 volle Bericht.
 
 17 neue Tests decken die acht umgesetzten Punkte ab; zwei bestehende
-Prüfungen zu „Wo dein Geld hingeht“ wurden an die neue, eingeklappte
+Prüfungen zu „Wo dein Geld hingeht” wurden an die neue, eingeklappte
 Darstellung angepasst (dieselbe Rechnung, nur nach einem Antippen von
-„Alle ansehen“ geprüft). Alle jetzt 1931 Tests bestehen.
+„Alle ansehen” geprüft). Alle jetzt 1931 Tests bestehen.
+
+## Ein UX-Testbericht, zweite Umsetzungsrunde (2026-09-02)
+
+Die restlichen Punkte aus demselben Testbericht — sieben davon
+umgesetzt, einer korrigiert:
+
+**Sprechblase des Wesens wiederholte sich im Alarmfall (P1).** Auf
+„Start” und „Liste” stand in der Sprechblase praktisch dasselbe, was
+schon die Sicherheits-Karte darunter sagte. Die Regel nennt jetzt
+stattdessen die konkrete Kühlzone (`Am besten dorthin: …`) — eine
+zweite, nützliche Information statt einer Wiederholung. Auf
+„Erfassen” bleibt die alte Kurzform, dort steht sonst nichts zur
+Kühlkette.
+
+**Zwei unterschiedlich gefärbte Wesen in Leerzuständen (P1).** Das
+ausgegraute Wesen im Hintergrund eines Leerzustands (Animation um
+`-.6s` versetzt) und das normal gefärbte Wesen der Sprechblase
+standen nebeneinander und wirkten wie zwei verschiedene Figuren.
+`.emptyMascot .mascot` bekommt jetzt zusätzlich `opacity:.55` — die
+absichtlich nicht geratene Stimmung (`mood` bleibt unverändert, siehe
+Kommentar im Code) bleibt bestehen, nur blasser, sodass klar ist:
+dasselbe Wesen, nur im Hintergrund.
+
+**Alarm-Stimmung im Dunkelmodus kaum zu erkennen (P1).** Die
+Alarmfarben (`--m-alarm-*`) waren fest verdrahtete Hex-Werte, die im
+Dunkelmodus nur 2,67:1 Kontrast gegen den Seitengrund erreichten.
+Jetzt eigene Tokens, in Hell und Dunkel getrennt gepflegt wie jedes
+andere Farbpaar der App — im Dunkelmodus 5,36:1, rechnerisch gegen
+`--paper` geprüft.
+
+**Gangreihenfolge nur per Pfeiltasten (P1).** Bei vielen Gängen war
+mehrfaches Antippen von ↑/↓ mühsam. Ein Ziehgriff links jeder Zeile
+erlaubt jetzt Drag-and-Drop per Pointer Events (nicht die native
+HTML5-Drag-API — die hat auf dem Telefon kaum Touch-Unterstützung,
+und das hier ist eine mobile-first-App). Während des Ziehens
+verschieben sich nur die betroffenen Nachbarzeilen per Transform;
+erst beim Loslassen committet `App.reorderAisleTo()` die neue
+Reihenfolge — die Funktion ruft dafür wiederholt das bestehende,
+geprüfte `moveAisle()` auf, statt eine neue „an Index X einfügen”-
+Logik zu schreiben. Die Pfeile bleiben zusätzlich bedienbar.
+
+**„Getauscht”-Knopf zu laut (P2).** Der aktive Zustand des
+Tausch-Knopfes nutzte dieselbe kräftige Akzentfläche wie ein
+Bestätigungs-Knopf, obwohl „getauscht” nur ein Status ist, keine
+Handlung, die gerade passiert. Eine eigene Kontur-Variante
+(`.swapBtn.on`) markiert den Zustand jetzt zurückhaltender.
+
+**Rot auch für unauffällige Aussagen (P2).** Die Verschwendungssumme
+in „Zahlen” stand in derselben Warnfarbe wie akute Sicherheitshinweise,
+obwohl eine Zahl aus der Vergangenheit keine Handlung verlangt. Jetzt
+Bernstein statt Rot — Rot bleibt für Fälle reserviert, die wirklich
+dringend sind.
+
+**Gefüllter/hohler Punkt kaum zu unterscheiden (P2).** Die 8px-Punkte
+für „reicht”/„geht aus” waren auf dem Telefon schwer auseinander­
+zuhalten. Jetzt 11px, sonst unverändert.
+
+**Korrigiert: „zwei gestapelte Filterzeilen” bei „Wo dein Geld
+hingeht” (F3 aus dem Bericht).** Der ursprüngliche Befund war falsch.
+Nachmessen mit `getBoundingClientRect()` zeigt: es ist ein einziges
+5-Optionen-Segment (`flex-wrap:wrap`), das bei schmaler Breite korrekt
+auf zwei Zeilen umbricht — die Knöpfe füllen dabei jede Zeile sauber
+aus, keine Lücke, keine zwei getrennten Konzepte. Nichts geändert.
+
+**Offen, bewusst nicht entschieden: runde Ecken für die Sprechblase.**
+Der Bericht schlug abgerundete Ecken für das Overlay des Wesens vor —
+das widerspricht der dokumentierten Formsprache dieser App (eckige
+Flächen, runde Punkte, siehe „Kanten: Flächen eckig, Punkte rund”
+oben). Eine echte Grundsatzfrage, keine reine Umsetzungsfrage — bleibt
+offen, bis das explizit entschieden ist.
+
+17 neue Tests decken die sieben umgesetzten Punkte ab. Alle jetzt
+1951 Tests bestehen.
 
 ---
 
@@ -3875,12 +3948,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1931
+npm test          # alle 1951
 npm run test:algo # 1158 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Liste, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 737 Oberflächentests in jsdom
+npm run test:ui   # 757 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

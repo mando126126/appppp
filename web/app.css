@@ -129,6 +129,14 @@
   --violet-soft:rgba(123,92,240,.11);
   --pink:#E4499A;             /* nur Abzeichen — hält Korall für Dringendes frei */
   --pink-soft:rgba(228,73,154,.12);
+  /* Das Wesen, Stimmung "alarm": eigene, dunkel-abhängige Tönung
+     statt eines festen Werts in .mascot.alarm -- auf dem fast
+     schwarzen --paper des dunklen Themas lag der helle Wert (unten,
+     2,7:1) fast im Hintergrund und verfehlte gerade den Zweck, vor
+     dem er warnen soll. Im dunklen Block darunter heller nachgezogen
+     (5,4:1), ohne den moodigen, entsättigten Ton selbst zu verlieren. */
+  --m-alarm-body:#5B5568;
+  --m-alarm-cheek:#4A4456;
 
   /* ---- Schriftfarben AUF den getönten Flächen -------------------
      Die Palettenfarbe selbst ist als Schrift auf ihrer eigenen
@@ -240,6 +248,8 @@
     --blue-ink:#6BA3FF;
     --violet-ink:#A48CFF;
     --pink-ink:#FF7CC0;
+    --m-alarm-body:#8B84A0;
+    --m-alarm-cheek:#726A94;
     --fill:rgba(255,255,255,.06);
     --fill-2:rgba(255,255,255,.11);
     --lift:0 1px 2px rgba(0,0,0,.30), 0 10px 26px -12px rgba(0,0,0,.60);
@@ -274,6 +284,8 @@
   --pink:#FF7CC0;
   --pink-soft:rgba(255,124,192,.16);
   --wash:linear-gradient(150deg,rgba(52,212,141,.20),rgba(107,163,255,.13) 52%,rgba(164,140,255,.20));
+  --m-alarm-body:#8B84A0;
+  --m-alarm-cheek:#726A94;
   --fill:rgba(255,255,255,.06);
   --fill-2:rgba(255,255,255,.11);
   --lift:0 1px 2px rgba(0,0,0,.30), 0 10px 26px -12px rgba(0,0,0,.60);
@@ -486,7 +498,7 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 .mascot.neutral{--m-body:#F2B9A0;--m-cheek:#E28E6E;--m-eye:#3A2A22}
 .mascot.besorgt{--m-body:#C9A68D;--m-cheek:#B98063;--m-eye:#332720}
 .mascot.alarm{
-  --m-body:#5B5568;--m-cheek:#4A4456;--m-eye:#1C1922;--m-pupil:#EDE9F2;
+  --m-body:var(--m-alarm-body);--m-cheek:var(--m-alarm-cheek);--m-eye:#1C1922;--m-pupil:#EDE9F2;
   animation:mascotBob 3.2s var(--ease) infinite,mascotShiver 2.6s ease-in-out infinite;
 }
 
@@ -565,6 +577,26 @@ main:has(> .card:only-child){display:flex;flex-direction:column;justify-content:
 }
 button.row,label.row{transition:background .14s linear}
 button.row:active,label.row:active{background:var(--fill)}
+
+/* Gangreihenfolge: Griff zum Ziehen (siehe attachAisleDrag() in
+   views.js). touch-action:none verhindert, dass das Ziehen auf einem
+   Telefon stattdessen die Seite scrollt. */
+.aisleHandle{
+  flex:0 0 auto;width:26px;height:26px;margin-left:-6px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--ink-3);touch-action:none;cursor:grab;
+  -webkit-user-select:none;user-select:none;
+}
+/* Während des Ziehens darf der Zeiger nicht aus Versehen Text auf der
+   ganzen Seite markieren -- ohne das gewann auf dem Desktop (Maus)
+   regelmäßig die Textauswahl gegen das Verschieben der Zeile. */
+.aisleRow.dragging,.aisleRow.dragging *{-webkit-user-select:none;user-select:none}
+.aisleHandle svg{width:20px;height:20px;fill:currentColor}
+.aisleRow.dragging{
+  position:relative;z-index:3;background:var(--surface);box-shadow:var(--lift);cursor:grabbing;
+}
+.aisleRow.dragging .aisleHandle{cursor:grabbing;color:var(--ink)}
+.aisleRow:not(.dragging){transition:transform .16s var(--ease)}
 .row .rowMain{flex:1;min-width:0}
 .row .rowTitle{font-size:1rem;letter-spacing:-.0075em}
 .row .rowSub{font-size:0.8rem;color:var(--ink-2);margin-top:1px;line-height:1.35}
@@ -588,7 +620,16 @@ button.row:active,label.row:active{background:var(--fill)}
 .srcnote{font-size:0.73rem;color:var(--ink-3);margin-top:13px;line-height:1.45}
 .empty{font-size:0.9rem;color:var(--ink-2);padding:0 0 26px;text-align:center}
 .emptyMascot{display:flex;justify-content:center;padding:22px 0 4px}
-.emptyMascot .mascot{animation-delay:-.6s}
+/* Absichtlich gedämpft statt vollfarbig: das Wesen im Kopfbereich
+   ist die eine echte Instanz mit einer echten Stimmung
+   (mascotMood(ctx)). Diese hier trägt eine feste, nicht aus ctx
+   abgeleitete Stimmung (siehe emptyView() in views.js -- bewusst so,
+   damit keine geratene Stimmung entsteht) und kann deshalb in einer
+   anderen Farbe dastehen als das echte Wesen direkt darüber. Gedämpft
+   liest sie sich als Verzierung dieser einen Karte, nicht als zweite,
+   gleichrangige Figur mit einer eigenen (und womöglich abweichenden)
+   Meinung zur Lage. */
+.emptyMascot .mascot{animation-delay:-.6s;opacity:.55}
 
 /* ---------------- Wo dein Geld hingeht: eigener Bereich -----------
    Ein eigenständiger, erhöhter Bereich wie `.hero` (Vorrat) -- weiße
@@ -654,7 +695,11 @@ button.moneyBarRow:active{opacity:.6}
    dasselbe bedeutet -- anders als der neutrale Vorperioden-Vergleich
    oben, der bewusst KEINE Ampelfarbe trägt (mehr ausgegeben ist kein
    Fehlverhalten, Lebensmittel wegwerfen schon eher). */
-.moneyWaste{margin-top:6px;font-size:0.78rem;color:var(--red)}
+/* --amber-ink statt --red: das ist ein Rückblick auf Vergangenes
+   ("X % davon meist verschwendet"), keine akute Warnung -- --red
+   bleibt damit dem einen Fall vorbehalten, der wirklich dringend ist
+   (Kühlkette, Verbrauchsdatum). */
+.moneyWaste{margin-top:6px;font-size:0.78rem;color:var(--amber-ink)}
 /* "Sonstige" ist keine echte Kategorie, sondern eine Sammelzeile für
    alles jenseits der Top 7 -- tritt bewusst zurück (graue statt
    Akzentfarbe im Balken, siehe moneyBarSvg, und hier gedämpfter Text),
@@ -818,6 +863,11 @@ button.moneyBarRow:active{opacity:.6}
   transition:transform .18s var(--spring),background .14s linear;
 }
 .pillBtn.on{background:var(--accent-strong);color:var(--on-accent)}
+/* "Getauscht" auf "Fällig": eine Kontur statt der vollen Fläche.
+   Dieselbe Farbe wie .pillBtn.on wäre dieselbe Aussage wie der
+   Hauptknopf der Seite (.cta) -- richtig für einen einzelnen Knopf,
+   zu laut für eine Zeile, die je fälligem Produkt einmal auftaucht. */
+.swapBtn.on{background:none;border:1.5px solid var(--accent);color:var(--accent-ink)}
 .pillBtn:active{transform:scale(.92)}
 .pillBtn:disabled{opacity:.3;cursor:default;transform:none}
 .rowActions{display:flex;gap:7px;flex:0 0 auto}
@@ -1600,7 +1650,10 @@ button.row.action,label.row.action{cursor:pointer}
 
 /* Konfidenzmarken: gefüllt heißt gelernt, hohl heißt geschätzt. */
 .supplyVal{display:flex;align-items:center;gap:9px;flex:0 0 auto}
-.dot{width:8px;height:8px;flex:0 0 auto;border-radius:99px;border:1.5px solid var(--ink-3);background:transparent}
+/* Etwas größer als die ursprünglichen 8px: bei "half" (Verlaufskante
+   mittig durch den Punkt) war der Unterschied zu "full"/"none" auf
+   einem Telefon-Display nur schwer zu erkennen. */
+.dot{width:11px;height:11px;flex:0 0 auto;border-radius:99px;border:1.5px solid var(--ink-3);background:transparent}
 .dot.full{background:var(--accent);border-color:var(--accent)}
 .dot.half{background:linear-gradient(90deg,var(--accent) 50%,transparent 50%);border-color:var(--accent)}
 .dot.none{border-style:dashed;opacity:.5}

@@ -221,6 +221,35 @@ const App = {
     });
   },
 
+  /**
+   * Gang per Ziehen an eine bestimmte Stelle der SICHTBAREN
+   * (relevanten) Liste bringen -- die Pfeiltasten bleiben für
+   * Tastatur und Vorleseprogramm, das Ziehen ist der bequemere Weg
+   * für viele Gänge auf einmal.
+   *
+   * Arbeitet auf derselben Volltliste und demselben moveAisle() wie
+   * die Pfeiltasten, nur wiederholt: Gänge, die gerade nicht gekauft
+   * werden, liegen irgendwo dazwischen und dürfen nicht mitgezählt
+   * werden, deshalb prüft jeder Schritt die tatsächlich sichtbare
+   * Reihenfolge (relevantAisles(), dieselbe Funktion, die auch die
+   * Liste zeichnet) statt nur stur zu zählen.
+   */
+  reorderAisleTo(aisle, targetVisibleIndex) {
+    const store = App.ctx.store;
+    Data.update((s) => {
+      const key = normalizeStore(store);
+      let current = orderFor(store, s.aisleOrders);
+      let guard = current.length * 2;
+      while (guard-- > 0) {
+        const sichtbar = relevantAisles(current, App.ctx.items);
+        const an = sichtbar.indexOf(aisle);
+        if (an === -1 || an === targetVisibleIndex) break;
+        current = moveAisle(current, aisle, an < targetVisibleIndex ? 1 : -1);
+      }
+      s.aisleOrders[key] = current;
+    });
+  },
+
   goto(tab) {
     App.closeMascotBubble();
     App.tab = tab;

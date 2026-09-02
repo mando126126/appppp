@@ -222,7 +222,11 @@ function mascotAlarmSignature(ctx) {
    Regel ohne Bedingung, damit die Sprechblase nie leer bleibt. */
 const MASCOT_RULES = {
   start: [
-    { when: (ctx) => !!ctx.safety, say: (ctx) => ctx.safety.short },
+    // Nicht ctx.safety.short -- das steht auf diesem Reiter schon
+    // prominent in "Jetzt zu tun" (todoCard()). Ein Antippen im
+    // Alarmfall soll etwas sagen, das man dort noch nicht sieht, statt
+    // wortgleich zu wiederholen, was zwei Zeilen tiefer schon steht.
+    { when: (ctx) => !!ctx.safety, say: (ctx) => `Am besten dorthin: ${ctx.safety.coldestZone}.` },
     { when: (ctx) => ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
         ctx.pulse.days[0].events.some((e) => e.kind === "verderb"),
       say: (ctx) => ctx.pulse.headline },
@@ -274,7 +278,10 @@ const MASCOT_RULES = {
   ],
 
   liste: [
-    { when: (ctx) => !!ctx.safety, say: (ctx) => ctx.safety.short },
+    // Dieselbe Überlegung wie beim Reiter "start": ctx.safety.short
+    // steht hier schon als dringende Zeile über der Liste (hintsRow()),
+    // wenn etwas ansteht -- die Blase ergänzt statt zu wiederholen.
+    { when: (ctx) => !!ctx.safety, say: (ctx) => `Am besten dorthin: ${ctx.safety.coldestZone}.` },
     { when: (ctx) => ctx.budgetResult && ctx.budgetResult.removed.length > 0,
       say: (ctx) => `${zahlwort(ctx.budgetResult.removed.length, "Position wurde", "Positionen wurden")} wegen deines Budgets gestrichen.` },
     { when: (ctx) => ctx.vacation && ctx.vacation.skip && ctx.vacation.skip.length > 0,
@@ -3009,7 +3016,12 @@ function swapRow(x, ctx, app) {
   main.addEventListener("click", () => productSheet(x.productId, ctx));
   r.append(main);
 
-  const swap = el("button", "pillBtn" + (x.due ? " on" : ""), "Getauscht");
+  // "swapBtn" statt der geteilten .pillBtn.on-Vollfläche: dieselbe
+  // Farbe volltonig zu geben wie dem einen Hauptknopf einer Seite
+  // (.cta) verliert ihr Gewicht, sobald sie mehrfach untereinander in
+  // einer Liste steht -- hier oft mehrmals, je ein "Getauscht" pro
+  // fälligem Produkt.
+  const swap = el("button", "pillBtn swapBtn" + (x.due ? " on" : ""), "Getauscht");
   swap.addEventListener("click", () => app.swap(x.productId, x.name));
   r.append(swap);
   return r;
@@ -4454,9 +4466,15 @@ function renderMehrEinstellungen(c, ctx, app) {
        dieselbe Reihenfolge — man sucht die Einstellung dann dort,
        wo sie nicht steht. */
     const g = uiGroup("Nach Gängen" + (ctx.store ? ` · ${ctx.store}` : ""),
-      "Die Reihenfolge, in der die Liste beim Einkaufen durchlaufen wird. Sie wird je Markt gemerkt.");
+      "Die Reihenfolge, in der die Liste beim Einkaufen durchlaufen wird. Sie wird je Markt gemerkt. " +
+      "Der Griff links lässt sich ziehen -- schneller als die Pfeile, wenn viele Gänge umsortiert werden sollen.");
     aisles.forEach((aisle, i) => {
-      const r = el("div", "row");
+      const r = el("div", "row aisleRow");
+      const handle = el("span", "aisleHandle",
+        '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="6" cy="5" r="1.5"/><circle cx="14" cy="5" r="1.5"/>' +
+        '<circle cx="6" cy="10" r="1.5"/><circle cx="14" cy="10" r="1.5"/><circle cx="6" cy="15" r="1.5"/><circle cx="14" cy="15" r="1.5"/></svg>');
+      handle.setAttribute("aria-hidden", "true");
+      r.append(handle);
       r.append(el("div", "rowMain", `<div class="rowTitle">${esc(aisle)}</div>`));
       const acts = el("div", "rowActions");
       [["↑", -1, i === 0], ["↓", 1, i === aisles.length - 1]].forEach(([sym, dir, disabled]) => {
@@ -4468,6 +4486,7 @@ function renderMehrEinstellungen(c, ctx, app) {
       });
       r.append(acts);
       g.body.append(r);
+      attachAisleDrag(handle, r, g.body, i, aisle, app);
     });
     c.append(g);
   }
@@ -4586,6 +4605,65 @@ function renderMehrEinstellungen(c, ctx, app) {
     () => { Data.reset(); app.toast("Gelöscht"); app.goto("liste"); }));
   actions.body.append(del);
   c.append(actions);
+}
+
+/**
+ * Eine Gangreihenfolge-Zeile per Zeigergeste an eine andere Stelle
+ * ziehen -- die Pfeiltasten bleiben daneben bestehen (Tastatur,
+ * Vorleseprogramm); das hier ist der bequemere Weg für viele Gänge.
+ *
+ * Bewusst ohne die Zeilen währenddessen wirklich im DOM umzuhängen:
+ * jede Nachbarzeile bekommt nur ein `transform`, solange gezogen
+ * wird, verschoben um genau eine Zeilenhöhe in die passende Richtung.
+ * Erst beim Loslassen wird `App.reorderAisleTo()` aufgerufen, das
+ * Ergebnis kommt über den ganz normalen Neuaufbau der Ansicht --
+ * kein Sonderfall, kein Nachräumen von Hand nötig.
+ */
+function attachAisleDrag(handle, row, list, startIndex, aisle, app) {
+  let dragging = false, startY = 0, rowHeight = 0, steps = 0, pointerId = null;
+
+  const rows = () => [...list.children];
+
+  const onMove = (e) => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    const gesamt = rows().length;
+    let neu = Math.round(dy / rowHeight);
+    neu = Math.max(-startIndex, Math.min(gesamt - 1 - startIndex, neu));
+    if (neu !== steps) {
+      steps = neu;
+      rows().forEach((r, i) => {
+        if (r === row) return;
+        if (i > startIndex && i <= startIndex + steps) r.style.transform = `translateY(${-rowHeight}px)`;
+        else if (i < startIndex && i >= startIndex + steps) r.style.transform = `translateY(${rowHeight}px)`;
+        else r.style.transform = "";
+      });
+    }
+    row.style.transform = `translateY(${dy}px)`;
+  };
+
+  const ende = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    try { handle.releasePointerCapture(pointerId); } catch (err) { /* schon losgelassen */ }
+    row.classList.remove("dragging");
+    rows().forEach((r) => { r.style.transform = ""; });
+    if (steps !== 0) app.reorderAisleTo(aisle, startIndex + steps);
+  };
+
+  handle.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    pointerId = e.pointerId;
+    startY = e.clientY;
+    steps = 0;
+    rowHeight = row.getBoundingClientRect().height;
+    row.classList.add("dragging");
+    handle.setPointerCapture(pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener("pointermove", onMove);
+  handle.addEventListener("pointerup", ende);
+  handle.addEventListener("pointercancel", ende);
 }
 
 /** Unterbereich "Auswertungen": Dinge, die man nachschlägt statt anfasst. */

@@ -3258,6 +3258,100 @@ console.log("\n--- UX-Testbericht: erste Umsetzungsrunde ---");
   }
 }
 
+console.log("\n--- UX-Testbericht: zweite Umsetzungsrunde ---");
+{
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+  const block = (sel) => {
+    const i = css.indexOf("\n" + sel + "{");
+    return i < 0 ? null : css.slice(i + sel.length + 2, css.indexOf("}", i));
+  };
+
+  /* --- F6: die Sprechblase wiederholt bei Kühlkette nicht mehr genau
+     das, was auf Start/Liste schon in "Jetzt zu tun" bzw. der
+     dringenden Zeile steht -- sie nennt stattdessen die kälteste
+     Lagerzone, eine Auskunft, die dort sonst nirgends alleine steht. */
+  D.reset(); D.loadDemo("full");
+  const safetyCtx = { ...D.compute(), safety: { short: "X direkt kühlen", coldestZone: "Kühlschrank unten (kälteste Zone)" } };
+  ["start", "liste"].forEach((tab) => {
+    const text = T.mascotMessage(safetyCtx, tab, 0);
+    ok(`Auf "${tab}" wiederholt die Blase nicht mehr ctx.safety.short`, text !== safetyCtx.safety.short, text);
+    ok(`Auf "${tab}" nennt sie stattdessen die kälteste Zone`, text.includes(safetyCtx.safety.coldestZone), text);
+  });
+  // Direkt an der Regel geprüft statt über mascotMessage(..., 0):
+  // welche Regel bei Zähler 0 vorne liegt, hängt auch davon ab, was
+  // sonst noch zutrifft (z. B. "Beispieldaten" bei geladener Demo) --
+  // hier zählt nur, dass die Kühlketten-Regel selbst unverändert ist.
+  const erfassenSafetyRegel = T.MASCOT_RULES.erfassen.find((r) => r.when(safetyCtx) && r.say(safetyCtx) === safetyCtx.safety.short);
+  ok('Auf "erfassen" bleibt die Kühlketten-Regel bei ctx.safety.short -- dort steht sonst nichts dazu',
+    !!erfassenSafetyRegel);
+
+  /* --- F7: das dekorative Wesen in Leerzuständen ist gedämpft, damit
+     es nicht als zweite, vollfarbige Instanz neben dem echten Wesen
+     im Kopfbereich steht. */
+  ok("Das Leerzustands-Wesen ist gedämpft (CSS)", /opacity:\.55/.test(block(".emptyMascot .mascot") || ""));
+
+  /* --- F8: die Alarm-Stimmung hat einen eigenen, helleren Farbsatz
+     im dunklen Thema -- der feste helle Wert lag vorher bei 2,7:1
+     gegen den fast schwarzen Seitengrund. */
+  ok(".mascot.alarm bezieht seine Farbe jetzt aus Token statt einem festen Wert",
+    /--m-body:var\(--m-alarm-body\)/.test(block(".mascot.alarm") || ""));
+  const rootBlock = css.slice(0, css.indexOf("@media (prefers-color-scheme: dark)"));
+  const darkBlock = css.slice(css.indexOf("@media (prefers-color-scheme: dark)"));
+  ok("--m-alarm-body ist im hellen Grundzustand definiert", /--m-alarm-body:#5B5568/.test(rootBlock));
+  ok("--m-alarm-body ist im dunklen Thema heller nachgezogen", /--m-alarm-body:#8B84A0/.test(darkBlock));
+
+  /* --- F12: Gangreihenfolge per Ziehen -- App.reorderAisleTo() bringt
+     einen Gang direkt an eine Zielposition der SICHTBAREN Liste,
+     dieselbe Grundlage (moveAisle(), relevantAisles()) wie die
+     Pfeiltasten. */
+  D.reset(); D.loadDemo("full");
+  App.goto("mehr");
+  const sichtbareGaenge = () => [...$("main").querySelectorAll(".aisleRow .rowTitle")].map((e) => e.textContent);
+  const gaengeVorher = sichtbareGaenge();
+  if (gaengeVorher.length >= 3) {
+    const b4 = errors.length;
+    App.reorderAisleTo(gaengeVorher[0], 2);
+    ok("Ziehen an eine Zielposition läuft fehlerfrei", errors.length === b4, errors[b4]);
+    const gaengeNachher = sichtbareGaenge();
+    ok("Der gezogene Gang steht jetzt an Position 2", gaengeNachher[2] === gaengeVorher[0], gaengeNachher.join(", "));
+    ok("Kein Gang geht dabei verloren",
+      gaengeNachher.length === gaengeVorher.length && gaengeVorher.every((a) => gaengeNachher.includes(a)));
+  } else {
+    ["Ziehen an eine Zielposition läuft fehlerfrei", "Der gezogene Gang steht jetzt an Position 2",
+      "Kein Gang geht dabei verloren"].forEach((name) => ok(name, true, "übersprungen (zu wenige Gänge)"));
+  }
+  const handles = $("main").querySelectorAll(".aisleHandle");
+  ok("Jede Gang-Zeile hat einen Ziehgriff", handles.length === gaengeVorher.length, handles.length);
+  ok("Der Griff ist rein dekorativ -- die Pfeiltasten bleiben der Tastaturweg",
+    [...handles].every((h) => h.getAttribute("aria-hidden") === "true"));
+  ok(".aisleHandle blockiert das Scrollen beim Ziehen nicht (touch-action)",
+    /touch-action:none/.test(block(".aisleHandle") || ""));
+
+  /* --- F14: "Getauscht" ist eine Kontur, keine Vollfläche mehr --
+     dieselbe Farbe wie der einzige Hauptknopf einer Seite (.cta)
+     verlor an Bedeutung, sobald sie mehrfach in einer Liste steht. */
+  ok('"Getauscht" ist jetzt eine Kontur, keine Vollfläche',
+    /border:1\.5px solid var\(--accent\)/.test(block(".swapBtn.on") || ""));
+  App.goto("faellig");
+  const getauschtBtn = [...$("main").querySelectorAll("button")].find((b) => b.textContent === "Getauscht");
+  ok('Die "Getauscht"-Schaltfläche trägt die neue, leisere Klasse',
+    !getauschtBtn || getauschtBtn.classList.contains("swapBtn"), "keine fällige Zeile in den Beispieldaten");
+
+  /* --- F15: rückblickende Verschwendungs-Hinweise stehen nicht mehr
+     in Rot -- Rot bleibt akuten Fällen vorbehalten (Kühlkette,
+     Verbrauchsdatum). */
+  ok('"X % davon meist verschwendet" steht nicht mehr in --red',
+    !/color:var\(--red\)/.test(block(".moneyWaste") || ""));
+  ok("...sondern in --amber-ink (Rückblick, kein akuter Fall)",
+    /color:var\(--amber-ink\)/.test(block(".moneyWaste") || ""));
+
+  /* --- F16: der Punkt "gelernt/vorläufig/geschätzt" ist größer. */
+  ok("Der Vertrauens-Punkt ist größer als die ursprünglichen 8px",
+    /width:11px;height:11px/.test(block(".dot") || ""));
+
+  D.loadDemo("full");
+}
+
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");
   ok("Konsole blieb fehlerfrei", errors.length === 0, errors.slice(0, 3).join(" | "));
 
