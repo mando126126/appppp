@@ -343,6 +343,10 @@ const App = {
     box.className = "party show m-" + badge.id + (still ? " still" : "");
     glow.className = "partyGlow";
 
+    // Ein Meilenstein ist der einzige Moment, in dem die Stimmung
+    // nicht aus mascotMood(ctx) kommt: die Feier selbst ist der
+    // Grund zur Freude, unabhängig davon, was sonst gerade ansteht.
+    document.getElementById("partyMascot").innerHTML = mascotSvg("froh", 64);
     document.getElementById("partyKicker").textContent =
       badge.level >= badge.maxLevel ? "Höchste Stufe" : "Geschafft";
     document.getElementById("partyMark").innerHTML = markSvg(badge.icon);
@@ -825,9 +829,17 @@ const App = {
     }
     textBlock.append(sub);
     // Das Wesen: derselbe Ort auf jeder Seite, weil renderBar() auf
-    // jeder Seite läuft. Die Stimmung kommt aus mascotMood(ctx) --
-    // siehe dort für die Signale und ihre Rangfolge.
-    large.insertAdjacentHTML("beforeend", mascotSvg(mascotMood(ctx)));
+    // jeder Seite läuft. Die Stimmung kommt aus mascotMood(ctx), das
+    // Antippen aus mascotTap(ctx) -- beide lesen nur Signale, die es
+    // schon gibt. Ein <button>, kein bloßes SVG: es tut jetzt etwas,
+    // also muss es auch mit der Tastatur erreichbar sein und einen
+    // Namen tragen, der sagt, was passiert -- nicht nur, dass dort
+    // ein Bild ist.
+    const tap = mascotTap(ctx);
+    const mascotBtn = el("button", "mascotBtn", mascotSvg(mascotMood(ctx)));
+    mascotBtn.setAttribute("aria-label", tap.label);
+    mascotBtn.addEventListener("click", () => tap.run(App));
+    large.append(mascotBtn);
   },
 
   renderNav() {

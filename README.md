@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1852 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1860 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3548,6 +3548,59 @@ geprüften Seite im Kopfbereich steht. Alle jetzt 1852 Tests bestehen.
 
 ---
 
+## Das Wesen wird interaktiv und deckt die App ab (2026-08-27)
+
+Zwei Rückmeldungen zur ersten Fassung, beide umgesetzt: die Form
+gefiel nicht (acht Büschel um einen Kreis las sich als Zahnrad, nicht
+als Fell) und die Abdeckung sollte über den Kopfbereich hinausgehen.
+
+**Die Form ist jetzt ausdrücklich ein Platzhalter.** Ersetzt durch
+eine handgezeichnete, unregelmäßige Kontur (`MASCOT_BODY_PATH` in
+views.js) — eine von zehn zur Auswahl gestellten Varianten, keine
+endgültige Gestaltung. Der eigentliche Plan: echtes Bild- oder
+Videomaterial (siehe unten), das nur diese eine Formel ersetzt —
+Stimmungslogik, Platzierung und Interaktionen hängen absichtlich
+nicht an der Zeichnung.
+
+**Aus Dekoration wurde eine Fläche, die etwas tut.** Das Wesen im
+Kopfbereich ist jetzt ein `<button>` mit eigenem Namen (nicht mehr
+`aria-hidden`, weil es jetzt etwas auslöst) — Antippen öffnet, was zur
+aktuellen Stimmung gehört: bei „alarm" dieselbe Kühlkette-Meldung wie
+in „Jetzt zu tun", bei „besorgt" dasselbe Hinweise-Blatt, bei „froh"
+eine kurze Rückmeldung zum Streak. Bewusst keine neuen Texte
+geschrieben — jede Meldung ist ein zweiter Zugang zu etwas, das
+bereits an einer Stelle korrekt beschrieben ist, nicht eine zweite
+Fassung derselben Aussage.
+
+**Volle Abdeckung statt eines einzelnen Auftritts:**
+- **Kopfbereich** — jede Seite, wie schon zuvor.
+- **Leere Ansichten** — `emptyView()` (der gemeinsame Baustein für
+  Zahlen, Bestand, Fällig, Angebote) zeigt jetzt das Wesen statt einer
+  bloßen Textzeile. Stimmung standardmäßig „neutral" (abwartend, keine
+  geratene Emotion für „noch keine Daten"), mit einer benannten
+  Ausnahme: „Nichts fällig, alles im Rhythmus" ist eine echte gute
+  Nachricht und bekommt „froh".
+- **Meilenstein-Feier** — die Vollbild-Karte bei einem erreichten
+  Abzeichen zeigt das Wesen jetzt fröhlich über dem Abzeichen-Symbol.
+  Hier kommt die Stimmung nicht aus den üblichen Signalen: die Feier
+  selbst ist der Grund zur Freude, unabhängig davon, was sonst gerade
+  ansteht.
+
+**Wie es weitergeht, wenn echtes Material da ist:** drei Stufen
+besprochen — ein Standbild pro Stimmung (von hier aus CSS-animiert,
+sofort machbar), mehrere Bilder als Frames, oder ein Bild-zu-Video-Loop
+aus einer KI wie Runway/Pika/Kling (dafür fehlt in dieser Umgebung der
+Zugriff — das müsste extern erzeugt und hierher übergeben werden).
+Alle drei ersetzen nur die Zeichenfunktion, nicht die Stimmungs- oder
+Interaktionslogik.
+
+Acht neue Tests: dass Antippen tatsächlich ein Blatt öffnet und dabei
+bestehende, nicht neu geschriebene Meldungen wiederverwendet, dass
+leere Ansichten das Wesen zeigen, und dass die Meilenstein-Feier es
+fröhlich zeigt. Alle jetzt 1860 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -3616,7 +3669,7 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1852
+npm test          # alle 1860
 npm run test:algo # 1151 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Sicherung, Verschwendung,
                   #   Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)

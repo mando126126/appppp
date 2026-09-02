@@ -111,18 +111,16 @@ const markSvg = (key) =>
 /* ================================================================
    Das Wesen — ein Begleiter, keine Illustration
    ================================================================
-   Acht Büschel um einen Kern statt gezeichnetem Fell: bei 56–64 px
-   Darstellungsgröße (siehe app.css, .mascot) wäre feineres Detail nur
-   Rauschen. Die Stimmung trägt die Farbe (mascotMood unten wählt sie
-   aus echten Signalen), die Form von Brauen und Mund trägt den
-   Ausdruck — beides in app.css/hier bewusst getrennt von der
-   Fachlogik, die diese Signale berechnet.
+   PLATZHALTER-FORM, ausdrücklich: die erste von zehn Varianten
+   ("Organischer Blob"), die dem Referenzbild vorgezogen wurde, bis
+   echtes Bild-/Videomaterial existiert (siehe README, "Das Wesen").
+   Wenn dieses Material da ist, ersetzt es NUR die Körperform bzw.
+   den Loop — Stimmungslogik (mascotMood), Platzierung und die
+   Interaktionen unten bleiben unverändert, weil sie an der Fachlogik
+   hängen, nicht an der Zeichnung.
    ================================================================ */
-const MASCOT_TUFTS = [
-  [77, 54], [69.1, 73.1], [50, 81], [30.9, 73.1],
-  [23, 54], [30.9, 34.9], [50, 27], [69.1, 34.9]
-];
-const MASCOT_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+const MASCOT_BODY_PATH = "M50,8 C68,6 88,18 92,40 C96,64 84,88 60,94 C38,99 14,88 8,64 " +
+  "C3,42 14,18 34,10 C39,8 45,9 50,8 Z";
 
 const MASCOT_FACE = {
   froh: {
@@ -153,9 +151,6 @@ function mascotSvg(mood, size = 58) {
   // app.css nur die vier benannten Klassen mit --m-body/--m-eye belegt.
   const gueltig = MASCOT_FACE[mood] ? mood : "neutral";
   const face = MASCOT_FACE[gueltig];
-  const tufts = MASCOT_TUFTS.map(([x, y], i) =>
-    `<ellipse class="mascotBody" cx="${x}" cy="${y}" rx="15" ry="10" ` +
-    `transform="rotate(${MASCOT_ANGLES[i]} ${x} ${y})"/>`).join("");
   const eye = (cx) =>
     `<g class="mascotBlink">` +
     `<ellipse class="mascotEyeWhite" cx="${cx}" cy="50" rx="8.5" ry="10.5"/>` +
@@ -164,9 +159,9 @@ function mascotSvg(mood, size = 58) {
     `</g>`;
   return `<svg class="mascot ${gueltig}" viewBox="0 0 100 100" width="${size}" height="${size}" ` +
     `aria-hidden="true" focusable="false">` +
-    `<circle class="mascotBody" cx="50" cy="54" r="32"/>${tufts}` +
-    `<ellipse class="mascotCheek" cx="27" cy="60" rx="6.5" ry="4.5"/>` +
-    `<ellipse class="mascotCheek" cx="73" cy="60" rx="6.5" ry="4.5"/>` +
+    `<path class="mascotBody" d="${MASCOT_BODY_PATH}"/>` +
+    `<ellipse class="mascotCheek" cx="27" cy="66" rx="6.5" ry="4.5"/>` +
+    `<ellipse class="mascotCheek" cx="73" cy="66" rx="6.5" ry="4.5"/>` +
     eye(38) + eye(62) +
     `<path class="mascotBrow" d="${face.browL}"/><path class="mascotBrow" d="${face.browR}"/>` +
     face.mouth +
@@ -186,6 +181,42 @@ function mascotMood(ctx) {
   if (ctx.forgotten && ctx.forgotten.length) return "besorgt";
   if (ctx.streak && ctx.streak.weeks > 0) return "froh";
   return "neutral";
+}
+
+/**
+ * Was passiert, wenn man das Wesen antippt — eine antippbare Fläche
+ * statt Dekoration. Öffnet an jeder Stelle etwas, das es schon gibt
+ * (dieselbe Kühlkette-Meldung wie in "Jetzt zu tun", dasselbe
+ * Sammelblatt wie bei den Hinweisen), statt eine zweite Fassung
+ * derselben Aussage zu schreiben — genau die Fehlerklasse, die
+ * PILL_INFO oben im Kopf schon einmal vermeiden wollte.
+ *
+ * @returns {{label:string, run:function(app)}}
+ */
+function mascotTap(ctx) {
+  if (ctx.safety) {
+    return {
+      label: "Kühlkette ansehen",
+      run: (app) => app.notice("Kühlkette", ctx.safety.message + "\n\nQuelle: " + ctx.safety.source)
+    };
+  }
+  const heuteVerdirbt = ctx.pulse && ctx.pulse.days && ctx.pulse.days[0] &&
+    ctx.pulse.days[0].events.some((e) => e.kind === "verderb");
+  if (heuteVerdirbt) {
+    return { label: "Was heute ansteht ansehen", run: (app) => app.notice("Heute", ctx.pulse.headline) };
+  }
+  if (ctx.forgotten && ctx.forgotten.length) {
+    return { label: `${zahlwort(ctx.forgotten.length, "vergessenes Produkt", "vergessene Produkte")} ansehen`,
+      run: (app) => hintsSheet(ctx, app) };
+  }
+  if (ctx.streak && ctx.streak.weeks > 0) {
+    return {
+      label: "Streak ansehen",
+      run: (app) => app.notice("Weiter so",
+        `${zahlwort(ctx.streak.weeks, "Woche", "Wochen")} am Stück ohne vergessenen Einkauf.`)
+    };
+  }
+  return { label: "Nichts Dringendes", run: (app) => app.notice("Alles ruhig", "Gerade steht nichts Dringendes an.") };
 }
 
 /* ================================================================
@@ -447,8 +478,18 @@ function tile(label, value, note, cls) {
 }
 
 /** Leerzustand: ein Satz und ein Knopf, nicht mehr. */
-function emptyView(text, actionLabel, onAction) {
+/**
+ * Leere-Ansicht — jetzt mit dem Wesen statt einer Textzeile allein.
+ * `mood` ist bewusst nicht `mascotMood(ctx)`: eine leere Ansicht hat
+ * meist gar keine der Signale, aus denen jene Funktion wählt, und
+ * "neutral" (abwartend) passt hier eher als eine geratene Stimmung.
+ * "Nichts fällig, alles im Rhythmus" ist die eine Ausnahme, die
+ * ausdrücklich "froh" übergibt — das ist eine echte gute Nachricht,
+ * keine leere Fläche.
+ */
+function emptyView(text, actionLabel, onAction, mood = "neutral") {
   const c = card();
+  c.append(el("div", "emptyMascot", mascotSvg(mood, 52)));
   c.append(el("p", "empty", esc(text)));
   if (actionLabel) {
     const b = el("button", "cta", actionLabel);
@@ -2505,7 +2546,8 @@ function viewFaellig(ctx, app) {
         ? "Nichts fällig. Alles im Rhythmus."
         : "Noch keine Haushaltsprodukte erfasst.",
       ctx.nonFoodEntries.length ? null : "Einkauf erfassen",
-      () => app.goto("erfassen")));
+      () => app.goto("erfassen"),
+      ctx.nonFoodEntries.length ? "froh" : "neutral"));
     return c;
   }
 

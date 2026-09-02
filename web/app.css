@@ -374,10 +374,15 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
    views.js. Kein neuer Zustand, nur eine neue Lesart des alten.
 
    Absichtlich flache SVG-Form statt echtem 3D: dieselbe Technik, mit
-   der auch Maskottchen wie das von Duolingo im Web laufen. Acht
-   Büschel um einen Kreis statt einzelner Fellsträhnen -- bei der
-   Größe, in der das Wesen hier vorkommt (56–64 px), wäre echtes Fell
-   ohnehin nur Rauschen. */
+   der auch Maskottchen wie das von Duolingo im Web laufen. Die Form
+   selbst ist Platzhalter (siehe Kommentar bei MASCOT_BODY_PATH in
+   views.js) -- was hier bleibt, auch wenn sie ersetzt wird, ist die
+   Bewegung, die Stimmungsfarben und die Antippbarkeit. */
+.mascotBtn{
+  flex:0 0 auto;padding:0;border:none;background:none;line-height:0;
+  transition:transform .16s var(--spring);
+}
+.mascotBtn:active{transform:scale(.9)}
 .mascot{
   /* Größe kommt vom width/height-Attribut (mascotSvg()-Parameter),
      absichtlich nicht hier fest verdrahtet -- sonst überschreibt
@@ -497,7 +502,9 @@ button.row:active,label.row:active{background:var(--fill)}
 .headrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
 .stat{font-size:0.79rem;color:var(--ink-2)}
 .srcnote{font-size:0.73rem;color:var(--ink-3);margin-top:13px;line-height:1.45}
-.empty{font-size:0.9rem;color:var(--ink-2);padding:26px 0;text-align:center}
+.empty{font-size:0.9rem;color:var(--ink-2);padding:0 0 26px;text-align:center}
+.emptyMascot{display:flex;justify-content:center;padding:22px 0 4px}
+.emptyMascot .mascot{animation-delay:-.6s}
 
 /* ---------------- Wo dein Geld hingeht: eigener Bereich -----------
    Ein eigenständiger, erhöhter Bereich wie `.hero` (Vorrat) -- weiße
@@ -1369,6 +1376,9 @@ button.row.action,label.row.action{cursor:pointer}
   from{transform:scale(.86) translateY(14px);opacity:0}
   to{transform:scale(1) translateY(0);opacity:1}
 }
+
+.partyMascot{margin-bottom:2px}
+.party:not(.still) .partyMascot{animation:markIn .62s var(--spring) .02s both}
 
 .partyKicker{
   font-size:0.7rem;font-weight:750;letter-spacing:.09em;text-transform:uppercase;

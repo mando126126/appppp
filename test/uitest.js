@@ -113,7 +113,7 @@ try {
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
-    " mascotSvg, mascotMood };"
+    " mascotSvg, mascotMood, mascotTap };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -2967,6 +2967,61 @@ console.log("\n--- Das Wesen ---");
     App.goto(tab);
     ok(`Das Wesen steht im Kopfbereich von "${tab}"`, !!$("largeTitle").querySelector("svg.mascot"));
   });
+
+  /* --- Antippen: dasselbe Wesen ist jetzt eine Fläche, die etwas
+     öffnet -- keine Dekoration mehr. Geprüft wird dieselbe
+     Rangfolge wie bei mascotMood, aber am Ergebnis der Handlung,
+     nicht nur an der Farbe. */
+  ok("mascotTap greift bei Kühlkette auf die bestehende Meldung zurück, schreibt keine neue", () => {
+    const gesehen = [];
+    const app = { notice: (t, x) => gesehen.push([t, x]) };
+    T.mascotTap({ safety: { message: "Hähnchenbrust direkt kühlen", source: "BZfE" } }).run(app);
+    return gesehen.length === 1 && gesehen[0][1].includes("Hähnchenbrust") && gesehen[0][1].includes("BZfE")
+      ? true : JSON.stringify(gesehen);
+  });
+  ok("Ohne jedes Signal öffnet es eine ruhige Meldung, keinen Fehler", () => {
+    let gesehen = null;
+    T.mascotTap({ safety: null, pulse: { days: [{ events: [] }] }, forgotten: [], streak: { weeks: 0 } })
+      .run({ notice: (t, x) => { gesehen = [t, x]; } });
+    return Array.isArray(gesehen) ? true : gesehen;
+  });
+
+  App.goto("start");
+  const btn = $("largeTitle").querySelector(".mascotBtn");
+  ok("Das Wesen im Kopfbereich ist jetzt eine Schaltfläche mit Namen",
+    !!btn && btn.tagName === "BUTTON" && !!btn.getAttribute("aria-label"));
+  click(btn);
+  ok("Antippen öffnet tatsächlich ein Blatt", !$("sheet").hidden);
+  App.closeSheet();
+
+  /* --- Leere Ansichten: dasselbe Wesen statt einer bloßen Textzeile.
+     "Nichts fällig, alles im Rhythmus" ist die eine Stelle mit einer
+     echten guten Nachricht -- deshalb dort ausdrücklich "froh". */
+  D.reset();
+  App.goto("zahlen");
+  ok("Die leere Zahlen-Seite zeigt das Wesen (neutral, keine Daten)",
+    !!$("main").querySelector(".emptyMascot svg.mascot.neutral"));
+
+  App.goto("faellig");
+  ok("Die leere Fällig-Seite ohne Haushaltsprodukte zeigt es ebenfalls neutral",
+    !!$("main").querySelector(".emptyMascot svg.mascot.neutral"));
+
+  // "Nichts fällig, alles im Rhythmus" (die Stelle, die "froh" statt
+  // "neutral" übergibt) tritt nur bei genau passender Datenlage ein
+  // und lässt sich nicht zuverlässig über Beispieldaten erzwingen --
+  // geprüft wird deshalb direkt, dass mascotSvg("froh", ...) tut, was
+  // diese Aufrufstelle von ihm erwartet.
+  ok("emptyView() mit \"froh\" trägt tatsächlich die froh-Klasse",
+    /class="mascot froh"/.test(T.mascotSvg("froh", 52)));
+  D.loadDemo("full");
+
+  /* --- Meilenstein-Feier: dieselbe Stimmung "froh" wie ein guter
+     Streak, unabhängig davon, was sonst gerade ansteht. */
+  App.celebrate({ id: "bons", icon: "receipt", level: 2, maxLevel: 5,
+    title: "Zehn Bons erfasst", note: "Weiter so." });
+  ok("Die Meilenstein-Feier zeigt das Wesen, fröhlich",
+    /class="mascot froh"/.test($("partyMascot").innerHTML));
+  App.closeParty();
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");
