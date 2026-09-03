@@ -16,7 +16,7 @@
  *   node test/learning.js
  */
 const {
-  feedbackAdjustment, applyFeedback, signalFor, medianOfSignals,
+  feedbackAdjustment, applyFeedback, signalFor, medianOfSignals, awayDaysFor,
   REASON, MAX_AGE_DAYS, MIN_SIGNALS, MAX_ADJUST, MAX_WEIGHT_SIGNALS,
   DISAGREEMENT_THRESHOLD, MIN_VALID_RHYTHM_DAYS
 } = require("../src/algo/feedbackLearner");
@@ -644,6 +644,119 @@ section("Feedback: nicht zweimal dasselbe zählen");
   ok("Nach dem Kauf wird nicht nachkorrigiert", spaeterGekauft.rhythmDays === 10, spaeterGekauft.rhythmDays);
   ok("Die Begründung steht am Ergebnis",
     spaeterGekauft.feedback.absorbed === 5, spaeterGekauft.feedback.absorbed);
+}
+
+/* ================================================================
+   Der Bündel-Effekt: „hab noch“ nach einer Abwesenheit
+   ================================================================
+   Fällig wird nach Kalendertagen, verbraucht wird an Anwesenheitstagen.
+   Nach einem Urlaub sind deshalb schlagartig viele Produkte
+   rechnerisch überfällig und treffen auf einen vollen Schrank — der
+   Nutzer tippt reihenweise „hab noch da“, und jede dieser Antworten
+   verlängert einen Rhythmus, der gar nicht falsch war.
+
+   Der Rhythmus selbst ist über `computeRhythm({absenceDays})` bereits
+   abwesenheitsbereinigt. Die Rückmeldung dagegen zu halten, ohne sie
+   ebenso zu bereinigen, vergleicht zwei verschiedene Zeitrechnungen.
+   ================================================================ */
+section("Feedback: Abwesenheit verzerrt die Überfälligkeit");
+{
+  // Zwölf Tage weg. Das Produkt gilt als 10 Tage überfällig — davon
+  // sind zehn Tage Abwesenheit. Ohne die Reise war es nicht fällig.
+  const abwesend = () => 12;
+  const log = feedback(REASON.HAVE, 5, { spacing: 3, dueIn: -10 });
+  const ohne = feedbackAdjustment(log, 14, T0, { lastPurchaseDate: day(-40) });
+  const mit = feedbackAdjustment(log, 14, T0, { lastPurchaseDate: day(-40), absenceDays: abwesend });
+
+  ok("Ohne Abwesenheitswissen wird verlängert", ohne.adjustedDays > 14, ohne.adjustedDays);
+  ok("Mit Abwesenheitswissen bleibt der Rhythmus stehen", mit.adjustedDays === 14, mit.adjustedDays);
+  ok("Die neutralisierten Rückmeldungen werden ausgewiesen",
+    mit.absenceNeutral === 5, mit.absenceNeutral);
+}
+{
+  // Teilweise: vier Tage weg, aber acht Tage überfällig. Da bleibt
+  // eine echte Überfälligkeit übrig — die Rückmeldung zählt weiter,
+  // nur schwächer. (Langer Rhythmus, damit die Deckelung bei ±40 %
+  // den Unterschied nicht verschluckt.)
+  const log = feedback(REASON.HAVE, 5, { spacing: 3, dueIn: -8 });
+  const ohne = feedbackAdjustment(log, 60, T0, { lastPurchaseDate: day(-40) });
+  const mit = feedbackAdjustment(log, 60, T0,
+    { lastPurchaseDate: day(-40), absenceDays: () => 4 });
+
+  ok("Die Korrektur greift weiterhin", mit.adjustedDays > 60, mit.adjustedDays);
+  ok("Aber schwächer als ohne Abwesenheitswissen",
+    mit.adjustedDays < ohne.adjustedDays, `${mit.adjustedDays} vs ${ohne.adjustedDays}`);
+}
+{
+  // „War schon alle“ wird NICHT entschärft: wer weg war und trotzdem
+  // nichts mehr hat, liefert das stärkere Signal, nicht das schwächere.
+  const log = feedback(REASON.EMPTY, 5, { spacing: 3, dueIn: 8 });
+  const ohne = feedbackAdjustment(log, 20, T0, { lastPurchaseDate: day(-40) });
+  const mit = feedbackAdjustment(log, 20, T0,
+    { lastPurchaseDate: day(-40), absenceDays: () => 30 });
+  ok("„War schon alle“ bleibt unangetastet", mit.adjustedDays === ohne.adjustedDays,
+    `${mit.adjustedDays} vs ${ohne.adjustedDays}`);
+  ok("Und wird nicht als abwesenheitsbedingt gezählt", mit.absenceNeutral === 0, mit.absenceNeutral);
+}
+{
+  // Ohne Abwesenheit ändert die neue Rechnung nichts am alten Verhalten.
+  const log = feedback(REASON.HAVE, 5, { spacing: 3, dueIn: -4 });
+  const alt = feedbackAdjustment(log, 12, T0, { lastPurchaseDate: day(-40) });
+  const neu = feedbackAdjustment(log, 12, T0,
+    { lastPurchaseDate: day(-40), absenceDays: () => 0 });
+  ok("Ohne Reise bleibt alles beim Alten",
+    alt.adjustedDays === neu.adjustedDays && alt.adjustedDays > 12, alt.adjustedDays);
+  ok("Und nichts wird neutralisiert", neu.absenceNeutral === 0, neu.absenceNeutral);
+}
+{
+  // Der Zeitraum, über den gefragt wird, ist „letzter Kauf bis
+  // Rückmeldung“ — nicht irgendein Fenster. Abwesenheiten davor sind
+  // im Kaufabstand schon berücksichtigt.
+  const gefragt = [];
+  const log = [{ productId: "x", date: day(-5), reason: REASON.HAVE, dueIn: -9 }];
+  feedbackAdjustment(log, 14, T0, {
+    lastPurchaseDate: day(-30),
+    absenceDays: (von, bis) => { gefragt.push([von, bis]); return 0; }
+  });
+  ok("Gefragt wird vom letzten Kauf bis zur Rückmeldung",
+    gefragt.length === 1 && gefragt[0][0] === day(-30) && gefragt[0][1] === day(-5),
+    JSON.stringify(gefragt));
+}
+{
+  // Rückmeldungen VOR dem letzten Kauf sind ohnehin verrechnet — dort
+  // darf gar nicht erst nach Abwesenheiten gefragt werden.
+  let gefragt = 0;
+  const log = feedback(REASON.HAVE, 4, { spacing: 3, start: 10 });
+  const r = feedbackAdjustment(log, 12, T0, {
+    lastPurchaseDate: day(-1),
+    absenceDays: () => { gefragt++; return 20; }
+  });
+  ok("Verrechnete Rückmeldungen fragen nicht nach Abwesenheit", gefragt === 0, gefragt);
+  ok("Sie bleiben schlicht verrechnet", r.absorbed === 4, r.absorbed);
+}
+{
+  // Über applyFeedback durchgereicht — so nutzt data.js es.
+  const rhythmus = { rhythmDays: 14, confidence: 0.8, lastPurchaseDate: day(-26) };
+  const log = feedback(REASON.HAVE, 5, { spacing: 3, dueIn: -10 });
+  const ohne = applyFeedback(rhythmus, log, T0, { purchases: [{ date: day(-26) }] });
+  const mit = applyFeedback(rhythmus, log, T0,
+    { purchases: [{ date: day(-26) }], absenceDays: () => 12 });
+  ok("applyFeedback reicht die Abwesenheit durch",
+    ohne.rhythmDays > 14 && mit.rhythmDays === 14, `${ohne.rhythmDays} / ${mit.rhythmDays}`);
+  ok("Die Begründung steht am Ergebnis", mit.feedback.absenceNeutral === 5,
+    mit.feedback.absenceNeutral);
+}
+{
+  // awayDaysFor selbst: die kleinen Fälle.
+  const eintrag = { date: day(-5), reason: REASON.HAVE, dueIn: -9 };
+  ok("Ohne Funktion null", awayDaysFor(eintrag, day(-30), undefined) === 0);
+  ok("Ohne Kaufdatum null", awayDaysFor(eintrag, null, () => 9) === 0);
+  ok("Nur für „hab noch da“",
+    awayDaysFor({ ...eintrag, reason: REASON.EMPTY }, day(-30), () => 9) === 0);
+  ok("Unsinnige Rückgaben werden verworfen",
+    awayDaysFor(eintrag, day(-30), () => NaN) === 0 &&
+    awayDaysFor(eintrag, day(-30), () => -3) === 0);
+  ok("Sonst der gemeldete Wert", awayDaysFor(eintrag, day(-30), () => 9) === 9);
 }
 
 /* ================================================================

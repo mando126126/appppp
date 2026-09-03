@@ -9415,7 +9415,7 @@ function medianOfSignals(values) {
  *
  * @returns {null|number} relative Korrektur, z. B. +0.2 = 20 % länger
  */
-function signalFor(entry, rhythmDays) {
+function signalFor(entry, rhythmDays, awayDays = 0) {
   if (!rhythmDays || rhythmDays <= 0) return null;
 
   if (entry.reason === REASON.HAVE) {
@@ -9423,8 +9423,17 @@ function signalFor(entry, rhythmDays) {
     // messen — der Nutzer sagt nur „noch da", nicht „noch fünf Tage".
     // Ein überfälliges Produkt, das noch da ist, liegt weiter daneben
     // als ein gerade erst fälliges.
-    const overdue = Math.max(0, -(Number(entry.dueIn) || 0));
-    const relative = (rhythmDays * 0.15 + overdue) / rhythmDays;
+    //
+    // DER BÜNDEL-EFFEKT (siehe ausführlich bei `awayDaysFor`): war der
+    // Haushalt zwischendurch weg, zählt die Überfälligkeit Tage mit, an
+    // denen niemand etwas verbraucht hat. Diese Tage werden abgezogen.
+    // Bleibt danach keine Überfälligkeit übrig, war das Produkt ohne die
+    // Reise gar nicht fällig — dann sagt „hab noch" nichts über den
+    // Rhythmus und die Rückmeldung wird neutral behandelt.
+    const away = Number.isFinite(awayDays) && awayDays > 0 ? awayDays : 0;
+    const overdue = -(Number(entry.dueIn) || 0) - away;
+    if (away > 0 && overdue <= 0) return null;
+    const relative = (rhythmDays * 0.15 + Math.max(0, overdue)) / rhythmDays;
     return Math.min(MAX_ADJUST, relative);
   }
 
@@ -9481,6 +9490,46 @@ function isAbsorbed(entry, lastPurchaseDate) {
   return entry.date <= lastPurchaseDate;
 }
 
+/**
+ * Abwesenheitstage, die in der Überfälligkeit dieser Rückmeldung
+ * stecken.
+ *
+ * DER BÜNDEL-EFFEKT — warum das nötig ist:
+ *
+ * Fällig wird ein Produkt nach Kalendertagen seit dem letzten Kauf.
+ * Verbraucht wird es aber nur an Tagen, an denen jemand da ist. Nach
+ * zwei Wochen Urlaub sind deshalb schlagartig viele Produkte
+ * rechnerisch fällig — und treffen gebündelt auf einen Schrank, in dem
+ * noch alles steht, weil zwei Wochen lang niemand etwas verbraucht
+ * hat. Der Nutzer tippt reihenweise „hab noch da", und jede dieser
+ * Antworten verlängert einen Rhythmus, der gar nicht falsch war.
+ *
+ * Der Schaden ist bleibend: die verlängerten Rhythmen schlagen danach
+ * zu spät vor, das Produkt ist wirklich alle, und der Haushalt kommt
+ * aus dem verschobenen Takt nicht mehr heraus. In der Drei-Jahres-
+ * Simulation ist genau dieses Muster als Einbruch im Quartal nach dem
+ * Urlaub sichtbar.
+ *
+ * Die Gegenmaßnahme setzt an der Ursache an und nicht an der
+ * Sichtbarkeits-Schwelle (die wurde gemessen und verworfen, siehe
+ * test/liste.js): die Abwesenheitstage werden aus der Überfälligkeit
+ * herausgerechnet. `rhythmDays` ist über `computeRhythm({absenceDays})`
+ * bereits abwesenheitsbereinigt — die Rückmeldung dagegen zu halten,
+ * ist also nur folgerichtig.
+ *
+ * Nur für „hab noch da". „War schon alle" bleibt unangetastet: dass
+ * etwas leer war, wird durch eine Reise nicht unwahr — im Gegenteil,
+ * wer weg war und trotzdem nichts mehr hat, liefert das stärkere
+ * Signal.
+ */
+function awayDaysFor(entry, lastPurchaseDate, absenceDays) {
+  if (typeof absenceDays !== "function") return 0;
+  if (!entry || entry.reason !== REASON.HAVE) return 0;
+  if (!lastPurchaseDate || !entry.date || entry.date <= lastPurchaseDate) return 0;
+  const away = absenceDays(lastPurchaseDate, entry.date);
+  return Number.isFinite(away) && away > 0 ? away : 0;
+}
+
 function feedbackAdjustment(log, rhythmDays, today, opts = {}) {
   const base = {
     factor: 1,
@@ -9490,6 +9539,7 @@ function feedbackAdjustment(log, rhythmDays, today, opts = {}) {
     neutral: 0,
     disagreement: 0,
     absorbed: 0,
+    absenceNeutral: 0,
     applied: false,
     reason: "kein_feedback",
     message: null
@@ -9523,10 +9573,16 @@ function feedbackAdjustment(log, rhythmDays, today, opts = {}) {
   const adjustments = [];
   const rawSignals = [];
   let neutral = 0;
+  let absenceNeutral = 0;
   let explicitCount = 0;
   for (const e of fresh) {
-    const s = signalFor(e, rhythmDays);
-    if (s === null || !Number.isFinite(s)) { neutral++; continue; }
+    const away = awayDaysFor(e, lastPurchaseDate, opts.absenceDays);
+    const s = signalFor(e, rhythmDays, away);
+    if (s === null || !Number.isFinite(s)) {
+      neutral++;
+      if (away > 0) absenceNeutral++;
+      continue;
+    }
     rawSignals.push(s);
     explicitCount++;
     adjustments.push(s);
@@ -9542,6 +9598,7 @@ function feedbackAdjustment(log, rhythmDays, today, opts = {}) {
       considered: fresh.length,
       signals: signalCount,
       neutral,
+      absenceNeutral,
       absorbed,
       reason: "zu_wenig_signale",
       message: signalCount
@@ -9589,6 +9646,7 @@ function feedbackAdjustment(log, rhythmDays, today, opts = {}) {
     explicitSignals: explicitCount,
     considered: fresh.length,
     neutral,
+    absenceNeutral,
     absorbed,
     disagreement: Math.round(disagreement * 100) / 100,
     applied: adjustedDays !== rhythmDays,
@@ -9633,7 +9691,12 @@ function applyFeedback(rhythm, log, today, opts = {}) {
     ? rows.map((p) => p.date).sort().pop()
     : rhythm.lastPurchaseDate || null;
 
-  const adj = feedbackAdjustment(log || [], rhythm.rhythmDays, today, { lastPurchaseDate });
+  const adj = feedbackAdjustment(log || [], rhythm.rhythmDays, today, {
+    lastPurchaseDate,
+    // Abwesenheiten entschärfen den Bündel-Effekt (siehe `awayDaysFor`).
+    // Fehlt die Angabe, verhält sich das Modul wie zuvor.
+    absenceDays: opts.absenceDays
+  });
 
   // Widersprüchliche Rückmeldungen senken das Vertrauen, statt den
   // Rhythmus mit falscher Sicherheit zu verschieben.

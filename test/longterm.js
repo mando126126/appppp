@@ -325,6 +325,13 @@ function strategieAnker({ date, bedarf, unitsLeft, horizon, rnd, factor: f, day 
   letzterCtx = ctx;
 
   const vorschlag = ctx.items.map((i) => i.productId);
+  // Die Fälligkeit, die die Oberfläche in diesem Moment anzeigt. Sie
+  // gehört zur Rückmeldung dazu: `app.js` gibt sie mit, und der
+  // Feedback-Lerner gewichtet danach, WIE weit der Rhythmus daneben
+  // lag. Hier stand lange eine feste 0 — damit war jede Rückmeldung
+  // gleich viel wert und der ganze Überfälligkeits-Zweig des Lerners
+  // in drei Jahren Simulation nie erreicht.
+  const faellig = new Map(ctx.items.map((i) => [i.productId, i.dueIn || 0]));
   const kauf = new Set();
 
   // Trefferquote: wie viel von dem, was der Haushalt braucht, steht
@@ -349,7 +356,7 @@ function strategieAnker({ date, bedarf, unitsLeft, horizon, rnd, factor: f, day 
     // Messung, und wird unten in beide Richtungen variiert.
     const genug = unitsLeft(pid) >= p.perDay * f * horizon;
     if (genug && rnd() < CHECK_RATE) {
-      Data.recordFeedback(pid, "have", 0);
+      Data.recordFeedback(pid, "have", faellig.get(pid) || 0);
       return;
     }
     kauf.add(pid);

@@ -978,7 +978,12 @@ function compute() {
     let r = computeRhythm(relevant, { absenceDays });
 
     r = applySeason(r, rows, ref);
-    r = applyFeedback(r, s.feedbackLog.filter((f) => f.productId === pid), ref, { purchases: relevant });
+    // `absenceDays` geht auch in die Rückmeldungen: nach einer Reise
+    // wird vieles gleichzeitig rechnerisch fällig und löst gebündelt
+    // „hab noch da" aus. Ohne diese Korrektur verlängerte jede dieser
+    // Antworten einen Rhythmus, der gar nicht falsch war.
+    r = applyFeedback(r, s.feedbackLog.filter((f) => f.productId === pid), ref,
+      { purchases: relevant, absenceDays });
     rhythms.set(pid, r);
   }
   const stage = determineStage(history, rhythms);

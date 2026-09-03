@@ -86,10 +86,31 @@
  *     einen Simulation kein Gewinn.
  *     Der Kaltstart bleibt deshalb NUR über die Streuungs-Stützung
  *     oben gelindert, nicht über eine weichere Fälligkeits-Schwelle.
- *     Wer das noch einmal versucht: das eigentliche Ziel wäre, den
- *     BÜNDEL-Effekt direkt zu entschärfen (z. B. "Hab noch" nach
- *     einer erkannten Abwesenheit den Rhythmus nicht verlängern zu
- *     lassen), nicht die Sichtbarkeits-Schwelle.
+ *     Der hier notierte nächste Schritt — den BÜNDEL-Effekt direkt
+ *     entschärfen statt an der Sichtbarkeits-Schwelle zu drehen — ist
+ *     inzwischen gemessen und ÜBERNOMMEN, siehe unten.
+ *
+ * Gemessen und ÜBERNOMMEN:
+ *   - Den BÜNDEL-Effekt an der Ursache entschärfen: "hab noch da"
+ *     um die Abwesenheitstage bereinigen, bevor daraus eine
+ *     Rhythmus-Verlängerung wird (`awayDaysFor` in feedbackLearner).
+ *     Dieser Test sieht davon nichts — er kennt keine Rückmeldungen
+ *     und läuft unverändert weiter. Nachgewiesen wurde es im
+ *     Drei-Jahres-Lauf, und zwar erst, nachdem dort ein Fehler der
+ *     Simulation behoben war: `test/longterm.js` hat jede
+ *     Rückmeldung mit `dueIn = 0` protokolliert statt mit der
+ *     Fälligkeit, die die Oberfläche tatsächlich mitgibt. Damit war
+ *     jedes "hab noch da" gleich viel wert und der gesamte
+ *     Überfälligkeits-Zweig des Lerners in drei simulierten Jahren
+ *     nie erreicht — der Bündel-Effekt konnte gar nicht auftreten.
+ *     Mit echter Fälligkeit und OHNE die Bereinigung fällt der
+ *     Langzeitlauf durch: die gelernten Takte driften auf 31,4 %
+ *     Median-Abweichung (Schwelle 30 %) und die Versorgung rutscht
+ *     unter die feste Liste (1717 statt 1710 Leertage). MIT der
+ *     Bereinigung ist er wieder grün: 1705 Leertage, 7,3 %
+ *     Vergessenes, und die beiden am weitesten abgedrifteten
+ *     Produkte kommen dem wahren Takt sichtbar näher (11 statt 7 bei
+ *     Soll 14; 42 statt 35 bei Soll 51).
  *   - Nach Rhythmuslänge statt nach Überfälligkeit sortieren: hebt
  *     die Genauigkeit der ersten Zeile von 40,9 % auf 58,6 % — aber
  *     die Kennzahl belohnt, das Offensichtliche zuerst zu nennen.
