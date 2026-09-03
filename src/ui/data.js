@@ -1129,6 +1129,10 @@ function compute() {
   /* --- Vorschlagsliste: gelernte Rhythmen, sonst Kategorie-Annahmen --- */
   let base = [];
   const lookahead = Math.max(0, Number(s.settings.lookaheadDays) || 0);
+  // Für den zweiten Auslöser weiter unten: was laut Schätzung noch da
+  // ist. `inventory` enthält nur, was wahrscheinlich vorhanden ist --
+  // wer hier fehlt, gilt als aufgebraucht.
+  const invByProduct = new Map(inventory.map((i) => [i.productId, i]));
   if (stage.stage >= 3) {
     for (const [pid, r] of rhythms) {
       // Haushaltsprodukte laufen NICHT über den Kaufrhythmus. Bei
@@ -1142,7 +1146,44 @@ function compute() {
       // Vorlauf als Anteil des Zyklus, nicht als feste Tageszahl —
       // sonst steht ein Produkt mit kurzem Rhythmus ab dem Tag nach
       // dem Kauf wieder auf der Liste. Begründung in shoppingDay.js.
-      if (dueIn > effectiveLookahead(r.rhythmDays, lookahead)) continue;
+      const vorlauf = effectiveLookahead(r.rhythmDays, lookahead);
+
+      /* ZWEITER AUSLÖSER: der geschätzte Vorrat ist aufgebraucht.
+       *
+       * Der Kaufrhythmus beantwortet „wie oft kaufst du das?". Die
+       * Frage, die auf der Liste steht, ist aber „geht es dir aus?".
+       * Meistens ist das dasselbe -- aber nicht, wenn die MENGE
+       * schwankt. Wer sonst zwei Liter Milch kauft und diesmal einen
+       * genommen hat, ist nach der halben Zeit leer; der Rhythmus
+       * merkt davon nichts und schlägt zum gewohnten Termin vor.
+       *
+       * Genau diese Zusatzinformation steckt in der Bestands-
+       * schätzung und wurde von der Liste bisher nicht benutzt:
+       * `lastQuantity` und die Korrekturen des Nutzers
+       * (setStockCorrection, die Wisch-Geste im Bestand). Ohne sie
+       * konnte jemand „ist alle" wischen, und die Liste blieb
+       * unbeeindruckt.
+       *
+       * KEINE DOPPELZÄHLUNG. Der Verdacht liegt nahe -- die
+       * Bestandsschätzung stammt aus denselben Käufen wie der
+       * Rhythmus, und dieses Projekt hat dreimal Geld dafür bezahlt,
+       * dieselbe Tatsache zweimal zu verrechnen. Hier zählt aber
+       * nichts doppelt: der Vorrat wirkt nicht AUF den Rhythmus, er
+       * öffnet nur eine zweite Tür zur Liste. Der gelernte Takt
+       * bleibt unangetastet.
+       *
+       * Gemessen (Zahlen in test/liste.js und README): der
+       * Rückvergleich verliert Genauigkeit (48,8 -> 42,5 %) und
+       * gewinnt Trefferquote (78,2 -> 83,9 %); der Drei-Jahres-Lauf,
+       * der als einziger die Rückkopplung sieht, verbessert sich
+       * deutlich -- 1641 statt 1724 Leertage, 5,1 statt 6,8 %
+       * Vergessenes.                                                */
+      const invE = invByProduct.get(pid);
+      const reichweite = invE && r.perUnitDays
+        ? invE.remainingUnits * r.perUnitDays : null;
+      // Gar nicht mehr im Bestand heißt: die Schätzung sagt, es ist weg.
+      const leer = !invE || (reichweite !== null && reichweite <= vorlauf);
+      if (dueIn > vorlauf && !leer) continue;
       const p = byId(pid);
       if (!p) continue;
       const st = wasteStats.get(pid) || {};

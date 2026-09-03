@@ -123,6 +123,7 @@ const { haushalt } = require("./fixtures/haushalte");
 const { computeAllRhythms, computeRhythm, daysBetween } = require("../src/algo/rhythmEngine2");
 const { effectiveLookahead } = require("../src/algo/shoppingDay");
 const { isNonFood } = require("../src/algo/nonFoodCatalog");
+const { estimateInventory } = require("../src/algo/inventoryEstimator");
 
 let pass = 0, fail = 0;
 const problems = [];
@@ -144,13 +145,24 @@ const pct = (x) => `${(x * 100).toFixed(1)} %`;
    hier gespiegelt statt importiert: data.js ist eine Browser-Datei
    ohne Modulausgang. Ein Test hält das fest -- weicht die Regel dort
    ab, muss auch diese Zeile nachgezogen werden. */
-function listeFuer(rhythms, ref, lookahead = 3) {
+function listeFuer(rhythms, ref, lookahead = 3, davor = null) {
+  // Der Vorrat als zweiter Auslöser -- dieselbe Rechnung wie in
+  // data.js. Ohne die Historie (ältere Aufrufe) bleibt es beim
+  // reinen Kaufrhythmus.
+  const inv = davor ? new Map(estimateInventory(davor, rhythms, ref).map((i) => [i.productId, i])) : null;
   const out = [];
   for (const [pid, r] of rhythms) {
     if (isNonFood(pid)) continue;
     if (!r.rhythmDays || !r.lastPurchaseDate || r.confidence < 0.4) continue;
     const since = daysBetween(r.lastPurchaseDate, ref);
-    if (r.rhythmDays - since > effectiveLookahead(r.rhythmDays, lookahead)) continue;
+    const vorlauf = effectiveLookahead(r.rhythmDays, lookahead);
+    let leer = false;
+    if (inv) {
+      const e = inv.get(pid);
+      const reichweite = e && r.perUnitDays ? e.remainingUnits * r.perUnitDays : null;
+      leer = !e || (reichweite !== null && reichweite <= vorlauf);
+    }
+    if (r.rhythmDays - since > vorlauf && !leer) continue;
     out.push(pid);
   }
   return out;
@@ -173,7 +185,7 @@ HAUSHALTE.forEach((H, idx) => {
     if (heute.size === 0) return;
     einkaufstage++;
 
-    const liste = new Set(listeFuer(computeAllRhythms(davor, { ref: tag }), tag));
+    const liste = new Set(listeFuer(computeAllRhythms(davor, { ref: tag }), tag, 3, davor));
     listeSumme += liste.size;
     korbSumme += heute.size;
     if (liste.size === 0) leereListen.push(`${idx}/${tag}`);

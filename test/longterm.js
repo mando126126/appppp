@@ -293,13 +293,14 @@ function bootApp() {
   for (const m of html.matchAll(/<script(?:\s+src="([^"]+)")?\s*>([\s\S]*?)<\/script>/g)) {
     sources.push(m[1] ? fs.readFileSync(path.join(WEB, m[1]), "utf8") : m[2]);
   }
-  window.eval(sources.join("\n;\n") + "\n;window.__T = { Data, App };");
+  window.eval(sources.join("\n;\n") + "\n;window.__T = { Data, App, daysBetween };");
 
   return { window, errors, clock, T: window.__T };
 }
 
 const app = bootApp();
 const { Data } = app.T;
+const T = app.T;
 
 const setClock = (dateStr) => { app.clock.ms = Date.parse(dateStr + "T12:00:00Z"); };
 
@@ -368,8 +369,22 @@ function strategieAnker({ date, bedarf, unitsLeft, horizon, rnd, factor: f, day 
     if (kauf.has(pid)) return;
     if (!erinnert(rnd)) return;
     kauf.add(pid);
-    // „War schon alle": die App lag zu spät.
-    if (rnd() < 0.5) Data.recordFeedback(pid, "empty", 0);
+    /* „War schon alle": die App lag zu spät.
+     *
+     * Die Bedingungen sind dieselben wie in askLate() (views.js) --
+     * dort wird gefragt, wenn jemand ein Produkt selbst auf die Liste
+     * setzt, das die App noch nicht vorgeschlagen hätte. Hier stand
+     * lange eine feste 0 ohne jede Bedingung: die Rückmeldung feuerte
+     * auch für Produkte ohne gelernten Rhythmus und immer mit dem
+     * schwächstmöglichen Signal. Beides zusammen hat den
+     * Verkürzungs-Zweig des Lerners in drei simulierten Jahren
+     * praktisch stillgelegt -- eine Simulation, die eine ganze
+     * Lernrichtung nicht erreicht, kann sie auch nicht prüfen. */
+    const r = ctx.rhythms.get(pid);
+    if (!r || !r.rhythmDays || !r.lastPurchaseDate || r.confidence < 0.4) return;
+    const dueIn = r.rhythmDays - T.daysBetween(r.lastPurchaseDate, date);
+    if (!(dueIn >= 2)) return;
+    if (rnd() < 0.5) Data.recordFeedback(pid, "empty", dueIn);
   });
 
   return [...kauf];
