@@ -4148,7 +4148,7 @@ Sie erscheint jetzt erst beim Ziehen, und die gezogene Zeile wird
 solange deckend.
 
 Alle Bereiche neu fotografiert, mobil und Rechner, hell und dunkel.
-55 neue Oberflächentests, 20 neue Kontrastprüfungen, 22 neue
+55 neue Oberflächentests, 20 neue Kontrastprüfungen, 19 neue
 Lerntests. Alle jetzt 2064 Tests bestehen.
 
 ---
