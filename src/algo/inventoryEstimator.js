@@ -74,7 +74,18 @@ function estimateRemaining(productId, lastPurchase, rhythm, today, opts = {}) {
   let basis;
   if (perUnitDays && perUnitDays > 0) {
     const consumed = daysSince / perUnitDays;
-    remainingUnits = Math.max(0, quantity - consumed);
+    let start = quantity;
+    if (!correctionValid && Array.isArray(opts.rows) && opts.rows.length > 1) {
+      let rest = 0, prev = null;
+      for (const row of opts.rows) {
+        const qty = row.quantity || 1;
+        if (prev) rest = Math.max(0, rest - daysBetween(prev, row.date) / perUnitDays);
+        rest = Math.min(rest, qty, p.shelfLifeDays / perUnitDays) + qty;
+        prev = row.date;
+      }
+      start = rest;
+    }
+    remainingUnits = Math.max(0, start - consumed);
     basis = "rhythmus";
   } else if (printedValid) {
     // Auch hier zählt das Etikett und nicht die Katalogzahl. Ohne
@@ -144,9 +155,17 @@ function estimateInventory(history, rhythms, today, opts = {}) {
     if (!prev || h.date > prev.date) lastByProduct.set(h.productId, h);
   }
 
+  const rowsByProduct = new Map();
+  for (const h of history) {
+    if (!rowsByProduct.has(h.productId)) rowsByProduct.set(h.productId, []);
+    rowsByProduct.get(h.productId).push(h);
+  }
+  for (const rows of rowsByProduct.values()) rows.sort((a, b) => (a.date < b.date ? -1 : 1));
+
   const inventory = [];
   for (const [productId, last] of lastByProduct.entries()) {
-    const est = estimateRemaining(productId, last, rhythms.get(productId), today, opts);
+    const est = estimateRemaining(productId, last, rhythms.get(productId), today,
+      { ...opts, rows: rowsByProduct.get(productId) });
     if (est && est.likelyPresent) inventory.push(est);
   }
 

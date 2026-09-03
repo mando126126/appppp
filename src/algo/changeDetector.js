@@ -28,10 +28,51 @@
 
 const { daysBetween, median } = require("./rhythmEngine2");
 
-const MIN_SIDE = 3;              // Intervalle je Seite
+const MIN_SIDE = 3;              // Intervalle VOR dem Bruch
 const MIN_RELATIVE_CHANGE = 0.4; // unter 40 % ist es Rauschen
 const MIN_AGE_DAYS = 14;         // ein Bruch von gestern ist eine Vermutung
 const MAX_LOOKBACK_DAYS = 540;
+
+/* WIE VIEL NEUES EIN BRUCH BRAUCHT
+   ----------------------------------------------------------------
+   Drei Intervalle auf jeder Seite waren symmetrisch gedacht und
+   sind es nicht: die eine Seite trägt die ganze bisherige Historie,
+   die andere die letzten drei Käufe. Bei Brot mit 174 erfassten
+   Käufen genügten damit drei Abstände aus drei Wochen, um alle
+   anderen 170 zu verwerfen — und danach rechnete der Median über
+   genau diese drei.
+
+   Im Drei-Jahres-Lauf traf das die HÄLFTE aller Produkte: zwölf von
+   vierundzwanzig hatten einen „Bruch" wenige Wochen vor dem Ende und
+   lernten danach aus einer Handvoll Abstände. Sichtbar wurde das
+   erst, als die Simulation Saison, Gäste und Vorratskäufe kannte —
+   in einer gleichmässigen Welt schwankt nichts genug, um einen
+   falschen Bruch zu erzeugen.
+
+   Zwei Bedingungen, beide an dieselbe Frage: hat das Neue GEHALTEN?
+
+     MIN_AFTER_SIDE   so viele Abstände muss die neue Seite haben,
+                      sonst ist ihr Median selbst nur ein Ausreisser.
+     MIN_AFTER_CYCLES so viele NEUE Takte muss der Bruch alt sein.
+                      Bei Brot (Takt 7) sind das 28 Tage, bei Kaffee
+                      (Takt 30) vier Monate. Eine feste Tageszahl
+                      kann beides nicht sein: 14 Tage sind für Brot
+                      zwei Zyklen und für Kaffee ein halber.
+
+   Beide Prüfungen stehen HINTER dem Suchlauf, nicht darin. Der
+   erste Versuch hatte sie im Suchlauf, und das schuf einen
+   verkehrten Anreiz: ein früher Trennpunkt, dessen „danach"-Median
+   altes und neues Verhalten vermischt, sieht harmloser aus, braucht
+   deshalb weniger Bestätigungszeit — und rutscht durch, während der
+   ehrliche späte Trennpunkt ausgeschlossen wird. Gemeldet würde ein
+   Bruch, den es so nie gab.
+
+   Richtig ist: den deutlichsten Trennpunkt suchen wie bisher, und
+   ihn dann annehmen oder eben noch nicht. „Da hat sich etwas
+   geändert, aber noch nicht lange genug, um danach zu handeln" ist
+   eine vollständige Antwort — und die ehrliche. */
+const MIN_AFTER_SIDE = 8;
+const MIN_AFTER_CYCLES = 3;
 
 /**
  * Bruchpunkt in einer Kaufreihe suchen.
@@ -62,20 +103,38 @@ function detectChange(purchases, today) {
     const qty = Math.max(1, Number(rows[i - 1].quantity) || 1);
     intervals.push({ perUnit: gap / qty, date: rows[i].date });
   }
-  if (intervals.length < MIN_SIDE * 2) return { ...none, intervals: intervals.length };
+  if (intervals.length < MIN_SIDE + MIN_AFTER_SIDE) return { ...none, intervals: intervals.length };
 
   let best = null;
-  for (let split = MIN_SIDE; split <= intervals.length - MIN_SIDE; split++) {
+  for (let split = MIN_SIDE; split <= intervals.length - MIN_AFTER_SIDE; split++) {
     const before = median(intervals.slice(0, split).map((x) => x.perUnit));
     const after = median(intervals.slice(split).map((x) => x.perUnit));
     if (!before || !after || before <= 0) continue;
 
+    /* Der Trennpunkt muss auf einem Abstand liegen, der schon das
+       NEUE Verhalten zeigt.
+       
+       Ohne diese Prüfung gewinnt eine Mischung: liegen hinten drei
+       kurze Abstände und davor lauter lange, dann hat jeder frühe
+       Trennpunkt einen „danach"-Median irgendwo dazwischen — weder
+       das Alte noch das Neue, aber weit genug vom Alten entfernt, um
+       die 40-Prozent-Schwelle zu reissen. Gemeldet würde ein Bruch an
+       einem Tag, an dem sich nichts geändert hat. */
+    const hier = intervals[split].perUnit;
+    if (Math.abs(hier - after) > Math.abs(hier - before)) continue;
+
     const change = Math.abs(after - before) / before;
-    // Bei gleichwertigen Trennpunkten gewinnt der SPÄTERE. Der Median
-    // verträgt bis zur Hälfte alte Werte im „danach“-Block, ohne dass
-    // sich das Änderungsmaß bewegt — die Trennung ist dann mehrdeutig,
-    // und mit „größer“ landete man systematisch zu früh. Gemeldet würde
-    // ein Datum, an dem das alte Verhalten noch galt.
+    /* Bei gleichwertigen Trennpunkten gewinnt der SPÄTERE. Der Median
+     * verträgt bis zur Hälfte alte Werte im „danach"-Block, ohne dass
+     * sich das Änderungsmass bewegt — die Trennung ist dann
+     * mehrdeutig, und mit „früher gewinnt" landet man systematisch auf
+     * einem Tag, an dem das alte Verhalten noch galt.
+     *
+     * Der Gegenversuch ist gemessen: „der früheste gleichwertige
+     * gewinnt", zusammen mit der Regime-Prüfung darüber, sah in der
+     * Begründung schlüssig aus und war im Drei-Jahres-Lauf schlechter
+     * (12,7 statt 12,0 % Vergessenes, 32 statt 34 bestandene
+     * Prüfungen). Es bleibt beim späteren.                          */
     if (!best || change > best.change + 1e-9 || Math.abs(change - best.change) <= 1e-9) {
       best = { split, before, after, change, date: intervals[split].date };
     }
@@ -92,9 +151,13 @@ function detectChange(purchases, today) {
       reason: "unter_schwelle"
     };
   }
-  // Ein Bruch, der erst gestern lag, ist noch nicht bestätigt. Erst
-  // wenn das neue Verhalten eine Weile anhält, ist es eines.
-  if (ageDays < MIN_AGE_DAYS) {
+  /* Ein Bruch, der erst gestern lag, ist noch nicht bestätigt. Erst
+     wenn das neue Verhalten eine Weile ANGEHALTEN hat, ist es eines
+     — und „eine Weile" misst sich in neuen Takten und in neuen
+     Abständen, nicht in einer festen Tageszahl (siehe oben). */
+  const nachher = intervals.length - best.split;
+  const noetigesAlter = Math.max(MIN_AGE_DAYS, best.after * MIN_AFTER_CYCLES);
+  if (nachher < MIN_AFTER_SIDE || ageDays < noetigesAlter) {
     return {
       ...none, intervals: intervals.length,
       changePercent: Math.round(best.change * 100),
@@ -142,6 +205,7 @@ function purchasesSinceChange(purchases, change) {
 }
 
 module.exports = {
+  MIN_AFTER_SIDE, MIN_AFTER_CYCLES,
   detectChange, purchasesSinceChange,
   MIN_SIDE, MIN_RELATIVE_CHANGE, MIN_AGE_DAYS, MAX_LOOKBACK_DAYS
 };

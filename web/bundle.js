@@ -1,4 +1,4 @@
-/* Gebündelt aus 56 Modulen — nicht von Hand ändern.
+/* Gebündelt aus 57 Modulen — nicht von Hand ändern.
    Quelle: src/algo/*.js. Neu bauen mit: npm run build */
 
 /* ===== safetyRules.js ===== */
@@ -2964,6 +2964,105 @@ function allAbsences(receipts, vacation, today) {
   return [...detectAbsences(receipts, today), ...knownAbsence(vacation, today)];
 }
 
+/* ===== abandonDetector.js ===== */
+/**
+ * abandonDetector.js — Produkte, die der Haushalt aufgegeben hat
+ * ================================================================
+ * DER FEHLER, DEN DAS BEHEBT.
+ *
+ * Ein Haushalt steigt von Gouda auf Emmentaler um. Ab diesem Tag
+ * wird Gouda nie wieder gebraucht — aber sein gelernter Takt bleibt
+ * bestehen, und mit jedem Tag wird er „überfälliger". Die Liste
+ * kennt bisher nur eine Obergrenze nach vorn (der Vorlauf), keine
+ * nach hinten: je länger ein Produkt nicht gekauft wurde, desto
+ * sicherer stand es oben auf der Liste.
+ *
+ * Im Drei-Jahres-Lauf war das messbar. Vierhundert Tage nach dem
+ * Umstieg stand Gouda immer noch auf der Liste, und der simulierte
+ * Haushalt kaufte ihn alle paar Wochen aus Gewohnheit mit — die App
+ * hatte ihm ein Produkt antrainiert, das er abgeschafft hatte.
+ *
+ * WARUM DER RHYTHMUS DAS NICHT VON SELBST MERKT.
+ *
+ * Der Median rechnet über abgeschlossene KAUFABSTÄNDE. Solange kein
+ * neuer Kauf kommt, entsteht kein neuer Abstand — die offene Lücke
+ * taucht in seiner Rechnung schlicht nicht auf. Er kann noch so
+ * robust sein; er sieht diese Tatsache gar nicht. Das ist keine
+ * Doppelzählung, sondern die eine Information, die dem Median
+ * strukturell fehlt.
+ *
+ * WARUM NICHT HART ABSCHNEIDEN.
+ *
+ * „Länger als das Dreifache nicht gekauft, also weg" wäre eine
+ * Behauptung, die die App nicht belegen kann: vielleicht hat jemand
+ * das Produkt wirklich nur vergessen, und dann ist es genau der
+ * Vorschlag, der zählt. Deshalb ein WEICHER Übergang auf das
+ * Vertrauen statt eines Schnitts auf die Sichtbarkeit. Das Vertrauen
+ * ist die Grösse, an der in dieser App ohnehin alles hängt — die
+ * Listenschwelle, die Vorhersage im Kalender, die Sicherheitsangabe
+ * im Detail-Blatt. Ein Produkt verschwindet dadurch nicht plötzlich,
+ * es verliert allmählich an Gewicht und fällt irgendwann unter die
+ * Schwelle.
+ *
+ * ABWESENHEIT ZÄHLT NICHT MIT.
+ *
+ * Wer zwei Wochen weg war, hat nichts aufgegeben. Der Aufrufer gibt
+ * deshalb die um Abwesenheiten bereinigten Tage herein — bei einem
+ * Produkt mit dreitägigem Takt läge sonst schon ein normaler Urlaub
+ * jenseits der Zweifelsschwelle.
+ * ================================================================
+ */
+
+/** Bis hierhin ist ein Produkt einfach überfällig, nicht aufgegeben. */
+const ABANDON_START = 2.5;
+/** Ab hier ist der Vorschlag nichts mehr wert. */
+const ABANDON_FULL = 6;
+
+/**
+ * Wie viel vom Vertrauen bleibt, wenn ein Produkt lange nicht
+ * gekauft wurde?
+ *
+ * @param {number} rhythmDays  gelernter Takt
+ * @param {number} daysSince   Tage seit dem letzten Kauf, OHNE Abwesenheiten
+ * @returns {number} Faktor zwischen 0 und 1
+ */
+function abandonFactor(rhythmDays, daysSince) {
+  if (!rhythmDays || !Number.isFinite(rhythmDays) || rhythmDays <= 0) return 1;
+  if (!Number.isFinite(daysSince) || daysSince <= 0) return 1;
+  const vielfaches = daysSince / rhythmDays;
+  if (vielfaches <= ABANDON_START) return 1;
+  if (vielfaches >= ABANDON_FULL) return 0;
+  const anteil = (vielfaches - ABANDON_START) / (ABANDON_FULL - ABANDON_START);
+  return Math.round((1 - anteil) * 100) / 100;
+}
+
+/**
+ * Den Faktor auf einen Rhythmus anwenden.
+ *
+ * Liefert ein neues Objekt und hängt die Begründung an, damit im
+ * Detail-Blatt nachvollziehbar bleibt, warum ein Produkt leiser
+ * geworden ist. `baseConfidence` bleibt erhalten — ohne sie wäre
+ * nicht mehr zu sehen, wie sicher der Takt selbst ist.
+ */
+function applyAbandon(rhythm, daysSinceWithoutAbsence) {
+  if (!rhythm || !rhythm.rhythmDays) return rhythm;
+  const faktor = abandonFactor(rhythm.rhythmDays, daysSinceWithoutAbsence);
+  if (faktor >= 1) return rhythm;
+  return {
+    ...rhythm,
+    confidence: Math.round(rhythm.confidence * faktor * 100) / 100,
+    baseConfidence: rhythm.confidence,
+    abandon: {
+      factor: faktor,
+      daysSince: daysSinceWithoutAbsence,
+      multiple: Math.round((daysSinceWithoutAbsence / rhythm.rhythmDays) * 10) / 10,
+      message: faktor === 0
+        ? "So lange nicht gekauft, dass die App nicht mehr von einem Rhythmus ausgeht."
+        : "Länger nicht gekauft als üblich — die App wird unsicherer, statt lauter zu werden."
+    }
+  };
+}
+
 /* ===== productMatcher2.js ===== */
 /**
  * productMatcher2.js — überarbeitete Fassung
@@ -4986,7 +5085,18 @@ function estimateRemaining(productId, lastPurchase, rhythm, today, opts = {}) {
   let basis;
   if (perUnitDays && perUnitDays > 0) {
     const consumed = daysSince / perUnitDays;
-    remainingUnits = Math.max(0, quantity - consumed);
+    let start = quantity;
+    if (!correctionValid && Array.isArray(opts.rows) && opts.rows.length > 1) {
+      let rest = 0, prev = null;
+      for (const row of opts.rows) {
+        const qty = row.quantity || 1;
+        if (prev) rest = Math.max(0, rest - daysBetween(prev, row.date) / perUnitDays);
+        rest = Math.min(rest, qty, p.shelfLifeDays / perUnitDays) + qty;
+        prev = row.date;
+      }
+      start = rest;
+    }
+    remainingUnits = Math.max(0, start - consumed);
     basis = "rhythmus";
   } else if (printedValid) {
     // Auch hier zählt das Etikett und nicht die Katalogzahl. Ohne
@@ -5056,9 +5166,17 @@ function estimateInventory(history, rhythms, today, opts = {}) {
     if (!prev || h.date > prev.date) lastByProduct.set(h.productId, h);
   }
 
+  const rowsByProduct = new Map();
+  for (const h of history) {
+    if (!rowsByProduct.has(h.productId)) rowsByProduct.set(h.productId, []);
+    rowsByProduct.get(h.productId).push(h);
+  }
+  for (const rows of rowsByProduct.values()) rows.sort((a, b) => (a.date < b.date ? -1 : 1));
+
   const inventory = [];
   for (const [productId, last] of lastByProduct.entries()) {
-    const est = estimateRemaining(productId, last, rhythms.get(productId), today, opts);
+    const est = estimateRemaining(productId, last, rhythms.get(productId), today,
+      { ...opts, rows: rowsByProduct.get(productId) });
     if (est && est.likelyPresent) inventory.push(est);
   }
 
@@ -10059,7 +10177,7 @@ const quarterOf = (dateStr) => Math.floor(new Date(dateStr + "T12:00:00Z").getUT
  *
  * @returns {{factor, quarter, quarterName, applied, reason, message, byQuarter, purchases, spanDays}}
  */
-function seasonalFactor(purchases, today) {
+function seasonalFactor(purchases, today, opts = {}) {
   const rows = (purchases || [])
     .filter((p) => p && p.date && p.date <= today)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -10089,12 +10207,33 @@ function seasonalFactor(purchases, today) {
 
   rows.forEach((p) => { counts[quarterOf(p.date)]++; });
 
-  // Beobachtete Tage je Quartal auszählen, Tag für Tag über den
-  // gesamten Zeitraum. Bei wenigen Jahren ist das billig und exakt.
+  /* Beobachtete Tage je Quartal auszählen, Tag für Tag über den
+     gesamten Zeitraum. Bei wenigen Jahren ist das billig und exakt.
+
+     ABWESENHEITEN ZÄHLEN NICHT MIT — und das ist keine Feinheit,
+     sondern der Unterschied zwischen einem Saisonmuster und dessen
+     Gegenteil. Wer im Juli zwei Wochen wegfährt, kauft in diesem
+     Quartal an vierzehn Tagen nichts. Die Rate „Käufe je Tag" sinkt
+     dadurch, und der Sommer sieht aus wie die ruhige Jahreszeit.
+     Genau das ist im Drei-Jahres-Lauf passiert, sobald dort echter
+     Saisonverbrauch modelliert wurde: Salat wurde als Frühjahrs-
+     produkt erkannt, weil der Sommerurlaub in seiner Hochsaison lag.
+
+     Die Rhythmus-Berechnung rechnet Abwesenheiten längst heraus
+     (`computeRhythm({absenceDays})`). Dass diese Stufe es nicht tat,
+     war eine Lücke, keine Absicht — sie ist nur nie aufgefallen,
+     weil in der alten Simulation niemand saisonal verbraucht hat. */
+  const absences = Array.isArray(opts.absences) ? opts.absences : [];
+  const abwesend = (iso) => absences.some((a) => a && a.from && a.to && iso >= a.from && iso <= a.to);
+
   const startMs = new Date(rows[0].date + "T12:00:00Z").getTime();
   const endMs = new Date(today + "T12:00:00Z").getTime();
+  let beobachteteTage = 0;
   for (let t = startMs; t <= endMs; t += 86400000) {
-    observedDays[Math.floor(new Date(t).getUTCMonth() / 3)]++;
+    const d = new Date(t);
+    if (absences.length && abwesend(d.toISOString().slice(0, 10))) continue;
+    observedDays[Math.floor(d.getUTCMonth() / 3)]++;
+    beobachteteTage++;
   }
 
   const rates = counts.map((c, i) => (observedDays[i] > 0 ? c / observedDays[i] : null));
@@ -10103,7 +10242,10 @@ function seasonalFactor(purchases, today) {
     return { ...base, reason: "zu_wenige_quartale", byQuarter: buildByQuarter(counts, observedDays, rates) };
   }
 
-  const overall = rows.length / Math.max(1, spanDays);
+  // Dieselbe Bereinigung für den Jahresdurchschnitt: sonst würde die
+  // Saison gegen einen Durchschnitt gemessen, der die Reisetage
+  // mitzählt, und jede Jahreszeit sähe geschäftiger aus als sie ist.
+  const overall = rows.length / Math.max(1, beobachteteTage || spanDays);
   const here = rates[quarter];
   const byQuarter = buildByQuarter(counts, observedDays, rates);
 
@@ -10143,9 +10285,9 @@ function buildByQuarter(counts, observedDays, rates) {
 }
 
 /** Rhythmus mit dem Saisonfaktor korrigieren. */
-function applySeason(rhythm, purchases, today) {
+function applySeason(rhythm, purchases, today, opts = {}) {
   if (!rhythm || !rhythm.rhythmDays) return rhythm;
-  const season = seasonalFactor(purchases, today);
+  const season = seasonalFactor(purchases, today, opts);
   if (!season.applied) return { ...rhythm, season };
   return {
     ...rhythm,
@@ -10186,10 +10328,51 @@ function applySeason(rhythm, purchases, today) {
 
 
 
-const MIN_SIDE = 3;              // Intervalle je Seite
+const MIN_SIDE = 3;              // Intervalle VOR dem Bruch
 const MIN_RELATIVE_CHANGE = 0.4; // unter 40 % ist es Rauschen
 const MIN_AGE_DAYS = 14;         // ein Bruch von gestern ist eine Vermutung
 const MAX_LOOKBACK_DAYS = 540;
+
+/* WIE VIEL NEUES EIN BRUCH BRAUCHT
+   ----------------------------------------------------------------
+   Drei Intervalle auf jeder Seite waren symmetrisch gedacht und
+   sind es nicht: die eine Seite trägt die ganze bisherige Historie,
+   die andere die letzten drei Käufe. Bei Brot mit 174 erfassten
+   Käufen genügten damit drei Abstände aus drei Wochen, um alle
+   anderen 170 zu verwerfen — und danach rechnete der Median über
+   genau diese drei.
+
+   Im Drei-Jahres-Lauf traf das die HÄLFTE aller Produkte: zwölf von
+   vierundzwanzig hatten einen „Bruch" wenige Wochen vor dem Ende und
+   lernten danach aus einer Handvoll Abstände. Sichtbar wurde das
+   erst, als die Simulation Saison, Gäste und Vorratskäufe kannte —
+   in einer gleichmässigen Welt schwankt nichts genug, um einen
+   falschen Bruch zu erzeugen.
+
+   Zwei Bedingungen, beide an dieselbe Frage: hat das Neue GEHALTEN?
+
+     MIN_AFTER_SIDE   so viele Abstände muss die neue Seite haben,
+                      sonst ist ihr Median selbst nur ein Ausreisser.
+     MIN_AFTER_CYCLES so viele NEUE Takte muss der Bruch alt sein.
+                      Bei Brot (Takt 7) sind das 28 Tage, bei Kaffee
+                      (Takt 30) vier Monate. Eine feste Tageszahl
+                      kann beides nicht sein: 14 Tage sind für Brot
+                      zwei Zyklen und für Kaffee ein halber.
+
+   Beide Prüfungen stehen HINTER dem Suchlauf, nicht darin. Der
+   erste Versuch hatte sie im Suchlauf, und das schuf einen
+   verkehrten Anreiz: ein früher Trennpunkt, dessen „danach"-Median
+   altes und neues Verhalten vermischt, sieht harmloser aus, braucht
+   deshalb weniger Bestätigungszeit — und rutscht durch, während der
+   ehrliche späte Trennpunkt ausgeschlossen wird. Gemeldet würde ein
+   Bruch, den es so nie gab.
+
+   Richtig ist: den deutlichsten Trennpunkt suchen wie bisher, und
+   ihn dann annehmen oder eben noch nicht. „Da hat sich etwas
+   geändert, aber noch nicht lange genug, um danach zu handeln" ist
+   eine vollständige Antwort — und die ehrliche. */
+const MIN_AFTER_SIDE = 8;
+const MIN_AFTER_CYCLES = 3;
 
 /**
  * Bruchpunkt in einer Kaufreihe suchen.
@@ -10220,20 +10403,38 @@ function detectChange(purchases, today) {
     const qty = Math.max(1, Number(rows[i - 1].quantity) || 1);
     intervals.push({ perUnit: gap / qty, date: rows[i].date });
   }
-  if (intervals.length < MIN_SIDE * 2) return { ...none, intervals: intervals.length };
+  if (intervals.length < MIN_SIDE + MIN_AFTER_SIDE) return { ...none, intervals: intervals.length };
 
   let best = null;
-  for (let split = MIN_SIDE; split <= intervals.length - MIN_SIDE; split++) {
+  for (let split = MIN_SIDE; split <= intervals.length - MIN_AFTER_SIDE; split++) {
     const before = median(intervals.slice(0, split).map((x) => x.perUnit));
     const after = median(intervals.slice(split).map((x) => x.perUnit));
     if (!before || !after || before <= 0) continue;
 
+    /* Der Trennpunkt muss auf einem Abstand liegen, der schon das
+       NEUE Verhalten zeigt.
+       
+       Ohne diese Prüfung gewinnt eine Mischung: liegen hinten drei
+       kurze Abstände und davor lauter lange, dann hat jeder frühe
+       Trennpunkt einen „danach"-Median irgendwo dazwischen — weder
+       das Alte noch das Neue, aber weit genug vom Alten entfernt, um
+       die 40-Prozent-Schwelle zu reissen. Gemeldet würde ein Bruch an
+       einem Tag, an dem sich nichts geändert hat. */
+    const hier = intervals[split].perUnit;
+    if (Math.abs(hier - after) > Math.abs(hier - before)) continue;
+
     const change = Math.abs(after - before) / before;
-    // Bei gleichwertigen Trennpunkten gewinnt der SPÄTERE. Der Median
-    // verträgt bis zur Hälfte alte Werte im „danach“-Block, ohne dass
-    // sich das Änderungsmaß bewegt — die Trennung ist dann mehrdeutig,
-    // und mit „größer“ landete man systematisch zu früh. Gemeldet würde
-    // ein Datum, an dem das alte Verhalten noch galt.
+    /* Bei gleichwertigen Trennpunkten gewinnt der SPÄTERE. Der Median
+     * verträgt bis zur Hälfte alte Werte im „danach"-Block, ohne dass
+     * sich das Änderungsmass bewegt — die Trennung ist dann
+     * mehrdeutig, und mit „früher gewinnt" landet man systematisch auf
+     * einem Tag, an dem das alte Verhalten noch galt.
+     *
+     * Der Gegenversuch ist gemessen: „der früheste gleichwertige
+     * gewinnt", zusammen mit der Regime-Prüfung darüber, sah in der
+     * Begründung schlüssig aus und war im Drei-Jahres-Lauf schlechter
+     * (12,7 statt 12,0 % Vergessenes, 32 statt 34 bestandene
+     * Prüfungen). Es bleibt beim späteren.                          */
     if (!best || change > best.change + 1e-9 || Math.abs(change - best.change) <= 1e-9) {
       best = { split, before, after, change, date: intervals[split].date };
     }
@@ -10250,9 +10451,13 @@ function detectChange(purchases, today) {
       reason: "unter_schwelle"
     };
   }
-  // Ein Bruch, der erst gestern lag, ist noch nicht bestätigt. Erst
-  // wenn das neue Verhalten eine Weile anhält, ist es eines.
-  if (ageDays < MIN_AGE_DAYS) {
+  /* Ein Bruch, der erst gestern lag, ist noch nicht bestätigt. Erst
+     wenn das neue Verhalten eine Weile ANGEHALTEN hat, ist es eines
+     — und „eine Weile" misst sich in neuen Takten und in neuen
+     Abständen, nicht in einer festen Tageszahl (siehe oben). */
+  const nachher = intervals.length - best.split;
+  const noetigesAlter = Math.max(MIN_AGE_DAYS, best.after * MIN_AFTER_CYCLES);
+  if (nachher < MIN_AFTER_SIDE || ageDays < noetigesAlter) {
     return {
       ...none, intervals: intervals.length,
       changePercent: Math.round(best.change * 100),

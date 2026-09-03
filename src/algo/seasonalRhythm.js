@@ -49,7 +49,7 @@ const quarterOf = (dateStr) => Math.floor(new Date(dateStr + "T12:00:00Z").getUT
  *
  * @returns {{factor, quarter, quarterName, applied, reason, message, byQuarter, purchases, spanDays}}
  */
-function seasonalFactor(purchases, today) {
+function seasonalFactor(purchases, today, opts = {}) {
   const rows = (purchases || [])
     .filter((p) => p && p.date && p.date <= today)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -79,12 +79,33 @@ function seasonalFactor(purchases, today) {
 
   rows.forEach((p) => { counts[quarterOf(p.date)]++; });
 
-  // Beobachtete Tage je Quartal auszählen, Tag für Tag über den
-  // gesamten Zeitraum. Bei wenigen Jahren ist das billig und exakt.
+  /* Beobachtete Tage je Quartal auszählen, Tag für Tag über den
+     gesamten Zeitraum. Bei wenigen Jahren ist das billig und exakt.
+
+     ABWESENHEITEN ZÄHLEN NICHT MIT — und das ist keine Feinheit,
+     sondern der Unterschied zwischen einem Saisonmuster und dessen
+     Gegenteil. Wer im Juli zwei Wochen wegfährt, kauft in diesem
+     Quartal an vierzehn Tagen nichts. Die Rate „Käufe je Tag" sinkt
+     dadurch, und der Sommer sieht aus wie die ruhige Jahreszeit.
+     Genau das ist im Drei-Jahres-Lauf passiert, sobald dort echter
+     Saisonverbrauch modelliert wurde: Salat wurde als Frühjahrs-
+     produkt erkannt, weil der Sommerurlaub in seiner Hochsaison lag.
+
+     Die Rhythmus-Berechnung rechnet Abwesenheiten längst heraus
+     (`computeRhythm({absenceDays})`). Dass diese Stufe es nicht tat,
+     war eine Lücke, keine Absicht — sie ist nur nie aufgefallen,
+     weil in der alten Simulation niemand saisonal verbraucht hat. */
+  const absences = Array.isArray(opts.absences) ? opts.absences : [];
+  const abwesend = (iso) => absences.some((a) => a && a.from && a.to && iso >= a.from && iso <= a.to);
+
   const startMs = new Date(rows[0].date + "T12:00:00Z").getTime();
   const endMs = new Date(today + "T12:00:00Z").getTime();
+  let beobachteteTage = 0;
   for (let t = startMs; t <= endMs; t += 86400000) {
-    observedDays[Math.floor(new Date(t).getUTCMonth() / 3)]++;
+    const d = new Date(t);
+    if (absences.length && abwesend(d.toISOString().slice(0, 10))) continue;
+    observedDays[Math.floor(d.getUTCMonth() / 3)]++;
+    beobachteteTage++;
   }
 
   const rates = counts.map((c, i) => (observedDays[i] > 0 ? c / observedDays[i] : null));
@@ -93,7 +114,10 @@ function seasonalFactor(purchases, today) {
     return { ...base, reason: "zu_wenige_quartale", byQuarter: buildByQuarter(counts, observedDays, rates) };
   }
 
-  const overall = rows.length / Math.max(1, spanDays);
+  // Dieselbe Bereinigung für den Jahresdurchschnitt: sonst würde die
+  // Saison gegen einen Durchschnitt gemessen, der die Reisetage
+  // mitzählt, und jede Jahreszeit sähe geschäftiger aus als sie ist.
+  const overall = rows.length / Math.max(1, beobachteteTage || spanDays);
   const here = rates[quarter];
   const byQuarter = buildByQuarter(counts, observedDays, rates);
 
@@ -133,9 +157,9 @@ function buildByQuarter(counts, observedDays, rates) {
 }
 
 /** Rhythmus mit dem Saisonfaktor korrigieren. */
-function applySeason(rhythm, purchases, today) {
+function applySeason(rhythm, purchases, today, opts = {}) {
   if (!rhythm || !rhythm.rhythmDays) return rhythm;
-  const season = seasonalFactor(purchases, today);
+  const season = seasonalFactor(purchases, today, opts);
   if (!season.applied) return { ...rhythm, season };
   return {
     ...rhythm,

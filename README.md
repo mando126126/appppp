@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 2171 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2207 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4284,6 +4284,149 @@ bestehen.
 
 ---
 
+## Sechs Dinge, die echte Haushalte tun (2026-09-03)
+
+Der Drei-Jahres-Lauf war eine sehr ordentliche Welt: konstanter
+Verbrauch, immer dieselbe Packungsgrösse, jeder Bon erfasst, nie ein
+Produktwechsel. Er hat damit genau die Fälle nicht geprüft, an denen
+ein Rhythmusmodell in Wirklichkeit scheitert. Alle sechs sind jetzt
+drin — und haben drei echte Fehler ans Licht gebracht.
+
+| | modelliert als |
+|---|---|
+| **Nicht erfasste Bons** | 18 % der Einkäufe landen nie in der App |
+| **Wechselnde Mengen** | 15 % Vorratskäufe bei Haltbarem |
+| **Produktwechsel** | Gouda → Emmentaler, Joghurt natur → griechisch, an Tag 700 |
+| **Saisonaler Verbrauch** | ±45 % übers Jahr, Sommer- und Winterprodukte |
+| **Gäste** | ganze Wochen mit 1,8-fachem Verbrauch |
+| **Einfrieren** | verlängert die Frist um 45 Tage — häufiger, wenn die App dazu geraten hat |
+
+### Fehler 1: aufgegebene Produkte blieben für immer auf der Liste
+
+Ein Haushalt steigt von Gouda auf Emmentaler um. Ab diesem Tag wird
+Gouda nie wieder gebraucht — aber sein gelernter Takt bleibt, und mit
+jedem Tag wird er „überfälliger". Die Liste kannte nur eine Obergrenze
+nach vorn (den Vorlauf), keine nach hinten.
+
+Im Lauf war das messbar: **vierhundert Tage nach dem Umstieg stand
+Gouda immer noch auf der Liste**, und der Haushalt kaufte ihn alle paar
+Wochen aus Gewohnheit mit. Die App hatte ihm ein Produkt antrainiert,
+das er abgeschafft hatte.
+
+Warum der Rhythmus das nicht selbst merkt: der Median rechnet über
+abgeschlossene Kaufabstände. Solange kein neuer Kauf kommt, entsteht
+kein neuer Abstand — die offene Lücke taucht in seiner Rechnung
+schlicht nicht auf. Das ist die eine Information, die ihm strukturell
+fehlt, und deshalb keine Doppelzählung.
+
+`abandonDetector.js` senkt das Vertrauen weich, sobald ein Produkt
+deutlich länger als sein Takt nicht gekauft wurde (ab dem 2,5-fachen,
+auf null beim 6-fachen). Kein harter Schnitt: vielleicht hat jemand es
+wirklich nur vergessen. Abwesenheiten zählen nicht mit — wer zwei
+Wochen weg war, hat nichts aufgegeben.
+
+### Fehler 2: der Sommerurlaub machte Sommerprodukte zu Frühjahrsprodukten
+
+`applySeason` misst „Käufe je beobachtetem Tag" je Quartal. Wer im Juli
+zwei Wochen wegfährt, kauft in diesem Quartal an vierzehn Tagen nichts
+— die Rate sinkt, und der Sommer sieht aus wie die ruhige Jahreszeit.
+
+Die Rhythmus-Berechnung rechnet Abwesenheiten längst heraus. Dass diese
+Stufe es nicht tat, war eine Lücke, keine Absicht: in einer
+gleichmässigen Welt verbraucht niemand saisonal, also fiel es nie auf.
+Salat wurde zuverlässig als **Frühjahrs**produkt erkannt.
+
+Nach der Korrektur trifft die App das richtige Quartal bei **6 von 6**
+Saisonprodukten statt bei 3 von 6 — über alle geprüften Startwerte.
+
+### Fehler 3: drei Kaufabstände verwarfen hundertsiebzig
+
+Der Strukturbruch-Erkenner verlangte drei Intervalle je Seite. Das war
+symmetrisch gedacht und ist es nicht: die eine Seite trägt die ganze
+Historie, die andere die letzten drei Käufe. Bei Brot mit 174 erfassten
+Käufen genügten drei Abstände aus drei Wochen, um alle anderen zu
+verwerfen — und danach rechnete der Median über genau diese drei.
+
+Das traf die **Hälfte aller Produkte**: zwölf von vierundzwanzig hatten
+einen „Bruch" wenige Wochen vor dem Ende und lernten danach aus einer
+Handvoll Abstände. In einer gleichmässigen Welt schwankt nichts genug,
+um einen falschen Bruch zu erzeugen; deshalb war das drei Jahre lang
+unsichtbar.
+
+Ein Bruch braucht jetzt genug **neue** Belege: mindestens acht neue
+Abstände, mindestens drei neue Takte Zeit (nicht eine feste Tageszahl —
+14 Tage sind für Brot zwei Zyklen und für Kaffee ein halber), und der
+Trennpunkt muss auf einem Abstand liegen, der selbst schon das neue
+Verhalten zeigt. Danach lernt **kein** Produkt mehr aus weniger als
+sechs Abständen.
+
+### Dazu: Reste gehen nicht mehr verloren
+
+`estimateRemaining` rechnete ab dem letzten Kauf mit der zuletzt
+gekauften Menge — und unterstellte damit, der Schrank sei in dem Moment
+leer gewesen. Gemessen gegen den wahren Vorrat der Simulation lag die
+Schätzung dadurch systematisch zu niedrig (−0,59 Einheiten bei einem
+wahren Mittel von 0,96) und sagte in 21 % der Fälle „ist alle", wenn
+reichlich da war. Der Übertrag ist jetzt drin, gedeckelt auf eine
+Packung: 71,1 statt 68,1 % richtige Ja/Nein-Aussagen.
+
+### Und der wichtigste Fund: der Prüfstand selbst
+
+Zwei Dinge, die alle bisherigen Feinmessungen entwertet haben.
+
+**Die Zufallsfolge hing an der App.** Die drei Strategien zogen aus
+derselben Folge, aber unterschiedlich oft — ab dem ersten abweichenden
+Zug lief die Welt auseinander. Ein Haushalt vergass andere Dinge, nur
+weil die App einen Vorschlag mehr gemacht hatte. Jede gemessene
+Verbesserung unter etwa einem Prozentpunkt war damit Rauschen, und zwar
+unsichtbares: die Zahlen sahen exakt und reproduzierbar aus. Der Zufall
+kommt jetzt aus einer reinen Funktion über (Tag, Produkt).
+
+**Und dann bin ich trotzdem in die Falle getappt.** Der
+Strukturbruch-Fix sah bei einem Startwert wie ein klarer Gewinn aus
+(12,0 statt 13,2 % Vergessenes) und war bei zwei anderen schlechter.
+Die Konstanten waren auf einen Seed eingestellt und hiessen dann
+Verbesserung.
+
+Belastbar sind stattdessen **strukturelle** Kennzahlen — und die fielen
+über alle vier geprüften Startwerte gleich aus:
+
+| | mit den Korrekturen | ohne |
+|---|---|---|
+| aufgegebene Produkte auf der Liste | 0 · 0 · 0 | 1 · 0 · 1 |
+| Produkte, die aus < 6 Abständen lernen | 0/21 · 0/22 · 0/20 | 5/23 · 5/23 · 6/23 |
+| Jahreszeit richtig erkannt | 6/6 · 5/6 · 6/6 | 3/6 · 3/6 · 2/6 |
+
+Sie sind jetzt feste Prüfungen im Langzeitlauf. Die Endwerte bleiben
+als Kennzahl stehen, aber der Test sagt in seinem eigenen Kopf, dass
+man an ihnen keine Konstanten einstellt.
+
+### Zwei Messlatten, die die neue Welt ungültig gemacht hat
+
+Beide wurden geändert, mit der Begründung im Test:
+
+- **„Der gelernte Takt gegen den wahren"** verglich gegen eine Formel
+  aus `perDay`. Diese eine Zahl gibt es nicht mehr: der Takt von Salat
+  ist im Juli ein anderer als im Dezember, und wer zwei Packungen
+  kauft, kauft danach doppelt so lange nicht. Verglichen wird jetzt mit
+  den **tatsächlichen** Kaufabständen der laufenden Saison, auf die
+  Menge normiert — sonst sah richtiges Verhalten wie ein Fehler von
+  100 % aus.
+- **„Höchstens so viele Leertage wie die feste Liste"** war fair,
+  solange beide gleich viel kauften. Die feste Liste nimmt sechs
+  Grundnahrungsmittel bei jedem Einkauf mit und profitiert von jeder
+  Doppelpackung doppelt; sie erkauft ihre Versorgung mit 60 %
+  unnötigen Käufen und dem 2,5-fachen Verderb. Der Massstab ist jetzt
+  vergleichbare Versorgung (5 % Toleranz) bei mindestens 10 % weniger
+  Geld. Die Toleranz wurde **nicht** nachgezogen, als ein vierter
+  Startwert sie um 1,5 % riss — das wäre derselbe Fehler noch einmal,
+  nur an der Messlatte statt am Algorithmus.
+
+33 neue Lerntests, 3 neue Prüfungen im Langzeitlauf. Alle jetzt 2207
+Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -4354,14 +4497,14 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 2171
-npm run test:algo # 1242 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 2207
+npm run test:algo # 1275 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
                   #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen,
                   #   Rückblick)
                   #   plus die Simulation
 npm run test:ui   # 893 Oberflächentests in jsdom
-npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
+npm run test:long # 39 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
 `test/bons.js` prüft gegen **echte Bons**, nicht gegen erfundene:

@@ -2493,8 +2493,18 @@ console.log("\n--- Selbst etwas hinzufügen ---");
   ok("Freier Text steht immer als letzte Möglichkeit",
     !!$("sheetOpts").querySelector(".freeRow"));
 
+  /* Bewusst ein Treffer, der noch NICHT auf der Liste steht.
+     Vorher stand hier `treffer[0]`, und das war zufällig „Kaffee" —
+     ein Produkt, das die App inzwischen selbst vorschlägt. Die Zeile
+     trug dann die Marke „doppelt?" statt „von dir", weil je Zeile
+     nur die dringendste Marke erscheint. Der Test prüfte damit nicht
+     mehr, was er prüfen wollte. */
   const vorher = App.ctx.items.length;
-  click(treffer[0]);
+  const frei = [...treffer].find((b) => {
+    const name = (b.textContent || "").trim();
+    return !App.ctx.items.some((i) => name.startsWith(i.name));
+  }) || treffer[0];
+  click(frei);
   ok("Das Blatt schließt nach der Wahl", $("sheet").hidden);
   ok("Die Position steht in der Liste", App.ctx.items.length === vorher + 1,
     `${vorher} -> ${App.ctx.items.length}`);

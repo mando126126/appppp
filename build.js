@@ -38,6 +38,7 @@ const MODULES = [
   "foodDatabase.js",
   "rhythmEngine2.js",
   "absenceDetector.js",
+  "abandonDetector.js",
   "productMatcher2.js",
   "productSearch.js",
   "brandSwap.js",

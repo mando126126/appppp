@@ -25,10 +25,12 @@ const {
 } = require("../src/algo/seasonalRhythm");
 const {
   detectChange, purchasesSinceChange, MIN_RELATIVE_CHANGE, MIN_AGE_DAYS
+, MIN_AFTER_SIDE, MIN_AFTER_CYCLES
 } = require("../src/algo/changeDetector");
 const { computeRhythm } = require("../src/algo/rhythmEngine2");
 const { effectiveLookahead } = require("../src/algo/shoppingDay");
 const { detectAbsences, knownAbsence, absenceDaysBetween } = require("../src/algo/absenceDetector");
+const { abandonFactor, applyAbandon, ABANDON_START, ABANDON_FULL } = require("../src/algo/abandonDetector");
 
 let pass = 0, fail = 0;
 function ok(name, cond, detail) {
@@ -757,6 +759,167 @@ section("Feedback: Abwesenheit verzerrt die Überfälligkeit");
     awayDaysFor(eintrag, day(-30), () => NaN) === 0 &&
     awayDaysFor(eintrag, day(-30), () => -3) === 0);
   ok("Sonst der gemeldete Wert", awayDaysFor(eintrag, day(-30), () => 9) === 9);
+}
+
+
+/* ================================================================
+   Aufgegebene Produkte
+   ================================================================
+   Der Median rechnet über abgeschlossene Kaufabstände. Die offene
+   Lücke seit dem letzten Kauf taucht in seiner Rechnung nicht auf —
+   er kann noch so robust sein, er sieht sie strukturell nicht. Ohne
+   eine eigene Prüfung wird ein aufgegebenes Produkt mit jedem Tag
+   „überfälliger“ und steht damit immer weiter oben auf der Liste.
+   ================================================================ */
+section("Aufgegeben statt überfällig");
+{
+  ok("Im normalen Bereich bleibt alles unverändert",
+    abandonFactor(10, 5) === 1 && abandonFactor(10, 20) === 1);
+  ok(`Genau an der Zweifelsschwelle (${ABANDON_START}x) noch voll`,
+    abandonFactor(10, 10 * ABANDON_START) === 1);
+  ok(`Ab dem ${ABANDON_FULL}-fachen ist nichts mehr übrig`,
+    abandonFactor(10, 10 * ABANDON_FULL) === 0 && abandonFactor(10, 999) === 0);
+  ok("Dazwischen wird es weich weniger",
+    abandonFactor(10, 40) > 0 && abandonFactor(10, 40) < 1, abandonFactor(10, 40));
+  ok("Und zwar monoton",
+    abandonFactor(10, 30) > abandonFactor(10, 40) && abandonFactor(10, 40) > abandonFactor(10, 50));
+  ok("Ein kurzer Takt verzeiht weniger Tage als ein langer",
+    abandonFactor(3, 15) < abandonFactor(30, 15));
+
+  ok("Unsinn ändert nichts",
+    abandonFactor(0, 100) === 1 && abandonFactor(null, 100) === 1 &&
+    abandonFactor(10, NaN) === 1 && abandonFactor(10, -5) === 1);
+}
+{
+  const r = { rhythmDays: 10, confidence: 0.8, lastPurchaseDate: day(-45), sampleSize: 12 };
+  const unberuehrt = applyAbandon(r, 15);
+  ok("Ein überfälliges Produkt behält sein Vertrauen", unberuehrt === r);
+
+  const leiser = applyAbandon(r, 40);
+  ok("Ein lange nicht gekauftes verliert Vertrauen", leiser.confidence < 0.8, leiser.confidence);
+  ok("Der ursprüngliche Wert bleibt nachvollziehbar", leiser.baseConfidence === 0.8);
+  ok("Der Takt selbst wird NICHT verändert", leiser.rhythmDays === 10);
+  ok("Die Begründung hängt am Ergebnis",
+    !!leiser.abandon && leiser.abandon.multiple === 4 && /nicht gekauft/.test(leiser.abandon.message));
+
+  const weg = applyAbandon(r, 10 * ABANDON_FULL + 10);
+  ok("Irgendwann fällt es unter jede Schwelle", weg.confidence === 0, weg.confidence);
+  ok("Und sagt das auch", /nicht mehr von einem Rhythmus/.test(weg.abandon.message));
+
+  ok("Ohne Takt passiert nichts", applyAbandon({ confidence: 0.9 }, 500).confidence === 0.9);
+  ok("Ohne Rhythmus-Objekt kein Absturz", applyAbandon(null, 500) === null);
+}
+{
+  // Der Regelkreis, um den es geht: die 0,4er-Schwelle der Liste
+  // muss irgendwann greifen, sonst bleibt das Produkt für immer.
+  const r = { rhythmDays: 7, confidence: 0.75 };
+  const tage = [];
+  for (let d = 7; d <= 7 * ABANDON_FULL; d += 7) tage.push(applyAbandon(r, d).confidence);
+  ok("Ein aufgegebenes Produkt fällt unter die Listenschwelle von 0,4",
+    tage[tage.length - 1] < 0.4, tage.join(" "));
+  ok("Aber nicht schon nach zwei Takten", applyAbandon(r, 14).confidence >= 0.4);
+}
+
+/* ================================================================
+   Strukturbruch: wie viel Neues er braucht
+   ================================================================ */
+section("Strukturbruch braucht bestätigtes Neues");
+{
+  // 40 gleichmässige Abstände, dann drei kurze. Drei Abstände sind
+  // kein neues Verhalten, sondern drei Abstände.
+  const rows = [];
+  for (let i = 0; i < 40; i++) rows.push({ date: day(-(400 - i * 9)), quantity: 1 });
+  for (let i = 0; i < 3; i++) rows.push({ date: day(-(9 - i * 3)), quantity: 1 });
+  const c = detectChange(rows, T0);
+  ok("Drei frische Abstände verwerfen nicht vierzig alte", c.found === false, c.reason);
+  ok("Die ganze Historie bleibt erhalten",
+    purchasesSinceChange(rows, c).length === rows.length);
+}
+{
+  // Dasselbe Muster, aber das Neue hat lange genug angehalten.
+  const rows = [];
+  for (let i = 0; i < 30; i++) rows.push({ date: day(-(520 - i * 9)), quantity: 1 });
+  for (let i = 0; i < 12; i++) rows.push({ date: day(-(240 - i * 20)), quantity: 1 });
+  const c = detectChange(rows, T0);
+  ok("Zwölf Abstände über Monate schon", c.found === true, `${c.reason} ${c.changePercent} %`);
+  ok("Und dann wird die Historie auch gekürzt",
+    purchasesSinceChange(rows, c).length < rows.length);
+}
+{
+  ok(`Ein Bruch braucht mindestens ${MIN_AFTER_SIDE} neue Abstände`, MIN_AFTER_SIDE >= 6);
+  ok(`... und mindestens ${MIN_AFTER_CYCLES} neue Takte Zeit`, MIN_AFTER_CYCLES >= 2);
+}
+
+/* ================================================================
+   Saison: Abwesenheiten verfälschen die Jahreszeit
+   ================================================================ */
+section("Saison rechnet Abwesenheiten heraus");
+{
+  /* Ein Sommerprodukt: von Mai bis September doppelt so oft gekauft
+     wie sonst. Mitten in der Hochsaison zwei Wochen Urlaub. Ohne
+     Bereinigung sinkt die Rate „Käufe je Tag“ im Sommerquartal, und
+     der Sommer sieht aus wie die ruhige Jahreszeit. */
+  const kaeufe = [];
+  const start = new Date("2024-01-01T12:00:00Z").getTime();
+  for (let t = 0; t < 730; t++) {
+    const d = new Date(start + t * 86400000);
+    const m = d.getUTCMonth();
+    const sommer = m >= 5 && m <= 7;          // Juni bis August
+    const jeder = sommer ? 4 : 12;
+    if (t % jeder === 0) kaeufe.push({ date: d.toISOString().slice(0, 10), quantity: 1 });
+  }
+  const heute = "2025-12-31";
+  // Urlaub jeweils im Juli
+  const urlaube = [{ from: "2024-07-05", to: "2024-07-25" }, { from: "2025-07-05", to: "2025-07-25" }];
+  const ohne = seasonalFactor(kaeufe.filter((k) =>
+    !urlaube.some((u) => k.date >= u.from && k.date <= u.to)), heute);
+  const mit = seasonalFactor(kaeufe.filter((k) =>
+    !urlaube.some((u) => k.date >= u.from && k.date <= u.to)), heute, { absences: urlaube });
+
+  const hoch = (s) => s.byQuarter.map((q) => q.ratePerDay || 0)
+    .indexOf(Math.max(...s.byQuarter.map((q) => q.ratePerDay || 0)));
+  ok("Mit Abwesenheitswissen liegt das Hoch im Sommerquartal", hoch(mit) === 2,
+    `Q${hoch(mit)} statt Q2`);
+  ok("Die Sommerrate steigt durch die Bereinigung",
+    mit.byQuarter[2].ratePerDay > ohne.byQuarter[2].ratePerDay,
+    `${mit.byQuarter[2].ratePerDay} > ${ohne.byQuarter[2].ratePerDay}`);
+  ok("Die beobachteten Tage im Sommer sind weniger geworden",
+    mit.byQuarter[2].observedDays < ohne.byQuarter[2].observedDays,
+    `${mit.byQuarter[2].observedDays} < ${ohne.byQuarter[2].observedDays}`);
+  ok("Quartale ohne Urlaub bleiben unberührt",
+    mit.byQuarter[0].observedDays === ohne.byQuarter[0].observedDays);
+  ok("Ohne Angabe verhält sich alles wie bisher",
+    JSON.stringify(seasonalFactor(kaeufe, heute)) === JSON.stringify(seasonalFactor(kaeufe, heute, {})));
+}
+
+/* ================================================================
+   Vorratsschätzung: Reste gehen nicht verloren
+   ================================================================ */
+section("Bestand: Reste aus früheren Käufen");
+{
+  const { estimateRemaining } = require("../src/algo/inventoryEstimator");
+  const pid = "milch_vollmilch";
+  const rhythm = { perUnitDays: 6, confidence: 0.8 };
+  // Alle 4 Tage eine Packung gekauft, obwohl eine 6 Tage reicht --
+  // es sammelt sich etwas an.
+  const rows = [];
+  for (let i = 10; i >= 0; i--) rows.push({ productId: pid, date: day(-i * 4), quantity: 1, unitPrice: 1.19 });
+  const letzter = rows[rows.length - 1];
+
+  const ohne = estimateRemaining(pid, letzter, rhythm, T0);
+  const mit = estimateRemaining(pid, letzter, rhythm, T0, { rows });
+  ok("Ohne Übertrag zählt nur der letzte Kauf", ohne.remainingUnits <= 1, ohne.remainingUnits);
+  ok("Mit Übertrag ist mehr da", mit.remainingUnits > ohne.remainingUnits,
+    `${mit.remainingUnits} > ${ohne.remainingUnits}`);
+  ok("Aber nicht beliebig viel — der Übertrag ist gedeckelt",
+    mit.remainingUnits <= 2.01, mit.remainingUnits);
+
+  // Eine Nutzerkorrektur schlägt den Übertrag: wer sagt „ist leer“,
+  // hat recht, egal was die Rechnung meint.
+  const korrigiert = estimateRemaining(pid, letzter, rhythm, T0, {
+    rows, corrections: { [pid]: { date: T0, remainingUnits: 0 } }
+  });
+  ok("„Ist leer“ schlägt den Übertrag", korrigiert.remainingUnits === 0, korrigiert.remainingUnits);
 }
 
 /* ================================================================

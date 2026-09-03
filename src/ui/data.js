@@ -1010,13 +1010,26 @@ function compute() {
     const relevant = purchasesSinceChange(rows, change);
     let r = computeRhythm(relevant, { absenceDays });
 
-    r = applySeason(r, rows, ref);
+    // Abwesenheiten auch hier: ein Sommerurlaub liegt mitten in der
+    // Hochsaison der Sommerprodukte und macht sie sonst zu
+    // Frühjahrsprodukten (siehe seasonalRhythm.js).
+    r = applySeason(r, rows, ref, { absences });
     // `absenceDays` geht auch in die Rückmeldungen: nach einer Reise
     // wird vieles gleichzeitig rechnerisch fällig und löst gebündelt
     // „hab noch da" aus. Ohne diese Korrektur verlängerte jede dieser
     // Antworten einen Rhythmus, der gar nicht falsch war.
     r = applyFeedback(r, s.feedbackLog.filter((f) => f.productId === pid), ref,
       { purchases: relevant, absenceDays });
+
+    /* Zuletzt: hat der Haushalt dieses Produkt aufgegeben?
+       Der Median rechnet nur über abgeschlossene Kaufabstände und
+       sieht die offene Lücke seit dem letzten Kauf strukturell nicht
+       (siehe abandonDetector.js). Abwesenheitstage zählen dabei
+       nicht mit -- wer zwei Wochen weg war, hat nichts aufgegeben. */
+    if (r.lastPurchaseDate) {
+      const offen = daysBetween(r.lastPurchaseDate, ref) - absenceDays(r.lastPurchaseDate, ref);
+      r = applyAbandon(r, offen);
+    }
     rhythms.set(pid, r);
   }
   const stage = determineStage(history, rhythms);
