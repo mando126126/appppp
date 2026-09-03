@@ -114,7 +114,8 @@ try {
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
     " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES, mascotAlarmSignature,"+
-    " viewKalender, kalenderTagGruppe, monatsTitel, buildCalendar, monatPlus, monatsSpanne };"
+    " viewKalender, kalenderTagGruppe, monatsTitel, buildCalendar, monatPlus, monatsSpanne," +
+    " eventSheet, detectEventPurchase };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -3986,6 +3987,150 @@ console.log("\n--- Kalender ---");
 
   D.reset(); D.loadDemo("full");
   App.kalenderMonat = null; App.kalenderTag = null; App.kalenderEbene = "geld";
+  App.goto("start");
+}
+
+console.log("\n--- Übergroße Einkäufe: die Anlass-Frage ---");
+{
+  D.reset(); D.loadDemo("full");
+
+  /* Ein echtes Produkt mit gelerntem Takt aus den Beispieldaten
+     suchen, statt eines zu erfinden -- so läuft der Test durch
+     dieselbe Erkennung, die auch im Betrieb entscheidet. */
+  const findeKandidat = () => {
+    const ctx = App.ctx;
+    let best = null;
+    ctx.rhythms.forEach((r, pid) => {
+      if (T.byId(pid) === undefined) return;
+      const p = T.byId(pid);
+      if (!p || !p.isFood) return;
+      if (!r.rhythmDays || r.confidence < 0.6 || (r.sampleSize || 0) < 4) return;
+      if (!best || r.sampleSize > best.r.sampleSize) best = { pid, r, p };
+    });
+    return best;
+  };
+  const kandidat = findeKandidat();
+  ok("Die Beispieldaten liefern ein Produkt mit gelerntem Takt", !!kandidat);
+
+  if (kandidat) {
+    const { pid, r, p } = kandidat;
+    const grosseMenge = Math.max(4, Math.ceil((r.lastQuantity || 1) * 4));
+
+    const einkaufBuchen = (menge) => {
+      App.goto("erfassen");
+      App.capture.tab = "manual";
+      App.capture.basket = [];
+      App.render();
+      const suche = $("main").querySelector('input[type="search"]');
+      suche.value = p.name;
+      suche.dispatchEvent(new window.Event("input", { bubbles: true }));
+      const treffer = [...$("main").querySelectorAll(".results button")]
+        .find((b) => b.textContent.includes(p.name));
+      click(treffer);
+      App.capture.basket[0].quantity = menge;
+      App.render();
+      const buchen = [...$("main").querySelectorAll("button.cta")]
+        .find((b) => b.textContent === "Einkauf buchen");
+      click(buchen);
+    };
+
+    einkaufBuchen(grosseMenge);
+
+    ok("Eine übergroße Menge löst die Anlass-Frage aus",
+      !doc.getElementById("sheet").hidden && /Fest/.test($("sheetTitle").textContent));
+    ok("Das betroffene Produkt steht im Untertitel", $("sheetSub").textContent.includes(p.name));
+    const zeile = [...doc.getElementById("sheet").querySelectorAll(".row")]
+      .find((r2) => r2.textContent.includes(p.name));
+    ok("Die Zeile nennt die gekaufte und die übliche Menge",
+      !!zeile && new RegExp(`${grosseMenge}.*statt sonst`).test(zeile.textContent.replace(/\s+/g, " ")),
+      zeile && zeile.textContent);
+
+    const ja = [...doc.getElementById("sheet").querySelectorAll(".row")]
+      .find((r2) => /Ja, für einen Anlass/.test(r2.textContent));
+    ok("Es gibt eine Ja-Antwort", !!ja);
+    click(ja);
+
+    ok("Ein Ja schließt das Blatt", doc.getElementById("sheet").hidden);
+    ok("Und wird gespeichert",
+      !!D.get().eventPurchases[pid] && D.get().eventPurchases[pid].quantity === grosseMenge,
+      JSON.stringify(D.get().eventPurchases[pid]));
+    ok("Mit der üblichen Menge als Bezugswert",
+      D.get().eventPurchases[pid].typical === (r.lastQuantity || 1));
+    ok("Der Toast bestätigt es", (doc.getElementById("toast").querySelector(".tTxt b") || {}).textContent
+      .includes(p.name));
+
+    const ctxDanach = D.compute();
+    const rDanach = ctxDanach.rhythms.get(pid);
+    ok("Die Vorhersage trägt jetzt die Anlass-Begründung", !!rDanach.event, JSON.stringify(rDanach.event));
+    ok("Und ist kürzer, als es die rohe Menge nahelegen würde",
+      rDanach.rhythmDays < rDanach.eventBaseDays,
+      `${rDanach.rhythmDays} < ${rDanach.eventBaseDays}`);
+
+    // Auch im Detail-Blatt nachvollziehbar -- nicht nur ein Toast,
+    // der nach ein paar Sekunden verschwindet.
+    App.render();
+    T.productSheet(pid, App.ctx);
+    ok("Das Detail-Blatt nennt den Anlass",
+      /Anlass/.test((doc.getElementById("sheet").textContent || "")));
+    App.closeSheet();
+  }
+
+  /* --- Ein Nein verändert nichts --- */
+  D.reset(); D.loadDemo("full");
+  const kandidat2 = findeKandidat();
+  if (kandidat2) {
+    const { pid, r, p } = kandidat2;
+    const grosseMenge = Math.max(4, Math.ceil((r.lastQuantity || 1) * 4));
+    App.goto("erfassen");
+    App.capture.tab = "manual";
+    App.capture.basket = [];
+    App.render();
+    const suche = $("main").querySelector('input[type="search"]');
+    suche.value = p.name;
+    suche.dispatchEvent(new window.Event("input", { bubbles: true }));
+    const treffer = [...$("main").querySelectorAll(".results button")]
+      .find((b) => b.textContent.includes(p.name));
+    click(treffer);
+    App.capture.basket[0].quantity = grosseMenge;
+    App.render();
+    const buchen = [...$("main").querySelectorAll("button.cta")]
+      .find((b) => b.textContent === "Einkauf buchen");
+    click(buchen);
+
+    const nein = [...doc.getElementById("sheet").querySelectorAll(".row")]
+      .find((r2) => /Nein, ganz normal/.test(r2.textContent));
+    ok("Es gibt eine Nein-Antwort", !!nein);
+    click(nein);
+    ok("Ein Nein schließt das Blatt", doc.getElementById("sheet").hidden);
+    ok("Und speichert nichts", !D.get().eventPurchases[pid]);
+  }
+
+  /* --- Zurückhaltung: eine mäßig größere Menge fragt gar nicht erst --- */
+  D.reset(); D.loadDemo("full");
+  const kandidat3 = findeKandidat();
+  if (kandidat3) {
+    const { pid, r, p } = kandidat3;
+    const kleineMehrmenge = (r.lastQuantity || 1) + 1;   // deutlich unter EVENT_FACTOR
+    App.goto("erfassen");
+    App.capture.tab = "manual";
+    App.capture.basket = [];
+    App.render();
+    const suche = $("main").querySelector('input[type="search"]');
+    suche.value = p.name;
+    suche.dispatchEvent(new window.Event("input", { bubbles: true }));
+    const treffer = [...$("main").querySelectorAll(".results button")]
+      .find((b) => b.textContent.includes(p.name));
+    click(treffer);
+    App.capture.basket[0].quantity = kleineMehrmenge;
+    App.render();
+    const buchen = [...$("main").querySelectorAll("button.cta")]
+      .find((b) => b.textContent === "Einkauf buchen");
+    click(buchen);
+    ok("Eine nur mäßig größere Menge fragt nicht nach einem Fest",
+      doc.getElementById("sheet").hidden);
+  }
+
+  D.reset(); D.loadDemo("full");
   App.goto("start");
 }
 

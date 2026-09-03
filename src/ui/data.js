@@ -110,6 +110,10 @@ function emptyState() {
     // oder zu niedrig geworden ist -- neuer Anker für die Rechnung,
     // bis der nächste Kauf sie ohnehin ersetzt. Siehe setStockCorrection().
     stockCorrections: {},       // productId -> {date, remainingUnits}
+    // Vom Nutzer bestätigte übergroße Einkäufe (siehe eventDetector.js
+    // und recordEvent()) — entschärft die Vorhersage, solange dieser
+    // Kauf noch der letzte für das Produkt ist.
+    eventPurchases: {},         // productId -> {date, quantity, typical}
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
     dismissed: {                // weggetippte Hinweise, je Woche
       week: null,
@@ -518,6 +522,28 @@ function clearStockCorrection(productId) {
     }
   });
   return weg;
+}
+
+/**
+ * Einen übergroßen Einkauf als Anlass bestätigen (Fest, Besuch,
+ * Feiertag) — siehe eventDetector.js für die Erkennung und die
+ * Begründung, warum das überhaupt gefragt wird.
+ *
+ * `quantity`/`typical` kommen aus der Erkennung, die auf dem Stand
+ * VOR diesem Einkauf rechnet — hier nur noch entgegennehmen und
+ * unter dem Kaufdatum ablegen. Die Korrektur greift beim nächsten
+ * compute() in applyEventCorrection() und verliert sich von selbst,
+ * sobald ein echter neuer Kauf `lastPurchaseDate` weiterschiebt.
+ */
+function recordEvent(productId, quantity, typical, date) {
+  if (!productId) return false;
+  const q = Math.max(1, Number(quantity) || 1);
+  const t = Math.max(1, Number(typical) || 1);
+  update((s) => {
+    if (!s.eventPurchases) s.eventPurchases = {};
+    s.eventPurchases[productId] = { date: date || today(), quantity: q, typical: t };
+  });
+  return true;
 }
 
 /* ---------- Ereignis-Protokoll ---------- */
@@ -1020,6 +1046,15 @@ function compute() {
     // Antworten einen Rhythmus, der gar nicht falsch war.
     r = applyFeedback(r, s.feedbackLog.filter((f) => f.productId === pid), ref,
       { purchases: relevant, absenceDays });
+
+    /* Ein vom Nutzer bestätigter Anlass (Fest, Besuch) entschärft die
+       Vorhersage aus einer übergroßen letzten Menge -- siehe
+       eventDetector.js. Vor dem Aufgeben-Check: der soll auf dem
+       ECHTEN, nicht dem anlassbedingt aufgeblähten Rhythmus prüfen,
+       sonst dauert es nach einem Fest scheinbar viel länger, bis ein
+       Produkt als aufgegeben gilt. */
+    const anlass = s.eventPurchases && s.eventPurchases[pid];
+    if (anlass) r = applyEventCorrection(r, anlass);
 
     /* Zuletzt: hat der Haushalt dieses Produkt aufgegeben?
        Der Median rechnet nur über abgeschlossene Kaufabstände und
@@ -1753,7 +1788,7 @@ const Data = {
   STORE_KEY, SHADOW_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
   addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened,
-  setStockCorrection, clearStockCorrection,
+  setStockCorrection, clearStockCorrection, recordEvent,
   recordSwapFor, recordFeedback,
   toggleEaten, toggleNoChronic,
   toggleBrandOff, setUseBy, recoveryNotice,

@@ -31,6 +31,10 @@ const { computeRhythm } = require("../src/algo/rhythmEngine2");
 const { effectiveLookahead } = require("../src/algo/shoppingDay");
 const { detectAbsences, knownAbsence, absenceDaysBetween } = require("../src/algo/absenceDetector");
 const { abandonFactor, applyAbandon, ABANDON_START, ABANDON_FULL } = require("../src/algo/abandonDetector");
+const {
+  detectEventPurchase, candidateProducts, applyEventCorrection,
+  EVENT_FACTOR, MIN_EXTRA_UNITS, MIN_SAMPLE, EVENT_MIN_CONFIDENCE, MIN_CANDIDATES, SOLO_FACTOR
+} = require("../src/algo/eventDetector");
 
 let pass = 0, fail = 0;
 function ok(name, cond, detail) {
@@ -920,6 +924,123 @@ section("Bestand: Reste aus früheren Käufen");
     rows, corrections: { [pid]: { date: T0, remainingUnits: 0 } }
   });
   ok("„Ist leer“ schlägt den Übertrag", korrigiert.remainingUnits === 0, korrigiert.remainingUnits);
+}
+
+/* ================================================================
+   Übergroße Einkäufe: erkennen und entschärfen
+   ================================================================
+   `rhythmDays = perUnitDays * lastQuantity` ist im Normalfall genau
+   richtig -- wer sechs statt einer Packung kauft, kommt sechsmal so
+   lange aus, SOLANGE der Verbrauch gleich bleibt. Bei einem Fest
+   bleibt er nicht gleich. Die App kann das aus den Kaufdaten allein
+   nicht unterscheiden, deshalb wird gefragt (siehe eventDetector.js).
+   ================================================================ */
+section("Übergroße Einkäufe erkennen");
+{
+  const rhythmus = (over = {}) => ({
+    rhythmDays: 10, confidence: 0.7, sampleSize: 6,
+    lastQuantity: 1, lastPurchaseDate: day(-2), perUnitDays: 10, ...over
+  });
+
+  const rhythms = new Map([["kaffee", rhythmus()], ["milch_vollmilch", rhythmus()]]);
+  ok("Weit über dem Faktor UND genug Produkte: als Anlass erkannt",
+    detectEventPurchase([
+      { productId: "kaffee", quantity: 4 },
+      { productId: "milch_vollmilch", quantity: 3 }
+    ], rhythms).isEvent === true);
+
+  ok("Ein einzelnes, nur mäßig größeres Produkt fällt nicht auf",
+    detectEventPurchase([{ productId: "kaffee", quantity: 3 }], rhythms).isEvent === false);
+
+  ok(`Ein einzelnes, aber sehr extremes Produkt (>= ${SOLO_FACTOR}x) reicht allein`,
+    detectEventPurchase([{ productId: "kaffee", quantity: 5 }], rhythms).isEvent === true);
+
+  ok("Mengen desselben Produkts über mehrere Bonzeilen werden zusammengezählt",
+    detectEventPurchase([
+      { productId: "kaffee", quantity: 2 }, { productId: "kaffee", quantity: 3 }
+    ], rhythms).isEvent === true);
+}
+{
+  const rhythms = new Map([["kaffee", { rhythmDays: 10, confidence: 0.7, sampleSize: 6, lastQuantity: 1 }]]);
+  ok("Ohne gelernten Takt kein Kandidat",
+    candidateProducts([{ productId: "kaffee", quantity: 9 }], new Map()).length === 0);
+  ok("Unter der Vertrauensschwelle kein Kandidat",
+    candidateProducts([{ productId: "kaffee", quantity: 9 }],
+      new Map([["kaffee", { rhythmDays: 10, confidence: 0.1, sampleSize: 6, lastQuantity: 1 }]])).length === 0);
+  ok("Mit zu wenig Stichprobe kein Kandidat -- \"die übliche Menge\" wäre selbst nur geraten",
+    candidateProducts([{ productId: "kaffee", quantity: 9 }],
+      new Map([["kaffee", { rhythmDays: 10, confidence: 0.7, sampleSize: 1, lastQuantity: 1 }]])).length === 0);
+  ok("Haushaltsprodukte werden nie als Anlass erkannt -- ihre Rate glättet das von selbst",
+    candidateProducts([{ productId: "klopapier", quantity: 20 }],
+      new Map([["klopapier", { rhythmDays: 10, confidence: 0.9, sampleSize: 10, lastQuantity: 1 }]])).length === 0);
+  ok(`Ein knapper Faktor (< ${EVENT_FACTOR}x) fällt nicht auf`,
+    candidateProducts([{ productId: "kaffee", quantity: 2 }], rhythms).length === 0);
+  ok(`Und ${MIN_EXTRA_UNITS} Einheiten mehr reichen bei kleinem "üblich" allein nicht ohne den Faktor`,
+    candidateProducts([{ productId: "kaffee", quantity: 3 }],
+      new Map([["kaffee", { rhythmDays: 10, confidence: 0.7, sampleSize: 6, lastQuantity: 2 }]])).length === 0);
+}
+{
+  // Der Regelkreis, um den es geht: eine Vorhersage aus der Menge.
+  const r = { rhythmDays: 60, lastQuantity: 6, lastPurchaseDate: day(0), perUnitDays: 10 };
+  const info = { productId: "kaffee", date: day(0), quantity: 6, typical: 1 };
+
+  const korrigiert = applyEventCorrection(r, info);
+  ok("Die Vorhersage schrumpft auf die übliche Menge zurück",
+    korrigiert.rhythmDays === 10, korrigiert.rhythmDays);
+  ok("Der unkorrigierte Wert bleibt nachvollziehbar", korrigiert.eventBaseDays === 60);
+  ok("Die Begründung hängt am Ergebnis",
+    !!korrigiert.event && korrigiert.event.typicalQuantity === 1 && /Anlass|deutlich mehr/.test(korrigiert.event.message));
+
+  const spaeter = { ...r, lastPurchaseDate: day(5) };
+  ok("Ohne passendes Datum -- ein neuer echter Kauf hat stattgefunden -- greift nichts mehr",
+    applyEventCorrection(spaeter, info) === spaeter);
+  ok("Ohne Anlass-Information bleibt der Rhythmus unverändert",
+    applyEventCorrection(r, null) === r);
+  ok("Ohne Rhythmus-Objekt kein Absturz", applyEventCorrection(null, info) === null);
+  ok("Ist die übliche Menge nicht kleiner als die gekaufte, gibt es nichts zu korrigieren",
+    applyEventCorrection(r, { ...info, typical: 6 }) === r);
+}
+{
+  // Zusammenspiel mit Saison und Rückmeldungen: die Korrektur rechnet
+  // als VERHÄLTNIS auf den aktuellen Rhythmus, nicht neu aus
+  // perUnitDays -- sonst verwürfe sie eine schon angewandte
+  // Saisonstufe wieder.
+  const nachSaison = { rhythmDays: 24, lastQuantity: 4, lastPurchaseDate: day(0), perUnitDays: 10,
+    season: { applied: true, factor: 1.2 } };
+  const info = { productId: "x", date: day(0), quantity: 4, typical: 1 };
+  const korrigiert = applyEventCorrection(nachSaison, info);
+  ok("Die Saisonstufe bleibt im Verhältnis erhalten (24 x 1/4 = 6, nicht 10)",
+    korrigiert.rhythmDays === 6, korrigiert.rhythmDays);
+  ok("Das Saison-Feld selbst bleibt unangetastet", korrigiert.season.factor === 1.2);
+}
+
+section("Übergroße Einkäufe: das Zusammenspiel mit dem Rhythmusmodell");
+{
+  /* Derselbe Ablauf wie ein echter Haushalt: alle zehn Tage eine
+     Packung Grillfleisch, an einem Tag auf einmal sechs für ein
+     Fest, danach wieder normal. Ohne Korrektur läuft die Vorhersage
+     auf 60 Tage hoch -- mit ihr bleibt sie bei den wahren 10, wie
+     der spätere tatsächliche Verlauf bestätigt. */
+  const purchases = [];
+  for (let t = 0; t <= 90; t += 10) purchases.push({ date: day(-(200 - t)), quantity: 1 });
+  purchases.push({ date: day(-100), quantity: 6 });   // das Fest
+
+  const vorher = computeRhythm(purchases.filter((p) => p.date < day(-100)));
+  const nachher = computeRhythm(purchases);
+  ok("Vor dem Fest steht der Takt bei zehn Tagen", vorher.rhythmDays === 10, vorher.rhythmDays);
+  ok("Ohne Korrektur schießt die Vorhersage auf das Sechsfache hoch",
+    nachher.rhythmDays === 60, nachher.rhythmDays);
+
+  const info = { productId: "x", date: day(-100), quantity: 6, typical: vorher.lastQuantity };
+  const korrigiert = applyEventCorrection(nachher, info);
+  ok("Mit der Bestätigung bleibt sie bei den wahren zehn Tagen",
+    korrigiert.rhythmDays === 10, korrigiert.rhythmDays);
+
+  const spaeter = [...purchases];
+  for (let t = 10; t <= 50; t += 10) spaeter.push({ date: day(-(100 - t)), quantity: 1 });
+  const wahrheit = computeRhythm(spaeter);
+  ok("Und genau das bestätigt der tatsächliche weitere Verlauf",
+    korrigiert.rhythmDays === wahrheit.rhythmDays, `${korrigiert.rhythmDays} vs ${wahrheit.rhythmDays}`);
 }
 
 /* ================================================================

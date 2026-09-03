@@ -786,6 +786,22 @@ const App = {
    * Fassungen desselben Buchungswegs wären genau die Doppelpflege,
    * bei der Fassungen auseinanderlaufen — steht er hier.
    */
+  /**
+   * Nach jedem Buchen: fiel dieser Einkauf für ein Produkt deutlich
+   * größer aus als sonst? Dann kurz fragen, ob ein Anlass dahinter-
+   * steht (eventSheet() in views.js, Herleitung in eventDetector.js).
+   *
+   * `rhythmenVorher` ist bewusst der Stand VOR diesem Einkauf — jeder
+   * Aufrufer erfasst ihn, bevor Data.addReceipt() läuft. Danach ist
+   * die auffällige Menge ja schon die neue „letzte Menge", und der
+   * Vergleich fände keinen Unterschied mehr.
+   */
+  maybeAskEvent(items, rhythmenVorher) {
+    if (!rhythmenVorher) return;
+    const { isEvent, products } = detectEventPurchase(items, rhythmenVorher);
+    if (isEvent) eventSheet(products, App);
+  },
+
   bookCart() {
     const inCart = App.cartItems();
     if (!inCart.length) return;
@@ -798,20 +814,30 @@ const App = {
         // Nur Katalogprodukte: eine frei eingetippte Zeile hat kein
         // Produkt und damit auch keine Sicherheitsangabe.
         const alert = safetyAlert(inCart.filter((i) => i.productId && byId(i.productId)));
+        // Vor dem Buchen erfasst: danach zählt jede auffällige Menge
+        // schon als die neue "letzte Menge" und fiele nicht mehr auf.
+        const rhythmenVorher = App.ctx.rhythms;
+        const gebucht = inCart.map((i) => ({
+          productId: i.productId,
+          quantity: 1,
+          unitPrice: i.halved ? i.price / 2 : i.price
+        }));
         const res = Data.addReceipt({
           date: Data.today(),
           store: App.ctx.store || "Einkauf",
-          items: inCart.map((i) => ({
-            productId: i.productId,
-            quantity: 1,
-            unitPrice: i.halved ? i.price / 2 : i.price
-          }))
+          items: gebucht
         });
         if (App.storeOpen) App.closeStore();
         // Sicherheitshinweis im richtigen Moment: beim Verlassen des
-        // Ladens, nicht drei Tage später in einer Liste.
+        // Ladens, nicht drei Tage später in einer Liste. Ein
+        // Kühlketten-Hinweis ist dringender als die Anlass-Frage, und
+        // beide teilen sich dasselbe Blatt -- deshalb hier bewusst
+        // "entweder, oder" statt beide nacheinander zu zeigen.
         if (alert) App.notice("Kühlkette", alert.message);
-        else App.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
+        else {
+          App.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
+          App.maybeAskEvent(gebucht, rhythmenVorher);
+        }
       },
       "Buchen"
     );

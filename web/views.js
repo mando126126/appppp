@@ -1374,6 +1374,7 @@ function productSheet(productId, ctx) {
   if (!nf && r && r.feedback && r.feedback.message) {
     body.append(el("div", "note", esc(r.feedback.message)));
   }
+  if (!nf && r && r.event) body.append(el("div", "note", esc(r.event.message)));
   if (!nf && chg && chg.found) body.append(el("div", "note blue", esc(chg.message)));
   if (p.note) body.append(el("div", "note", esc(p.note)));
 
@@ -1419,6 +1420,10 @@ function productSheet(productId, ctx) {
       hz("Rückmeldungen", `${r.feedback.signals} · ${r.feedback.applied ? "wirken auf den Rhythmus" : "noch ohne Wirkung"}`);
     }
     if (r && r.season && r.season.applied) hz("Saison", r.season.message);
+    if (r && r.event) {
+      hz("Anlass", `${de(r.event.boughtQuantity)}× gekauft, ${de(r.event.typicalQuantity)}× üblich · ` +
+        `ohne das wären es ${alleTage(r.eventBaseDays)} gewesen`);
+    }
     if (chg && chg.found) hz("Verhalten geändert", chg.message);
   }
   if (nf) hz("Quelle", nf.rateSource || nf.intervalSource || nf.datedSource);
@@ -2479,6 +2484,69 @@ function askLate(productId, ctx, app) {
   body.append(g);
   app.sheet("Kam das zu spät?", p.name, body);
   return true;
+}
+
+/**
+ * „Steht ein Fest an?“ — nach einem auffällig großen Einkauf.
+ * ================================================================
+ * Derselbe Grundsatz wie bei askLate() direkt oberhalb: eine
+ * Rückmeldung, die man auch weglassen kann, kein stilles Signal.
+ *
+ * WARUM DAS ÜBERHAUPT WICHTIG IST. `rhythmDays = perUnitDays x
+ * lastQuantity` (rhythmEngine2.js) geht davon aus, dass eine größere
+ * Menge im GLEICHEN Tempo verbraucht wird wie sonst. Bei einer
+ * Grillfeier stimmt das nicht — die App würde sonst monatelang nichts
+ * mehr vorschlagen, weil sie sechs Packungen für sechsmal so lange
+ * hält, statt für ein verlängertes Wochenende. Siehe eventDetector.js
+ * für die Herleitung samt Messung.
+ *
+ * WARUM GENAU JETZT GEFRAGT WIRD. Der Moment direkt nach dem Buchen
+ * ist der einzige, in dem die App überhaupt weiß, dass gerade etwas
+ * Auffälliges passiert ist — Tage später sähe derselbe Kauf in der
+ * Historie aus wie jeder andere.
+ *
+ * WARUM NICHT PRODUKTWEISE EINZELN GEFRAGT WIRD. Ein Fest betrifft
+ * meist mehrere Zutaten gleichzeitig; eine Frage pro Produkt wäre
+ * fünf Fragen für einen einzigen Anlass. Ein Ja gilt für alle
+ * erkannten Produkte auf einmal, mit der Liste sichtbar davor.
+ */
+function eventSheet(products, app) {
+  const body = frag();
+  const namen = products.map((p) => (byId(p.productId) || {}).name || p.productId);
+  const g = uiGroup("Diese Menge stach heraus",
+    "Ein Ja passt nur die Vorhersage an, wann du das nächste Mal wieder brauchst — nicht den gelernten " +
+    "Rhythmus selbst. Die App rechnet sonst mit der üblichen Menge weiter, sobald ein normaler Einkauf " +
+    "folgt.");
+  products.forEach((p, i) => {
+    g.body.append(uiRow(namen[i], `${de(p.quantity)}× statt sonst ${de(p.typical)}×`));
+  });
+  body.append(g);
+
+  const antwort = el("div", "group");
+  const ja = el("button", "row");
+  ja.append(el("div", "rowMain",
+    '<div class="rowTitle">Ja, für einen Anlass</div>' +
+    '<div class="rowSub">der nächste Vorschlag kommt trotzdem bald</div>'));
+  ja.addEventListener("click", () => {
+    const heute = Data.today();
+    products.forEach((p) => Data.recordEvent(p.productId, p.quantity, p.typical, heute));
+    App.closeSheet();
+    app.toast(
+      products.length === 1 ? `Notiert für ${namen[0]}` : `Notiert für ${zahlwort(products.length, "Produkt", "Produkte")}`,
+      { icon: "🎉" }
+    );
+  });
+  const nein = el("button", "row");
+  nein.append(el("div", "rowMain",
+    '<div class="rowTitle">Nein, ganz normal</div>' +
+    '<div class="rowSub">nichts wird angepasst</div>'));
+  nein.addEventListener("click", () => App.closeSheet());
+  antwort.append(ja, nein);
+  body.append(antwort);
+
+  app.sheet("Steht ein Fest an?",
+    products.length === 1 ? namen[0] : `${namen[0]} und ${zahlwort(products.length - 1, "weiteres", "weitere")}`,
+    body);
 }
 
 function addSheet(ctx, app) {
@@ -3812,10 +3880,14 @@ function renderScan(box, cap, app) {
   save.disabled = p.open > 0 || buchbar === 0;
   save.addEventListener("click", () => {
     p.rows.forEach((r) => { if (r.learn && r.productId) Data.learnAlias(r.raw, r.productId); });
+    // Vor dem Buchen erfasst -- siehe App.maybeAskEvent().
+    const rhythmenVorher = app.ctx.rhythms;
+    const gebucht = p.rows.filter((r) => r.productId && !r.needsConfirmation);
     const res = Data.addReceipt({ date: cap.date, store: cap.store, items: p.rows });
     cap.parsed = null; cap.text = "";
     app.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
+    App.maybeAskEvent(gebucht, rhythmenVorher);
   });
   box.append(save);
 }
@@ -3895,10 +3967,14 @@ function renderManual(box, cap, app) {
 
   const save = el("button", "cta", "Einkauf buchen");
   save.addEventListener("click", () => {
+    // Vor dem Buchen erfasst -- siehe App.maybeAskEvent().
+    const rhythmenVorher = app.ctx.rhythms;
+    const gebucht = cap.basket.filter((b) => b.productId);
     const res = Data.addReceipt({ date: di.value, store: si.value.trim() || "Unbekannt", items: cap.basket });
     cap.basket = [];
     app.toast(`${zahlwort(res.count, "Position", "Positionen")} gebucht`, { detail: bookedDetail(res) });
     app.goto("liste");
+    App.maybeAskEvent(gebucht, rhythmenVorher);
   });
   box.append(save);
 }

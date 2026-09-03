@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 2207 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2246 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4427,6 +4427,100 @@ Tests bestehen.
 
 ---
 
+## Die Anlass-Frage: übergroße Einkäufe entschärfen (2026-09-03)
+
+### Der Fehler, um den es geht
+
+`rhythmDays = perUnitDays × lastQuantity` (rhythmEngine2.js) ist im
+Normalfall genau richtig: wer sechs Packungen statt einer kauft, kommt
+damit sechsmal so lange aus — bei **gleichbleibendem** Verbrauch. Diese
+Annahme bricht genau dann, wenn sie am wichtigsten wäre: eine
+Grillfeier, Besuch übers Wochenende, Weihnachten. Dort wird die
+sechsfache Menge nicht sechsmal so langsam verbraucht, sondern in ein
+paar Tagen deutlich schneller — und die App zog daraus bisher den
+falschen Schluss, das Produkt sei jetzt für Monate erledigt.
+
+Gemessen an einem deterministischen Fall (nicht am seed-abhängigen
+Langzeitlauf, aus gutem Grund — siehe die vorige Runde): ein Haushalt
+kauft alle zehn Tage eine Packung Grillfleisch, kauft an einem Tag auf
+einmal sechs für ein Fest, danach wieder normal. **Ohne** Korrektur
+schießt die Vorhersage auf 60 Tage hoch. **Mit** ihr bleibt sie bei den
+wahren 10 — bestätigt durch den tatsächlichen weiteren Verlauf.
+
+Die App kann diesen Unterschied nicht aus den Kaufdaten allein
+ablesen: ein Vorratskauf zum Sparpreis und ein Fest sehen in der Kasse
+identisch aus. Deshalb wird gefragt statt geschlossen — derselbe
+Grundsatz wie bei `askLate()`: eine Rückmeldung, die man auch
+weglassen kann, nie ein stilles Signal.
+
+### Was erkannt wird
+
+`eventDetector.js` vergleicht die gekaufte Menge je Produkt mit der
+zuletzt üblichen (`rhythm.lastQuantity`, aus dem Stand **vor** diesem
+Einkauf — danach wäre die auffällige Menge ja schon die neue „letzte
+Menge" und nichts fiele mehr auf). Auffällig ist ein Produkt erst ab
+dem 2,5-fachen der üblichen Menge **und** mindestens zwei Einheiten
+mehr in absoluten Zahlen — ein einzelnes Produkt, das von einer auf
+drei Packungen springt, ist kein Fest, sondern gewöhnliches Rauschen.
+Gefragt wird nur, wenn mehrere Produkte gleichzeitig auffallen oder
+ein einzelnes sehr deutlich (ab dem Vierfachen) — dieselbe
+Zurückhaltung wie überall in diesem Projekt gegen Rückmeldungen, die
+zum Hintergrundrauschen werden.
+
+Nur Lebensmittel: Haushaltsprodukte rechnen über eine gleitende
+Verbrauchsrate (`rateLearner.js`), gemittelt über 180 Tage — ein
+einzelner Großeinkauf geht darin unter, statt sie zu dominieren. Das
+Problem existiert dort strukturell nicht, und eine ohnehin nie
+zutreffende Bulk-Klopapier-Frage wurde entsprechend ausgeschlossen.
+
+### Was bei einem Ja passiert
+
+Die Korrektur rechnet als **Verhältnis auf den aktuellen Rhythmus**,
+nicht neu aus dem rohen Pro-Einheit-Wert — der hereinkommende Rhythmus
+hat zu diesem Zeitpunkt bereits Saison und Rückmeldungen durchlaufen,
+und eine Neuberechnung von Grund auf würde diese Stufen verwerfen. Der
+Faktor „übliche Menge ÷ gekaufte Menge" nimmt nur die Menge aus der
+Rechnung, die den Ausschlag gab.
+
+Angewendet wird sie **nur, solange dieser Kauf noch der letzte für das
+Produkt ist**: sobald danach ein echter neuer Kauf stattfindet, weicht
+das gespeicherte Ereignisdatum vom neuen `lastPurchaseDate` ab, und die
+Korrektur verliert sich von selbst — kein Aufräumen nötig, derselbe
+Mechanismus wie bei einer überholten Vorratskorrektur.
+
+Der gelernte Rhythmus selbst — der Median über die echten Kaufabstände
+— bleibt unangetastet. Käufe bleiben Käufe, wie überall in diesem
+Projekt seit `feedbackLearner.js`.
+
+### Wo gefragt wird
+
+Nach jedem gebuchten Einkauf: im Ladenmodus, nach dem Bestätigen eines
+gescannten Bons und nach der Hand-Erfassung. Ladenmodus-Buchungen
+tragen technisch immer Menge 1 je Position, lösen die Frage also
+praktisch nie aus — der eigentliche Anwendungsfall ist „nach Einspielung
+eines Bons", wie angefragt: ein gescannter Kassenzettel oder eine
+Hand-Erfassung mit echten Stückzahlen.
+
+Ein Kühlketten-Hinweis (bereits vorhandene Sicherheitswarnung) ist
+dringender als die Anlass-Frage, und beide teilen sich dasselbe Blatt
+— deshalb bewusst „entweder, oder" statt beide nacheinander zu zeigen.
+
+Ein Ja gilt für alle erkannten Produkte auf einmal, mit der Liste
+sichtbar davor — ein Fest betrifft meist mehrere Zutaten gleichzeitig,
+eine Frage pro Produkt wäre fünf Fragen für einen Anlass. Ein Nein
+ändert nichts, genau wie bei jeder anderen optionalen Rückmeldung in
+dieser App.
+
+Die Bestätigung bleibt nachvollziehbar: ein Hinweis direkt im
+Detail-Blatt des Produkts (nicht nur ein Toast, der nach ein paar
+Sekunden verschwindet) und eine Zeile unter „Wie die App darauf kommt"
+mit der gekauften und der üblichen Menge.
+
+24 neue Lerntests (Erkennung, Korrektur, Zusammenspiel mit Saison),
+16 neue Oberflächentests. Alle jetzt 2246 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -4497,13 +4591,13 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 2207
-npm run test:algo # 1275 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 2246
+npm run test:algo # 1298 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
                   #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen,
                   #   Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 893 Oberflächentests in jsdom
+npm run test:ui   # 909 Oberflächentests in jsdom
 npm run test:long # 39 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

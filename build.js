@@ -39,6 +39,7 @@ const MODULES = [
   "rhythmEngine2.js",
   "absenceDetector.js",
   "abandonDetector.js",
+  "eventDetector.js",
   "productMatcher2.js",
   "productSearch.js",
   "brandSwap.js",
