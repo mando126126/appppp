@@ -106,6 +106,10 @@ function emptyState() {
     // belastbare Zahl, die es gibt — alles andere im Katalog ist
     // Lagerempfehlung. Sie schlägt deshalb jede Schätzung.
     useBy: {},                  // productId -> "JJJJ-MM-TT"
+    // Nutzerkorrektur einer Vorratsschätzung, die einfach zu hoch
+    // oder zu niedrig geworden ist -- neuer Anker für die Rechnung,
+    // bis der nächste Kauf sie ohnehin ersetzt. Siehe setStockCorrection().
+    stockCorrections: {},       // productId -> {date, remainingUnits}
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
     dismissed: {                // weggetippte Hinweise, je Woche
       week: null,
@@ -123,6 +127,9 @@ function emptyState() {
     // die App ein Automat, den man nicht bedienen kann.
     manual: [],           // [{id, productId|null, name, price, aisle, category, week}]
     savingsAccepted: [],  // ids angenommener Sparvorschläge
+    // Schnappschuss bei Annahme, damit der Wochenrückblick später
+    // nachhalten kann, ob sich seither tatsächlich etwas geändert hat.
+    savingsAcceptedAt: {}, // id -> {date, productId, title, wasteRateThen}
     // Produkte, für die kein Eigenmarken-Vergleich mehr gezeigt wird.
     // Manches ist Geschmack und nicht Rechnen — wer seinen Kaffee mag,
     // soll nicht jede Woche gefragt werden.
@@ -455,6 +462,29 @@ function toggleOpened(productId) {
     if (i >= 0) s.opened.splice(i, 1);
     else s.opened.push({ productId, openedDate: today() });
   });
+}
+
+/**
+ * Eine Vorratsschätzung von Hand korrigieren -- für die neun von zehn
+ * Fällen, in denen sie einfach nur zu hoch oder zu niedrig geworden
+ * ist (mehr gegessen als sonst, etwas verschüttet, eine zweite
+ * Packung im Schrank vergessen). Bisher gab es dafür keinen Weg außer
+ * abzuwarten, bis der nächste Kauf die Schätzung zurücksetzt -- das
+ * kann je nach Rhythmus Wochen dauern.
+ *
+ * Wirkt wie ein neuer, kleiner Kauf: `inventoryEstimator.js` rechnet
+ * ab jetzt vom heutigen Tag und der korrigierten Menge weiter, bis
+ * ein echter Kauf sie ersetzt. `remainingUnits` in Vielfachen der
+ * zuletzt gekauften Menge, wie überall sonst im Bestand ("0,6×").
+ */
+function setStockCorrection(productId, remainingUnits) {
+  if (!productId) return false;
+  const value = Math.max(0, Number(remainingUnits) || 0);
+  update((s) => {
+    if (!s.stockCorrections) s.stockCorrections = {};
+    s.stockCorrections[productId] = { date: today(), remainingUnits: value };
+  });
+  return true;
 }
 
 /* ---------- Ereignis-Protokoll ---------- */
@@ -978,7 +1008,8 @@ function compute() {
   // Angebrochenes hält kürzer als die Packung — die Korrektur muss vor
   // Reichweite und Rezepten greifen, sonst rechnen beide mit der Frist
   // der ungeöffneten Ware.
-  const inventory = applyOpened(estimateInventory(history, rhythms, ref, { useBy: s.useBy }), s.opened, ref)
+  const inventory = applyOpened(estimateInventory(history, rhythms, ref,
+    { useBy: s.useBy, corrections: s.stockCorrections }), s.opened, ref)
     .filter((i) => !isNonFood(i.productId));
   const opened = openedItems(s.opened, ref);
 
@@ -1204,6 +1235,31 @@ function compute() {
     ...x, on: s.savingsAccepted.includes(x.id)
   }));
 
+  /* Ein angenommener Sparvorschlag änderte bisher an keiner Stelle
+   * der App etwas außer der eigenen Wochensumme -- ein Haken ohne
+   * Folge. Statt die Produktwahl automatisch umzustellen (das wäre
+   * eine Automatisierung, die niemand ausdrücklich erbeten hat),
+   * hält der Wochenrückblick jetzt nach: ist die Verschwendung bei
+   * genau diesem Produkt seit der Annahme messbar gesunken? Dieselbe
+   * Verschwendungsquote, die überall sonst in der App auch gilt --
+   * keine neue Fachlogik, nur eine neue Lesart vorhandener Zahlen. */
+  const savingsFollowUp = Object.entries(s.savingsAcceptedAt || {})
+    .filter(([id]) => s.savingsAccepted.includes(id))
+    .map(([id, snap]) => {
+      const now = wasteStats.get(snap.productId);
+      const wasteRateNow = now ? now.wasteRate : null;
+      const wasteRateThen = typeof snap.wasteRateThen === "number" ? snap.wasteRateThen : null;
+      return {
+        id, title: snap.title, productId: snap.productId, date: snap.date,
+        wasteRateThen, wasteRateNow,
+        // Drei Prozentpunkte Toleranz, damit dieselbe Quote nicht
+        // durch reine Rundung als "eingehalten" durchgeht.
+        improved: wasteRateNow !== null && wasteRateThen !== null && wasteRateNow <= wasteRateThen - 0.03,
+        messbar: wasteRateNow !== null && wasteRateThen !== null
+      };
+    })
+    .sort((a, b) => a.date < b.date ? 1 : -1);
+
   /* --- Pfand und Archiv aus den echten Bons --- */
   const byReceipt = new Map();
   s.purchases.forEach((p) => {
@@ -1343,7 +1399,7 @@ function compute() {
   return {
     ref, weekKey: wk, weekday: weekdayOf(ref),
     history, rhythms, stage, chronic, anomalies, wasteStats, inventory,
-    items, manualItems, knownItems: known, duplicates, budgetResult, vacation, savings,
+    items, manualItems, knownItems: known, duplicates, budgetResult, vacation, savings, savingsFollowUp,
     deposit, depositEntries, openDepositEntries: openEntries, archive,
     inflation,
     range, prices, foodDeals, forgotten, freeze, safety,
@@ -1604,7 +1660,8 @@ function searchProducts(query, limit = 12) {
 const Data = {
   STORE_KEY, SHADOW_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
-  addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened, recordSwapFor, recordFeedback,
+  addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened, setStockCorrection,
+  recordSwapFor, recordFeedback,
   toggleEaten, toggleNoChronic,
   toggleBrandOff, setUseBy, recoveryNotice,
   addManual, removeManual,

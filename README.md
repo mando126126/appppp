@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1900 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 1970 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -3926,6 +3926,104 @@ die Schattenkopie weiterhin greift; die Prüfungen, die nur die jetzt
 entfernte Oberfläche betrafen (Sicherungskarte, Wochenstreifen-
 Rendering), sind mit ihr gegangen. Alle jetzt 1900 Tests bestehen.
 
+## Ein UX- und Logik-Audit, dritte Runde (2026-09-03)
+
+Ein dritter Testbericht, diesmal mit einem anderen Auftrag: nicht nur
+Politur, sondern auch Logik-Vorschläge — Stellen, an denen die
+Fachlogik in `src/algo/` bereits etwas berechnet oder anbietet, das
+die Oberfläche nicht nutzt. Elf Befunde, alle umgesetzt:
+
+**Fachlogik angeschlossen.** `budgetOptimizer.js`s `cheaperAlternatives()`
+lag fertig, getestet und ungenutzt in der Fachlogik — laut eigenem
+Modul-Kommentar extra gebaut, weil Streichen nie der eigentliche
+Wunsch war, Tauschen ist es. Jede wegen Budget gestrichene Position
+auf der Liste zeigt jetzt, wenn der Katalog eine günstigere
+Alternative in derselben Kategorie kennt, einen Tauschvorschlag mit
+Ersparnis und eigenem „Tauschen“-Knopf.
+
+**„Sparen“ hat jetzt eine Folge.** Ein angenommener Sparvorschlag
+änderte bislang an keiner Stelle der App etwas außer der eigenen
+Wochensumme — ein Haken ohne Wirkung. Statt die Produktwahl
+automatisch umzustellen, hält der Wochenrückblick jetzt nach: ist die
+Verschwendung bei genau diesem Produkt seit der Annahme tatsächlich
+gesunken? Dieselbe Verschwendungsquote, die überall sonst in der App
+gilt — keine neue Fachlogik, nur eine neue Lesart vorhandener Zahlen.
+
+**Vorratsschätzungen lassen sich jetzt korrigieren.** Bisher gab es
+außer „leer“ (für angebrochene Packungen) und Abwarten bis zum
+nächsten Kauf keinen Weg, eine falsch gewordene Schätzung
+richtigzustellen — konnte je nach Rhythmus Wochen dauern. Drei Knöpfe
+im Produkt-Blatt („Ist leer“ / „Etwa richtig“ / „Mehr als gedacht“)
+wirken wie ein kleiner neuer Kauf: `inventoryEstimator.js` rechnet ab
+dem Korrekturzeitpunkt weiter, bis der nächste echte Kauf sie ersetzt.
+
+**Bestand ist jetzt gegliedert.** Mit Beispieldaten kam die Seite auf
+2335 Pixel Höhe, nur durch Überschriften getrennt — genau das Problem,
+das „Zahlen“ und „Mehr“ mit einem Segment schon einmal gelöst hatten.
+Jetzt drei Unterbereiche (Vorrat, Küche, bei aktivem Urlaub zusätzlich
+Reise). „Vermutlich noch da“ bekommt außerdem ein „Alle N ansehen“
+statt bei 20 Positionen kommentarlos abzuschneiden.
+
+**Der Rechner-Bildschirm wird nicht mehr verschenkt.** Die
+Zweispalten-Regel `.cards2` stand fertig in `app.css`, wurde aber in
+keiner einzigen Ansicht verwendet. Jetzt aktiv für „Vermutlich noch
+da“ + „Haushalt“ (Bestand) und „Darstellung“ + „Deine Liste“,
+„Wochenrückblick“ + „Haushalt“ (Mehr) — überall dort, wo zwei kurze,
+unabhängige Gruppen nebeneinanderpassen. Auf dem Telefon bewirkt die
+Regel nichts, sie steht nur im ≥900px-Media-Query.
+
+**Ein echter Layout-Fehler auf dem Rechner.** Bei „Zahlen“ fiel die
+fünfte Kennzahlen-Kachel („Rhythmen“) allein in die nächste Zeile und
+zog sich über die volle Breite — eine fast leere, sehr breite Fläche,
+weil `flex:1` den Rest der Zeile an das einzige Element vergab.
+`flex:0 1 200px` behebt das: jede Kachel bleibt bei ihrer eigenen
+Breite, auch allein in ihrer Zeile.
+
+**Das Segment vor die lange Karte gezogen.** Bei „Zahlen“ stand die
+Auswahl Ausgaben/Verhalten/Bilanz hinter der kompletten Geld-Karte —
+wer zu „Verhalten“ oder „Bilanz“ wollte, musste erst daran
+vorbeiscrollen. Das Segment steht jetzt direkt unter der Kachelzeile;
+„Wo dein Geld hingeht“ läuft nur noch im Ausgaben-Tab, wo sie
+inhaltlich hingehört, statt für alle drei Tabs gemeinsam.
+
+**„Deine Liste“ nach oben.** Budget, Personen, Vorausschau und Urlaub
+— die vier Werte mit der höchsten Handlungsdichte in „Mehr“ — standen
+an fünfter von sechs Stellen. Jetzt direkt nach „Darstellung“.
+
+**Ein „+“ im Ladenmodus.** Eine ungeplante Position hinzuzufügen
+erforderte bisher, den Ladenmodus zu verlassen. Ein neuer Knopf öffnet
+`addSheet()` als Blatt darüber, ohne ihn zu schließen — die
+bestehende Diff-Logik in `renderStore()` erkennt die neue Position
+beim nächsten Neuzeichnen von selbst.
+
+**„Fällig“/„Angebote“ bleiben immer erreichbar.** Beide Seiten hingen
+ausschließlich an bedingten Zeilen auf Start und Bestand — waren beide
+Bedingungen gleichzeitig falsch, verschwand jeder Weg dorthin
+komplett. Ein dauerhafter, im Ruhezustand unauffälliger Einstiegspunkt
+steht jetzt unter „Mehr → Auswertungen“.
+
+**Erfassen auf dem Rechner.** „Fotografieren“ blieb dort der optisch
+dominante, volltonige Knopf, obwohl „Bild wählen“ oder eingefügter
+Text der naheliegendere Weg ist. Farbe und Reihenfolge tauschen jetzt
+ab 900px zugunsten von „Bild wählen“ — reine Gewichtung, kein Eingriff
+in die Erkennung.
+
+**Start nutzt den Rechner-Bildschirm.** Der Inhalt endete dort bislang
+bei rund 660px Höhe, der Rest des Fensters blieb leer, während die
+Wesen-Nachricht nur nach Antippen als Sprechblase erschien. Eine
+zweite Spalte ab 900px zeigt sie jetzt dauerhaft — derselbe Text,
+derselbe Rotations-Zähler, nur zusätzlich im DOM gerendert. Auf dem
+Telefon ändert sich nichts.
+
+Methode wie in den Runden zuvor: jeder Befund an einer Zeile
+Quellcode oder einem Screenshot festgemacht, mit gebauter App unter
+Playwright fotografiert (alle Bereiche, Ladenmodus, Produkt-Blatt,
+mobil und Rechner, hell und dunkel).
+
+62 neue Oberflächentests, dazu acht neue Tests für die
+Vorratskorrektur in `test/features.js`. Alle jetzt 1970 Tests
+bestehen.
+
 ---
 
 ## Aufbau
@@ -3965,11 +4063,11 @@ gehört `npm run build` in denselben Commit.
 |---|---|
 | **Start** | die Liste als ein Feld, „Jetzt zu tun“, die Wochenreihe |
 | **Liste** | Wochenrückblick (ab Sonntagabend), Wagen mit Buchen-Leiste, eigene Positionen ergänzen, Vorrats-Reichweite, Sicherheitshinweis, Vorschlag mit Detail-Blatt je Zeile, Preis-Gedächtnis, Vergessens-Detektor, Einfrier-Empfehlung, Saisonhinweis, Teilen, Budget, Haushaltsgröße, Vorausschau, Urlaub |
-| **Fällig** | kein eigener Reiter mehr — erreichbar über „Start“ und „Bestand“: Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
-| **Bestand** | geschätzter Vorrat, Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
+| **Fällig** | kein eigener Reiter mehr — erreichbar über „Start“, „Bestand“ und dauerhaft über „Mehr → Auswertungen“: Austausch-Produkte mit Tausch-Reset, was zur Neige geht, Bevorratung bei gutem Grundpreis |
+| **Bestand** | drei Unterbereiche (Vorrat, Küche, bei aktivem Urlaub zusätzlich Reise): geschätzter Vorrat mit Korrekturmöglichkeit („Ist leer“/„Etwa richtig“/„Mehr als gedacht“), Haushaltsprodukte mit Reichweite und Konfidenz, angebrochene Packungen, Rezepte, Einräumhilfe, Aufbrauchplan |
 | **Erfassen** | Bon-Text auswerten (an einem echten Lidl-Bon kalibriert) oder von Hand; unsichere Zuordnungen werden **gefragt, nicht geraten** |
-| **Zahlen** | Streak und Rückblick, Meilensteine, eigener Einkaufsrhythmus, Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge, Packungsgrößen, Wirkung in Kilogramm |
-| **Mehr** | Erscheinungsbild, Schriftgröße, Rückblick-Erinnerung, Haushaltsprofil (Wasserhärte, Geräte), Ladenweg je Markt, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Beispieldaten, Löschen |
+| **Zahlen** | Streak und Rückblick, Meilensteine, eigener Einkaufsrhythmus, Ausgaben je Monat, persönliche Inflation, Preis-Gedächtnis, gelernte Rhythmen, Sparvorschläge mit Nachhaltung im Rückblick, Packungsgrößen, Wirkung in Kilogramm |
+| **Mehr** | Erscheinungsbild, Schriftgröße, Rückblick-Erinnerung, Haushaltsprofil (Wasserhärte, Geräte), Ladenweg je Markt, Einstiegspunkt zu Fällig/Angebote, Saison, Pfand, Bon-Archiv, Rechenweg, Datenqualitätsbericht, Beispieldaten, Löschen |
 
 Dazu der **Ladenmodus** als Vollbild: nach Gängen sortiert, große
 Ziele, am Ende ein Knopf, der den Einkauf in die Historie schreibt.
@@ -3998,12 +4096,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1900
-npm run test:algo # 1137 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 1970
+npm run test:algo # 1145 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
                   #   Verschwendung, Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 727 Oberflächentests in jsdom
+npm run test:ui   # 789 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

@@ -46,10 +46,23 @@ function estimateRemaining(productId, lastPurchase, rhythm, today, opts = {}) {
   const p = byId(productId);
   if (!p || !lastPurchase) return null;
 
-  const daysSince = daysBetween(lastPurchase.date, today);
+  /* Eine Nutzerkorrektur ("Ist leer" / "etwa richtig" / "mehr als
+   * gedacht", siehe Data.setStockCorrection) wirkt wie ein neuer,
+   * kleiner Kauf: die Rechnung läuft ab da vom Korrekturdatum und der
+   * korrigierten Menge weiter, statt vom ursprünglichen Kauf. Nur
+   * solange sie NACH dem letzten echten Kauf liegt -- ein neuer Kauf
+   * setzt ohnehin frisch auf, eine ältere Korrektur wäre dann nur
+   * noch Rauschen. */
+  const correction = opts.corrections && opts.corrections[productId];
+  const correctionValid = correction && isRealDate(correction.date) &&
+    correction.date >= lastPurchase.date && correction.date <= today &&
+    Number.isFinite(correction.remainingUnits);
+
+  const anchorDate = correctionValid ? correction.date : lastPurchase.date;
+  const daysSince = daysBetween(anchorDate, today);
   if (!Number.isFinite(daysSince) || daysSince < 0) return null;
 
-  const quantity = lastPurchase.quantity || 1;
+  const quantity = correctionValid ? correction.remainingUnits : (lastPurchase.quantity || 1);
 
   // Verbrauch pro Einheit: aus dem Rhythmus, sonst Kategorie-Annahme
   const perUnitDays = rhythm && rhythm.perUnitDays ? rhythm.perUnitDays : null;

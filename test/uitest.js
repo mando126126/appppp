@@ -1656,8 +1656,12 @@ console.log("\n--- Die Übersicht ---");
   ok("Die Übersicht rendert", errors.length === b4 && main.children.length > 0, errors[b4]);
 
   /* Dieselbe Grenze wie für die Liste, und aus demselben Grund. Die
-     Übersicht darf reicher aussehen, aber nicht wieder zuwachsen. */
-  const bloecke = main.querySelectorAll(":scope > .group, :scope > .card");
+     Übersicht darf reicher aussehen, aber nicht wieder zuwachsen.
+     .startMain trägt seit der zweiten Spalte auf dem Rechner die
+     eigentlichen Blöcke; .startAside (Wesen-Nachricht) zählt separat
+     nicht mit -- sie ist kein weiterer inhaltlicher Block. */
+  const startMain = main.querySelector(".startMain") || main;
+  const bloecke = startMain.querySelectorAll(":scope > .group, :scope > .card");
   ok("Die Übersicht hat höchstens vier Blöcke", bloecke.length <= 4, bloecke.length);
 
   ok("Die Liste ist NICHT der erste Reiter", T.NAV[0].id === "start", T.NAV[0].id);
@@ -3495,6 +3499,130 @@ console.log("\n--- UX-Testbericht: dritte Umsetzungsrunde ---");
     /\.shotFoto\{background:var\(--fill\)/.test(desktopCss));
   ok("Und \"Bild wählen\" zur vollen Fläche",
     /\.shotWaehlen\{background:var\(--accent-strong\)/.test(desktopCss));
+
+  /* --- Bestand: keine Korrektur für eine falsch gewordene Schätzung
+     außer "leer" oder Abwarten. Jetzt drei Knöpfe im Produkt-Blatt. */
+  D.reset();
+  D.loadDemo("full");
+  const mitBestand = App.ctx.inventory[0];
+  ok("Es gibt ein Produkt mit geschätztem Bestand", !!mitBestand);
+  if (mitBestand) {
+    productSheetFor(mitBestand.productId);
+    const corrBtns = [...$("sheetOpts").querySelectorAll(".stockCorrRow button")].map((b) => b.textContent);
+    ok("Alle drei Korrektur-Knöpfe stehen im Blatt",
+      corrBtns.includes("Ist leer") && corrBtns.includes("Etwa richtig") && corrBtns.includes("Mehr als gedacht"),
+      corrBtns.join(", "));
+
+    const leerBtn = [...$("sheetOpts").querySelectorAll(".stockCorrRow button")]
+      .find((b) => b.textContent === "Ist leer");
+    click(leerBtn);
+    const corr = D.get().stockCorrections[mitBestand.productId];
+    ok("\"Ist leer\" trägt die Korrektur ein", !!corr && corr.remainingUnits === 0, JSON.stringify(corr));
+    ok("Mit dem heutigen Datum", corr && corr.date === D.today(), corr && corr.date);
+    ok("Die Schätzung übernimmt sie beim nächsten Rechnen",
+      !App.ctx.inventory.some((i) => i.productId === mitBestand.productId));
+    ok("Das Blatt schließt sich", $("sheet").hidden === true);
+  }
+
+  D.reset();
+  D.loadDemo("full");
+  const mitBestand2 = App.ctx.inventory.find((i) => i.remainingUnits < 3);
+  if (mitBestand2) {
+    productSheetFor(mitBestand2.productId);
+    const mehrBtn = [...$("sheetOpts").querySelectorAll(".stockCorrRow button")]
+      .find((b) => b.textContent === "Mehr als gedacht");
+    click(mehrBtn);
+    const corr2 = D.get().stockCorrections[mitBestand2.productId];
+    ok("\"Mehr als gedacht\" hebt die hinterlegte Menge über die alte Schätzung",
+      corr2 && corr2.remainingUnits > mitBestand2.remainingUnits,
+      corr2 && `${corr2.remainingUnits} vs ${mitBestand2.remainingUnits}`);
+    const neu = App.ctx.inventory.find((i) => i.productId === mitBestand2.productId);
+    ok("Und die Bestandsanzeige zeigt danach mehr als vorher",
+      neu && neu.remainingUnits > mitBestand2.remainingUnits,
+      neu && `${neu.remainingUnits} vs ${mitBestand2.remainingUnits}`);
+  }
+
+  D.reset();
+  D.loadDemo("full");
+
+  /* --- Zahlen: "Sparen" war ein Haken ohne Folge -- kein
+     Fachlogik-Modul liest savingsAccepted. Jetzt hält der
+     Wochenrückblick nach, ob die Verschwendung beim Produkt seit der
+     Annahme tatsächlich gesunken ist. */
+  App.goto("zahlen");
+  App.zahlenTab = "bilanz";
+  App.render();
+  const vorschlag = App.ctx.savings[0];
+  ok("Es gibt einen Sparvorschlag in den Beispieldaten", !!vorschlag);
+  if (vorschlag) {
+    const nehmenBtn = [...$("main").querySelectorAll(".save .pillBtn")]
+      .find((b) => b.getAttribute("aria-label") === vorschlag.title);
+    ok("Der Knopf zum Annehmen steht da", !!nehmenBtn);
+    if (nehmenBtn) click(nehmenBtn);
+
+    const snap = D.get().savingsAcceptedAt[vorschlag.id];
+    ok("Die Annahme hinterlegt einen Schnappschuss", !!snap, JSON.stringify(snap));
+    ok("Mit Produkt, Titel und heutigem Datum",
+      snap && snap.productId === vorschlag.productId && snap.title === vorschlag.title && snap.date === D.today(),
+      JSON.stringify(snap));
+
+    const folge = App.ctx.savingsFollowUp.find((f) => f.id === vorschlag.id);
+    ok("ctx.savingsFollowUp führt den angenommenen Vorschlag", !!folge, JSON.stringify(folge));
+
+    T.reviewSheet(App.ctx, App);
+    ok("Der Rückblick zeigt \"Angenommene Sparvorschläge\"",
+      /Angenommene Sparvorschläge/.test($("sheetOpts").textContent));
+    ok("Und nennt den Vorschlag beim Namen",
+      $("sheetOpts").textContent.includes(vorschlag.title));
+    App.closeSheet();
+
+    // Eine künstlich schlechtere Vergangenheit simulieren, um zu
+    // prüfen, dass "eingehalten" wirklich von den Zahlen abhängt und
+    // nicht immer denselben Text zeigt.
+    D.update((s) => {
+      s.savingsAcceptedAt[vorschlag.id].wasteRateThen =
+        Math.min(1, (App.ctx.wasteStats.get(vorschlag.productId) || { wasteRate: 0 }).wasteRate + 0.3);
+    });
+    const folgeBesser = App.ctx.savingsFollowUp.find((f) => f.id === vorschlag.id);
+    ok("Bei gesunkener Quote gilt der Vorschlag als eingehalten",
+      folgeBesser && folgeBesser.improved === true, JSON.stringify(folgeBesser));
+
+    // Und ungeschehen machen, ohne den Wochenzähler zu verfälschen.
+    D.update((s) => { s.savingsAccepted = s.savingsAccepted.filter((id) => id !== vorschlag.id); });
+    ok("Ohne aktive Annahme verschwindet der Vorschlag aus der Nachhaltung",
+      !App.ctx.savingsFollowUp.some((f) => f.id === vorschlag.id));
+  }
+
+  D.reset();
+  D.loadDemo("full");
+
+  /* --- Start: zweite Spalte mit der Wesen-Nachricht, nur auf dem
+     Rechner (per CSS). Derselbe Text wie die Sprechblase, ohne den
+     Zähler zu erhöhen -- sonst würde bloßes Neuzeichnen die Rotation
+     der echten Sprechblase weiterdrehen. */
+  App.mascotTapCount.start = 0;
+  App.goto("start");
+  App.render();
+  const aside = $("main").querySelector(".startAside");
+  const mascotCard = $("main").querySelector(".startMascotCard");
+  ok("Es gibt eine zweite Spalte mit der Wesen-Nachricht", !!aside && !!mascotCard);
+  ok("Sie trägt dieselbe Nachricht wie mascotMessage(ctx, \"start\", 0)",
+    mascotCard && mascotCard.textContent.trim() === T.mascotMessage(App.ctx, "start", 0).trim(),
+    mascotCard && mascotCard.textContent);
+  ok("Das bloße Rendern erhöht den Sprechblasen-Zähler nicht",
+    App.mascotTapCount.start === 0, App.mascotTapCount.start);
+  App.render();
+  App.render();
+  ok("Auch nach mehreren Neuzeichnungen nicht", App.mascotTapCount.start === 0, App.mascotTapCount.start);
+
+  ok(".startAside ist standardmäßig ausgeblendet (CSS)", /\.startAside\{display:none\}/.test(css));
+  const desktopCss2 = css.slice(css.indexOf("min-width:900px"));
+  ok("...und ab 900px sichtbar", /\.startAside\{display:block/.test(desktopCss2));
+  ok("Die Startseite bleibt auf höchstens vier Blöcke begrenzt (unverändert durch die Spalte)",
+    $("main").querySelector(".startMain").querySelectorAll(":scope > .group, :scope > .card").length <= 4);
+
+  D.reset();
+  D.loadDemo("full");
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

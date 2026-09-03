@@ -1225,6 +1225,31 @@ function productSheet(productId, ctx) {
       : null);
     a.zeile("Reichweite", range ? `${tage(range.days)} · begrenzt durch ${range.limitedBy === "frische" ? "Frische" : "Menge"}` : null);
     a.fertig();
+
+    /* Bisher gab es keinen Weg, eine Schätzung zu korrigieren, die
+       einfach zu hoch oder zu niedrig geworden ist -- nur "leer" für
+       angebrochene Packungen oder Abwarten bis zum nächsten Kauf.
+       Wirkt wie ein kleiner neuer Kauf (siehe setStockCorrection() /
+       inventoryEstimator.js): der nächste echte Kauf ersetzt sie
+       ohnehin wieder. */
+    if (inv) {
+      const corrRow = el("div", "stockCorrRow");
+      const corrBtn = (label, remainingUnits) => {
+        const b = el("button", "pillBtn", label);
+        b.addEventListener("click", () => {
+          Data.setStockCorrection(productId, remainingUnits);
+          App.closeSheet();
+          App.toast("Notiert");
+        });
+        return b;
+      };
+      corrRow.append(
+        corrBtn("Ist leer", 0),
+        corrBtn("Etwa richtig", inv.remainingUnits),
+        corrBtn("Mehr als gedacht", inv.remainingUnits + 1)
+      );
+      body.append(corrRow);
+    }
   }
 
   /* ---------- 6. Haushaltsprodukte rechnen anders ---------- */
@@ -1412,13 +1437,39 @@ function viewStart(ctx, app) {
     return c;
   }
 
-  c.append(listCard(ctx, app));
+  const main = el("div", "startMain");
+  main.append(listCard(ctx, app));
 
   const todo = todoCard(ctx, app);
-  if (todo) c.append(todo);
+  if (todo) main.append(todo);
 
-  if (ctx.stage.stage >= 2) c.append(runCard(ctx, app));
+  if (ctx.stage.stage >= 2) main.append(runCard(ctx, app));
+
+  // Auf dem Telefon bleibt es bei genau diesen drei Blöcken -- die
+  // Seite ist bewusst so kurz, wie sie laut Kommentar oben sein soll.
+  // Auf dem Rechner (≥900px, siehe app.css) bleibt sonst mehr als die
+  // Hälfte der Fensterhöhe leer, während die Wesen-Nachricht nur über
+  // Antippen als Sprechblase erscheint -- eine zweite Spalte zeigt sie
+  // stattdessen dauerhaft. .startAside ist mobil per CSS ausgeblendet,
+  // keine Verhaltensänderung, nur eine ≥900px-Ergänzung.
+  const layout = el("div", "startLayout");
+  layout.append(main, startAsideCard(ctx, app));
+  c.append(layout);
   return c;
+}
+
+/** Nur auf dem Rechner sichtbar (siehe .startAside in app.css): die
+ *  Wesen-Nachricht dauerhaft als ruhige Karte statt nur als
+ *  Sprechblase nach Antippen. Derselbe Text, derselbe Zähler --
+ *  liest ihn nur, erhöht ihn nicht, sonst driftete die Rotation der
+ *  echten Sprechblase bei jedem Neuzeichnen weiter. */
+function startAsideCard(ctx, app) {
+  const wrap = el("div", "startAside");
+  const seed = App.mascotTapCount.start || 0;
+  const box = el("div", "startMascotCard", mascotSvg(mascotMood(ctx), 40));
+  box.append(el("p", null, esc(mascotMessage(ctx, "start", seed))));
+  wrap.append(box);
+  return wrap;
 }
 
 /**
@@ -2039,6 +2090,25 @@ function reviewSheet(ctx, app, opts = {}) {
   }
 
   body.append(streakStrip(ctx));
+
+  /* Angenommene Sparvorschläge, nachgehalten. Vorher änderte "nehmen"
+     unter Zahlen -> Sparen an keiner Stelle der App irgendetwas außer
+     der eigenen Wochensumme. Statt die Produktwahl automatisch
+     umzustellen, hält der Rückblick fest, ob die Verschwendung bei
+     genau diesem Produkt seit der Annahme tatsächlich gesunken ist --
+     dieselbe Quote, die überall sonst gilt, keine neue Fachlogik. */
+  if (ctx.savingsFollowUp.length) {
+    body.append(el("div", "sheetGroupTitle", "Angenommene Sparvorschläge"));
+    ctx.savingsFollowUp.forEach((f) => {
+      const sub = !f.messbar
+        ? "noch keine Vergleichszahl seit der Annahme"
+        : f.improved
+          ? `Verschwendung seitdem gesunken: ${pct(f.wasteRateThen)} → ${pct(f.wasteRateNow)}`
+          : `noch nicht messbar weniger: ${pct(f.wasteRateThen)} → ${pct(f.wasteRateNow)}`;
+      body.append(uiRow(f.title, sub,
+        f.messbar ? flag("", f.improved ? "f-ok" : "f-gold", f.improved ? "eingehalten" : "noch nicht") : null));
+    });
+  }
 
   body.append(el("p", "srcnote",
     "„Gerettet“ ist eine Schätzung des abgewendeten Verlusts, „günstiger als üblich“ ist die nachrechenbare " +
@@ -3643,6 +3713,18 @@ function renderZahlenBilanz(c, ctx, app) {
       e.stopPropagation();
       app.set((st) => {
         st.savingsAccepted = x.on ? st.savingsAccepted.filter((y) => y !== x.id) : [...st.savingsAccepted, x.id];
+        // Schnappschuss bei der Annahme -- der Wochenrückblick hält
+        // später nach, ob die Verschwendung bei genau diesem Produkt
+        // seitdem tatsächlich gesunken ist, statt dass der Haken hier
+        // an keiner Stelle sonst etwas bewirkt.
+        if (!x.on) {
+          if (!st.savingsAcceptedAt) st.savingsAcceptedAt = {};
+          const stats = ctx.wasteStats.get(x.productId);
+          st.savingsAcceptedAt[x.id] = {
+            date: Data.today(), productId: x.productId, title: x.title,
+            wasteRateThen: stats ? stats.wasteRate : null
+          };
+        }
       });
     });
     d.addEventListener("click", () => app.notice(x.title, x.detail));

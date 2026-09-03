@@ -12,7 +12,7 @@ const { findForgotten } = require("../src/algo/forgottenDetector");
 const { safetyAlert } = require("../src/algo/safetyAlert");
 const { DEFAULT_AISLE_ORDER, orderFor, groupByAisle, moveAisle, relevantAisles } = require("../src/algo/aisleOrder");
 const { computeAllRhythms } = require("../src/algo/rhythmEngine2");
-const { estimateInventory } = require("../src/algo/inventoryEstimator");
+const { estimateInventory, estimateRemaining } = require("../src/algo/inventoryEstimator");
 const { byId } = require("../src/algo/foodDatabase");
 
 let pass = 0, fail = 0;
@@ -414,6 +414,60 @@ section("Liste als Text");
   ok("Kurzfassung ist eine Zeile",
     listAsLine([{ name: "A" }, { name: "B" }]) === "A, B");
   ok("Leere Kurzfassung sagt das auch", /Nichts/.test(listAsLine([])));
+}
+
+/* ================= Vorratskorrektur ================= */
+section("Vorratskorrektur von Hand");
+{
+  // Milch alle 6 Tage, letzter Kauf vor 10 Tagen -> Schätzung wäre
+  // längst auf null, ohne Korrektur.
+  const history = series("milch_vollmilch", 6, 12, { lastGap: 10, quantity: 1 });
+  const rhythms = computeAllRhythms(history);
+  const last = { date: day(-10), quantity: 1, unitPrice: byId("milch_vollmilch").typicalPrice };
+  const rhythm = rhythms.get("milch_vollmilch");
+
+  const ohne = estimateRemaining("milch_vollmilch", last, rhythm, day(0));
+  ok("Ohne Korrektur ist die Schätzung längst leer", !ohne || ohne.remainingUnits <= 0.15,
+    ohne && ohne.remainingUnits);
+
+  const leer = estimateRemaining("milch_vollmilch", last, rhythm, day(0), {
+    corrections: { milch_vollmilch: { date: day(-1), remainingUnits: 0 } }
+  });
+  ok("\"Ist leer\" wirkt sofort", leer && leer.remainingUnits === 0, leer && leer.remainingUnits);
+
+  const mehr = estimateRemaining("milch_vollmilch", last, rhythm, day(0), {
+    corrections: { milch_vollmilch: { date: day(-1), remainingUnits: 2 } }
+  });
+  ok("\"Mehr als gedacht\" hebt die Schätzung tatsächlich an",
+    mehr && mehr.remainingUnits > (ohne ? ohne.remainingUnits : 0) && mehr.remainingUnits < 2,
+    mehr && mehr.remainingUnits);
+  ok("Die Rechnung läuft ab dem Korrekturdatum weiter, nicht ab dem alten Kauf",
+    mehr && mehr.remainingUnits > 1.5, mehr && mehr.remainingUnits);
+
+  const veraltet = estimateRemaining("milch_vollmilch", last, rhythm, day(0), {
+    // Die Korrektur liegt VOR dem letzten Kauf -- ein neuer Kauf
+    // sollte sie ersetzen, nicht umgekehrt.
+    corrections: { milch_vollmilch: { date: day(-20), remainingUnits: 5 } }
+  });
+  ok("Eine Korrektur vor dem letzten Kauf wird ignoriert",
+    veraltet && (!ohne || Math.abs(veraltet.remainingUnits - ohne.remainingUnits) < 0.01),
+    veraltet && veraltet.remainingUnits);
+
+  const kaputt = estimateRemaining("milch_vollmilch", last, rhythm, day(0), {
+    corrections: { milch_vollmilch: { date: "2026-13-45", remainingUnits: 5 } }
+  });
+  ok("Ein kaputtes Korrekturdatum wird ignoriert, nicht übernommen",
+    kaputt && (!ohne || Math.abs(kaputt.remainingUnits - ohne.remainingUnits) < 0.01));
+
+  const inv = estimateInventory(history, rhythms, day(0),
+    { corrections: { milch_vollmilch: { date: day(-1), remainingUnits: 2 } } });
+  ok("estimateInventory() reicht die Korrektur ebenso durch",
+    inv.some((i) => i.productId === "milch_vollmilch" && i.remainingUnits > 1));
+
+  ok("Eine Packung ohne Korrektur bleibt unverändert",
+    estimateRemaining("brot_vollkorn",
+      { date: day(-2), quantity: 1, unitPrice: byId("brot_vollkorn").typicalPrice },
+      rhythms.get("brot_vollkorn"), day(0), { corrections: {} }) !== null);
 }
 
 console.log("\n" + "=".repeat(60));
