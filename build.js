@@ -44,6 +44,7 @@ const MODULES = [
   "wasteInference2.js",
   "storageAdvisor.js",
   "inventoryEstimator.js",
+  "calendarModel.js",
   "coldStart.js",
   "budgetOptimizer.js",
   "recipeMatcher.js",

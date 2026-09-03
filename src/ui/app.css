@@ -743,6 +743,146 @@ button.row:active,label.row:active{background:var(--fill)}
 .card h2{font-size:1.15rem}
 .card h3{font-size:0.94rem;margin-bottom:6px}
 .sub{font-size:0.85rem;color:var(--ink-2);margin:4px 0 14px;line-height:1.42}
+/* Das Datum auf der Übersicht ist der Weg in den Kalender. Es sieht
+   fast aus wie vorher -- ein eigener Knopf daneben hätte dieselbe
+   Sache zweimal gesagt. Nur der kleine Winkel dahinter verrät, dass
+   es antippbar ist. */
+.dateBtn{
+  display:inline-flex;align-items:center;gap:6px;
+  font:inherit;color:inherit;padding:2px 0;
+  border-radius:var(--r-sm);
+}
+.dateBtn:active{opacity:.5}
+.dateChev{
+  width:5px;height:5px;flex:0 0 auto;
+  border-right:1.6px solid var(--ink-3);border-top:1.6px solid var(--ink-3);
+  transform:rotate(45deg);
+  transition:transform .18s var(--ease);
+}
+.dateBtn:hover .dateChev{transform:rotate(45deg) translate(1px,-1px)}
+
+/* ---------------- Aufgehen ----------------
+   Eine einzige Bewegung für alles, was AUFGEHT: ein
+   Segmentwechsel, ein angetippter Tag im Kalender, nachgeladene
+   Zeilen, der Inhalt eines aufgeklappten `details`.
+
+   WARUM NUR EINE. Vier verschiedene Öffnen-Animationen in einer App
+   sind vier verschiedene Aussagen über dieselbe Sache. Eine, überall
+   gleich, macht die Bewegung zur Sprache statt zur Verzierung.
+
+   WARUM SO KURZ (unter einer drittel Sekunde). Alles darüber wird
+   beim zehnten Mal zur Wartezeit. Bewegung darf man beim ersten Mal
+   bemerken und danach nie wieder.
+
+   Abgeschaltet wird das nicht hier, sondern zentral über
+   prefers-reduced-motion ganz am Ende der Datei -- weniger Bewegung
+   heißt dort: keine. */
+@keyframes oeffnen{
+  from{opacity:0;transform:translateY(7px)}
+  to{opacity:1;transform:none}
+}
+.oeffnet{animation:oeffnen .3s var(--ease) both}
+/* Nach einem Segmentwechsel laufen die Blöcke der Seite gestaffelt
+   ein. Die Staffelung endet nach vier Schritten: was danach kommt,
+   steht ohnehin unter dem Falz, und eine Treppe aus zwölf Stufen
+   wäre eine Ladeanimation. */
+main.oeffnet > *{animation:oeffnen .32s var(--ease) both}
+main.oeffnet > *:nth-child(2){animation-delay:.05s}
+main.oeffnet > *:nth-child(3){animation-delay:.1s}
+main.oeffnet > *:nth-child(n+4){animation-delay:.14s}
+/* Aufgeklapptes `details`: nur der Inhalt bewegt sich, die
+   Zusammenfassung bleibt stehen -- sie war ja schon da. */
+details[open] > *:not(summary){animation:oeffnen .26s var(--ease) both}
+
+/* ---------------- Kalender ---------------- */
+.kMonat{display:flex;align-items:center;gap:6px;margin:0 0 12px}
+.kTitel{
+  flex:1;text-align:center;font-size:1.06rem;font-weight:650;letter-spacing:-.01em;
+}
+.kNav{
+  width:38px;height:38px;flex:0 0 auto;border-radius:99px;
+  font-size:1.3rem;line-height:1;color:var(--ink-2);background:var(--fill);
+  transition:background .14s linear,transform .18s var(--spring);
+}
+.kNav:active{background:var(--fill-2);transform:scale(.9)}
+
+.kalender{
+  background:var(--glass);border-radius:var(--r-lg);padding:10px 8px 8px;
+  -webkit-backdrop-filter:saturate(140%) blur(var(--glass-blur));
+  backdrop-filter:saturate(140%) blur(var(--glass-blur));
+  box-shadow:var(--lift);margin-bottom:14px;
+}
+.kWochenkopf{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px}
+.kWt{
+  text-align:center;font-size:0.68rem;font-weight:650;color:var(--ink-3);
+  letter-spacing:.02em;
+}
+.kGitter{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.kLeer{aspect-ratio:1}
+
+/* Eine Zelle ist ein Knopf mit drei Lagen: Datumszahl oben, Balken
+   unten, Betrag darüber. `aspect-ratio` statt fester Höhe, damit das
+   Gitter auf jedem Gerät quadratisch bleibt. */
+.kTag{
+  position:relative;aspect-ratio:1;border-radius:var(--r-sm);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  padding:4px 2px 3px;overflow:hidden;
+  background:var(--fill);color:var(--ink-2);
+  transition:background .16s linear,transform .2s var(--spring);
+}
+.kTag:active{transform:scale(.93)}
+.kZahl{font-size:0.74rem;font-weight:650;line-height:1;position:relative;z-index:2;color:var(--ink)}
+.kTag.zukunft .kZahl{color:var(--ink-2)}
+
+/* Die Trennlinie der ganzen Ansicht: was war, ist eine FLÄCHE; was
+   kommt, ist nur eine KONTUR. Kein blasseres Grau -- blass liest sich
+   als „unwichtig", eine offene Kontur als „noch nicht wahr".
+   (Schraffur stand hier zuerst und war in einem Monat, der fast ganz
+   in der Zukunft liegt, ein einziges Streifenmuster.) */
+.kTag.zukunft{
+  background:transparent;
+  box-shadow:inset 0 0 0 1px var(--hairline-strong);
+}
+.kTag.heute{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.kTag.heute .kZahl{color:var(--accent-ink);font-weight:750}
+.kTag.gewaehlt{background:var(--accent-soft)}
+.kTag.gewaehlt .kZahl{color:var(--accent-ink)}
+
+.kBalken{
+  position:absolute;left:3px;right:3px;bottom:0;height:var(--h,0%);
+  background:var(--accent);opacity:.26;
+  z-index:1;
+  animation:kBalkenAuf .42s var(--ease) both;
+}
+.kTag.zukunft .kBalken{opacity:.16}
+@keyframes kBalkenAuf{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.kBalken{transform-origin:bottom}
+.kBetrag{
+  position:relative;z-index:2;margin-top:auto;
+  font-size:0.6rem;font-weight:650;color:var(--ink);line-height:1;
+}
+.kTag.zukunft .kBetrag{color:var(--ink-2)}
+
+/* Vorrats-Ebene: Punkte statt Zahlen. „Zwei gehen aus, eines
+   verdirbt" ist an drei Punkten schneller gelesen als an „2 · 1". */
+.kPunkte{
+  position:relative;z-index:2;margin-top:auto;
+  display:flex;gap:2px;flex-wrap:wrap;justify-content:center;max-width:100%;
+}
+.kPunkt{width:5px;height:5px;border-radius:99px;flex:0 0 auto}
+.kPunkt.leer{background:var(--blue)}
+.kPunkt.verderb{background:var(--amber)}
+/* Verdirbt, bevor es aufgebraucht ist -- das ist die Verschwendung,
+   um die es dieser App geht, und die einzige rote Aussage hier. */
+.kPunkt.droht{background:var(--red)}
+.row.kWarn .rowTitle{color:var(--red-ink)}
+
+@media (min-width:600px){
+  .kTag{border-radius:var(--r-md)}
+  .kZahl{font-size:0.82rem}
+  .kBetrag{font-size:0.7rem}
+  .kPunkt{width:6px;height:6px}
+}
 .headrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
 .stat{font-size:0.79rem;color:var(--ink-2)}
 .srcnote{font-size:0.73rem;color:var(--ink-3);margin-top:13px;line-height:1.45}

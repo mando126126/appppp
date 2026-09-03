@@ -11,7 +11,11 @@ zuerst lesen bei größeren Änderungen.
 Es gibt drei Ebenen, in dieser Reihenfolge:
 
 1. `src/algo/` — die eigentliche Fachlogik (Rhythmus-Berechnung,
-   Vorratsschätzung usw.), ca. 50 reine Node-Module, keine UI-Bezüge.
+   Vorratsschätzung, Kalenderrechnung usw.), ca. 50 reine
+   Node-Module, keine UI-Bezüge. Neue Module gehören in die Liste
+   `MODULES` in `build.js`, sonst landen sie nicht im Bündel; der
+   Build bricht ab, wenn zwei Module denselben Namen auf oberster
+   Ebene vergeben (ein Bündel, ein Namensraum).
 2. `src/ui/` — die Quelldateien der Oberfläche (HTML/CSS/JS, `sw.js`,
    Icons, Fonts). `src/ui/index.html` enthält den Platzhalter
    `%%BUILD%%` statt einer festen Build-Kennung.

@@ -801,7 +801,14 @@ function segmented(options, current, onChange, label) {
     const b = el("button", null, esc(text));
     b.setAttribute("role", "tab");
     b.setAttribute("aria-selected", current === value ? "true" : "false");
-    b.addEventListener("click", () => onChange(value));
+    b.addEventListener("click", () => {
+      // Ein Segmentwechsel tauscht den halben Bildschirm aus. Ohne
+      // Bewegung wirkt das wie ein Sprungschnitt: es steht plötzlich
+      // etwas anderes da, und das Auge muss sich neu sortieren.
+      // Der Merker wird in App.render() eingelöst und verfällt dort.
+      if (current !== value) App._oeffnet = true;
+      onChange(value);
+    });
     s.append(b);
   });
   return s;
@@ -2845,6 +2852,232 @@ function viewFaellig(ctx, app) {
  * Aktionszyklus) haben kaum etwas gemeinsam, und eine Liste, die beide
  * mischt, beantwortet keine der beiden Fragen mehr sauber.
  */
+/* ================================================================
+   Kalender
+   ================================================================
+   WOZU EIN KALENDER IN EINER EINKAUFS-APP.
+
+   Die App beantwortet bisher jede Frage für den heutigen Tag: was
+   steht auf der Liste, was ist noch da, was hat der Monat gekostet.
+   Alles, was sie darüber hinaus weiß, hat aber ein Datum — der
+   gelernte Takt sagt, WANN etwas wieder fällig wird, die
+   Bestandsschätzung sagt, WANN der Vorrat aufgebraucht ist, und die
+   Haltbarkeit sagt, WANN etwas verdirbt. Nur gab es keine Achse, auf
+   der sich das nebeneinander lesen ließ.
+
+   Erst im Kalender wird sichtbar, dass die 40 € am Samstag kein
+   Ausreißer waren, sondern der Tag, an dem drei Monatsprodukte
+   zusammenfielen — und dass in drei Wochen dasselbe wieder ansteht.
+
+   ZWEI EBENEN, NICHT ZEHN.
+
+     GELD    was ein Tag gekostet hat (rückwärts) und was er
+             voraussichtlich kosten wird (vorwärts).
+     VORRAT  wann etwas leer wird und wann etwas verdirbt.
+
+   Das sind zwei verschiedene Fragen an dieselben Tage, und wer die
+   eine stellt, will die andere gerade nicht sehen. Ein Kalender, der
+   beides gleichzeitig zeigt, zeigt nichts.
+
+   WAS VERGANGENHEIT IST UND WAS SCHÄTZUNG.
+
+   Der Unterschied ist nicht dekorativ, sondern die wichtigste
+   Aussage der ganzen Ansicht: links vom heutigen Tag stehen Zahlen,
+   rechts davon Vermutungen. Die Oberfläche trennt beides sichtbar
+   (gefüllt gegen schraffiert, siehe .kTag.zukunft in app.css), und
+   die Rechnung hört nach `HORIZONT_TAGE` ganz auf, statt immer
+   blasser weiterzuraten.
+   ================================================================ */
+
+/** Der Monat, den der Kalender gerade zeigt. */
+function kalenderMonatVon(app, ctx) {
+  return app.kalenderMonat || String(ctx.ref).slice(0, 7);
+}
+
+const MONATSNAMEN = ["Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember"];
+const WOCHENTAGE_KURZ = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function monatsTitel(monat) {
+  const [j, m] = String(monat).split("-");
+  return `${MONATSNAMEN[Number(m) - 1] || monat} ${j}`;
+}
+
+function viewKalender(ctx, app) {
+  const c = frag();
+  const monat = kalenderMonatVon(app, ctx);
+  const spanne = monatsSpanne(monat);
+  if (!spanne) { c.append(emptyView("Dieser Monat lässt sich nicht darstellen.")); return c; }
+
+  const daten = buildCalendar({
+    purchases: ctx.history,
+    rhythms: ctx.rhythms,
+    inventory: ctx.inventory,
+    heute: ctx.ref,
+    von: spanne.von,
+    bis: spanne.bis,
+    nameFuer: (id) => (byId(id) || {}).name || id,
+    // Derselbe Preis, den auch die Liste ansetzt: übliche Menge mal
+    // üblicher Preis. Eine eigene Preisrechnung nur für den Kalender
+    // wäre eine zweite Wahrheit über dieselbe Sache.
+    preisFuer: (id, r) => ((byId(id) || {}).typicalPrice || 0) * (r.lastQuantity || 1),
+    skip: (id) => isNonFood(id)
+  });
+
+  /* --- Kopf: Monat blättern --- */
+  const kopf = el("div", "kMonat");
+  const zurueck = el("button", "kNav", "‹");
+  zurueck.setAttribute("aria-label", "Vorheriger Monat");
+  zurueck.addEventListener("click", () => {
+    app.kalenderMonat = monatPlus(monat, -1); app.kalenderTag = null; app.render();
+  });
+  const vor = el("button", "kNav", "›");
+  vor.setAttribute("aria-label", "Nächster Monat");
+  vor.addEventListener("click", () => {
+    app.kalenderMonat = monatPlus(monat, 1); app.kalenderTag = null; app.render();
+  });
+  const titel = el("div", "kTitel", esc(monatsTitel(monat)));
+  kopf.append(zurueck, titel, vor);
+  c.append(kopf);
+
+  /* --- Ebene wählen --- */
+  const nav = el("div", "group");
+  nav.append(segmented([["geld", "Geld"], ["vorrat", "Vorrat"]], app.kalenderEbene,
+    (k) => { app.kalenderEbene = k; app.render(); }, "Ebene"));
+  c.append(nav);
+
+  const geld = app.kalenderEbene !== "vorrat";
+
+  /* --- Das Gitter ---
+     Sieben Spalten, Montag zuerst. Die Tage vor dem Monatsersten
+     werden als leere Zellen aufgefüllt, damit die Wochentage
+     untereinander stehen -- ohne das wäre ein Kalender ein Raster
+     mit Datumszahlen darin und nichts weiter. */
+  const box = el("div", "kalender");
+  const kopfzeile = el("div", "kWoche kWochenkopf");
+  WOCHENTAGE_KURZ.forEach((w) => kopfzeile.append(el("div", "kWt", esc(w))));
+  box.append(kopfzeile);
+
+  const gitter = el("div", "kGitter");
+  for (let i = 0; i < spalteFuer(spanne.von); i++) gitter.append(el("div", "kLeer"));
+
+  // Bezugsgröße für die Balkenhöhe: der stärkste Tag im Monat. Ein
+  // fester Maßstab wäre in einem ruhigen Monat eine Reihe von
+  // Strichen und in einem teuren eine Reihe von Volltreffern.
+  const maxGeld = Math.max(1, ...daten.tage.map((t) => Math.max(t.ausgegeben, t.erwartet)));
+
+  daten.tage.forEach((t) => {
+    const zukunft = t.date > ctx.ref;
+    const heute = t.date === ctx.ref;
+    const cell = el("button", "kTag");
+    if (zukunft) cell.classList.add("zukunft");
+    if (heute) cell.classList.add("heute");
+    if (app.kalenderTag === t.date) cell.classList.add("gewaehlt");
+
+    cell.append(el("span", "kZahl", esc(String(Number(t.date.slice(8))))));
+
+    if (geld) {
+      const wert = zukunft ? t.erwartet : t.ausgegeben;
+      if (wert > 0) {
+        const bar = el("span", "kBalken");
+        bar.style.setProperty("--h", `${Math.max(12, Math.round((wert / maxGeld) * 100))}%`);
+        cell.append(bar);
+        cell.append(el("span", "kBetrag", esc(Math.round(wert) + " €")));
+      }
+    } else {
+      // Punkte statt Zahlen: „zwei Sachen gehen aus, eine verdirbt"
+      // ist an drei Punkten schneller gelesen als an „2 · 1".
+      const punkte = el("span", "kPunkte");
+      t.leer.filter((x) => !x.ueberholt).slice(0, 3)
+        .forEach(() => punkte.append(el("i", "kPunkt leer")));
+      t.verdirbt.slice(0, 3).forEach((v) =>
+        punkte.append(el("i", "kPunkt " + (v.droht ? "droht" : "verderb"))));
+      if (punkte.children.length) cell.append(punkte);
+    }
+
+    const was = geld
+      ? (zukunft ? (t.erwartet ? `voraussichtlich ${eur(t.erwartet)}` : "nichts erwartet")
+        : (t.ausgegeben ? eur(t.ausgegeben) : "kein Einkauf"))
+      : `${t.leer.length} leer, ${t.verdirbt.length} verdirbt`;
+    cell.setAttribute("aria-label", `${deDate(t.date)}: ${was}`);
+    cell.addEventListener("click", () => {
+      app.kalenderTag = app.kalenderTag === t.date ? null : t.date;
+      app.render();
+    });
+    gitter.append(cell);
+  });
+  box.append(gitter);
+  c.append(box);
+
+  /* --- Der gewählte Tag: direkt unter dem Gitter ---
+     Erst stand er ganz unten, hinter der Monatssumme. Das ist der
+     falsche Ort: wer auf einen Tag tippt, hat eine Frage zu DIESEM
+     Tag, und die Antwort darf nicht hinter einer Zwischensumme
+     stehen, die er gerade nicht gestellt hat. */
+  if (app.kalenderTag) {
+    const t = daten.tage.find((x) => x.date === app.kalenderTag);
+    if (t) c.append(kalenderTagGruppe(t, ctx, app));
+  }
+
+  /* --- Monatssumme, ehrlich getrennt --- */
+  const summe = uiGroup(geld ? "Dieser Monat" : "In diesem Monat");
+  if (geld) {
+    if (daten.summeAusgegeben > 0) summe.body.append(uiRow("Ausgegeben", null, null,
+      { value: eur(daten.summeAusgegeben) }));
+    if (daten.summeErwartet > 0) summe.body.append(uiRow("Voraussichtlich noch", "geschätzt aus deinen Takten",
+      null, { value: eur(daten.summeErwartet) }));
+    if (!daten.summeAusgegeben && !daten.summeErwartet) {
+      summe.body.append(uiRow("Nichts erfasst und nichts erwartet"));
+    }
+  } else {
+    const leer = daten.tage.reduce((a, t) => a + t.leer.filter((x) => !x.ueberholt).length, 0);
+    const verdirbt = daten.tage.reduce((a, t) => a + t.verdirbt.length, 0);
+    const droht = daten.tage.reduce((a, t) => a + t.verdirbt.filter((v) => v.droht).length, 0);
+    summe.body.append(uiRow("Geht aus", null, null, { value: String(leer) }));
+    summe.body.append(uiRow("Läuft ab", droht
+      ? `${zahlwort(droht, "Packung", "Packungen")} vermutlich vor dem Aufbrauchen`
+      : "voraussichtlich alles rechtzeitig verbraucht", null, { value: String(verdirbt) }));
+  }
+  c.append(summe);
+
+  /* Der Horizont ist eine Aussage, keine Fußnote: ohne ihn liest sich
+     ein leerer Kalender in acht Monaten als „da kommt nichts". */
+  c.append(el("p", "srcnote",
+    `Vorhergesagt wird bis ${deDate(daten.horizont)}. Weiter voraus hinge jede Zahl an lauter ` +
+    "vorhergesagten Käufen davor — das wäre geraten, nicht geschätzt."));
+  return c;
+}
+
+/** Was an einem angetippten Tag steht. */
+function kalenderTagGruppe(t, ctx, app) {
+  const zukunft = t.date > ctx.ref;
+  const g = uiGroup(deDate(t.date) + (zukunft ? " · geschätzt" : ""));
+  // Diese Gruppe gibt es nur, weil jemand gerade einen Tag angetippt
+  // hat -- sie geht also wirklich jedes Mal auf, wenn sie erscheint.
+  g.classList.add("oeffnet");
+
+  const zeile = (name, sub, wert, pid, cls) => {
+    const r = uiRow(name, sub, null, {
+      value: wert || null,
+      onClick: pid ? () => productSheet(pid, ctx) : null
+    });
+    if (cls) r.classList.add(cls);
+    g.body.append(r);
+  };
+
+  t.gekauft.forEach((p) => zeile(p.name, null, eur(p.betrag), p.productId));
+  t.faellig.forEach((p) => zeile(p.name, "voraussichtlich fällig", eur(p.betrag), p.productId));
+  t.leer.filter((x) => !x.ueberholt).forEach((p) => zeile(p.name, "Vorrat vermutlich aufgebraucht", null, p.productId));
+  t.verdirbt.forEach((v) => zeile(v.name,
+    v.droht ? "läuft ab, bevor es aufgebraucht ist" : "Haltbarkeit endet",
+    v.wert ? eur(v.wert) : null, v.productId, v.droht ? "kWarn" : null));
+
+  if (!g.body.children.length) {
+    g.body.append(uiRow(zukunft ? "Für diesen Tag ist nichts vorhergesagt" : "An diesem Tag ist nichts erfasst"));
+  }
+  return g;
+}
+
 function viewAngebote(ctx, app) {
   const c = frag();
 
@@ -3037,7 +3270,15 @@ function renderBestandVorrat(c, ctx, app) {
   if (invRest.length) {
     const btn = el("button", "moneyMore", `Alle ${ctx.inventory.length} ansehen`);
     btn.addEventListener("click", () => {
-      invRest.forEach((i) => btn.before(renderInvRow(i)));
+      // Nachgeladene Zeilen laufen gestaffelt ein statt schlagartig
+      // zu erscheinen -- so ist zu sehen, dass die Liste gewachsen
+      // ist, statt dass sie ausgetauscht wurde.
+      invRest.forEach((i, n) => {
+        const z = renderInvRow(i);
+        z.classList.add("oeffnet");
+        z.style.animationDelay = `${Math.min(n, 8) * 26}ms`;
+        btn.before(z);
+      });
       btn.remove();
     });
     inv.body.append(btn);
@@ -4005,7 +4246,14 @@ function moneyBarSection(h, title, items, renderRow, visible = 4) {
   if (!rest.length) return;
   const btn = el("button", "moneyMore", `Alle ${items.length} ansehen`);
   btn.addEventListener("click", () => {
-    rest.forEach((item) => btn.before(renderRow(item)));
+    // Dieselbe gestaffelte Bewegung wie beim Bestand -- die Liste
+    // wächst sichtbar, statt ausgetauscht zu werden.
+    rest.forEach((item, n) => {
+      const z = renderRow(item);
+      z.classList.add("oeffnet");
+      z.style.animationDelay = `${Math.min(n, 8) * 26}ms`;
+      btn.before(z);
+    });
     btn.remove();
   });
   h.append(btn);

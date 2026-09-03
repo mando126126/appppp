@@ -50,6 +50,10 @@ const SUBVIEWS = [
   {
     id: "angebote", label: "Angebote", title: "Angebote", view: viewAngebote, parent: "start",
     icon: '<path d="M12 3.5l2.4 5.1 5.6.8-4 4 1 5.6-5-2.6-5 2.6 1-5.6-4-4 5.6-.8z"/>'
+  },
+  {
+    id: "kalender", label: "Kalender", title: "Kalender", view: viewKalender, parent: "start",
+    icon: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3.5v3M16 3.5v3"/>'
   }
 ];
 
@@ -89,6 +93,14 @@ const App = {
   zahlenTab: "ausgaben",
   mehrTab: "einstellungen",
   bestandTab: "vorrat",
+  // Kalender: welcher Monat und welche Ebene gerade zu sehen sind.
+  // Wie zahlenFilter reine Anzeige-Einstellung -- kein Haushaltsdatum,
+  // kein Data.update(). `kalenderMonat: null` heißt „der laufende
+  // Monat"; ihn hier fest einzutragen wäre falsch, sobald jemand die
+  // App über Mitternacht offen lässt.
+  kalenderMonat: null,
+  kalenderEbene: "geld",
+  kalenderTag: null,
   // Wie oft die Sprechblase je Reiter schon geöffnet wurde -- steuert
   // nur, welche der zutreffenden Aussagen als Nächstes dran ist
   // (mascotMessage() rotiert reihum, nicht zufällig). Reine
@@ -975,8 +987,10 @@ const App = {
     if (!ctx.history.length) {
       subText = "noch keine Daten — leg mit einem Einkauf los";
     } else if (App.tab === "start") {
-      // Auf der Übersicht: das Datum. Es ist die einzige Angabe, die
-      // dem Wochenstreifen darunter etwas hinzufügt.
+      // Auf der Übersicht: das Datum -- und seit es den Kalender gibt,
+      // ist es auch der Weg dorthin. Ein Datum, das man antippen kann,
+      // um Tage zu sehen, ist der kürzeste denkbare Einstieg; ein
+      // eigener Knopf daneben hätte dieselbe Sache zweimal gesagt.
       subText = `${ctx.weekday}, ${deDate(ctx.ref)}`;
     } else if (App.tab === "liste") {
       /* Auch in den frühen Wochen: die Unterzeile beschreibt die
@@ -993,7 +1007,15 @@ const App = {
     } else {
       subText = `${ctx.weekday} · ${zahlwort(ctx.totals.receipts, "Bon", "Bons")} · ${zahlwort(ctx.rhythms.size, "Produkt", "Produkte")}`;
     }
-    sub.append(document.createTextNode(subText));
+    if (App.tab === "start" && ctx.history.length) {
+      const b = el("button", "dateBtn", esc(subText));
+      b.setAttribute("aria-label", `${subText} — Kalender öffnen`);
+      b.append(el("span", "dateChev"));
+      b.addEventListener("click", () => App.goto("kalender"));
+      sub.append(b);
+    } else {
+      sub.append(document.createTextNode(subText));
+    }
     // Erzeugte Historie bleibt dauerhaft als solche gekennzeichnet.
     if (S.settings.demo) {
       const tag = el("button", "pill warn", "Beispieldaten");
@@ -1066,6 +1088,21 @@ const App = {
     main.innerHTML = "";
     const entry = viewFor(App.tab);
     main.append(entry.view(App.ctx, App));
+
+    /* Einmalige Öffnen-Bewegung nach einem Segmentwechsel.
+     *
+     * WARUM NICHT BEI JEDEM ZEICHNEN. render() läuft nach fast jeder
+     * Berührung -- ein Abhaken, ein Toast, ein Rücksprung. Eine
+     * Animation an dieser Stelle ohne Bedingung hieße: die ganze
+     * Seite hüpft, sobald man irgendwo hintippt. Bewegung ist nur
+     * dann Qualität, wenn sie einem Ereignis entspricht; sonst ist
+     * sie Zappeln.
+     *
+     * Deshalb ein Merker, der genau einmal gilt und danach verfällt.
+     * Gesetzt wird er dort, wo wirklich etwas AUFGEHT -- in
+     * segmented() beim Wechsel des Unterbereichs. */
+    main.classList.toggle("oeffnet", !!App._oeffnet);
+    App._oeffnet = false;
 
     App.onScroll();
     if (App.storeOpen) App.renderStore();

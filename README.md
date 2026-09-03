@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 2064 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2171 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4153,6 +4153,137 @@ Lerntests. Alle jetzt 2064 Tests bestehen.
 
 ---
 
+## Der Vorrat auf der Liste, ein Kalender, Bewegung (2026-09-03)
+
+### Der zweite Auslöser für die Liste
+
+Der Kaufrhythmus beantwortet „wie oft kaufst du das?". Die Frage, die
+auf der Liste steht, ist aber „geht es dir aus?". Meistens dasselbe —
+nicht aber, wenn die **Menge** schwankt. Wer sonst zwei Liter Milch
+kauft und diesmal einen genommen hat, ist nach der halben Zeit leer;
+der Rhythmus merkt davon nichts und schlägt zum gewohnten Termin vor.
+
+Genau diese Zusatzinformation steckt in der Bestandsschätzung und
+wurde von der Liste bisher nicht benutzt: die zuletzt gekaufte Menge
+und die Korrekturen des Nutzers. Ohne sie konnte jemand im Bestand
+„ist alle" wischen, und die Liste blieb unbeeindruckt.
+
+Keine Doppelzählung — der Verdacht liegt nahe, weil die
+Bestandsschätzung aus denselben Käufen stammt wie der Rhythmus, und
+dieses Projekt hat dreimal Geld dafür bezahlt, dieselbe Tatsache
+zweimal zu verrechnen. Hier zählt nichts doppelt: der Vorrat wirkt
+nicht **auf** den Rhythmus, er öffnet nur eine zweite Tür zur Liste.
+Der gelernte Takt bleibt unangetastet.
+
+### Der zweite Messfehler im Langzeittest
+
+Wie schon bei „hab noch da" hat die Simulation auch „war schon alle"
+mit `dueIn = 0` protokolliert — und ohne jede Bedingung, also auch für
+Produkte ganz ohne gelernten Takt. Die Oberfläche fragt das nur, wenn
+jemand ein Produkt selbst auf die Liste setzt, das die App mindestens
+zwei Tage lang nicht vorgeschlagen hätte, und nur bei gelerntem Takt
+(`askLate` in views.js). Die Simulation spiegelt jetzt genau diese
+Bedingungen.
+
+Damit wurde sichtbar, was vorher eine falsche Zahl verdeckt hatte: die
+App verliert ihren Vorsprung bei der Versorgung — 1724 Leertage gegen
+1710 der festen Liste. Besser in jeder anderen Kennzahl, aber nicht
+mehr besser versorgt. Zwei Messfehler in zwei Runden, beide in
+derselben Datei, beide mit demselben Muster: die Simulation hat einen
+ganzen Zweig der Lernlogik nie erreicht und sah dabei grün aus.
+
+### Gemessen
+
+| | vorher | nachher |
+|---|---|---|
+| Vergessenes (Drei-Jahres-Lauf) | 6,8 % | **5,5 %** |
+| Unnötiges | 12,6 % | 16,3 % |
+| Leertage (feste Liste: 1710) | 1724 | **1673** |
+| Ausgaben (feste Liste: 7132,23 €) | 6120,75 € | 6247,71 € |
+| Rückvergleich: Trefferquote | 78,2 % | **83,9 %** |
+| Rückvergleich: Genauigkeit | 48,8 % | 42,5 % |
+| Übersehene Käufe | 946 | **698** |
+| Liste im Schnitt | 5,6 | 7,0 Positionen |
+
+Der Rückvergleich verliert Genauigkeit und gewinnt Trefferquote; der
+Drei-Jahres-Lauf, der als einziger die Rückkopplung sieht, verbessert
+sich auf beiden Kennzahlen, die einen Haushalt wirklich kosten. Die
+Regel steht jetzt in beiden Prüfständen gleich.
+
+**Gemessen und verworfen.** „War schon alle" höher gewichten als „hab
+noch da" (die eine Rückmeldung steht an jedem Vorschlag, die andere
+nur in einem engen Fenster): im Drei-Jahres-Lauf ohne jede Wirkung —
+beide Sorten treffen pro Produkt kaum zusammen, und ein Median über
+gleichgerichtete Signale ändert sich durch Gewichte nicht. Ebenso den
+15-Prozent-Sockel von „hab noch da" streichen: ohne messbare Wirkung,
+dafür 16 fallende Lerntests. Eine Änderung ohne Messung ist keine
+Verbesserung.
+
+### Ein Kalender
+
+Die App beantwortete bisher jede Frage für den heutigen Tag. Alles,
+was sie darüber hinaus weiß, hat aber ein Datum: der gelernte Takt
+sagt, **wann** etwas wieder fällig wird, die Bestandsschätzung sagt,
+**wann** der Vorrat aufgebraucht ist, und die Haltbarkeit sagt,
+**wann** etwas verdirbt. Es fehlte nur die Achse, auf der sich das
+nebeneinander lesen lässt.
+
+Der Weg hinein ist das Datum auf der Übersicht — ein eigener Knopf
+daneben hätte dieselbe Sache zweimal gesagt.
+
+Zwei Ebenen, nicht zehn:
+
+- **Geld** — was ein Tag gekostet hat (rückwärts) und was er
+  voraussichtlich kosten wird (vorwärts), als Balken in der Zelle.
+- **Vorrat** — wann etwas leer wird (blau) und wann etwas verdirbt
+  (gelb; rot, wenn es *vor* dem Aufbrauchen abläuft — das ist die
+  Verschwendung, um die es dieser App geht).
+
+Das sind zwei verschiedene Fragen an dieselben Tage, und wer die eine
+stellt, will die andere gerade nicht sehen.
+
+Die wichtigste Aussage der Ansicht ist nicht dekorativ: **was war, ist
+eine Fläche; was kommt, ist nur eine Kontur.** Schraffur stand dort
+zuerst und war in einem Monat, der fast ganz in der Zukunft liegt, ein
+einziges Streifenmuster. Und die Rechnung hört nach 120 Tagen ganz
+auf, statt immer blasser weiterzuraten — der dritte vorhergesagte Kauf
+hinge an zwei vorhergesagten davor. Die Ansicht schreibt das Datum
+hin, bis zu dem sie überhaupt etwas behauptet.
+
+Vorhergesagt wird außerdem nur, was auch auf der Liste stünde:
+gelernter Takt, letztes Kaufdatum, Vertrauen über derselben Schwelle.
+Ein Kalender, der mehr behauptet als die Liste, wäre ein zweiter
+Algorithmus mit einer zweiten Wahrheit. Überfälliges steht dabei auf
+**heute** und nicht auf dem nächsten rechnerischen Vielfachen — die
+Vielfachen weiterzuzählen wäre die bequemere Rechnung und eine falsche
+Aussage: sie tut so, als hätte der Haushalt pünktlich weitergekauft.
+
+Die Fachlogik steht als `src/algo/calendarModel.js` außerhalb der
+Oberfläche und wird ohne Browser geprüft (58 Tests).
+
+### Bewegung — genau eine, und nur wo etwas aufgeht
+
+Eine einzige Öffnen-Animation für alles, was aufgeht: ein
+Segmentwechsel, ein angetippter Tag im Kalender, nachgeladene Zeilen,
+der Inhalt eines aufgeklappten `details`. Vier verschiedene
+Öffnen-Animationen wären vier verschiedene Aussagen über dieselbe
+Sache; eine, überall gleich, macht die Bewegung zur Sprache statt zur
+Verzierung. Unter einer drittel Sekunde — alles darüber wird beim
+zehnten Mal zur Wartezeit.
+
+Der Punkt, an dem so etwas schiefgeht: `App.render()` läuft nach fast
+jeder Berührung. Eine Animation ohne Bedingung hieße, dass die ganze
+Seite hüpft, sobald man irgendwo hintippt. Deshalb ein Merker, der
+genau einmal gilt und im nächsten Zeichnen verfällt — und zwei Tests,
+die genau das prüfen: ein gewöhnliches Zeichnen bewegt nichts, ein
+Tipp auf das bereits gewählte Segment auch nicht. Abgeschaltet wird
+alles zentral über `prefers-reduced-motion`.
+
+58 neue Kalendertests, 49 neue Oberflächentests. Alle jetzt 2171 Tests
+bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -4223,12 +4354,13 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 2064
-npm run test:algo # 1184 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 2171
+npm run test:algo # 1242 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
-                  #   Verschwendung, Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
+                  #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen,
+                  #   Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 844 Oberflächentests in jsdom
+npm run test:ui   # 893 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

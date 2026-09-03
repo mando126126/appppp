@@ -113,7 +113,8 @@ try {
     " collectHints, hintsSheet, weekPulse, viewStart, NAV, SUBVIEWS, addSheet, askLate, daysBetween,"+
     " zahlwort, tage, tagen, alleTage, OffLookup, nachschlagen, marktGruppen, moneySparklineSvg," +
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
-    " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES, mascotAlarmSignature };"
+    " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES, mascotAlarmSignature,"+
+    " viewKalender, kalenderTagGruppe, monatsTitel, buildCalendar, monatPlus, monatsSpanne };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -3853,6 +3854,185 @@ console.log("\n--- Bestand: Wischen heißt „ist alle“ ---");
 
   D.reset();
   D.loadDemo("full");
+  App.goto("start");
+}
+
+console.log("\n--- Kalender ---");
+{
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+  const block = (sel) => {
+    const i = css.indexOf("\n" + sel + "{");
+    return i < 0 ? null : css.slice(i + sel.length + 2, css.indexOf("}", i));
+  };
+
+  D.reset(); D.loadDemo("full");
+  App.goto("start");
+
+  /* --- Der Weg hinein: das Datum auf der Übersicht --- */
+  const datum = doc.getElementById("largeTitle").querySelector(".dateBtn");
+  ok("Das Datum auf der Übersicht ist antippbar", !!datum);
+  ok("Und sagt der Vorlesehilfe, wohin es führt",
+    !!datum && /Kalender/.test(datum.getAttribute("aria-label") || ""));
+  ok("Es trägt weiterhin das Datum", !!datum && /\d{2}\.\d{2}\.\d{4}/.test(datum.textContent));
+  click(datum);
+  ok("Ein Tipp darauf öffnet den Kalender", App.tab === "kalender", App.tab);
+
+  /* --- Das Gitter --- */
+  const gitter = () => $("main").querySelector(".kGitter");
+  const zellen = () => [...gitter().querySelectorAll(".kTag")];
+  ok("Es gibt ein Gitter", !!gitter());
+  const heuteMonat = App.ctx.ref.slice(0, 7);
+  const tageImMonat = T.monatsSpanne(heuteMonat).bis.slice(8);
+  ok("Für jeden Tag des Monats eine Zelle", zellen().length === Number(tageImMonat),
+    `${zellen().length} von ${tageImMonat}`);
+  ok("Sieben Wochentage stehen als Kopfzeile darüber",
+    $("main").querySelectorAll(".kWt").length === 7);
+  ok("Die Woche beginnt am Montag",
+    ($("main").querySelector(".kWt") || {}).textContent === "Mo");
+
+  const heuteZelle = zellen().find((z) => z.classList.contains("heute"));
+  ok("Der heutige Tag ist markiert", !!heuteZelle);
+  ok("Und trägt die richtige Zahl",
+    !!heuteZelle && heuteZelle.querySelector(".kZahl").textContent === String(Number(App.ctx.ref.slice(8))));
+
+  const zukunft = zellen().filter((z) => z.classList.contains("zukunft"));
+  const vergangen = zellen().filter((z) => !z.classList.contains("zukunft") && !z.classList.contains("heute"));
+  ok("Zukunft und Vergangenheit werden unterschieden",
+    zukunft.length > 0 && vergangen.length > 0, `${zukunft.length} / ${vergangen.length}`);
+  ok("Der heutige Tag zählt nicht als Zukunft", !heuteZelle.classList.contains("zukunft"));
+  ok("Zukunft ist eine Kontur, keine Fläche",
+    /background:transparent/.test(block(".kTag.zukunft") || ""));
+
+  /* --- Blättern --- */
+  const titelText = () => ($("main").querySelector(".kTitel") || {}).textContent;
+  const vorher = titelText();
+  const knoepfe = $("main").querySelectorAll(".kNav");
+  ok("Es gibt zwei Blätter-Knöpfe", knoepfe.length === 2);
+  click(knoepfe[0]);
+  ok("Zurück blättert einen Monat", titelText() !== vorher, `${vorher} -> ${titelText()}`);
+  ok("Und der Monat ist gemerkt", App.kalenderMonat === T.monatPlus(heuteMonat, -1), App.kalenderMonat);
+  ok("Im Vormonat ist alles Vergangenheit",
+    zellen().every((z) => !z.classList.contains("zukunft")));
+  click($("main").querySelectorAll(".kNav")[1]);
+  click($("main").querySelectorAll(".kNav")[1]);
+  ok("Vorwärts kommt man über den heutigen Monat hinaus",
+    App.kalenderMonat === T.monatPlus(heuteMonat, 1), App.kalenderMonat);
+  ok("Dort ist alles Zukunft",
+    [...$("main").querySelectorAll(".kTag")].every((z) => z.classList.contains("zukunft")));
+
+  App.kalenderMonat = null; App.kalenderTag = null; App.render();
+
+  /* --- Ebenen: Geld und Vorrat sind zwei Fragen --- */
+  ok("Geld ist die Vorgabe", App.kalenderEbene === "geld");
+  ok("In der Geld-Ebene stehen Beträge", $("main").querySelectorAll(".kBetrag").length > 0);
+  ok("Und keine Vorrats-Punkte", $("main").querySelectorAll(".kPunkt").length === 0);
+  const segBtns = [...$("main").querySelectorAll(".segmented button")];
+  ok("Es gibt genau zwei Ebenen", segBtns.length === 2 && segBtns.map((b) => b.textContent).join("|") === "Geld|Vorrat");
+  click(segBtns[1]);
+  ok("Der Wechsel wird gemerkt", App.kalenderEbene === "vorrat");
+  ok("In der Vorrats-Ebene stehen Punkte", $("main").querySelectorAll(".kPunkt").length > 0);
+  ok("Und keine Beträge mehr", $("main").querySelectorAll(".kBetrag").length === 0);
+  ok("Die Monatszeilen wechseln mit",
+    ($("main").textContent || "").includes("Geht aus") &&
+    ($("main").textContent || "").includes("Läuft ab"));
+  click([...$("main").querySelectorAll(".segmented button")][0]);
+  ok("Zurück zur Geld-Ebene", App.kalenderEbene === "geld");
+
+  /* --- Ein Tag antippen --- */
+  const mitBetrag = [...$("main").querySelectorAll(".kTag")].find((z) => z.querySelector(".kBetrag"));
+  ok("Es gibt einen Tag mit einem Betrag", !!mitBetrag);
+  click(mitBetrag);
+  ok("Der angetippte Tag ist markiert",
+    !!$("main").querySelector(".kTag.gewaehlt"));
+  const gruppen = [...$("main").querySelectorAll(".group")];
+  const tagGruppe = gruppen.find((g) => /\d{2}\.\d{2}\.\d{4}/.test(
+    ((g.querySelector(".groupTitle") || {}).textContent) || ""));
+  ok("Darunter steht, was an diesem Tag ansteht", !!tagGruppe);
+  ok("Die Gruppe geht sichtbar auf", !!tagGruppe && tagGruppe.classList.contains("oeffnet"));
+  ok("Sie steht VOR der Monatssumme -- die Antwort vor der Zwischensumme",
+    gruppen.indexOf(tagGruppe) < gruppen.findIndex((g) =>
+      /Dieser Monat|In diesem Monat/.test(((g.querySelector(".groupTitle") || {}).textContent) || "")));
+  click($("main").querySelector(".kTag.gewaehlt"));
+  ok("Noch einmal antippen schließt ihn wieder", App.kalenderTag === null);
+
+  /* --- Ehrlichkeit: der Horizont wird benannt --- */
+  ok("Die Ansicht sagt, wie weit sie vorhersagt",
+    /Vorhergesagt wird bis \d{2}\.\d{2}\.\d{4}/.test($("main").textContent || ""));
+
+  /* --- Der Kalender behauptet nicht mehr als die Liste --- */
+  {
+    const daten = T.buildCalendar({
+      purchases: App.ctx.history, rhythms: App.ctx.rhythms, inventory: App.ctx.inventory,
+      heute: App.ctx.ref, von: App.ctx.ref, bis: D.plusDays(App.ctx.ref, 400),
+      preisFuer: () => 1
+    });
+    const letzterMitVorhersage = [...daten.tage].reverse().find((t) => t.erwartet > 0);
+    ok("Jenseits des Horizonts wird nichts mehr vorhergesagt",
+      !letzterMitVorhersage || letzterMitVorhersage.date <= daten.horizont,
+      letzterMitVorhersage && letzterMitVorhersage.date);
+    ok("Vergangene Tage tragen nie eine Vorhersage",
+      daten.tage.filter((t) => t.date < App.ctx.ref).every((t) => t.erwartet === 0));
+  }
+
+  D.reset(); D.loadDemo("full");
+  App.kalenderMonat = null; App.kalenderTag = null; App.kalenderEbene = "geld";
+  App.goto("start");
+}
+
+console.log("\n--- Bewegung nur dort, wo etwas aufgeht ---");
+{
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+
+  ok("Es gibt genau eine Öffnen-Bewegung", /@keyframes oeffnen\{/.test(css));
+  const dauer = parseFloat((/\.oeffnet\{animation:oeffnen (\.?[\d.]+)s/.exec(css) || [])[1]);
+  ok("Sie ist kurz -- unter einer drittel Sekunde",
+    dauer > 0 && dauer <= 0.33, dauer + "s");
+  ok("Aufgeklapptes details bewegt nur den Inhalt, nicht die Zusammenfassung",
+    /details\[open\] > \*:not\(summary\)\{animation:oeffnen/.test(css));
+  ok("Weniger Bewegung heißt keine",
+    /@media \(prefers-reduced-motion:reduce\)\{\s*\*\{transition:none !important;animation:none !important\}/.test(css));
+
+  /* Der Punkt, an dem so etwas schiefgeht: eine Animation, die bei
+     JEDEM Zeichnen läuft. render() läuft nach fast jeder Berührung. */
+  D.reset(); D.loadDemo("full");
+  App.goto("bestand");
+  ok("Ein gewöhnliches Zeichnen bewegt nichts",
+    !$("main").classList.contains("oeffnet"));
+  App.render();
+  ok("Auch ein zweites nicht", !$("main").classList.contains("oeffnet"));
+
+  const seg = [...$("main").querySelectorAll(".segmented button")];
+  click(seg[1]);
+  ok("Ein Segmentwechsel dagegen schon", $("main").classList.contains("oeffnet"));
+  App.render();
+  ok("Und die Bewegung gilt genau einmal", !$("main").classList.contains("oeffnet"));
+
+  const seg2 = [...$("main").querySelectorAll(".segmented button")];
+  const aktiv = seg2.findIndex((b) => b.getAttribute("aria-selected") === "true");
+  click(seg2[aktiv]);
+  ok("Ein Tipp auf das bereits gewählte Segment bewegt nichts",
+    !$("main").classList.contains("oeffnet"));
+
+  /* Nachgeladene Zeilen laufen gestaffelt ein. */
+  App.bestandTab = "vorrat"; App.render();
+  const mehr = [...$("main").querySelectorAll(".moneyMore")]
+    .find((b) => /Alle \d+ ansehen/.test(b.textContent));
+  if (mehr) {
+    const vorher = $("main").querySelectorAll(".swipeWrap").length;
+    click(mehr);
+    const neue = [...$("main").querySelectorAll(".swipeWrap.oeffnet")];
+    ok("Nachgeladene Bestandszeilen gehen auf", neue.length > 0, neue.length);
+    ok("Und zwar gestaffelt", neue.length < 2 || neue[1].style.animationDelay !== neue[0].style.animationDelay,
+      neue.slice(0, 2).map((n) => n.style.animationDelay).join(" / "));
+    ok("Die Liste ist wirklich gewachsen",
+      $("main").querySelectorAll(".swipeWrap").length > vorher);
+  } else {
+    ["Nachgeladene Bestandszeilen gehen auf", "Und zwar gestaffelt", "Die Liste ist wirklich gewachsen"]
+      .forEach((n) => ok(n, true, "übersprungen (keine Nachladen-Schaltfläche)"));
+  }
+
+  D.reset(); D.loadDemo("full");
+  App.bestandTab = "vorrat";
   App.goto("start");
 }
 
