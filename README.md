@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 1970 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2064 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4026,6 +4026,133 @@ bestehen.
 
 ---
 
+## Algorithmus, Wischen, Glas (2026-09-03)
+
+Drei Dinge auf einmal: der Rhythmus-Lerner hatte einen Fehler, den
+niemand sehen konnte, der Bestand brauchte einen schnelleren Weg, und
+die Oberfläche bekommt ihre runden Ecken zurück.
+
+### Der Bündel-Effekt — und ein Messfehler, der ihn versteckt hat
+
+Fällig wird ein Produkt nach Kalendertagen seit dem letzten Kauf.
+Verbraucht wird es nur an Tagen, an denen jemand da ist. Nach zwei
+Wochen Urlaub sind deshalb schlagartig viele Produkte rechnerisch
+überfällig — und treffen gebündelt auf einen Schrank, in dem noch
+alles steht. Der Nutzer tippt reihenweise „hab noch da", und jede
+dieser Antworten verlängert einen Rhythmus, der gar nicht falsch war.
+Der Schaden bleibt: die verlängerten Rhythmen schlagen danach zu spät
+vor.
+
+`test/liste.js` hatte diesen Weg schon als nächsten Schritt notiert
+(„das eigentliche Ziel wäre, den BÜNDEL-Effekt direkt zu entschärfen"),
+nachdem drei andere Ansätze gemessen und verworfen worden waren.
+
+Die Umsetzung steht in `feedbackLearner.js` (`awayDaysFor`): die
+Abwesenheitstage werden aus der Überfälligkeit herausgerechnet, bevor
+daraus eine Verlängerung wird. Bleibt danach keine Überfälligkeit
+übrig, war das Produkt ohne die Reise gar nicht fällig — die
+Rückmeldung zählt dann neutral. Nur für „hab noch da". „War schon
+alle" bleibt unangetastet: wer weg war und trotzdem nichts mehr hat,
+liefert das stärkere Signal, nicht das schwächere. Der Rhythmus selbst
+ist über `computeRhythm({absenceDays})` längst abwesenheitsbereinigt;
+die Rückmeldung dagegen zu halten, ohne sie ebenso zu bereinigen, war
+ein Vergleich zweier Zeitrechnungen.
+
+Der eigentliche Fund liegt daneben. Beim ersten Messen änderte die
+Korrektur **exakt gar nichts** — dieselben Zahlen bis auf die
+Nachkommastelle. Der Grund: `test/longterm.js` hat jede simulierte
+Rückmeldung mit `dueIn = 0` protokolliert, statt mit der Fälligkeit,
+die die Oberfläche tatsächlich mitgibt (`app.js` tut das seit jeher).
+Damit war jedes „hab noch da" gleich viel wert, der gesamte
+Überfälligkeits-Zweig des Lerners wurde in drei simulierten Jahren nie
+erreicht, und der Bündel-Effekt konnte in der Simulation gar nicht
+entstehen. Ein Test, der die Sache nicht messen kann, die er messen
+soll, sieht von außen genauso grün aus wie einer, der sie misst.
+
+Mit der echten Fälligkeit und **ohne** die Bereinigung fällt der
+Drei-Jahres-Lauf durch:
+
+| | ohne Bereinigung | mit Bereinigung |
+|---|---|---|
+| Median-Abweichung der Takte (Schwelle 30 %) | **31,4 %** | unter 30 % |
+| Leertage (feste Liste: 1710) | **1717** | 1705 |
+| Vergessenes | 7,3 % | 7,3 % |
+| Takt „alle 14 Tage" gelernt als | 7 | 11 |
+| Takt „alle 51 Tage" gelernt als | 35 | 42 |
+
+Der Rückvergleich `test/liste.js` kennt keine Rückmeldungen und bleibt
+unverändert (Trefferquote 78,2 %, F1 60,1 %). Sein Merkzettel führt
+den Weg jetzt unter „gemessen und ÜBERNOMMEN".
+
+### Bestand: ein Wisch heißt „ist alle"
+
+Der Bestand ist die einzige Zahl der App, die niemand bestätigt hat —
+sie ist gerechnet. Genau deshalb liegt sie regelmäßig daneben, und
+genau eine Korrektur überwiegt alle anderen: „das ist längst weg."
+Eine Aussage, die so oft fällt, darf nicht drei Handgriffe kosten
+(Zeile antippen, Blatt lesen, eine von drei Schaltflächen suchen).
+
+Wischen nach links setzt die Schätzung auf null. Ohne Rückfrage: die
+Geste ist die Antwort. Der Preis dafür ist ein Rückweg, und den gibt
+es — „Rückgängig" im Toast (`App.toast` kann jetzt eine Handlung
+tragen). Die drei Schaltflächen im Detail-Blatt bleiben: sie sind der
+Weg mit Tastatur und der Weg für die beiden anderen Fälle.
+
+Technisch dieselbe Wahl wie beim Ziehen der Gangreihenfolge: Pointer
+Events statt Touch, eine Behandlung für Finger, Stift und Maus.
+`touch-action:pan-y` statt `none` — die Zeilen stehen in einer langen
+Liste, und `none` würde das senkrechte Scrollen abwürgen. Gesperrt
+wird erst, wenn die waagerechte Bewegung deutlich ist UND größer als
+die senkrechte; der Klick danach wird geschluckt, sonst öffnete sich
+das Detail-Blatt direkt über dem eigenen Toast.
+
+Verbrauchstag und Haltbarkeitsdatum bleiben **freiwillig**. Das
+aufgedruckte Datum hatte schon ein Feld; der Verbrauchstag hat jetzt
+eins, zugeklappt, unter „Verbrauchstag nachtragen". Beides als
+Standardabfrage hätte die Geste zunichte gemacht — es ist die
+Ausnahme, nicht der Regelfall.
+
+### Runde Ecken und ein Hauch Glas
+
+`--r-lg/--r-md/--r-sm` standen eine Weile auf `0px` („Flächen eckig,
+Punkte rund"). Der Gedanke dahinter war, dass eine Fläche, die etwas
+misst, sich eckig eher als Messwert liest. Im Ganzen hat das die App
+härter gemacht, als sie ist: sie schätzt, sie mahnt nicht. Die Werte
+sind zurück (20/14/10 px), die Regel ist geblieben — gerundet wird
+über die drei Stufen, nicht über frei gewählte Zahlen, und ein Punkt
+bleibt ein Punkt. Der Test dazu prüft jetzt genau das, statt auf `0px`
+zu bestehen.
+
+Dazu Glas. Die Leisten oben und unten arbeiten seit jeher mit
+`backdrop-filter`; `--glass` trägt dasselbe Prinzip in die
+Inhaltsflächen — Gruppen, Karten, Kacheln, Blätter. Damit das etwas
+zeigt, braucht es etwas zu zeigen: der Seitengrund trägt zwei sehr
+schwache, festsitzende Farbwolken. Ohne sie wäre eine durchscheinende
+Fläche über einfarbigem Grund exakt dasselbe wie eine deckende —
+Rechenarbeit ohne Wirkung. Die feine helle Kante liegt als
+Innenschatten in `--lift` und nicht als eigenes Element: so folgt sie
+jedem Radius von selbst.
+
+Der eine Punkt, an dem Glas gefährlich wird, ist die Lesbarkeit. Die
+Deckkraft ist deshalb hoch (.86 hell, .82 dunkel), und
+`test/contrast.js` rechnet jetzt die **tatsächliche** Fläche nach —
+Glas über Farbwolke über Papier — statt des Tokens, das sie einmal
+war, für Haupttext, Nebentext, kleine Beschriftungen und alle sechs
+getönten Marken, hell und dunkel. Mit der Gegenprobe: zu deckend wäre
+gut für den Text und machte die Karte unsichtbar.
+
+Beim Nachsehen mit Playwright fiel ein echter Fehler auf, den kein
+Test gestellt hätte: weil die Zeilen in einer Gruppe für das Glas
+durchsichtig sind, schien die rote Wischfläche durch **jede** Zeile.
+Sie erscheint jetzt erst beim Ziehen, und die gezogene Zeile wird
+solange deckend.
+
+Alle Bereiche neu fotografiert, mobil und Rechner, hell und dunkel.
+55 neue Oberflächentests, 20 neue Kontrastprüfungen, 22 neue
+Lerntests. Alle jetzt 2064 Tests bestehen.
+
+---
+
 ## Aufbau
 
 ```
@@ -4096,12 +4223,12 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 1970
-npm run test:algo # 1145 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 2064
+npm run test:algo # 1184 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
                   #   Verschwendung, Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 789 Oberflächentests in jsdom
+npm run test:ui   # 844 Oberflächentests in jsdom
 npm run test:long # 36 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

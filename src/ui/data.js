@@ -476,15 +476,48 @@ function toggleOpened(productId) {
  * ab jetzt vom heutigen Tag und der korrigierten Menge weiter, bis
  * ein echter Kauf sie ersetzt. `remainingUnits` in Vielfachen der
  * zuletzt gekauften Menge, wie überall sonst im Bestand ("0,6×").
+ *
+ * `date` ist der Tag, an dem der gemeldete Stand galt -- also der
+ * Verbrauchstag, wenn jemand nachträglich sagt „das war schon letzte
+ * Woche alle". Ohne Angabe: heute. Ein Datum vor dem letzten Kauf
+ * oder in der Zukunft wird abgelehnt statt stillschweigend auf heute
+ * gebogen; `inventoryEstimator.js` verwirft es sonst ohnehin, und
+ * eine Korrektur, die spurlos verpufft, ist schlimmer als eine, die
+ * ehrlich fehlschlägt.
  */
-function setStockCorrection(productId, remainingUnits) {
+function setStockCorrection(productId, remainingUnits, date) {
   if (!productId) return false;
   const value = Math.max(0, Number(remainingUnits) || 0);
+  let tag = today();
+  if (date) {
+    if (!isRealDate(date) || date > tag) return false;
+    const letzter = state.purchases
+      .filter((p) => p.productId === productId)
+      .map((p) => p.date)
+      .sort()
+      .pop();
+    if (letzter && date < letzter) return false;
+    tag = date;
+  }
   update((s) => {
     if (!s.stockCorrections) s.stockCorrections = {};
-    s.stockCorrections[productId] = { date: today(), remainingUnits: value };
+    s.stockCorrections[productId] = { date: tag, remainingUnits: value };
   });
   return true;
+}
+
+/** Eine Korrektur zurücknehmen — der Rückweg zur reinen Schätzung.
+    Ohne ihn wäre die Wisch-Geste im Bestand unumkehrbar. */
+function clearStockCorrection(productId) {
+  if (!productId) return false;
+  let weg = false;
+  update((s) => {
+    if (s.stockCorrections && s.stockCorrections[productId]) {
+      delete s.stockCorrections[productId];
+      weg = true;
+    }
+  });
+  return weg;
 }
 
 /* ---------- Ereignis-Protokoll ---------- */
@@ -1665,7 +1698,8 @@ function searchProducts(query, limit = 12) {
 const Data = {
   STORE_KEY, SHADOW_KEY, SCHEMA,
   load, save, get, update, subscribe, reset,
-  addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened, setStockCorrection,
+  addReceipt, removeReceipt, receiptLines, updatePurchase, learnAlias, toggleOpened,
+  setStockCorrection, clearStockCorrection,
   recordSwapFor, recordFeedback,
   toggleEaten, toggleNoChronic,
   toggleBrandOff, setUseBy, recoveryNotice,

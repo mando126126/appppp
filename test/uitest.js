@@ -2606,21 +2606,31 @@ setTimeout(() => {
   ok("Und nicht mehr abgekürzt", !marken.some((m) => m.trim() === "VD"), marken.join(" | "));
 }
 
-console.log("\n--- Kanten: Flächen eckig, Punkte rund ---");
+console.log("\n--- Kanten: Flächen gerundet, Punkte rund ---");
 {
   /* Die Regel steht als Kommentar in app.css und wäre damit eine
      Absichtserklärung. Hier wird sie geprüft — sonst schleicht sich
      beim nächsten neuen Bauteil wieder ein `border-radius:12px` ein,
-     und niemand sieht es, weil zwölf Pixel für sich harmlos aussehen. */
+     und niemand sieht es, weil zwölf Pixel für sich harmlos aussehen.
+
+     Die Werte standen eine Weile auf 0 („Flächen eckig"). Sie sind
+     zurück, die Regel ist geblieben: gerundet wird über die drei
+     Stufen, nicht über frei gewählte Zahlen. */
   const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
 
   const token = (name) => (css.match(new RegExp("--" + name + ":(\\S+?);")) || [])[1];
+  const px = (name) => parseFloat(token(name));
   ["r-lg", "r-md", "r-sm"].forEach((t) =>
-    ok(`--${t} ist eckig`, token(t) === "0px", token(t)));
+    ok(`--${t} ist ein echter Radius`, px(t) > 0, token(t)));
+  ok("Die drei Stufen sind abgestuft, nicht dreimal derselbe Wert",
+    px("r-lg") > px("r-md") && px("r-md") > px("r-sm"),
+    `${token("r-lg")} / ${token("r-md")} / ${token("r-sm")}`);
+  ok("Der innere Radius bleibt kleiner als der äußere — sonst wirkt der Rand ungleich",
+    px("r-lg") - px("r-md") >= 4 && px("r-md") - px("r-sm") >= 3);
 
   /* Erlaubt ist genau zweierlei: ein voller Kreis (99px, 50 %) oder
-     gar keine Rundung. Alles dazwischen ist die weiche Ecke, die weg
-     sollte. */
+     eine der drei Stufen. Eine frei gewählte Zahl dazwischen ist die
+     Ecke, die niemand mehr wiederfindet, wenn die Stufen sich ändern. */
   const werte = [...css.matchAll(/border-radius:([^;}]+)/g)].map((m) => m[1].trim());
   const dazwischen = werte.filter((v) => {
     if (/var\(/.test(v) || /%/.test(v)) return false;
@@ -2629,7 +2639,7 @@ console.log("\n--- Kanten: Flächen eckig, Punkte rund ---");
       return Number.isFinite(z) && z > 0 && z < 40;
     });
   });
-  ok("Keine halbrunden Ecken mehr", dazwischen.length === 0, dazwischen.join(" | "));
+  ok("Keine frei gewählten Ecken neben den drei Stufen", dazwischen.length === 0, dazwischen.join(" | "));
 
   /* Und die Gegenprobe: die Kreise sind noch da. Eine Regel, die
      alles platt macht, wäre genauso falsch — der Abhak-Kreis, der
@@ -2655,8 +2665,61 @@ console.log("\n--- Kanten: Flächen eckig, Punkte rund ---");
   [".baGo", ".pill", ".box", ".sDot", ".infoBtn"].forEach((sel) =>
     ok(`${sel} bleibt rund`, /99px|50%/.test(radius(sel)), radius(sel)));
 
-  [".groupBody", ".cta", ".barBtn", ".pillBtn", ".toast"].forEach((sel) =>
-    ok(`${sel} ist eckig`, radius(sel) === "keine" || /var\(/.test(radius(sel)), radius(sel)));
+  [".groupBody", ".cta", ".pillBtn", ".toast", ".card", ".tile", ".sheetBody"].forEach((sel) =>
+    ok(`${sel} rundet über eine der drei Stufen`, /var\(--r-(lg|md|sm)\)/.test(radius(sel)), radius(sel)));
+}
+
+console.log("\n--- Glas: durchscheinende Flächen ---");
+{
+  /* „Ein Hauch Liquid Glass": durchscheinende Flächen mit einer
+     feinen hellen Kante. Geprüft wird das Gerüst, nicht der Eindruck
+     — ein Weichzeichner ohne etwas dahinter ist reine Rechenarbeit,
+     und eine deckende Zeile über einer Glasgruppe macht das Glas
+     wieder zunichte. Genau diese beiden Fehler fängt dieser Block. */
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+  const block = (sel) => {
+    const i = css.indexOf("\n" + sel + "{");
+    return i < 0 ? null : css.slice(i + sel.length + 2, css.indexOf("}", i));
+  };
+  const token = (name) => (css.match(new RegExp("--" + name + ":(\\S+?);")) || [])[1];
+
+  ok("Es gibt einen Glas-Ton", /^rgba\(/.test(token("glass") || ""), token("glass"));
+  ok("Er ist durchscheinend, nicht deckend",
+    parseFloat((token("glass") || "").split(",")[3]) < 1, token("glass"));
+  ok("...aber nicht so durchscheinend, dass Text darauf leidet",
+    parseFloat((token("glass") || "").split(",")[3]) >= 0.8, token("glass"));
+  ok("Es gibt eine helle Kante", !!token("glass-edge"), token("glass-edge"));
+  ok("Die Kante liegt im Tiefen-Token und braucht deshalb kein overflow:hidden",
+    /inset 0 1px 0 var\(--glass-edge\)/.test(css));
+
+  [".groupBody", ".card", ".tile", ".sheetBody"].forEach((sel) => {
+    const b = block(sel) || "";
+    ok(`${sel} ist eine Glasfläche`, /background:var\(--glass\)/.test(b), b.slice(0, 60));
+    ok(`${sel} zeichnet weich, was darunter liegt`, /backdrop-filter:/.test(b));
+  });
+
+  ok("Zeilen in einer Gruppe mauern das Glas nicht wieder zu",
+    /\.groupBody \.row,\.card \.row\{background:transparent\}/.test(css));
+
+  /* Ohne etwas hinter dem Glas ist Glas gleich Farbe. Der Seitengrund
+     trägt deshalb zwei sehr schwache Farbwolken. */
+  const body = block("body") || "";
+  ok("Der Seitengrund trägt etwas, das durchscheinen kann",
+    /radial-gradient/.test(body) && /var\(--tint-a\)/.test(body) && /var\(--tint-b\)/.test(body));
+  ok("Die Wolken scrollen nicht mit", /background-attachment:fixed/.test(body));
+  ok("Beide Farbwolken sind sehr schwach — Raum, nicht Dekoration",
+    parseFloat((token("tint-a") || "").split(",")[3]) <= 0.1 &&
+    parseFloat((token("tint-b") || "").split(",")[3]) <= 0.1,
+    `${token("tint-a")} / ${token("tint-b")}`);
+
+  /* Im dunklen Modus sind die Werte eigene, nicht dieselben: eine
+     weiße Kante mit 75 % sieht auf Dunkelgrau aus wie ein Riss. */
+  const dunkel = css.slice(css.indexOf("@media (prefers-color-scheme: dark)"));
+  ok("Der dunkle Modus hat einen eigenen Glas-Ton", /--glass:rgba\(30,34,41/.test(dunkel));
+  ok("...und eine viel schwächere Kante",
+    /--glass-edge:rgba\(255,255,255,\.0\d\)/.test(dunkel));
+  ok("Das feste Dunkelthema bekommt dieselben Werte",
+    /--glass:rgba\(30,34,41,\.82\)/.test(css.slice(css.indexOf('[data-theme="dunkel"]'))));
 }
 
 console.log("\n--- Die Schrift liegt bei ---");
@@ -3623,6 +3686,174 @@ console.log("\n--- UX-Testbericht: dritte Umsetzungsrunde ---");
 
   D.reset();
   D.loadDemo("full");
+}
+
+console.log("\n--- Bestand: Wischen heißt „ist alle“ ---");
+{
+  const css = fs.readFileSync(path.join(WEB, "app.css"), "utf8");
+  const block = (sel) => {
+    const i = css.indexOf("\n" + sel + "{");
+    return i < 0 ? null : css.slice(i + sel.length + 2, css.indexOf("}", i));
+  };
+
+  /* Eine echte Geste, nicht nur die Verdrahtung: jsdom kennt
+     PointerEvent, nur setPointerCapture nicht -- der Aufruf steht
+     deshalb in views.js in einem try/catch. */
+  const zeiger = (typ, x, y) => new window.PointerEvent(typ,
+    { pointerId: 1, clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true });
+  const wisch = (row, dx, dy = 0) => {
+    row.dispatchEvent(zeiger("pointerdown", 300, 200));
+    row.dispatchEvent(zeiger("pointermove", 300 + Math.round(dx / 2), 200 + Math.round(dy / 2)));
+    row.dispatchEvent(zeiger("pointermove", 300 + dx, 200 + dy));
+    row.dispatchEvent(zeiger("pointerup", 300 + dx, 200 + dy));
+  };
+  const bestandZeigen = () => {
+    D.reset(); D.loadDemo("full");
+    App.goto("bestand"); App.bestandTab = "vorrat"; App.render();
+  };
+  const ersteZeile = () => $("main").querySelector(".swipeWrap");
+
+  bestandZeigen();
+  const w = ersteZeile();
+  ok("Bestandszeilen liegen in einer Wisch-Hülle", !!w);
+  ok("Dahinter steht die Fläche mit der Beschriftung",
+    !!w && w.querySelector(".swipeBack .swipeLabel") &&
+    w.querySelector(".swipeLabel").textContent === "Ist alle");
+  ok("Die Zeile selbst liegt darüber", !!w && !!w.querySelector(":scope > .row"));
+  ok("Senkrechtes Scrollen bleibt dem Browser (touch-action:pan-y)",
+    /touch-action:pan-y/.test(block(".swipeWrap > .row") || ""));
+  ok("Die Trennlinie überlebt die Hülle",
+    css.includes(".swipeWrap + .swipeWrap > .row::before"));
+
+  /* --- Ein kurzes Wischen ist ein Tippen und darf nichts auslösen --- */
+  {
+    const wrap = ersteZeile();
+    const row = wrap.querySelector(":scope > .row");
+    const pid = App.ctx.inventory[0].productId;
+    wisch(row, -20);
+    ok("Ein kurzes Ziehen löst nichts aus",
+      !(D.get().stockCorrections || {})[pid], JSON.stringify(D.get().stockCorrections));
+  }
+
+  /* --- Senkrecht überwiegt: das ist Scrollen --- */
+  {
+    bestandZeigen();
+    const wrap = ersteZeile();
+    const row = wrap.querySelector(":scope > .row");
+    const pid = App.ctx.inventory[0].productId;
+    wisch(row, -120, -140);
+    ok("Eine überwiegend senkrechte Bewegung wird nicht als Wischen gewertet",
+      !(D.get().stockCorrections || {})[pid], JSON.stringify(D.get().stockCorrections));
+  }
+
+  /* --- Weit genug: die Schätzung steht auf null --- */
+  let pidLeer = null;
+  {
+    bestandZeigen();
+    const wrap = ersteZeile();
+    const row = wrap.querySelector(":scope > .row");
+    pidLeer = App.ctx.inventory[0].productId;
+    const vorher = App.ctx.inventory[0].remainingUnits;
+    ok("Vorher ist noch etwas geschätzt", vorher > 0, vorher);
+    wisch(row, -120);
+    const korr = (D.get().stockCorrections || {})[pidLeer];
+    ok("Ein weites Wischen setzt die Schätzung auf null",
+      !!korr && korr.remainingUnits === 0, JSON.stringify(korr));
+    ok("Es geschieht ohne Rückfrage — kein Blatt öffnet sich",
+      doc.getElementById("sheet").hidden !== false ||
+      !doc.getElementById("sheet").querySelector(".pTitle"));
+    const inv = App.ctx.inventory.find((i) => i.productId === pidLeer);
+    ok("Und die Anzeige zieht sofort nach", !inv || inv.remainingUnits === 0, inv && inv.remainingUnits);
+  }
+
+  /* --- Der Rückweg: „Rückgängig" im Toast --- */
+  {
+    const t = doc.getElementById("toast");
+    const act = t.querySelector(".tAct");
+    ok("Der Toast bietet einen Rückweg an", !!act && act.textContent === "Rückgängig");
+    click(act);
+    ok("Rückgängig nimmt die Korrektur zurück",
+      !(D.get().stockCorrections || {})[pidLeer], JSON.stringify(D.get().stockCorrections));
+    ok("Der Toast bestätigt die Rücknahme",
+      (t.querySelector(".tTxt b") || {}).textContent === "Zurückgenommen");
+  }
+
+  /* --- Nach dem Wischen darf der Klick das Blatt nicht öffnen --- */
+  {
+    bestandZeigen();
+    const wrap = ersteZeile();
+    const row = wrap.querySelector(":scope > .row");
+    row.dispatchEvent(zeiger("pointerdown", 300, 200));
+    row.dispatchEvent(zeiger("pointermove", 180, 200));
+    row.dispatchEvent(zeiger("pointerup", 180, 200));
+    const geoeffnet = doc.getElementById("sheet").hidden === false;
+    click(row);
+    ok("Der Klick nach dem Wischen öffnet kein Blatt",
+      (doc.getElementById("sheet").hidden === false) === geoeffnet);
+    App.closeSheet();
+  }
+
+  /* --- Der Weg mit Tastatur bleibt: die Schaltflächen im Blatt --- */
+  {
+    bestandZeigen();
+    const pid = App.ctx.inventory[0].productId;
+    T.productSheet(pid, App.ctx);
+    const btns = [...doc.getElementById("sheet").querySelectorAll(".stockCorrRow .pillBtn")]
+      .map((b) => b.textContent);
+    ok("Das Detail-Blatt behält alle drei Korrekturen",
+      btns.join("|") === "Ist leer|Etwa richtig|Mehr als gedacht", btns.join("|"));
+    App.closeSheet();
+  }
+
+  /* --- Der Verbrauchstag: freiwillig und zugeklappt --- */
+  {
+    bestandZeigen();
+    const pid = App.ctx.inventory[0].productId;
+    T.productSheet(pid, App.ctx);
+    const det = [...doc.getElementById("sheet").querySelectorAll("details.pMore")]
+      .find((d) => (d.querySelector("summary") || {}).textContent === "Verbrauchstag nachtragen");
+    ok("Der Verbrauchstag steht im Blatt", !!det);
+    ok("Und er ist zugeklappt — keine Standardabfrage", !!det && det.open !== true);
+    const inp = det && det.querySelector('input[type="date"]');
+    ok("Dahinter steht ein Datumsfeld", !!inp);
+    ok("Kein Datum in der Zukunft", !!inp && inp.max === D.today());
+    App.closeSheet();
+  }
+
+  /* --- setStockCorrection mit Datum: die Regeln --- */
+  {
+    D.reset(); D.loadDemo("full");
+    const pid = App.ctx.inventory[0].productId;
+    const letzter = D.get().purchases.filter((p) => p.productId === pid).map((p) => p.date).sort().pop();
+    ok("Ein Datum in der Zukunft wird abgelehnt",
+      D.setStockCorrection(pid, 0, D.plusDays(D.today(), 1)) === false);
+    ok("Ein kaputtes Datum wird abgelehnt", D.setStockCorrection(pid, 0, "2026-13-45") === false);
+    ok("Ein Datum vor dem letzten Kauf wird abgelehnt",
+      D.setStockCorrection(pid, 0, D.plusDays(letzter, -1)) === false);
+    ok("Nichts davon wurde gespeichert", !(D.get().stockCorrections || {})[pid]);
+    ok("Ein Tag zwischen Kauf und heute wird angenommen",
+      D.setStockCorrection(pid, 0, letzter) === true);
+    ok("Und er landet als Korrekturdatum in den Daten",
+      (D.get().stockCorrections[pid] || {}).date === letzter);
+    ok("Zurücknehmen räumt den Eintrag weg",
+      D.clearStockCorrection(pid) === true && !(D.get().stockCorrections || {})[pid]);
+    ok("Zweimal zurücknehmen meldet ehrlich, dass nichts da war",
+      D.clearStockCorrection(pid) === false);
+    ok("Ohne Datum gilt heute",
+      D.setStockCorrection(pid, 0) === true && D.get().stockCorrections[pid].date === D.today());
+    D.reset(); D.loadDemo("full");
+  }
+
+  ok("Der Auslösepunkt ist sichtbar markiert (.armed)",
+    /\.swipeWrap\.armed \.swipeBack/.test(css) && /\.swipeWrap\.armed \.swipeLabel/.test(css));
+  ok("Die Gruppe erklärt die Geste",
+    ($("main").textContent || "").includes("Wisch eine Zeile nach links") ||
+    (() => { App.goto("bestand"); App.bestandTab = "vorrat"; App.render();
+      return [...$("main").querySelectorAll(".infoBtn")].length > 0; })());
+
+  D.reset();
+  D.loadDemo("full");
+  App.goto("start");
 }
 
 console.log("\n--- Keine unbeaufsichtigten Fehler ---");

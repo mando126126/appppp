@@ -166,37 +166,78 @@
   --fill:rgba(21,24,30,.05);
   --fill-2:rgba(21,24,30,.09);
 
-  /* KANTEN: Flächen sind eckig, Punkte bleiben Punkte.
+  /* KANTEN: gerundet, in drei abgestuften Radien.
      ------------------------------------------------------------
-     Die App war durchgehend abgerundet. Das sah freundlich aus und
-     hatte einen Preis, der erst im Vergleich auffiel: alles wirkte
-     gleich weich, und eine Fläche, die etwas MISST — ein Balken, ein
-     Feld, eine Zeile — sah aus wie Dekoration. Eckig gesetzt liest
-     sich derselbe Balken als Messwert.
+     Zwischenstand: eine Weile standen diese drei Werte auf 0. Der
+     Gedanke dahinter war, dass eine Fläche, die etwas MISST — ein
+     Balken, ein Feld, eine Zeile —, sich eckig eher als Messwert
+     liest als abgerundet. Im Ganzen gesehen hat das die App härter
+     gemacht, als sie ist: sie schätzt, sie mahnt nicht.
 
-     Die Regel, nach der hier entschieden wird, ist keine
-     Geschmacksfrage, sondern eine Frage der Natur des Elements:
+     Die Regel selbst ist geblieben, nur die Werte sind zurück. Sie
+     ist keine Geschmacksfrage, sondern eine Frage der Natur des
+     Elements — nur dass „eckig" jetzt „sanft gerundet" heißt:
 
-       ECKIG  ist alles, was eine FLÄCHE ist — Karten, Gruppen,
-              Zeilen, Knöpfe, Eingabefelder, Blätter, Balken.
-       RUND   bleibt, was ein PUNKT oder ein KREIS ist — Abhak-
-              Kreise, der Pfeilkreis, Streak-Punkte, der Schalter,
-              das (i), die Marken („Beispieldaten“, „!“, „2“).
+       --r-lg  große FLÄCHEN, die etwas umschließen — Karten,
+               Gruppen, Blätter, Kacheln.
+       --r-md  bedienbare Flächen — Knöpfe, Eingabefelder,
+               Segmente, Balken.
+       --r-sm  kleine Flächen innerhalb einer anderen — Chips im
+               Toast, Bänder, Fortschrittsspuren.
+       99px    bleibt, was ein PUNKT oder ein KREIS ist — Abhak-
+               Kreise, der Pfeilkreis, Streak-Punkte, der Schalter,
+               das (i), die Marken („Beispieldaten", „!", „2").
+               Diese Werte stehen direkt an ihrer Regel, nicht hier:
+               ein Kreis ist keine Abstufung, er ist ein Kreis.
 
-     Marken bleiben rund, obwohl sie Flächen sind: sie sind
-     Beschriftungen, keine Bedienelemente, und als Rechtecke bekämen
-     sie ein Gewicht, das ihnen nicht zusteht. Ein Knopf dagegen
-     WILL Gewicht — deshalb ist „Im Laden“ eckig geworden und
-     „Beispieldaten“ nicht.
+     Warum drei und nicht einer: geschachtelte Flächen mit demselben
+     Radius sehen falsch aus. Der innere Radius muss kleiner sein als
+     der äußere, sonst wirkt der Abstand dazwischen ungleichmäßig.
 
-     Die drei Werte stehen auf 0 und nicht die Regeln auf „entfernt“:
-     so ist der Weg zurück ein Zahlenwert und keine Archäologie. */
-  --r-lg:0px;
-  --r-md:0px;
-  --r-sm:0px;
+     Der Weg zurück bleibt ein Zahlenwert und keine Archäologie. */
+  --r-lg:20px;
+  --r-md:14px;
+  --r-sm:10px;
 
-  /* Genau eine Tiefenstufe */
-  --lift:0 1px 2px rgba(16,24,40,.04), 0 10px 26px -12px rgba(16,24,40,.16);
+  /* GLAS: die Flächen sind leicht durchscheinend.
+     ------------------------------------------------------------
+     Die Leisten oben und unten arbeiten seit jeher mit `--material`
+     und `backdrop-filter` — durchscheinend, damit sichtbar bleibt,
+     dass darunter etwas weiterläuft. `--glass` trägt dasselbe Prinzip
+     in die Inhaltsflächen: Gruppen, Karten, Blätter.
+
+     Damit das überhaupt etwas zeigt, braucht es etwas zu zeigen. Der
+     Seitengrund ist deshalb nicht mehr nur ein Ton, sondern trägt
+     zwei sehr schwache, festsitzende Farbwolken (siehe `body`). Ohne
+     sie wäre eine durchscheinende Fläche über einem einfarbigen Grund
+     exakt dasselbe wie eine deckende — Rechenarbeit ohne Wirkung.
+
+     `--glass-edge` ist die feine helle Kante oben an jeder Fläche:
+     das, was eine Glasscheibe von einem Aufkleber unterscheidet.
+
+     WICHTIG FÜRS LESEN: die Deckkraft ist bewusst hoch (.86 hell,
+     .82 dunkel). Glas mit 50 % sieht auf einem Bild großartig aus und
+     macht Fließtext unlesbar, sobald darunter etwas Dunkles liegt.
+     Was hier steht, wird in test/contrast.js über den Seitengrund
+     gelegt und nachgerechnet — genau wie jede andere Farbe. */
+  --glass:rgba(255,255,255,.86);
+  /* Die Kante liegt als Innenschatten in `--lift` und nicht als
+     eigenes Element: so folgt sie jedem Radius von selbst und
+     braucht kein overflow:hidden, das sonst die Sprechblase der
+     Meilenstein-Karte abschneiden würde. */
+  --glass-edge:rgba(255,255,255,.75);
+  --glass-blur:22px;
+  --tint-a:rgba(14,164,107,.07);   /* Farbwolke oben links */
+  --tint-b:rgba(61,130,246,.06);   /* Farbwolke unten rechts */
+
+  /* Tiefe: die Fläche liegt auf, statt aufgedruckt zu sein. Drei
+     Lagen — eine harte Kontur, ein naher weicher Schatten, ein
+     weiter. Zusammen ergibt das Höhe ohne eine sichtbare Wolke. */
+  --lift:
+    inset 0 1px 0 var(--glass-edge),
+    0 0 0 1px rgba(16,24,40,.035),
+    0 1px 2px rgba(16,24,40,.05),
+    0 12px 30px -14px rgba(16,24,40,.20);
 
   --safe-top:env(safe-area-inset-top,0px);
   --safe-bottom:env(safe-area-inset-bottom,0px);
@@ -252,7 +293,18 @@
     --m-alarm-cheek:#726A94;
     --fill:rgba(255,255,255,.06);
     --fill-2:rgba(255,255,255,.11);
-    --lift:0 1px 2px rgba(0,0,0,.30), 0 10px 26px -12px rgba(0,0,0,.60);
+    /* Glas im Dunkeln: die Fläche ist heller als der Grund, die Kante
+       bleibt hell, aber sehr schwach — eine weiße Linie mit 75 %
+       sieht auf Dunkelgrau aus wie ein Riss. */
+    --glass:rgba(30,34,41,.82);
+    --glass-edge:rgba(255,255,255,.09);
+    --tint-a:rgba(52,212,141,.09);
+    --tint-b:rgba(107,163,255,.07);
+    --lift:
+      inset 0 1px 0 var(--glass-edge),
+      0 0 0 1px rgba(255,255,255,.05),
+      0 1px 2px rgba(0,0,0,.34),
+      0 12px 30px -14px rgba(0,0,0,.65);
   }
 }
 
@@ -288,7 +340,15 @@
   --m-alarm-cheek:#726A94;
   --fill:rgba(255,255,255,.06);
   --fill-2:rgba(255,255,255,.11);
-  --lift:0 1px 2px rgba(0,0,0,.30), 0 10px 26px -12px rgba(0,0,0,.60);
+  --glass:rgba(30,34,41,.82);
+  --glass-edge:rgba(255,255,255,.09);
+  --tint-a:rgba(52,212,141,.09);
+  --tint-b:rgba(107,163,255,.07);
+  --lift:
+    inset 0 1px 0 var(--glass-edge),
+    0 0 0 1px rgba(255,255,255,.05),
+    0 1px 2px rgba(0,0,0,.34),
+    0 12px 30px -14px rgba(0,0,0,.65);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -299,7 +359,18 @@ html,body{margin:0;padding:0;min-height:100%}
    das Gerüst. */
 html{font-size:calc(16.5px * var(--text-scale))}
 body{
-  background:var(--paper);color:var(--ink);
+  /* Zwei sehr schwache Farbwolken auf dem Seitengrund. Sie sind
+     nicht Dekoration, sondern die Voraussetzung dafür, dass die
+     durchscheinenden Flächen darüber überhaupt etwas durchscheinen
+     lassen — über einem einfarbigen Grund ist Glas dasselbe wie
+     Farbe. `fixed` statt mitscrollend: die Wolken gehören zum Raum,
+     nicht zum Inhalt, und wandern beim Scrollen nicht mit. */
+  background:
+    radial-gradient(1100px 620px at 12% -8%, var(--tint-a), transparent 62%),
+    radial-gradient(900px 560px at 108% 106%, var(--tint-b), transparent 60%),
+    var(--paper);
+  background-attachment:fixed;
+  color:var(--ink);
   font-family:"Manrope",-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;
   /* Zwei Korrekturen gegenüber der Systemschrift, beide gemessen und
      nicht geschätzt:
@@ -371,7 +442,7 @@ input,select,textarea{font-family:inherit;font-size:max(16px,0.97rem);color:inhe
 }
 .barBtn:active{opacity:.45}
 .barBtn.filled{
-  background:var(--accent-strong);color:var(--on-accent);
+  background:var(--accent-strong);color:var(--on-accent);border-radius:var(--r-md);
   padding:9px 17px;box-shadow:var(--lift);
   transition:transform .16s var(--spring);
 }
@@ -561,9 +632,17 @@ main:has(> .card:only-child){display:flex;flex-direction:column;justify-content:
   font-size:0.82rem;font-weight:600;color:var(--ink-2);
   padding:0 4px 8px;letter-spacing:-.0025em;
 }
+/* Die Gruppe ist die Glasscheibe, nicht die einzelne Zeile: der
+   Weichzeichner liegt EINMAL auf dem Behälter statt auf jeder Zeile
+   darin. Deshalb sind die Zeilen darin durchsichtig (siehe unten) --
+   sonst läge über dem Glas wieder eine deckende Fläche und der
+   ganze Aufwand wäre unsichtbar. */
 .groupBody{
-  background:var(--surface);border-radius:var(--r-lg);overflow:hidden;
+  background:var(--glass);border-radius:var(--r-lg);overflow:hidden;
+  -webkit-backdrop-filter:saturate(140%) blur(var(--glass-blur));
+  backdrop-filter:saturate(140%) blur(var(--glass-blur));
   box-shadow:var(--lift);
+  position:relative;
 }
 .groupNote{font-size:0.79rem;color:var(--ink-2);padding:8px 4px 0;line-height:1.4}
 
@@ -572,9 +651,53 @@ main:has(> .card:only-child){display:flex;flex-direction:column;justify-content:
   padding:12px 16px;min-height:48px;position:relative;
   background:var(--surface);width:100%;text-align:left;
 }
+/* In einer Gruppe trägt der Behälter die Fläche (siehe .groupBody).
+   Eine deckende Zeile darin würde das Glas wieder zumauern. */
+.groupBody .row,.card .row{background:transparent}
 .row + .row::before{
   content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline);
 }
+
+/* Wischen im Bestand: „ist alle" (siehe attachStockSwipe() in
+   views.js). Die Zeile liegt über einer Fläche, die beim Ziehen zum
+   Vorschein kommt.
+
+   touch-action:pan-y statt none -- die Zeilen stehen in einer langen
+   Liste, und `none` würde das senkrechte Scrollen darüber abwürgen.
+   Die waagerechte Achse gehört uns, die senkrechte dem Browser. */
+.swipeWrap{position:relative;overflow:hidden}
+.swipeWrap + .swipeWrap > .row::before{
+  content:"";position:absolute;left:16px;right:0;top:0;height:1px;background:var(--hairline);
+}
+.swipeWrap > .row{
+  touch-action:pan-y;position:relative;z-index:1;
+  transition:transform .2s var(--ease);
+}
+/* Während des Ziehens ist die Zeile deckend: sie liegt als Blatt über
+   der Fläche darunter, sonst schiene das Rot durch die Schrift. In
+   Ruhe ist sie durchsichtig, damit das Glas der Gruppe sichtbar
+   bleibt (siehe .groupBody .row). */
+.swipeWrap.swiping > .row{
+  transition:none;background:var(--surface);
+  -webkit-user-select:none;user-select:none;
+}
+/* Die Fläche dahinter erscheint erst beim Ziehen. Dauerhaft sichtbar
+   wäre sie ein rotes Band hinter JEDER Zeile -- die Zeilen darüber
+   sind durchsichtig, das Rot schlüge überall durch. */
+.swipeBack{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;
+  padding-right:20px;background:var(--red-soft);
+  opacity:0;transition:opacity .12s linear;
+}
+.swipeWrap.swiping .swipeBack{opacity:1}
+.swipeLabel{
+  font-size:0.88rem;font-weight:650;color:var(--red);letter-spacing:-.005em;
+  opacity:.55;transition:opacity .14s linear,transform .18s var(--ease);
+}
+/* Weit genug gezogen: das Loslassen löst aus. Ohne diese Rückmeldung
+   ist die Auslöseschwelle unsichtbar und die Geste ein Glücksspiel. */
+.swipeWrap.armed .swipeBack{background:var(--red)}
+.swipeWrap.armed .swipeLabel{color:#fff;opacity:1;transform:scale(1.04)}
 button.row,label.row{transition:background .14s linear}
 button.row:active,label.row:active{background:var(--fill)}
 
@@ -610,7 +733,12 @@ button.row:active,label.row:active{background:var(--fill)}
 .row.stacked{flex-direction:column;align-items:stretch;gap:11px;padding:14px 16px}
 .row.stacked .segmented{width:100%}
 
-.card{background:var(--surface);border-radius:var(--r-lg);padding:16px;box-shadow:var(--lift)}
+.card{
+  background:var(--glass);border-radius:var(--r-lg);padding:16px;box-shadow:var(--lift);
+  -webkit-backdrop-filter:saturate(140%) blur(var(--glass-blur));
+  backdrop-filter:saturate(140%) blur(var(--glass-blur));
+  position:relative;
+}
 .card + .card{margin-top:12px}
 .card h2{font-size:1.15rem}
 .card h3{font-size:0.94rem;margin-bottom:6px}
@@ -771,8 +899,10 @@ button.moneyBarRow:active{opacity:.6}
 }
 .scroller::-webkit-scrollbar{display:none}
 .tile{
-  flex:0 0 auto;min-width:138px;background:var(--surface);
+  flex:0 0 auto;min-width:138px;background:var(--glass);
   border-radius:var(--r-lg);padding:14px 15px 15px;box-shadow:var(--lift);
+  -webkit-backdrop-filter:saturate(140%) blur(var(--glass-blur));
+  backdrop-filter:saturate(140%) blur(var(--glass-blur));
 }
 .tile .l{font-size:0.76rem;color:var(--ink-2);font-weight:500}
 .tile .v{font-size:1.55rem;font-weight:750;margin-top:5px;letter-spacing:-.02em;line-height:1.05}
@@ -806,7 +936,7 @@ button.moneyBarRow:active{opacity:.6}
 
 .segmented{display:flex;background:var(--fill);border-radius:var(--r-sm);padding:3px;gap:3px}
 .segmented button{
-  flex:1;padding:7px 10px;font-size:0.82rem;font-weight:600;
+  flex:1;padding:7px 10px;font-size:0.82rem;font-weight:600;border-radius:calc(var(--r-sm) - 3px);
   color:var(--ink-2);transition:background .2s var(--ease),color .2s linear;white-space:nowrap;
 }
 .segmented button[aria-selected="true"]{
@@ -858,7 +988,7 @@ button.moneyBarRow:active{opacity:.6}
 .ctaRow .cta.light:first-child{flex:1}
 
 .pillBtn{
-  padding:8px 15px;background:var(--fill);
+  padding:8px 15px;background:var(--fill);border-radius:var(--r-md);
   font-size:0.85rem;font-weight:600;color:var(--ink);min-height:34px;white-space:nowrap;
   transition:transform .18s var(--spring),background .14s linear;
 }
@@ -1203,10 +1333,17 @@ button.row.action,label.row.action{cursor:pointer}
   animation:fade .22s var(--ease);
 }
 .sheet[hidden]{display:none}
+/* Das Blatt kommt von unten und deckt die Seite darunter zum
+   grössten Teil ab. Oben rund, unten nicht -- es sitzt auf der Kante
+   des Bildschirms auf. */
 .sheetBody{
-  width:100%;max-width:540px;background:var(--surface);
+  width:100%;max-width:540px;background:var(--glass);
+  border-radius:var(--r-lg) var(--r-lg) 0 0;
+  -webkit-backdrop-filter:saturate(150%) blur(30px);
+  backdrop-filter:saturate(150%) blur(30px);
   padding:8px 18px calc(var(--safe-bottom) + 18px);
   max-height:88vh;overflow-y:auto;animation:rise .34s var(--ease);
+  position:relative;
 }
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes rise{from{transform:translateY(100%)}to{transform:none}}
@@ -1286,7 +1423,7 @@ button.row.action,label.row.action{cursor:pointer}
 .toast{
   position:fixed;left:0;right:0;margin-inline:auto;width:fit-content;
   bottom:calc(var(--nav-h) + var(--safe-bottom) + 18px);z-index:120;
-  background:rgba(21,24,30,.95);color:#fff;padding:12px 20px 12px 14px;
+  background:rgba(21,24,30,.95);color:#fff;padding:12px 20px 12px 14px;border-radius:var(--r-lg);
   font-size:0.9rem;max-width:92vw;text-align:left;
   box-shadow:0 12px 32px rgba(16,24,40,.30);
   -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
@@ -1305,6 +1442,16 @@ button.row.action,label.row.action{cursor:pointer}
 .toast .tTxt{min-width:0}
 .toast .tTxt b{display:block;font-weight:550}
 .toast .tTxt small{display:block;font-size:0.76rem;opacity:.68;margin-top:1px}
+/* Rückweg nach einer Geste. Weiß auf dunklem Grund statt Akzentfarbe:
+   der Toast ist der einzige Ort der App mit dunklem Untergrund, und
+   der Akzent hätte darauf zu wenig Kontrast. */
+.toast .tAct{
+  flex:0 0 auto;margin-left:2px;padding:7px 12px;
+  background:rgba(255,255,255,.14);color:#fff;
+  border-radius:var(--r-sm);font-size:0.82rem;font-weight:600;
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+}
+.toast .tAct:active{background:rgba(255,255,255,.26)}
 @keyframes tick{
   0%{transform:scale(.2);opacity:0}
   100%{transform:scale(1);opacity:1}

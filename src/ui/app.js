@@ -179,6 +179,41 @@ const App = {
     });
   },
 
+  /**
+   * „Ist alle" aus der Wisch-Geste im Bestand.
+   *
+   * Bewusst OHNE Rückfrage: die Geste ist die Antwort. Ein Blatt, das
+   * danach fragt „wirklich?", macht aus einer Bewegung wieder zwei
+   * Handgriffe und nimmt der Geste genau das, wofür sie da ist.
+   *
+   * Der Preis dafür ist ein Rückweg, und den gibt es: „Rückgängig" im
+   * Toast nimmt die Korrektur zurück (`clearStockCorrection`). Ein
+   * vorheriger Stand kann dabei nicht verloren gehen — die Korrektur
+   * ist ein einzelner Eintrag je Produkt, der beim nächsten Kauf
+   * ohnehin ersetzt wird.
+   *
+   * Verbrauchs- und Haltbarkeitsdatum bleiben bewusst draußen. Beide
+   * sind Feinheiten für den seltenen Fall und stehen im Detail-Blatt;
+   * als Standardabfrage würden sie die Geste zunichte machen.
+   */
+  markiereLeer(item) {
+    if (!item || !item.productId) return;
+    if (!Data.setStockCorrection(item.productId, 0)) return;
+    App.render();
+    App.toast(`${item.name} ist alle`, {
+      icon: "✓",
+      detail: "Bestandsschätzung auf null gesetzt",
+      action: {
+        label: "Rückgängig",
+        onClick: () => {
+          Data.clearStockCorrection(item.productId);
+          App.render();
+          App.toast("Zurückgenommen", { icon: "↺" });
+        }
+      }
+    });
+  },
+
   /** Austausch eintragen — setzt den Zähler zurück, ohne Kauf. */
   swap(productId, name) {
     Data.recordSwapFor(productId);
@@ -290,7 +325,7 @@ const App = {
    */
   toast(text, opts = {}) {
     const o = typeof opts === "number" ? { ms: opts } : opts;
-    const ms = o.ms || (o.detail ? 2800 : 2200);
+    const ms = o.ms || (o.action ? 5000 : o.detail ? 2800 : 2200);
     const t = document.getElementById("toast");
 
     t.innerHTML = "";
@@ -299,6 +334,21 @@ const App = {
     txt.append(el("b", null, esc(text)));
     if (o.detail) txt.append(el("small", null, esc(o.detail)));
     t.append(txt);
+
+    /* Eine Handlung im Toast — gedacht für „Rückgängig" nach einer
+       Geste. Eine Wisch-Geste ist schnell und trifft deshalb auch mal
+       die falsche Zeile; ohne Rückweg wäre sie eine Falle. Die
+       Handlung verlängert die Anzeigedauer, sonst ist sie weg, bevor
+       jemand sie gelesen hat. */
+    if (o.action && o.action.label && typeof o.action.onClick === "function") {
+      const b = el("button", "tAct", esc(o.action.label));
+      b.addEventListener("click", () => {
+        clearTimeout(App._toastTimer);
+        t.hidden = true;
+        o.action.onClick();
+      });
+      t.append(b);
+    }
 
     t.hidden = false;
     // Neustart der Animation: ohne das bleibt der zweite Toast in

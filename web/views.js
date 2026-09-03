@@ -1249,6 +1249,41 @@ function productSheet(productId, ctx) {
         corrBtn("Mehr als gedacht", inv.remainingUnits + 1)
       );
       body.append(corrRow);
+
+      /* Der Verbrauchstag — freiwillig und deshalb zugeklappt.
+         Die Wisch-Geste im Bestand und die drei Schaltflächen oben
+         rechnen ab HEUTE. Wer weiß, dass etwas schon letzten Freitag
+         alle war, kann das hier nachtragen; die Bestandsschätzung
+         rechnet dann ab diesem Tag weiter. Als Standardabfrage hätte
+         es nichts verloren: es ist die Ausnahme, nicht der Regelfall,
+         und jede Pflichtangabe macht aus einer Bewegung ein Formular.
+         Das aufgedruckte Haltbarkeitsdatum steht aus demselben Grund
+         weiter oben in seinem eigenen Feld. */
+      const korr = (Data.get().stockCorrections || {})[productId] || null;
+      const det = el("details", "pMore");
+      det.append(el("summary", null, "Verbrauchstag nachtragen"));
+      const wrap = el("label", "field");
+      wrap.append(el("span", "lbl", "War alle am"));
+      const inp = el("input");
+      inp.type = "date";
+      inp.max = Data.today();
+      inp.value = korr && korr.remainingUnits === 0 ? korr.date : "";
+      inp.setAttribute("aria-label", `Verbrauchstag für ${p.name}`);
+      inp.addEventListener("change", () => {
+        if (!inp.value) { Data.clearStockCorrection(productId); App.closeSheet(); App.toast("Wieder geschätzt"); return; }
+        if (!Data.setStockCorrection(productId, 0, inp.value)) {
+          App.toast("Das Datum passt nicht zum letzten Kauf", { icon: "!" });
+          inp.value = korr && korr.remainingUnits === 0 ? korr.date : "";
+          return;
+        }
+        App.closeSheet();
+        App.toast("Notiert");
+      });
+      wrap.append(inp);
+      det.append(wrap);
+      det.append(el("p", "srcnote",
+        "Ohne Eintrag zählt der heutige Tag. Der nächste erfasste Kauf ersetzt die Korrektur ohnehin."));
+      body.append(det);
     }
   }
 
@@ -2957,7 +2992,9 @@ function renderBestandVorrat(c, ctx, app) {
   const inv = uiGroup("Vermutlich noch da",
     "Geschätzt aus Einkauf minus Verbrauch, ohne dass du etwas pflegst. Die Zahl vor dem „×“ ist ein " +
     "Vielfaches deiner zuletzt gekauften Menge — „0,6×“ heißt: etwa 60 % von dem, was du beim letzten " +
-    "Mal mitgenommen hast. Die Sicherheitsangabe steht im Detail-Blatt jeder Zeile.");
+    "Mal mitgenommen hast. Die Sicherheitsangabe steht im Detail-Blatt jeder Zeile.\n\n" +
+    "Wisch eine Zeile nach links, wenn etwas längst alle ist. Alles Weitere — auch der Verbrauchstag, " +
+    "falls du ihn genauer weißt — steht im Detail-Blatt.");
   const renderInvRow = (i) => {
     const p = byId(i.productId) || {};
     const longLived = !p.isFood || i.daysLeft > 120;
@@ -2978,7 +3015,18 @@ function renderBestandVorrat(c, ctx, app) {
     });
     r.append(el("div", "chev"));
     r.addEventListener("click", () => productSheet(i.productId, ctx));
-    return r;
+
+    /* Wischen = „ist alle". Der Bestand ist eine Schätzung, und die
+       häufigste Korrektur daran ist immer dieselbe: das Produkt ist
+       längst weg. Dafür erst ein Blatt zu öffnen und darin eine von
+       drei Schaltflächen zu suchen, ist drei Handgriffe für eine
+       Aussage. Die Schaltflächen bleiben trotzdem (siehe
+       productSheet) — sie sind der Weg mit Tastatur und der Weg für
+       die beiden anderen Fälle. */
+    const wrap = el("div", "swipeWrap");
+    wrap.append(el("div", "swipeBack", '<span class="swipeLabel">Ist alle</span>'), r);
+    attachStockSwipe(wrap, r, i, app);
+    return wrap;
   };
   // Vorher schnitt die Liste bei 20 Positionen kommentarlos ab. Jetzt
   // dasselbe "Alle N ansehen"-Muster wie in moneyBarSection() --
@@ -4556,6 +4604,93 @@ function attachAisleDrag(handle, row, list, startIndex, aisle, app) {
   handle.addEventListener("pointermove", onMove);
   handle.addEventListener("pointerup", ende);
   handle.addEventListener("pointercancel", ende);
+}
+
+/* ================================================================
+   Wisch-Geste im Bestand: „ist alle"
+   ================================================================
+   WARUM ÜBERHAUPT EINE GESTE. Der Bestand ist die einzige Zahl der
+   App, die niemand bestätigt hat -- sie ist aus Kauf minus Verbrauch
+   gerechnet. Genau deshalb liegt sie regelmäßig daneben, und genau
+   eine Korrektur überwiegt alle anderen: „das ist längst weg". Eine
+   Aussage, die so oft fällt, darf nicht drei Handgriffe kosten.
+
+   WARUM POINTER EVENTS UND NICHT TOUCH. Dieselbe Wahl wie bei
+   attachAisleDrag(): eine Behandlung für Finger, Stift und Maus.
+
+   WARUM touch-action:pan-y UND NICHT none. Die Zeilen stehen in einer
+   langen, scrollbaren Liste. `none` würde das Scrollen über der Liste
+   abwürgen. `pan-y` überlässt dem Browser die senkrechte Bewegung und
+   uns die waagerechte.
+
+   WARUM ERST AB EINER SCHWELLE. Ein Tipp auf die Zeile öffnet das
+   Detail-Blatt. Ohne Schwelle würde jedes leichte Verrutschen beim
+   Tippen als Wischen gelten. Gesperrt wird erst, wenn die waagerechte
+   Bewegung deutlich ist UND größer als die senkrechte -- danach
+   gehört der Zeiger uns, und der nachfolgende Klick wird geschluckt.
+
+   WARUM KEIN NACHFRAGE-BLATT. Die Geste ist die Antwort. Wer das
+   Datum des Verbrauchs oder die Haltbarkeit genauer angeben will,
+   findet beides im Detail-Blatt -- freiwillig, nicht als Vorbedingung.
+   Der Rückweg läuft über „Rückgängig" im Toast.
+   ================================================================ */
+const SWIPE_LOCK_PX = 12;      // ab hier ist es ein Wischen, kein Tippen
+const SWIPE_TRIGGER_PX = 88;   // ab hier löst das Loslassen aus
+const SWIPE_MAX_PX = 132;      // weiter zieht die Zeile nicht mit
+
+function attachStockSwipe(wrap, row, item, app) {
+  let id = null, startX = 0, startY = 0, dx = 0, locked = false, gewischt = false;
+
+  const setzen = (px) => { row.style.transform = px ? `translateX(${px}px)` : ""; };
+
+  const aufraeumen = () => {
+    if (id !== null) { try { row.releasePointerCapture(id); } catch (e) { /* schon los */ } }
+    id = null; locked = false; dx = 0;
+    wrap.classList.remove("swiping", "armed");
+    setzen(0);
+  };
+
+  row.addEventListener("pointerdown", (e) => {
+    if (id !== null || e.button > 0) return;
+    id = e.pointerId; startX = e.clientX; startY = e.clientY; dx = 0; locked = false;
+  });
+
+  row.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== id) return;
+    const ax = e.clientX - startX;
+    const ay = e.clientY - startY;
+    if (!locked) {
+      // Senkrecht überwiegt: das ist Scrollen, nicht Wischen.
+      if (Math.abs(ay) > Math.abs(ax) && Math.abs(ay) > SWIPE_LOCK_PX) { id = null; return; }
+      if (ax > -SWIPE_LOCK_PX) return;
+      locked = true;
+      wrap.classList.add("swiping");
+      try { row.setPointerCapture(id); } catch (err) { /* Maus ohne Capture */ }
+    }
+    dx = Math.max(-SWIPE_MAX_PX, Math.min(0, ax));
+    wrap.classList.toggle("armed", dx <= -SWIPE_TRIGGER_PX);
+    setzen(dx);
+    e.preventDefault();
+  });
+
+  const los = (e) => {
+    if (e.pointerId !== id) return;
+    const ausgeloest = locked && dx <= -SWIPE_TRIGGER_PX;
+    // Der Klick kommt NACH dem pointerup und würde sonst das
+    // Detail-Blatt öffnen -- direkt über dem Toast, den die Geste
+    // gerade ausgelöst hat. Die Merkung muss deshalb das Aufräumen
+    // überleben und erst im nächsten Zug fallen.
+    gewischt = locked;
+    aufraeumen();
+    if (gewischt) setTimeout(() => { gewischt = false; }, 0);
+    if (ausgeloest) app.markiereLeer(item);
+  };
+  row.addEventListener("pointerup", los);
+  row.addEventListener("pointercancel", () => { if (id !== null) aufraeumen(); });
+
+  row.addEventListener("click", (e) => {
+    if (gewischt) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
 }
 
 /** Unterbereich "Auswertungen": Dinge, die man nachschlägt statt anfasst. */

@@ -209,6 +209,82 @@ t("Der dritte Grauton bleibt für kleine Beschriftungen brauchbar", () => {
 });
 
 // ================================================================
+section("C2: Glas — Text auf durchscheinenden Flächen");
+
+/* Seit die Inhaltsflächen durchscheinend sind (`--glass`) und der
+   Seitengrund zwei schwache Farbwolken trägt (`--tint-a`/`--tint-b`),
+   ist „Text auf Karte" nicht mehr Text auf --surface. Er steht auf
+   einer MISCHUNG: Glas über Farbwolke über Papier.
+
+   Das ist genau die Stelle, an der ein Glas-Anstrich Lesbarkeit
+   kostet, ohne dass es jemandem auffällt — die Schrift wird nicht
+   unlesbar, nur ein bisschen flauer, und zwar überall gleichzeitig.
+   Deshalb wird hier die tatsächliche Fläche gerechnet und nicht das
+   Token, das sie einmal war. */
+function glasGrund(werte) {
+  const paper = werte.paper;
+  const glass = werte.glass;
+  if (!paper || !glass) return null;
+  // Der ungünstigste Untergrund: die dunklere der beiden Farbwolken
+  // auf dem Papierton.
+  const kandidaten = ["tint-a", "tint-b"]
+    .map((k) => werte[k])
+    .filter(Boolean)
+    .map((t) => over(t, paper.rgb));
+  const wolke = kandidaten.length
+    ? kandidaten.reduce((a, b) => (luminance(a) < luminance(b) ? a : b))
+    : paper.rgb;
+  return over(glass, wolke);
+}
+
+["hell", "dunkel"].forEach((bereich) => {
+  const werte = bereich === "hell" ? HELL : DUNKEL;
+
+  t(`Haupttext auf Glas (${bereich})`, () => {
+    const grund = glasGrund(werte);
+    if (!grund) return "Token fehlt: glass/paper";
+    const k = contrast(over(werte.ink, grund), grund);
+    return k >= MIN_TEXT ? true : `${k.toFixed(2)}:1 — nötig sind ${MIN_TEXT}:1`;
+  });
+
+  t(`Nebentext auf Glas (${bereich})`, () => {
+    const grund = glasGrund(werte);
+    if (!grund) return "Token fehlt";
+    const k = contrast(over(werte["ink-2"], grund), grund);
+    return k >= MIN_TEXT ? true : `${k.toFixed(2)}:1`;
+  });
+
+  t(`Kleine Beschriftungen auf Glas (${bereich})`, () => {
+    const grund = glasGrund(werte);
+    if (!grund) return "Token fehlt";
+    const k = contrast(over(werte["ink-3"], grund), grund);
+    return k >= MIN_GROSS ? true : `${k.toFixed(2)}:1`;
+  });
+
+  CHIPS.forEach(([name, textToken, tintToken]) => {
+    t(`${name} bleibt auf Glas lesbar (${bereich})`, () => {
+      const grund = glasGrund(werte);
+      const text = werte[textToken], tint = werte[tintToken];
+      if (!grund || !text || !tint) return "Token fehlt";
+      const auf = over(tint, grund);
+      const k = contrast(over(text, auf), auf);
+      return k >= MIN_TEXT ? true : `${k.toFixed(2)}:1`;
+    });
+  });
+
+  t(`Das Glas bleibt vom Seitengrund unterscheidbar (${bereich})`, () => {
+    // Die Gegenprobe zur Lesbarkeit: zu deckend ist gut für den Text
+    // und macht die Fläche unsichtbar. Eine Karte, die man nicht vom
+    // Grund unterscheiden kann, ist keine Karte mehr.
+    const grund = glasGrund(werte);
+    const paper = werte.paper;
+    if (!grund || !paper) return "Token fehlt";
+    const k = contrast(grund, paper.rgb);
+    return k >= 1.04 ? true : `nur ${k.toFixed(3)}:1 Unterschied zum Papier`;
+  });
+});
+
+// ================================================================
 section("D: Farbige Flächen mit Text darauf");
 
 t("Die Hauptschaltfläche trägt lesbaren Text", () => {
