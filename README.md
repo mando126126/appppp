@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 2293 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2303 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4572,6 +4572,44 @@ Tests bestehen (Algorithmus 1342, Oberfläche 912, Langzeitlauf 39).
 
 ---
 
+## Start am Rechner: die leere zweite Spalte gefüllt, ein echter Anzeigefehler behoben (2026-09-04)
+
+Auftrag: die Anordnung der App bewerten, mit dem Ziel, dass Start
+schon selbst zu allen Kernfunktionen führt, ohne überladen zu wirken.
+Ergebnis der Durchsicht (mit Beispieldaten live geprüft, mobil und am
+Rechner): mobil passt es -- drei Blöcke, dazu die feste Tab-Leiste,
+die von Start aus ohnehin jeden Bereich einen Tipp entfernt hält, plus
+Fällig/Angebote/Kalender klug ohne eigenen Reiter angedockt. Am
+Rechner (≥900px) dagegen blieb die zweite Spalte fast leer: nur die
+einzeilige Wesen-Nachricht, darunter und daneben nichts als Fläche --
+das Gegenteil von „überladen", aber genauso ein Mangel.
+
+**Behoben:** `startKalenderVorschau()` (`src/ui/views.js`) füllt die
+Spalte jetzt mit echtem Inhalt statt Leerraum -- ein knapper Blick auf
+die nächsten sechs Tage, dieselbe Rechnung wie im Kalender
+(`buildCalendar`), nur über ein kurzes Fenster statt einen Monat.
+Gezeigt wird nur, was ansteht: fällige Produkte, drohender Verderb,
+erwartete Ausgaben, höchstens vier Tage. Ist im Fenster nichts
+vorherzusehen, bleibt die Karte ganz weg -- dieselbe Regel wie bei
+„Jetzt zu tun": eine leere Karte wäre Füllmaterial, keine Auskunft.
+Ein Antippen öffnet den Kalender an genau diesem Tag.
+
+**Nebenbefund, ein echter Anzeigefehler:** beim Bauen der Vorschau
+zeigte eine Zeile ohne Betrag das Wort **„null"** -- sichtbar für den
+Nutzer. Ursache lag nicht im neuen Code, sondern in `uiRow()`: mehrere
+bestehende Aufrufer (u. a. `kalenderTagGruppe` für Vorratszeilen ohne
+Preis) reichen genau dafür `value: wert || null` durch, und `uiRow`
+prüfte bisher nur `!== undefined` -- ein absichtliches „kein Wert"
+wurde wie ein echter Wert behandelt und als Text ausgegeben. Betroffen
+war damit auch der bestehende Kalender, nicht nur die neue Karte. Jetzt
+prüft `uiRow` `!== undefined && !== null`, mit Test-Regression in
+`test/uitest.js`.
+
+10 neue Oberflächentests. Alle jetzt 2303 Tests bestehen (Algorithmus
+1342, Oberfläche 922, Langzeitlauf 39).
+
+---
+
 ## Aufbau
 
 ```
@@ -4642,13 +4680,13 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 2293
+npm test          # alle 2303
 npm run test:algo # 1342 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
                   #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Einladungen/Prämie,
                   #   Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 912 Oberflächentests in jsdom
+npm run test:ui   # 922 Oberflächentests in jsdom
 npm run test:long # 39 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

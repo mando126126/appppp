@@ -1664,10 +1664,13 @@ button.row.action,label.row.action{cursor:pointer}
 }
 
 /* Start, zweite Spalte: nur auf dem Rechner (≥900px, siehe
-   Media-Query unten), dieselbe Wesen-Nachricht dauerhaft sichtbar,
-   die sonst nur nach Antippen als Sprechblase erscheint. Auf dem
-   Telefon bleibt es bei den drei Blöcken -- ausgeblendet, nicht nur
-   leer, damit nichts von der eigentlichen Seite verdrängt wird. */
+   Media-Query unten). Zwei Karten: die Wesen-Nachricht, dauerhaft
+   sichtbar statt nur nach Antippen als Sprechblase, und darunter ein
+   kurzer Blick auf die nächsten Tage (siehe startKalenderVorschau in
+   views.js) -- echte Vorschau statt Leerfläche, die sonst bei einer
+   einzeiligen Nachricht übrig bliebe. Auf dem Telefon bleibt es bei
+   den drei Hauptblöcken -- ausgeblendet, nicht nur leer, damit nichts
+   von der eigentlichen Seite verdrängt wird. */
 .startAside{display:none}
 .startMascotCard{
   background:var(--surface);box-shadow:var(--lift);
@@ -1982,12 +1985,13 @@ button.row.action,label.row.action{cursor:pointer}
      Fläche. flex:0 1 hält jede Kachel bei ihrer eigenen Breite, auch
      wenn sie allein in ihrer Zeile steht. */
   .tile{flex:0 1 200px}
-  /* Start: zweite Spalte für die dauerhafte Wesen-Nachricht -- der
-     Inhalt endete sonst bei ~660px Höhe, während der Rest des
-     Fensters leer blieb. */
+  /* Start: zweite Spalte für die dauerhafte Wesen-Nachricht und die
+     Kalender-Vorschau -- der Inhalt endete sonst bei ~660px Höhe,
+     während der Rest des Fensters leer blieb. */
   .startLayout{display:flex;gap:24px;align-items:flex-start}
   .startMain{flex:1;min-width:0}
-  .startAside{display:block;flex:0 0 280px}
+  .startAside{display:flex;flex-direction:column;gap:20px;flex:0 0 280px}
+  .startAside .group{margin-top:0}
   .cards2{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
   .cards2 .card + .card{margin-top:0}
   /* Erfassen: "Fotografieren" blieb auch auf dem Rechner der

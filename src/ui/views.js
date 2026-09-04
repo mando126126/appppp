@@ -756,7 +756,11 @@ function uiRow(title, sub, control, opts = {}) {
   if (sub) main.append(el("div", "rowSub", esc(sub)));
   r.append(main);
   if (control) r.append(control);
-  if (opts.value !== undefined) r.append(el("div", "rowValue", esc(opts.value)));
+  // `null` heißt hier "kein Wert", nicht "der Wert null" -- mehrere
+  // Aufrufer reichen genau das absichtlich durch (z. B. `wert || null`
+  // in kalenderTagGruppe). Ohne diese Prüfung stand dort buchstäblich
+  // "null" in der Zeile, wo eigentlich gar kein Wert stehen sollte.
+  if (opts.value !== undefined && opts.value !== null) r.append(el("div", "rowValue", esc(opts.value)));
   if (opts.onClick) { r.append(el("div", "chev")); r.addEventListener("click", opts.onClick); }
   return r;
 }
@@ -1509,14 +1513,65 @@ function viewStart(ctx, app) {
  *  Wesen-Nachricht dauerhaft als ruhige Karte statt nur als
  *  Sprechblase nach Antippen. Derselbe Text, derselbe Zähler --
  *  liest ihn nur, erhöht ihn nicht, sonst driftete die Rotation der
- *  echten Sprechblase bei jedem Neuzeichnen weiter. */
+ *  echten Sprechblase bei jedem Neuzeichnen weiter. Darunter, wenn es
+ *  etwas zu zeigen gibt, ein kurzer Blick auf die nächsten Tage --
+ *  sonst blieb die Spalte bei einer einzeiligen Nachricht fast leer. */
 function startAsideCard(ctx, app) {
   const wrap = el("div", "startAside");
   const seed = App.mascotTapCount.start || 0;
   const box = el("div", "startMascotCard", mascotSvg(mascotMood(ctx), 40));
   box.append(el("p", null, esc(mascotMessage(ctx, "start", seed))));
   wrap.append(box);
+  const vorschau = startKalenderVorschau(ctx, app);
+  if (vorschau) wrap.append(vorschau);
   return wrap;
+}
+
+/**
+ * Ein kurzer Blick nach vorn: dieselbe Rechnung wie in viewKalender,
+ * nur über sechs Tage statt einen Monat, und nur Tage, an denen
+ * tatsächlich etwas ansteht (fällige Produkte, drohender Verderb,
+ * erwartete Ausgaben). Bleibt ganz weg, wenn das Fenster leer ist --
+ * dieselbe Regel wie bei todoCard: eine leere Karte wäre Füllmaterial,
+ * keine Auskunft. Ein Antippen öffnet den Kalender an genau diesem Tag.
+ */
+function startKalenderVorschau(ctx, app) {
+  const von = ctx.ref;
+  const bis = addDays(ctx.ref, 5);
+  const daten = buildCalendar({
+    purchases: ctx.history,
+    rhythms: ctx.rhythms,
+    inventory: ctx.inventory,
+    heute: ctx.ref,
+    von, bis,
+    nameFuer: (id) => (byId(id) || {}).name || id,
+    preisFuer: (id, r) => ((byId(id) || {}).typicalPrice || 0) * (r.lastQuantity || 1),
+    skip: (id) => isNonFood(id)
+  });
+
+  const tage = daten.tage.filter((t) => t.faellig.length || t.verdirbt.length || t.erwartet > 0);
+  if (!tage.length) return null;
+
+  const g = uiGroup("Die nächsten Tage");
+  tage.slice(0, 4).forEach((t) => {
+    const wt = WOCHENTAGE_KURZ[(new Date(t.date + "T12:00:00Z").getUTCDay() + 6) % 7];
+    const [, m, d] = t.date.split("-");
+    const titel = `${wt} ${Number(d)}.${Number(m)}.`;
+
+    const droht = t.verdirbt.find((v) => v.droht);
+    const sub = droht
+      ? `${droht.name} läuft ab`
+      : t.faellig.length
+        ? t.faellig.slice(0, 2).map((p) => p.name).join(", ") +
+          (t.faellig.length > 2 ? ` und ${t.faellig.length - 2} weitere` : "")
+        : null;
+
+    g.body.append(uiRow(titel, sub, null, {
+      value: t.erwartet > 0 ? eur(t.erwartet) : null,
+      onClick: () => { app.kalenderMonat = t.date.slice(0, 7); app.kalenderTag = t.date; app.goto("kalender"); }
+    }));
+  });
+  return g;
 }
 
 /**

@@ -115,7 +115,7 @@ try {
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
     " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES, mascotAlarmSignature,"+
     " viewKalender, kalenderTagGruppe, monatsTitel, buildCalendar, monatPlus, monatsSpanne," +
-    " eventSheet, detectEventPurchase };"
+    " eventSheet, detectEventPurchase, startKalenderVorschau, uiRow };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -2907,6 +2907,52 @@ console.log("\n--- Einladungen/Prämie/Bestenliste sind vorbereitet, aber nirgen
     !/referral\.code\s*=/.test(d));
 }
 
+console.log("\n--- uiRow: kein Wert heißt kein Text (Regression) ---");
+{
+  /* Mehrere Aufrufer reichen `value: wert || null` durch, wenn es
+     nichts zu zeigen gibt (z. B. kalenderTagGruppe für Vorratszeilen
+     ohne Preis). uiRow behandelte `null` bisher wie einen echten Wert
+     und schrieb das Wort "null" in die Zeile -- sichtbar für den
+     Nutzer, gefunden beim Bau der Kalender-Vorschau auf Start. */
+  const mitNull = T.uiRow("Titel", null, null, { value: null });
+  ok("value: null zeigt keinen Text 'null'", !/\bnull\b/.test(mitNull.textContent), mitNull.textContent);
+  const ohneOpt = T.uiRow("Titel", null, null);
+  ok("Auch ganz ohne value-Angabe steht kein 'null' da", !/\bnull\b/.test(ohneOpt.textContent));
+  const mitWert = T.uiRow("Titel", null, null, { value: "5,00 €" });
+  ok("Ein echter Wert steht weiterhin da", /5,00 €/.test(mitWert.textContent));
+}
+
+console.log("\n--- Start, Rechner-Vorschau: nächste Tage ---");
+{
+  /* .startAside ist mobil per CSS ausgeblendet (siehe app.css) --
+     dieser Test prüft trotzdem den DOM-Inhalt, unabhängig vom
+     Bildschirm: die Karte muss richtig gefüllt sein, sichtbar oder
+     nicht. */
+  D.loadDemo("full");
+  const ctxV = D.compute();
+  App.goto("start");
+
+  const g = T.startKalenderVorschau(ctxV, App);
+  ok("Bei Beispieldaten gibt es etwas für die nächsten Tage zu zeigen", !!g);
+  if (g) {
+    ok("Die Karte trägt ihren Titel", /Die nächsten Tage/.test(g.textContent));
+    ok("Kein Platzhaltertext 'null' darin", !/\bnull\b/.test(g.textContent), g.textContent);
+    ok("Höchstens vier Tage, keine lange Liste", g.querySelectorAll(".row").length <= 4);
+
+    const zeile = g.querySelector(".row");
+    if (zeile) {
+      const vorherTag = App.tab;
+      click(zeile);
+      ok("Ein Tipp auf einen Tag öffnet den Kalender", App.tab === "kalender", App.tab);
+      ok("Und wählt genau diesen Tag aus", !!App.kalenderTag, App.kalenderTag);
+      App.goto(vorherTag === "kalender" ? "start" : vorherTag);
+    }
+  }
+
+  const leer = T.startKalenderVorschau({ ref: ctxV.ref, history: [], rhythms: new Map(), inventory: [] }, App);
+  ok("Ohne irgendetwas Anstehendes bleibt die Karte ganz weg (kein Füllmaterial)", leer === null);
+}
+
 console.log("\n--- Das Wesen ---");
 {
   /* Reihenfolge ist Dringlichkeit -- ein akutes Risiko schlägt einen
@@ -3711,7 +3757,8 @@ console.log("\n--- UX-Testbericht: dritte Umsetzungsrunde ---");
 
   ok(".startAside ist standardmäßig ausgeblendet (CSS)", /\.startAside\{display:none\}/.test(css));
   const desktopCss2 = css.slice(css.indexOf("min-width:900px"));
-  ok("...und ab 900px sichtbar", /\.startAside\{display:block/.test(desktopCss2));
+  ok("...und ab 900px sichtbar (zweispaltig für Wesen-Nachricht plus Vorschau)",
+    /\.startAside\{display:flex/.test(desktopCss2));
   ok("Die Startseite bleibt auf höchstens vier Blöcke begrenzt (unverändert durch die Spalte)",
     $("main").querySelector(".startMain").querySelectorAll(":scope > .group, :scope > .card").length <= 4);
 
