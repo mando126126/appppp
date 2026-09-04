@@ -2888,6 +2888,25 @@ console.log("\n--- Stufe 2 ist vorbereitet, aber nirgends erreichbar ---");
     !/settings\.schwarm\.enabled\s*=/.test(fs.readFileSync(path.join(WEB, "data.js"), "utf8")));
 }
 
+console.log("\n--- Einladungen/Prämie/Bestenliste sind vorbereitet, aber nirgends erreichbar ---");
+{
+  /* Dieselbe zweite Garantie wie bei Schwarm, für referralSystem.js /
+     accountClient.js (siehe test/referral.js für die Garantie, dass
+     accountClient.js nichts sendet): kein Menüpunkt, kein Knopf, keine
+     Einstellung führt heute zu einem Einladungscode, einer Prämie oder
+     einer Bestenliste. Das Datenfeld in data.js existiert (als
+     künftige Form, siehe dortiger Kommentar), aber nichts befüllt es. */
+  const v = fs.readFileSync(path.join(WEB, "views.js"), "utf8");
+  const a = fs.readFileSync(path.join(WEB, "app.js"), "utf8");
+  const d = fs.readFileSync(path.join(WEB, "data.js"), "utf8");
+  ok("Kein Menüpunkt oder Knopf verweist auf Einladung, Prämie oder Bestenliste",
+    !/einladung|referral|bestenliste|leaderboard/i.test(v) && !/einladung|referral|bestenliste|leaderboard/i.test(a));
+  ok("data.js setzt die Prämie nirgends aktiv",
+    !/referral\.premium\.active\s*=\s*true/.test(d));
+  ok("data.js erzeugt nirgends selbst einen Einladungscode",
+    !/referral\.code\s*=/.test(d));
+}
+
 console.log("\n--- Das Wesen ---");
 {
   /* Reihenfolge ist Dringlichkeit -- ein akutes Risiko schlägt einen

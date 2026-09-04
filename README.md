@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 2246 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2293 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4521,6 +4521,57 @@ mit der gekauften und der üblichen Menge.
 
 ---
 
+## Einladungen, Prämie, Bestenliste: Infrastruktur vorbereitet, nichts live (2026-09-04)
+
+Auftrag: eine Einladung, die erfolgreich einlöst, schenkt der
+einladenden Person 3 Monate Prämie („Premium"). Dazu die
+Infrastruktur — ausdrücklich **nur** die Infrastruktur — für eine
+künftige Bestenliste. Vor dem Bauen drei Rückfragen geklärt: kein
+Server jetzt, ein echtes Konto (E-Mail/Login) als Ziel-Identität, und
+eine Bestenlisten-Metrik, die noch offen ist — also ein generisches
+Punktekonto statt einer festgelegten Kennzahl. Siehe `docs/referral.md`
+für die vollständige Begründung und die offene Liste.
+
+Dasselbe Prinzip wie beim Schwarm-Preisindex (siehe oben, „Stufe 2
+vorbereitet, aber nicht live"), diesmal für eine Funktion, die
+zusätzlich ein echtes Konto und einen geldwerten Vorteil berührt — mehr
+offene Punkte, nicht weniger.
+
+**Was dazukam:** `src/algo/referralSystem.js` — drei serverunabhängige
+Rechnungen. Ein Einladungscode hat eine geprüfte Form (7 Zeichen, ohne
+verwechselbare Zeichen wie `0`/`O` oder `1`/`I`/`L`). Eine bestätigte
+Einladung verlängert die Prämie um 3 Monate, kalendersicher gerechnet
+ab dem späteren von „heute" und „bisheriges Ende" — eine laufende
+Prämie wird verlängert, eine abgelaufene zählt erst wieder ab heute,
+nicht rückwirkend. Ein Punktekonto ist ein Protokoll einzelner
+Gutschriften (Datum, Punkte, Grund), keine blanke Zahl — dieselbe
+Buchhaltungslogik wie im Ereignis-Protokoll. Dazu
+`src/algo/accountClient.js`, der dokumentierte API-Vertrag für eine
+künftige Gegenstelle (Code einlösen, Bestenliste abrufen, Punktekonto
+abgleichen) — `ACCOUNT_ENDPOINT` steht auf `null`, jede Funktion prüft
+das zuerst und verweigert sich sonst.
+
+**Keine dieser Funktionen gewährt etwas von selbst.** Sie rechnen nur,
+was gelten würde, wenn ein Ereignis bestätigt wäre — ob ein Code
+wirklich von einer zweiten, echten Installation eingelöst wurde, kann
+ohne Gegenstelle niemand wissen. `s.settings.referral` im Datenmodell
+existiert nur als künftige Form (Code, eingelöste Codes, Prämien-
+Zustand, Punkte-Protokoll), ohne einen einzigen Leser oder Schreiber
+irgendwo in `data.js`, `views.js` oder `app.js`.
+
+**Zwei getrennt geprüfte Garantien**, dieselbe Zweiteilung wie beim
+Schwarm-Preisindex: Erstens, dass `accountClient.js` unter keiner
+Eingabe tatsächlich etwas sendet, solange `ACCOUNT_ENDPOINT` leer ist
+(`test/referral.js`, Abschnitt D). Zweitens, dass keine Oberfläche
+überhaupt dorthin verweist — kein Menüpunkt, kein Knopf, keine
+Einstellung ist heute erreichbar (`test/uitest.js`, „Einladungen/
+Prämie/Bestenliste sind vorbereitet, aber nirgends erreichbar").
+
+44 neue Algorithmus-Tests, 3 neue Oberflächentests. Alle jetzt 2293
+Tests bestehen (Algorithmus 1342, Oberfläche 912, Langzeitlauf 39).
+
+---
+
 ## Aufbau
 
 ```
@@ -4591,13 +4642,13 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 2246
-npm run test:algo # 1298 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 2293
+npm run test:algo # 1342 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
-                  #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Kontrast, Lernen,
-                  #   Rückblick)
+                  #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Einladungen/Prämie,
+                  #   Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 909 Oberflächentests in jsdom
+npm run test:ui   # 912 Oberflächentests in jsdom
 npm run test:long # 39 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

@@ -114,6 +114,24 @@ function emptyState() {
     // und recordEvent()) — entschärft die Vorhersage, solange dieser
     // Kauf noch der letzte für das Produkt ist.
     eventPurchases: {},         // productId -> {date, quantity, typical}
+    /* Infrastruktur für Einladungen, Prämie, Bestenliste — vorbereitet
+       und absichtlich untätig, dasselbe Prinzip wie s.settings.schwarm
+       oben (siehe docs/referral.md, docs/schwarm.md für das Vorbild).
+       KEIN Code in data.js/views.js/app.js liest oder schreibt dieses
+       Feld — genau wie bei schwarm gibt es dafür heute keine einzige
+       Funktion, nicht einmal eine, die nur den lokalen Code erzeugen
+       würde. Die Rechnung dazu lebt vollständig in
+       referralSystem.js/accountClient.js und wird dort für sich
+       geprüft. Das Feld steht hier nur als geplante Form, damit eine
+       spätere Oberfläche einen echten, gesicherten Zustand zum Füllen
+       hat statt eines neuen Felds mit allen Wanderungsfragen, die ein
+       neues Feld sonst aufwirft. */
+    referral: {
+      code: null,                 // künftig: referralSystem.generateReferralCode()
+      redeemedCodes: [],          // eingegebene fremde Codes — nur Anzeige, keine Wirkung ohne Server
+      premium: { active: false, until: null, source: null, months: 0 },
+      scoreLog: []                 // [{date, points, reason}] — Grundlage einer künftigen Bestenliste
+    },
     lastStore: "",              // zuletzt benutzter Markt (für die Gangfolge)
     dismissed: {                // weggetippte Hinweise, je Woche
       week: null,

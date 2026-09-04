@@ -91,7 +91,9 @@ const MODULES = [
   "hoardDetector.js",
   "priceShare.js",
   "offerAdvisor.js",
-  "schwarmClient.js"
+  "schwarmClient.js",
+  "referralSystem.js",
+  "accountClient.js"
 ];
 
 // Oberflächendateien in Ladereihenfolge — dieselbe Liste nutzt
