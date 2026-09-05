@@ -186,6 +186,100 @@ t("Und die Abdeckung sagt, wie viel die Aussage überhaupt trägt", () => {
 });
 
 // ================================================================
+section("C2: Was beim Nachprüfen der ersten Fassung auffiel");
+
+/* Drei einzeln gerundete Anteile ergaben bei je einem Drittel
+   33/33/33 -- und darunter stand eine Karte, deren Zahlen zusammen
+   99 ergeben. In einer App, deren Wert daran hängt, dass man ihren
+   Zahlen glaubt, ist das kein Schönheitsfehler. */
+t("Drei gleiche Anteile summieren sich trotzdem auf 100", () => {
+  const k = [["hackfleisch", 1], ["milch_vollmilch", 1], ["linsen", 1]]
+    .map(([id, pr]) => ({ productId: id, date: "2026-01-01", quantity: 1, unitPrice: pr }));
+  const s = dietShares(k);
+  const summe = s.prozentPflanzlich + s.prozentVegetarisch + s.prozentFleisch;
+  return summe === 100 ? true : `${s.prozentFleisch}/${s.prozentVegetarisch}/${s.prozentPflanzlich} = ${summe}`;
+});
+t("Und das für viele zufällige Preisverhältnisse", () => {
+  for (let i = 1; i <= 40; i++) {
+    const k = [["hackfleisch", i], ["milch_vollmilch", 41 - i], ["linsen", (i * 7) % 23 + 1]]
+      .map(([id, pr]) => ({ productId: id, date: "2026-01-01", quantity: 1, unitPrice: pr }));
+    const s = dietShares(k);
+    const summe = s.prozentPflanzlich + s.prozentVegetarisch + s.prozentFleisch;
+    if (summe !== 100) return `bei i=${i}: ${summe}`;
+  }
+  return true;
+});
+t("Ohne Käufe bleiben die Anteile leer statt 0/0/100", () => {
+  const s = dietShares([]);
+  return s.prozentPflanzlich === null && s.prozentFleisch === null;
+});
+
+/* Eine Position ohne Preis (Gutschein, Zugabe, nicht gelesener Preis)
+   fiel vorher lautlos aus jeder Statistik. */
+t("Eine Position ohne Preis wird gezählt, nicht verschluckt", () => {
+  const s = dietShares([
+    { productId: "linsen", date: "2026-01-01", quantity: 1, unitPrice: 0 },
+    { productId: "hackfleisch", date: "2026-01-01", quantity: 1, unitPrice: 5 }
+  ]);
+  return s.positionen.gesamt === 2 && s.positionen.ohnePreis === 1
+    ? true : JSON.stringify(s.positionen);
+});
+
+/* TK-Hackbällchen lief als "unklar" durch: "hack" allein darf kein
+   Stamm sein, weil "Gehackte Tomaten" im Katalog stehen. */
+t("TK-Hackbällchen sind Fleisch",
+  () => dietKindOf(idVon("TK-Hackbällchen")) === DIET_KIND.MEAT);
+t("Gehackte Tomaten bleiben trotzdem pflanzlich", () => {
+  const tomaten = FOOD_DATABASE.filter((p) => /gehackt/i.test(p.name) && /tomate/i.test(p.name));
+  const falsch = tomaten.filter((p) => dietKindOf(p.id) !== DIET_KIND.PLANT);
+  return falsch.length === 0 ? true : falsch.map((p) => p.name).join(", ");
+});
+t("Kein Produkt mit eindeutigem Fleischwort bleibt unklar", () => {
+  const eindeutig = /wurst|schinken|hackfleisch|hackbaellchen|hackbällchen|haehnchen|hähnchen|fleisch|thunfisch|salami|speck|bacon/i;
+  const durchgerutscht = FOOD_DATABASE.filter((p) => p.isFood && eindeutig.test(p.name) &&
+    dietKindOf(p.id) === DIET_KIND.UNCLEAR &&
+    !/veggie|vegan|fruchtfleisch|fleischtomate/i.test(p.name));
+  return durchgerutscht.length === 0 ? true : durchgerutscht.map((p) => p.name).join(", ");
+});
+
+/* Geld und Gewicht sind zwei verschiedene Wahrheiten über denselben
+   Korb -- und genau deshalb müssen beide da sein. */
+t("Nach Geld und nach Gewicht kommen verschiedene Anteile heraus", () => {
+  const k = [
+    { productId: "hackfleisch", date: "2026-01-01", quantity: 1, unitPrice: 6, weightG: 400 },
+    { productId: "kartoffeln", date: "2026-01-01", quantity: 1, unitPrice: 2, weightG: 2000 }
+  ];
+  const s = dietShares(k);
+  return s.prozentFleisch > 50 && s.prozentGewicht.fleisch < 50
+    ? true : `Geld ${s.prozentFleisch} %, Gewicht ${s.prozentGewicht.fleisch} %`;
+});
+t("Auch die Gewichtsanteile summieren sich auf 100", () => {
+  const k = [
+    { productId: "hackfleisch", date: "2026-01-01", quantity: 1, unitPrice: 6, weightG: 400 },
+    { productId: "milch_vollmilch", date: "2026-01-01", quantity: 1, unitPrice: 1, weightG: 1000 },
+    { productId: "kartoffeln", date: "2026-01-01", quantity: 1, unitPrice: 2, weightG: 2000 }
+  ];
+  const p = dietShares(k).prozentGewicht;
+  return p.pflanzlich + p.vegetarisch + p.fleisch === 100
+    ? true : JSON.stringify(p);
+});
+t("Ohne hinterlegtes Gewicht wird nichts erfunden", () => {
+  // Batterien sind Non-Food und haben kein Gewicht -- sie dürfen
+  // weder in der Gewichts- noch in der Geldrechnung auftauchen.
+  const s = dietShares([{ productId: "batterien", date: "2026-01-01", quantity: 1, unitPrice: 5 }]);
+  return s.gesamt === 0 && s.gesamtGramm === 0 && s.positionen.gesamt === 0
+    ? true : JSON.stringify({ g: s.gesamt, gg: s.gesamtGramm, p: s.positionen.gesamt });
+});
+t("Die Abdeckung gibt es für beide Maßstäbe", () => {
+  const s = dietShares([
+    { productId: "linsen", date: "2026-01-01", quantity: 1, unitPrice: 3, weightG: 500 },
+    { productId: idVon("Fertigsauce"), date: "2026-01-01", quantity: 1, unitPrice: 3, weightG: 500 }
+  ]);
+  return s.abdeckung === 50 && s.abdeckungGewicht === 50
+    ? true : `${s.abdeckung} / ${s.abdeckungGewicht}`;
+});
+
+// ================================================================
 section("D: Protein");
 
 t("Für Linsen gibt es einen Wert", () => proteinPer100g("linsen") > 0);

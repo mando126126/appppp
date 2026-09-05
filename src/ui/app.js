@@ -101,6 +101,10 @@ const App = {
   kalenderMonat: null,
   kalenderEbene: "geld",
   kalenderTag: null,
+  /* Maßstab der Ernährungs-Karte: Geld oder Gewicht. Wie kalenderEbene
+     eine reine Anzeige-Einstellung -- sie gehört nicht in den
+     Haushaltsstand und wird beim Neuladen zurückgesetzt. */
+  dietEinheit: "geld",
   // Wie oft die Sprechblase je Reiter schon geöffnet wurde -- steuert
   // nur, welche der zutreffenden Aussagen als Nächstes dran ist
   // (mascotMessage() rotiert reihum, nicht zufällig). Reine

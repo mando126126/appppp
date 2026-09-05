@@ -3102,6 +3102,24 @@ console.log("\n--- Ernährungsweisen: nur auf Wunsch, und dann überall ---");
     ok("Der Ersatz passt selbst zur Weise",
       alts.every((a) => T.fitsDiet(a.productId, "vegan") === true));
     App.closeSheet();
+
+    /* addManual prüft nicht auf Dubletten -- ein Ersatz, der schon auf
+       der Liste steht, wäre eine Einladung, ihn doppelt draufzusetzen. */
+    if (alts.length) {
+      const schon = alts[0];
+      D.addManual({ productId: schon.productId, week: App.ctx.weekKey });
+      App.goto("liste");
+      T.productSheet(milch.productId, App.ctx);
+      const blatt2 = $("sheet").textContent;
+      const zeilen = [...$("sheet").querySelectorAll(".row")]
+        .map((r) => r.textContent).filter((t) => t.includes(schon.name));
+      ok("Ein bereits gelisteter Ersatz wird nicht noch einmal angeboten",
+        !zeilen.some((z) => /auf die Liste setzen/.test(z)), zeilen.join(" | "));
+      ok("Sondern als bereits vorhanden benannt",
+        /Steht schon auf der Liste/.test(blatt2) || zeilen.length === 0, blatt2.slice(0, 120));
+      App.closeSheet();
+      D.update((s) => { s.manual = s.manual.filter((m) => m.productId !== schon.productId); });
+    }
   }
 
   // Die Karte unter Zahlen.
@@ -3113,6 +3131,42 @@ console.log("\n--- Ernährungsweisen: nur auf Wunsch, und dann überall ---");
   ok("Sie nennt die gewählte Weise", karte && /Vegan/.test(karte.textContent));
   ok("Und weist Unklares getrennt aus, statt es zu verteilen",
     karte && /Nicht einzuordnen|beziehen sich auf/.test(karte.textContent));
+
+  /* Die angezeigten Anteile müssen sich auf 100 summieren -- drei
+     einzeln gerundete Drittel ergaben vorher sichtbar 99 %. */
+  ok("Die angezeigten Prozente ergeben zusammen 100", (() => {
+    const pz = [...karte.querySelectorAll(".rowSub")]
+      .map((e) => (e.textContent.match(/^(\d+) %/) || [])[1])
+      .filter(Boolean).map(Number);
+    if (pz.length < 2) return true;                  // zu wenig Zeilen, nichts zu prüfen
+    const summe = pz.reduce((a, b) => a + b, 0);
+    return summe === 100 ? true : `${pz.join("+")} = ${summe}`;
+  })());
+
+  /* Geld und Gewicht sind zwei Antworten auf dieselbe Frage. Beide
+     müssen erreichbar sein, und der Wechsel muss die Zahlen wirklich
+     ändern -- ein Segment, das nichts tut, ist schlimmer als keins. */
+  App.dietEinheit = "geld";
+  App.render();
+  const nachGeld = T.dietCard(App.ctx, App).textContent;
+  ok("Es gibt eine Umschaltung auf Gewicht", /Nach Gewicht/.test(nachGeld));
+  App.dietEinheit = "gewicht";
+  App.render();
+  const nachGewicht = T.dietCard(App.ctx, App).textContent;
+  ok("Nach Gewicht stehen Kilogramm statt Euro",
+    /kg/.test(nachGewicht) && !/€/.test(nachGewicht.split("Die Anteile")[0]));
+  ok("Und die Anteile sind andere als nach Geld", nachGeld !== nachGewicht);
+  ok("Auch die Gewichts-Prozente ergeben 100", (() => {
+    const k = T.dietCard(App.ctx, App);
+    const pz = [...k.querySelectorAll(".rowSub")]
+      .map((e) => (e.textContent.match(/^(\d+) %/) || [])[1])
+      .filter(Boolean).map(Number);
+    if (pz.length < 2) return true;
+    const summe = pz.reduce((a, b) => a + b, 0);
+    return summe === 100 ? true : `${pz.join("+")} = ${summe}`;
+  })());
+  ok("Die Abdeckung nennt den passenden Maßstab", /des Gewichts|beziehen sich auf/.test(nachGewicht));
+  App.dietEinheit = "geld";
 
   /* Proteinreich schließt nichts aus -- es darf deshalb auch nichts
      markieren, sondern nur zusätzlich rechnen. */

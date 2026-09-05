@@ -121,6 +121,11 @@ const MEAT_STEMS = [
   "landjaeger", "pastrami", "chorizo", "merguez", "bierschinken",
   "pfefferbeisser", "tafelspitz", "prosciutto", "bolognese", "doener",
   "schnitzel", "schmalz", "suelze", "gelatine", "wuerstchen",
+  /* „hack" allein geht NICHT: „Gehackte Tomaten" und „Geschälte
+     Tomaten gehackt" stehen so im Katalog. Deshalb nur die
+     zusammengesetzten Formen, die es wirklich nur beim Fleisch gibt.
+     Gefunden, weil TK-Hackbällchen als „unklar" durchlief. */
+  "hackbaellchen", "hackball", "hackbraten", "hacksteak", "boulette",
   "fisch", "lachs", "thunfisch", "garnele", "hering", "makrele", "forelle",
   "zander", "dorade", "barsch", "scholle", "matjes", "rollmops", "sardelle",
   "sardine", "muschel", "tintenfisch", "surimi", "rogen", "krabben",
@@ -320,39 +325,117 @@ function dietAlternatives(productId, profileId, limit = 3) {
  * ausdrücklich auf den eingeordneten Teil, und die Oberfläche sagt,
  * wie groß der ist.
  */
+/**
+ * Prozente, die sich auf 100 summieren.
+ *
+ * Drei Werte einzeln zu runden ergibt bei je einem Drittel drei Mal
+ * 33 % — und darunter steht dann eine Karte, deren Zahlen zusammen
+ * 99 ergeben. In einer App, deren ganzer Wert darin besteht, dass man
+ * ihren Zahlen glaubt, ist das kein Schönheitsfehler.
+ *
+ * Größter Rest (Hare/Niemeyer): erst abrunden, dann die fehlenden
+ * Punkte an die größten Nachkommastellen verteilen.
+ */
+function prozenteAuf100(werte) {
+  const schluessel = Object.keys(werte);
+  const summe = schluessel.reduce((a, k) => a + (Number(werte[k]) || 0), 0);
+  if (summe <= 0) {
+    return schluessel.reduce((o, k) => { o[k] = null; return o; }, {});
+  }
+  const roh = schluessel.map((k) => {
+    const exakt = ((Number(werte[k]) || 0) / summe) * 100;
+    const ab = Math.floor(exakt);
+    return { k, ab, rest: exakt - ab };
+  });
+  let fehlt = 100 - roh.reduce((a, r) => a + r.ab, 0);
+  [...roh].sort((a, b) => b.rest - a.rest).forEach((r) => { if (fehlt > 0) { r.ab++; fehlt--; } });
+  return roh.reduce((o, r) => { o[r.k] = r.ab; return o; }, {});
+}
+
+/**
+ * Wie viel des Lebensmittel-Einkaufs war pflanzlich?
+ *
+ * ZWEI MASSSTÄBE, und beide werden gebraucht:
+ *
+ *   GELD    Fleisch ist teuer. Nach Geld sieht ein Korb fleischlastiger
+ *           aus, als er auf dem Teller ist.
+ *   GEWICHT Gemüse ist billig und schwer. Nach Gewicht sieht derselbe
+ *           Korb pflanzlicher aus, als er ist.
+ *
+ * Keiner der beiden ist „richtig" — deshalb rechnet diese Funktion
+ * beide, und die Oberfläche lässt umschalten, statt sich für einen zu
+ * entscheiden und den anderen zu verschweigen.
+ *
+ * Non-Food bleibt außen vor — Spülmittel hat keine Ernährungsweise.
+ * `unklar` wird ausgewiesen, nicht verteilt.
+ */
 function dietShares(purchases, { from = null, to = null } = {}) {
-  const summe = { [DIET_KIND.PLANT]: 0, [DIET_KIND.VEGGIE]: 0, [DIET_KIND.MEAT]: 0, [DIET_KIND.UNCLEAR]: 0 };
-  let gesamt = 0;
+  const leer = () => ({ [DIET_KIND.PLANT]: 0, [DIET_KIND.VEGGIE]: 0, [DIET_KIND.MEAT]: 0, [DIET_KIND.UNCLEAR]: 0 });
+  const euro = leer(), gramm = leer(), stueck = leer();
+  let gesamtEuro = 0, gesamtGramm = 0, gesamtStueck = 0;
+  let ohnePreis = 0, ohneGewicht = 0;
 
   for (const h of purchases || []) {
     if (from && h.date < from) continue;
     if (to && h.date > to) continue;
     const kind = dietKindOf(h.productId);
-    if (kind === null) continue;
-    const wert = (Number(h.unitPrice) || 0) * (Number(h.quantity) || 1);
-    if (wert <= 0) continue;
-    summe[kind] += wert;
-    gesamt += wert;
+    if (kind === null) continue;                       // Non-Food
+
+    const menge = Number(h.quantity) || 1;
+    const wert = (Number(h.unitPrice) || 0) * menge;
+    const p = byId(h.productId) || {};
+    const g = (Number(h.weightG) || p.typicalWeightG || 0) * menge;
+
+    /* Gezählt wird die Position IMMER -- auch die ohne Preis. Vorher
+       fiel eine 0-€-Position (Gutschein, Zugabe, nicht gelesener Preis)
+       lautlos aus jeder Statistik, und niemand konnte sehen, dass sie
+       gefehlt hat. Jetzt taucht sie wenigstens in der Stückzahl auf. */
+    stueck[kind] += 1;
+    gesamtStueck += 1;
+    if (wert > 0) { euro[kind] += wert; gesamtEuro += wert; } else { ohnePreis++; }
+    if (g > 0) { gramm[kind] += g; gesamtGramm += g; } else { ohneGewicht++; }
   }
 
-  const eingeordnet = gesamt - summe[DIET_KIND.UNCLEAR];
-  const anteil = (k) => (eingeordnet > 0 ? Math.round((summe[k] / eingeordnet) * 100) : null);
+  const rund2 = (n) => Math.round(n * 100) / 100;
+  const eingeordnetEuro = gesamtEuro - euro[DIET_KIND.UNCLEAR];
+  const eingeordnetGramm = gesamtGramm - gramm[DIET_KIND.UNCLEAR];
+
+  const pGeld = prozenteAuf100({
+    pflanzlich: euro[DIET_KIND.PLANT], vegetarisch: euro[DIET_KIND.VEGGIE], fleisch: euro[DIET_KIND.MEAT]
+  });
+  const pGewicht = prozenteAuf100({
+    pflanzlich: gramm[DIET_KIND.PLANT], vegetarisch: gramm[DIET_KIND.VEGGIE], fleisch: gramm[DIET_KIND.MEAT]
+  });
 
   return {
     euros: {
-      pflanzlich: Math.round(summe[DIET_KIND.PLANT] * 100) / 100,
-      vegetarisch: Math.round(summe[DIET_KIND.VEGGIE] * 100) / 100,
-      fleisch: Math.round(summe[DIET_KIND.MEAT] * 100) / 100,
-      unklar: Math.round(summe[DIET_KIND.UNCLEAR] * 100) / 100
+      pflanzlich: rund2(euro[DIET_KIND.PLANT]),
+      vegetarisch: rund2(euro[DIET_KIND.VEGGIE]),
+      fleisch: rund2(euro[DIET_KIND.MEAT]),
+      unklar: rund2(euro[DIET_KIND.UNCLEAR])
     },
-    gesamt: Math.round(gesamt * 100) / 100,
-    eingeordnet: Math.round(eingeordnet * 100) / 100,
+    gramm: {
+      pflanzlich: Math.round(gramm[DIET_KIND.PLANT]),
+      vegetarisch: Math.round(gramm[DIET_KIND.VEGGIE]),
+      fleisch: Math.round(gramm[DIET_KIND.MEAT]),
+      unklar: Math.round(gramm[DIET_KIND.UNCLEAR])
+    },
+    positionen: { ...stueck, gesamt: gesamtStueck, ohnePreis, ohneGewicht },
+
+    gesamt: rund2(gesamtEuro),
+    eingeordnet: rund2(eingeordnetEuro),
+    gesamtGramm: Math.round(gesamtGramm),
+    eingeordnetGramm: Math.round(eingeordnetGramm),
+
     // Anteile beziehen sich auf den EINGEORDNETEN Teil, nie auf alles.
-    prozentPflanzlich: anteil(DIET_KIND.PLANT),
-    prozentVegetarisch: anteil(DIET_KIND.VEGGIE),
-    prozentFleisch: anteil(DIET_KIND.MEAT),
+    prozentPflanzlich: pGeld.pflanzlich,
+    prozentVegetarisch: pGeld.vegetarisch,
+    prozentFleisch: pGeld.fleisch,
+    prozentGewicht: pGewicht,
+
     // Wie viel des Einkaufs die Aussage überhaupt trägt.
-    abdeckung: gesamt > 0 ? Math.round((eingeordnet / gesamt) * 100) : null
+    abdeckung: gesamtEuro > 0 ? Math.round((eingeordnetEuro / gesamtEuro) * 100) : null,
+    abdeckungGewicht: gesamtGramm > 0 ? Math.round((eingeordnetGramm / gesamtGramm) * 100) : null
   };
 }
 

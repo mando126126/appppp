@@ -1391,9 +1391,19 @@ function productSheet(productId, ctx) {
   {
     const profil = Data.get().settings.diet;
     if (!nf && fitsDiet(productId, profil) === false) {
-      const alts = dietAlternatives(productId, profil);
+      /* Was schon auf der Liste steht, ist kein Vorschlag mehr: ein
+         Tipp darauf setzt es ein zweites Mal drauf, denn addManual
+         prüft nicht auf Dubletten. Erst rausfiltern, dann anbieten;
+         und wenn danach nichts übrig ist, sagt die Karte genau das,
+         statt still leer zu bleiben. */
+      const schonDrauf = new Set((ctx.items || []).filter((i) => i.on).map((i) => i.productId));
+      const alle = dietAlternatives(productId, profil);
+      const alts = alle.filter((a) => !schonDrauf.has(a.productId));
       const g = uiGroup(`Passt nicht zu „${(dietProfileById(profil) || {}).label || profil}“`);
-      if (alts.length) {
+      if (!alts.length && alle.length) {
+        g.body.append(uiRow("Steht schon auf der Liste",
+          alle.map((a) => a.name).join(", ")));
+      } else if (alts.length) {
         alts.forEach((a) => g.body.append(uiRow(a.name, "auf die Liste setzen", null, {
           value: eur(a.price),
           onClick: () => {
@@ -4260,19 +4270,51 @@ function dietCard(ctx, app) {
     "Eingeordnet nach Produktname und Kategorie aus dem eigenen Katalog, nicht nach " +
     "Zutatenliste. Was sich so nicht entscheiden lässt, zählt NICHT in die Anteile " +
     "hinein, sondern steht als eigener Betrag da.\n\n" +
+    "GELD ODER GEWICHT: Fleisch ist teuer, Gemüse ist billig und schwer. Nach Geld " +
+    "wirkt derselbe Korb fleischlastiger, nach Gewicht pflanzlicher, als er ist. " +
+    "Keiner der beiden Maßstäbe ist der richtige — deshalb stehen beide zur Wahl.\n\n" +
     "Zeitraum und Auswahl sind dieselben wie in „Wo dein Geld hingeht“ darüber.");
 
-  const zeile = (titel, euro, prozent) => {
-    if (!euro) return;
-    g.body.append(uiRow(titel, prozent === null ? null : `${prozent} % des eingeordneten Teils`,
-      null, { value: eur(euro) }));
+  /* Dieselbe Geste wie die Ebenen im Kalender (Geld/Vorrat): ein
+     Segment, das den Maßstab umschaltet, statt zwei Zahlenreihen
+     nebeneinander, die niemand auseinanderhält. */
+  const nachGewicht = App.dietEinheit === "gewicht";
+  const seg = el("div", "row stacked");
+  seg.append(segmented([["geld", "Nach Geld"], ["gewicht", "Nach Gewicht"]],
+    App.dietEinheit,
+    (v) => { App.dietEinheit = v; app.render(); }, "Maßstab der Anteile"));
+  g.body.append(seg);
+
+  const werte = nachGewicht ? anteile.gramm : anteile.euros;
+  const prozente = nachGewicht ? anteile.prozentGewicht : {
+    pflanzlich: anteile.prozentPflanzlich,
+    vegetarisch: anteile.prozentVegetarisch,
+    fleisch: anteile.prozentFleisch
   };
-  zeile("Pflanzlich", anteile.euros.pflanzlich, anteile.prozentPflanzlich);
-  zeile("Milch, Käse, Ei", anteile.euros.vegetarisch, anteile.prozentVegetarisch);
-  zeile("Fleisch und Fisch", anteile.euros.fleisch, anteile.prozentFleisch);
-  if (anteile.euros.unklar) {
+  const zeigeWert = (n) => (nachGewicht ? `${de(Math.round(n / 10) / 100)} kg` : eur(n));
+
+  const zeile = (titel, schluessel) => {
+    const wert = werte[schluessel];
+    if (!wert) return;
+    const pz = prozente[schluessel];
+    g.body.append(uiRow(titel, pz === null || pz === undefined ? null : `${pz} % des eingeordneten Teils`,
+      null, { value: zeigeWert(wert) }));
+  };
+  zeile("Pflanzlich", "pflanzlich");
+  zeile("Milch, Käse, Ei", "vegetarisch");
+  zeile("Fleisch und Fisch", "fleisch");
+  if (werte.unklar) {
     g.body.append(uiRow("Nicht einzuordnen", "zählt in keinen Anteil mit", null,
-      { value: eur(anteile.euros.unklar) }));
+      { value: zeigeWert(werte.unklar) }));
+  }
+
+  /* Positionen ohne Preis oder ohne Gewicht fielen vorher lautlos aus
+     der Rechnung. Eine Zahl, die nicht sagt, was sie auslässt, ist
+     keine Auskunft. */
+  const fehlend = nachGewicht ? anteile.positionen.ohneGewicht : anteile.positionen.ohnePreis;
+  if (fehlend) {
+    g.body.append(uiRow(`${zahlwort(fehlend, "Position", "Positionen")} ohne ${nachGewicht ? "Gewicht" : "Preis"}`,
+      "in diesem Maßstab nicht mitgerechnet"));
   }
 
   /* Nur beim Protein-Profil: die Grammrechnung. Sie steht bewusst
@@ -4293,10 +4335,11 @@ function dietCard(ctx, app) {
       (pr.ohneWert ? ` ${zahlwort(pr.ohneWert, "Position", "Positionen")} ohne hinterlegten Wert bleiben außen vor.` : ""))));
   }
 
-  if (anteile.abdeckung !== null && anteile.abdeckung < 100) {
+  const abd = nachGewicht ? anteile.abdeckungGewicht : anteile.abdeckung;
+  if (abd !== null && abd < 100) {
     g.append(el("p", "srcnote",
-      `Die Anteile beziehen sich auf ${anteile.abdeckung} % der Lebensmittel-Ausgaben in diesem ` +
-      "Zeitraum. Der Rest ließ sich nach dem Namen nicht sicher einordnen."));
+      `Die Anteile beziehen sich auf ${abd} % ${nachGewicht ? "des Gewichts" : "der Lebensmittel-Ausgaben"} ` +
+      "in diesem Zeitraum. Der Rest ließ sich nach dem Namen nicht sicher einordnen."));
   }
   return g;
 }

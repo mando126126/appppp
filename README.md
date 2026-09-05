@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 2401 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2420 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4721,6 +4721,43 @@ wie vielen Positionen sie rechnet und wie viele sie nicht erfasst.
 64 neue Algorithmus-Tests, 18 neue Oberflächentests. Alle jetzt 2401
 Tests bestehen (Algorithmus 1406, Oberfläche 956, Langzeitlauf 39).
 
+### Nachgeprüft, und dabei fünf Sachen gefunden (2026-09-05)
+
+Eine eigene Runde nur zum Fehlersuchen in der frisch gebauten
+Funktion. Drei echte Fehler, zwei Lücken:
+
+**Die Prozente ergaben 99.** Drei einzeln gerundete Anteile werden bei
+je einem Drittel zu 33/33/33 — und darunter stand eine Karte, deren
+Zahlen zusammen nicht 100 ergeben. In einer App, deren ganzer Wert
+daran hängt, dass man ihren Zahlen glaubt, ist das kein
+Schönheitsfehler. Jetzt größter Rest (Hare/Niemeyer): abrunden, dann
+die fehlenden Punkte an die größten Nachkommastellen verteilen.
+
+**Positionen ohne Preis verschwanden spurlos.** Ein Gutschein, eine
+Zugabe oder ein nicht gelesener Preis fiel lautlos aus jeder Statistik,
+und niemand konnte sehen, dass etwas fehlt. Jetzt wird jede Position
+gezählt, und die Karte nennt, wie viele in diesem Maßstab nicht
+mitgerechnet werden konnten.
+
+**TK-Hackbällchen galten als „unklar".** Weil „hack" allein kein Stamm
+sein darf — „Gehackte Tomaten" stehen so im Katalog. Jetzt die
+zusammengesetzten Formen, die es nur beim Fleisch gibt, mit einem
+Test, der beide Seiten festhält.
+
+**Geld allein war der falsche Maßstab.** Fleisch ist teuer, Gemüse ist
+billig und schwer: derselbe Korb ist 52 % pflanzlich nach Geld und
+75 % nach Gewicht. Keiner der beiden Werte ist der richtige — deshalb
+rechnet die App jetzt beide, und ein Segment schaltet um, statt dass
+sich die App für einen entscheidet und den anderen verschweigt.
+
+**Ein Ersatz, der schon auf der Liste stand, wurde erneut angeboten.**
+`addManual` prüft nicht auf Dubletten, ein zweiter Tipp hätte ihn
+doppelt draufgesetzt. Jetzt wird vorher gefiltert; steht alles Passende
+schon drauf, sagt die Karte genau das.
+
+11 neue Algorithmus-Tests, 8 neue Oberflächentests. Alle jetzt 2420
+Tests bestehen (Algorithmus 1417, Oberfläche 964, Langzeitlauf 39).
+
 ---
 
 ## Aufbau
@@ -4793,13 +4830,13 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 2401
-npm run test:algo # 1406 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 2420
+npm run test:algo # 1417 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
                   #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Einladungen/Prämie,
                   #   Ernährung, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 956 Oberflächentests in jsdom
+npm run test:ui   # 964 Oberflächentests in jsdom
 npm run test:long # 39 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
