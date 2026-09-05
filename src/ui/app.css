@@ -886,6 +886,9 @@ details[open] > *:not(summary){animation:oeffnen .26s var(--ease) both}
 .headrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
 .stat{font-size:0.79rem;color:var(--ink-2)}
 .srcnote{font-size:0.73rem;color:var(--ink-3);margin-top:13px;line-height:1.45}
+/* Eine Quellenangabe direkt unter einer Gruppe (nicht in ihrer
+   Glasfläche) rückt auf dieselbe Kante ein wie deren Überschrift. */
+.group > .srcnote{padding:0 4px}
 .empty{font-size:0.9rem;color:var(--ink-2);padding:0 0 26px;text-align:center}
 .emptyMascot{display:flex;justify-content:center;padding:22px 0 4px}
 /* Absichtlich gedämpft statt vollfarbig: das Wesen im Kopfbereich

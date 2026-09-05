@@ -115,7 +115,8 @@ try {
     " kategorieVerlust, kategorieMonatsverlauf, produktRang, produktVerlust, produktMonatsverlauf," +
     " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES, mascotAlarmSignature,"+
     " viewKalender, kalenderTagGruppe, monatsTitel, buildCalendar, monatPlus, monatsSpanne," +
-    " eventSheet, detectEventPurchase, startKalenderVorschau, uiRow };"
+    " eventSheet, detectEventPurchase, startKalenderVorschau, uiRow," +
+    " firstReceiptCard, firstReceiptInsights, eur };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -689,6 +690,67 @@ ok("Stufe 1 wird erkannt", c1.stage.stage === 1, "Stufe " + c1.stage.stage);
 const b4cold = errors.length;
 ["liste", "faellig", "bestand", "zahlen", "mehr"].forEach((tab) => App.goto(tab));
 ok("Ansichten laufen auch mit einem einzigen Bon", errors.length === b4cold, errors[b4cold]);
+
+{
+  /* Nach dem ersten Bon stand auf der Startseite nur "Einkaufsliste --
+     wird noch gelernt", sonst nichts: der Bildschirm direkt nach der
+     ersten Handlung, um die die App gebeten hat, war fast leer.
+     firstReceiptCard() zeigt dort jetzt, was der eine Bon hergibt --
+     gerechnet von firstReceiptInsights() aus coldStart.js, das bis
+     dahin an keiner Stelle der Oberfläche hing. */
+  App.goto("start");
+  const karte = T.firstReceiptCard(App.ctx, App);
+  ok("Nach dem ersten Bon steht eine eigene Gruppe auf der Startseite", !!karte);
+  ok("Sie steht auch wirklich in der gezeichneten Seite",
+    /Dein erster Bon/.test($("main").textContent));
+
+  const ins = T.firstReceiptInsights(App.ctx.history);
+  ok("Die Summe stammt aus firstReceiptInsights, nicht aus einer zweiten Rechnung",
+    karte && karte.textContent.includes(T.eur(ins.total)), karte && karte.textContent.slice(0, 120));
+  ok("Der größte Kategorie-Anteil steht dabei",
+    karte && karte.textContent.includes(ins.categories[0].name), ins.categories[0].name);
+  ok("Und wird als Prozentwert genannt",
+    karte && karte.textContent.includes(`${ins.categories[0].share} %`));
+
+  /* Die Zeilen führen genau dorthin, wo nach einem einzigen Bon sonst
+     niemand hinsieht -- die Leiste unten erreicht sie zwar auch, aber
+     nur, wenn man weiß, dass dort etwas ist. */
+  const zeilen = [...karte.querySelectorAll(".row")];
+  ok("Vier Zeilen, nicht mehr", zeilen.length === 4, String(zeilen.length));
+  const ziele = [];
+  zeilen.forEach((z) => { App.goto("start"); click(z); ziele.push(App.tab); });
+  ok("Sie führen zu Zahlen, Zahlen, Bestand und Erfassen",
+    ziele.join(",") === "zahlen,zahlen,bestand,erfassen", ziele.join(","));
+
+  /* Die Jahres-Hochrechnung ist 52 × ein einziger Bon -- eine steile
+     Annahme. Sie steht deshalb nicht als Zahl zwischen gemessenen,
+     sondern hinter dem (i), zusammen mit ihrem Vorbehalt. */
+  App.goto("start");
+  ok("Die Hochrechnung steht in keiner Zeile",
+    !karte.querySelector(".groupBody").textContent.includes(String(ins.yearProjection)));
+  const info = $("main").querySelector(".groupTitle .infoBtn");
+  ok("Es gibt ein (i) dazu", !!info);
+  if (info) {
+    click(info);
+    const blatt = doc.body.textContent;
+    ok("Dahinter steht die Hochrechnung", blatt.includes(String(ins.yearProjection)));
+    ok("Und der Vorbehalt gleich mit", blatt.includes("typisch für eine Woche"));
+    const fertig = [...doc.querySelectorAll("button")].find((b) => /Fertig|Schließen/.test(b.textContent));
+    if (fertig) click(fertig);
+  }
+
+  ok("Ab Stufe 2 verschwindet die Gruppe wieder", (() => {
+    D.loadDemo("full");
+    App.goto("start");
+    return App.ctx.stage.stage >= 2 && !/Dein erster Bon/.test($("main").textContent);
+  })());
+  ok("Ohne jede Historie gibt es sie auch nicht", (() => {
+    D.reset();
+    App.goto("start");
+    return !/Dein erster Bon/.test($("main").textContent);
+  })());
+  D.loadDemo("first");
+}
 
 console.log("\n--- Sicherheitsregel ---");
 D.loadDemo("full");
@@ -2939,6 +3001,15 @@ console.log("\n--- Start, Rechner-Vorschau: nächste Tage ---");
     ok("Kein Platzhaltertext 'null' darin", !/\bnull\b/.test(g.textContent), g.textContent);
     ok("Höchstens vier Tage, keine lange Liste", g.querySelectorAll(".row").length <= 4);
 
+    /* Jede Zeile muss etwas sagen: ein blankes Datum ohne Untertitel
+       und ohne Betrag nimmt Platz ein, ohne die Frage zu beantworten,
+       warum der Tag hier steht. Aufgefallen bei einem Tag, dessen
+       einziger Inhalt eine nicht drohende Haltbarkeit war. */
+    const stumm = [...g.querySelectorAll(".row")].filter(
+      (r) => !r.querySelector(".rowSub") && !r.querySelector(".rowValue"));
+    ok("Keine Zeile besteht nur aus einem Datum", stumm.length === 0,
+      stumm.map((r) => r.textContent.trim()).join(" | "));
+
     const zeile = g.querySelector(".row");
     if (zeile) {
       const vorherTag = App.tab;
@@ -2951,6 +3022,22 @@ console.log("\n--- Start, Rechner-Vorschau: nächste Tage ---");
 
   const leer = T.startKalenderVorschau({ ref: ctxV.ref, history: [], rhythms: new Map(), inventory: [] }, App);
   ok("Ohne irgendetwas Anstehendes bleibt die Karte ganz weg (kein Füllmaterial)", leer === null);
+
+  /* Und dasselbe nach einem einzigen Bon: dort gibt es noch keine
+     Takte, also auch keine fälligen Produkte -- die Tage kommen dann
+     allein aus Haltbarkeiten. Genau dieser Fall zeigte anfangs
+     blanke Datumszeilen. */
+  D.loadDemo("first");
+  const g1 = T.startKalenderVorschau(D.compute(), App);
+  if (g1) {
+    const stumm1 = [...g1.querySelectorAll(".row")].filter(
+      (r) => !r.querySelector(".rowSub") && !r.querySelector(".rowValue"));
+    ok("Auch nach dem ersten Bon sagt jede Zeile etwas", stumm1.length === 0,
+      stumm1.map((r) => r.textContent.trim()).join(" | "));
+    ok("Und die Haltbarkeit wird dabei benannt", /Haltbarkeit endet|läuft ab/.test(g1.textContent),
+      g1.textContent.slice(0, 160));
+  }
+  D.loadDemo("full");
 }
 
 console.log("\n--- Das Wesen ---");

@@ -1491,6 +1491,14 @@ function viewStart(ctx, app) {
   const main = el("div", "startMain");
   main.append(listCard(ctx, app));
 
+  // Nach genau einem Bon hat die Liste noch nichts zu sagen ("wird
+  // noch gelernt") und "Jetzt zu tun" meistens auch nicht -- die Seite
+  // stand danach fast leer da, ausgerechnet direkt nach der ersten
+  // Handlung, um die die App gebeten hat. Was der eine Bon schon
+  // hergibt, steht hier stattdessen.
+  const erster = firstReceiptCard(ctx, app);
+  if (erster) main.append(erster);
+
   const todo = todoCard(ctx, app);
   if (todo) main.append(todo);
 
@@ -1558,19 +1566,104 @@ function startKalenderVorschau(ctx, app) {
     const [, m, d] = t.date.split("-");
     const titel = `${wt} ${Number(d)}.${Number(m)}.`;
 
+    /* Jede Zeile muss etwas SAGEN. Ein Tag, dessen einziger Inhalt
+       eine nicht drohende Haltbarkeit war, stand sonst als blankes
+       Datum ohne Untertitel und ohne Betrag da -- eine Zeile, die den
+       Platz einnimmt und die Frage offenlässt, warum sie da ist.
+       Dieselben Worte wie im Kalender selbst (kalenderTagGruppe). */
     const droht = t.verdirbt.find((v) => v.droht);
     const sub = droht
-      ? `${droht.name} läuft ab`
+      ? `${droht.name} läuft ab, bevor es aufgebraucht ist`
       : t.faellig.length
         ? t.faellig.slice(0, 2).map((p) => p.name).join(", ") +
           (t.faellig.length > 2 ? ` und ${t.faellig.length - 2} weitere` : "")
-        : null;
+        : t.verdirbt.length
+          ? `${t.verdirbt[0].name}: Haltbarkeit endet`
+          : null;
 
     g.body.append(uiRow(titel, sub, null, {
       value: t.erwartet > 0 ? eur(t.erwartet) : null,
       onClick: () => { app.kalenderMonat = t.date.slice(0, 7); app.kalenderTag = t.date; app.goto("kalender"); }
     }));
   });
+  return g;
+}
+
+/**
+ * Was der ERSTE Bon schon hergibt — nur auf Stufe 1.
+ *
+ * Vorher stand nach dem ersten Einkauf genau eine Karte auf der
+ * Startseite: „Einkaufsliste — wird noch gelernt". Das ist der
+ * Bildschirm direkt nach der ersten Handlung, um die die App gebeten
+ * hat, und er sagte nichts darüber, was gerade passiert ist, was die
+ * App davon hat oder wo es weitergeht.
+ *
+ * Gerechnet wird das hier NICHT: `firstReceiptInsights()` in
+ * coldStart.js macht das seit jeher und war bis hierher an keiner
+ * Stelle der Oberfläche angeschlossen — geprüft in test/tests.js und
+ * test/stresstest.js, aber für niemanden sichtbar.
+ *
+ * Jede Zeile führt zu einem Bereich, den die Leiste unten zwar auch
+ * erreicht, den nach einem einzigen Bon aber niemand von sich aus
+ * aufsucht: die Ausgaben, der Vorrat, der nächste Bon. Ab Stufe 2
+ * verschwindet die Gruppe wieder — dann tragen Liste, „Jetzt zu tun"
+ * und „Dein Lauf" die Seite von selbst.
+ *
+ * Die Jahres-Hochrechnung steht bewusst NICHT in einer Zeile, sondern
+ * hinter dem (i): 52 × ein einziger Bon ist eine steile Annahme, und
+ * sie gehört zusammen mit ihrem Vorbehalt gelesen, nicht als Zahl
+ * neben lauter gemessenen.
+ */
+function firstReceiptCard(ctx, app) {
+  if (!ctx.stage || ctx.stage.stage !== 1 || !ctx.history.length) return null;
+
+  const ins = firstReceiptInsights(ctx.history);
+  if (!ins.positions) return null;
+
+  const g = uiGroup("Dein erster Bon",
+    `Aus diesem einen Einkauf: ${eur(ins.total)} für ${zahlwort(ins.positions, "Position", "Positionen")}, ` +
+    `davon ${eur(ins.foodSpend)} Lebensmittel.\n\n` +
+    `Hochgerechnet wären das rund ${ins.yearProjection} € im Jahr. ${ins.hint}`);
+
+  g.body.append(uiRow("Ausgegeben",
+    zahlwort(ins.positions, "Position", "Positionen"), null, {
+      value: eur(ins.total),
+      onClick: () => app.goto("zahlen")
+    }));
+
+  if (ins.categories.length) {
+    const top = ins.categories[0];
+    g.body.append(uiRow("Größter Anteil", top.name, null, {
+      value: `${top.share} %`,
+      onClick: () => app.goto("zahlen")
+    }));
+  }
+
+  /* Der Vorrat steht schon nach dem ersten Bon — er kommt aus
+     Haltbarkeiten, nicht aus gelernten Takten, und ist deshalb sofort
+     belastbar. Genannt wird das, was als Erstes knapp wird: eine Zahl
+     allein ("11 Produkte") ist kein Grund nachzusehen. */
+  const vorrat = (ctx.inventory || []).filter((i) => i.likelyPresent);
+  if (vorrat.length) {
+    const knapp = [...vorrat].sort((a, b) => (a.daysLeft || 0) - (b.daysLeft || 0))[0];
+    g.body.append(uiRow("Im Vorrat",
+      knapp ? `${knapp.name}: noch etwa ${tage(Math.max(0, knapp.daysLeft || 0))}` : null, null, {
+        value: String(vorrat.length),
+        onClick: () => app.goto("bestand")
+      }));
+  }
+
+  g.body.append(uiRow("Nächsten Bon erfassen",
+    "Ab dem zweiten Einkauf lernt die App deine Abstände.", null, {
+      onClick: () => app.goto("erfassen")
+    }));
+
+  // Unter die Gruppe, nicht hinein: .groupBody ist die Glasfläche mit
+  // runden Ecken und overflow:hidden -- ein Absatz darin stößt an die
+  // Rundung und wird an der letzten Zeile abgeschnitten.
+  g.append(el("p", "srcnote",
+    "Die Einkaufsliste bleibt so lange leer: ein Takt braucht mindestens " +
+    "zwei Käufe desselben Produkts. Geraten wird hier nichts."));
   return g;
 }
 

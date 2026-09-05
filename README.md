@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 2303 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2319 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4610,6 +4610,53 @@ prüft `uiRow` `!== undefined && !== null`, mit Test-Regression in
 
 ---
 
+## Die Startseite nach dem ersten Bon (2026-09-04)
+
+Die Durchsicht der Orientierung ging weiter, und die schwächste Stelle
+war nicht die volle App, sondern die erste Stunde damit. Nach genau
+einem erfassten Bon — dem Schritt, um den die Willkommensseite bittet —
+bestand die Startseite aus **einer** Karte: „Einkaufsliste — wird noch
+gelernt". Sonst nichts. Der Bildschirm direkt nach der ersten Handlung
+sagte weder, was gerade passiert ist, noch was die App davon hat, noch
+wo es weitergeht. Wer hier abspringt, hat nie erlebt, wofür die App
+gebaut ist.
+
+**Was dazukam:** `firstReceiptCard()` zeigt auf Stufe 1 eine Gruppe
+„Dein erster Bon" — ausgegebene Summe mit Positionszahl, der größte
+Kategorie-Anteil, der geschätzte Vorrat mit dem, was zuerst knapp wird,
+und „Nächsten Bon erfassen" mit dem Grund dafür. Vier Zeilen, vier
+Ziele: Zahlen, Zahlen, Bestand, Erfassen. Genau die Bereiche, welche
+die Leiste unten zwar auch erreicht, die aber nach einem einzigen Bon
+niemand von sich aus aufsucht. Ab Stufe 2 verschwindet die Gruppe
+wieder — dann tragen Liste, „Jetzt zu tun" und „Dein Lauf" die Seite
+von selbst.
+
+**Gerechnet wird dafür nichts Neues.** `firstReceiptInsights()` in
+`coldStart.js` macht genau diese Rechnung seit jeher, geprüft in
+`test/tests.js` und `test/stresstest.js` — und war an keiner Stelle
+der Oberfläche angeschlossen. Dieselbe Sorte Fund wie damals bei
+`cheaperAlternatives()`: fertige, getestete Logik ohne Anschluss.
+
+**Was bewusst nicht in einer Zeile steht:** die Jahres-Hochrechnung.
+52 × ein einziger Bon ist eine steile Annahme; sie steht hinter dem
+(i), zusammen mit ihrem Vorbehalt aus dem Modul — nicht als Zahl
+zwischen lauter gemessenen. Darunter eine Zeile, warum die Liste noch
+leer ist: ein Takt braucht zwei Käufe desselben Produkts. Geraten wird
+nichts.
+
+**Nachbesserung an der Vorschau von gestern:** auf Stufe 1 gibt es noch
+keine Takte, die nächsten Tage kommen dann allein aus Haltbarkeiten —
+und weil nur *drohender* Verderb einen Untertitel bekam, standen dort
+zwei blanke Datumszeilen ohne jede Aussage. Jetzt nennt auch die
+gewöhnliche Haltbarkeit ihr Produkt, mit denselben Worten wie im
+Kalender. Ein Test hält fest, dass keine Zeile nur aus einem Datum
+besteht.
+
+16 neue Oberflächentests. Alle jetzt 2319 Tests bestehen (Algorithmus
+1342, Oberfläche 938, Langzeitlauf 39).
+
+---
+
 ## Aufbau
 
 ```
@@ -4680,13 +4727,13 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 2303
+npm test          # alle 2319
 npm run test:algo # 1342 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
                   #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Einladungen/Prämie,
                   #   Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 922 Oberflächentests in jsdom
+npm run test:ui   # 938 Oberflächentests in jsdom
 npm run test:long # 39 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 
