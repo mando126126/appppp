@@ -116,7 +116,8 @@ try {
     " mascotSvg, mascotMood, mascotMessage, MASCOT_RULES, mascotAlarmSignature,"+
     " viewKalender, kalenderTagGruppe, monatsTitel, buildCalendar, monatPlus, monatsSpanne," +
     " eventSheet, detectEventPurchase, startKalenderVorschau, uiRow," +
-    " firstReceiptCard, firstReceiptInsights, eur };"
+    " firstReceiptCard, firstReceiptInsights, eur," +
+    " dietCard, dietKindOf, fitsDiet, dietAlternatives, DIET_PROFILES };"
   );
 } catch (e) {
   errors.push(String(e.stack || e.message));
@@ -3038,6 +3039,115 @@ console.log("\n--- Start, Rechner-Vorschau: nächste Tage ---");
       g1.textContent.slice(0, 160));
   }
   D.loadDemo("full");
+}
+
+console.log("\n--- Ernährungsweisen: nur auf Wunsch, und dann überall ---");
+{
+  /* Die wichtigste Prüfung steht zuerst: OHNE gewählte Weise darf sich
+     nichts ändern. Eine App, die ungefragt den Einkaufszettel
+     kommentiert, erzieht -- und das ist nicht ihre Aufgabe. */
+  D.loadDemo("full");
+  D.update((s) => { s.settings.diet = null; });
+  App.goto("liste");
+  ok("Ohne gewählte Weise trägt keine Zeile eine Ernährungs-Marke",
+    $("main").querySelectorAll(".pill.diet").length === 0);
+  App.goto("zahlen");
+  App.zahlenTab = "ausgaben";
+  App.render();
+  ok("Und unter Zahlen gibt es keine Ernährungs-Karte",
+    !/Ernährung ·/.test($("main").textContent));
+  ok("dietCard() liefert dann gar nichts", T.dietCard(App.ctx, App) === null);
+
+  // Jetzt vegan -- und die Marken müssen an den richtigen Zeilen sitzen.
+  D.update((s) => { s.settings.diet = "vegan"; });
+  App.goto("liste");
+  const markiert = [...$("main").querySelectorAll(".item")]
+    .filter((li) => li.querySelector(".pill.diet"));
+  ok("Mit veganer Weise werden Zeilen markiert", markiert.length > 0, String(markiert.length));
+  ok("Und zwar genau die, die laut fitsDiet nicht passen", (() => {
+    const falsch = [...$("main").querySelectorAll(".item")].filter((li) => {
+      const name = li.querySelector(".nm").textContent.replace("passt nicht", "").trim();
+      const eintrag = App.ctx.items.find((i) => i.name === name);
+      if (!eintrag) return false;
+      const passt = T.fitsDiet(eintrag.productId, "vegan");
+      return (passt === false) !== !!li.querySelector(".pill.diet");
+    });
+    return falsch.length === 0 ? true : falsch.map((li) => li.querySelector(".nm").textContent).join(", ");
+  })());
+  /* Bewusst KEINE Prüfung auf ein bestimmtes Produkt ("Milch ist
+     dabei"): was auf der Liste steht, hängt an Rhythmus und Datum und
+     wechselt. Die Prüfung darüber deckt die Richtigkeit vollständig ab,
+     ohne von einer Zeile abzuhängen, die morgen fehlen darf. */
+
+  /* Unklares wird NICHT markiert -- lieber schweigen als ein veganes
+     Produkt fälschlich als tierisch ausweisen. */
+  ok("Was sich nicht entscheiden lässt, bleibt unmarkiert", (() => {
+    const unklar = [...$("main").querySelectorAll(".item")].filter((li) => {
+      const name = li.querySelector(".nm").textContent.replace("passt nicht", "").trim();
+      const eintrag = App.ctx.items.find((i) => i.name === name);
+      return eintrag && T.fitsDiet(eintrag.productId, "vegan") === null;
+    });
+    return unklar.every((li) => !li.querySelector(".pill.diet"));
+  })());
+
+  // Das Detail-Blatt bietet Ersatz an, statt nur zu meckern.
+  const milch = App.ctx.items.find((i) => T.fitsDiet(i.productId, "vegan") === false);
+  if (milch) {
+    T.productSheet(milch.productId, App.ctx);
+    const blatt = $("sheet").textContent;
+    ok("Das Detail-Blatt nennt die Ernährungsweise", /Passt nicht zu/.test(blatt));
+    const alts = T.dietAlternatives(milch.productId, "vegan");
+    ok("Und schlägt Ersatz aus demselben Regal vor",
+      alts.length === 0 || alts.some((a) => blatt.includes(a.name)), alts.map((a) => a.name).join(", "));
+    ok("Der Ersatz passt selbst zur Weise",
+      alts.every((a) => T.fitsDiet(a.productId, "vegan") === true));
+    App.closeSheet();
+  }
+
+  // Die Karte unter Zahlen.
+  App.goto("zahlen");
+  App.zahlenTab = "ausgaben";
+  App.render();
+  const karte = T.dietCard(App.ctx, App);
+  ok("Mit gewählter Weise gibt es eine Karte", !!karte);
+  ok("Sie nennt die gewählte Weise", karte && /Vegan/.test(karte.textContent));
+  ok("Und weist Unklares getrennt aus, statt es zu verteilen",
+    karte && /Nicht einzuordnen|beziehen sich auf/.test(karte.textContent));
+
+  /* Proteinreich schließt nichts aus -- es darf deshalb auch nichts
+     markieren, sondern nur zusätzlich rechnen. */
+  D.update((s) => { s.settings.diet = "proteinreich"; });
+  App.goto("liste");
+  ok("Proteinreich markiert keine einzige Zeile",
+    $("main").querySelectorAll(".pill.diet").length === 0);
+  App.goto("zahlen");
+  App.zahlenTab = "ausgaben";
+  App.render();
+  const pk = T.dietCard(App.ctx, App);
+  ok("Zeigt dafür die Protein-Rechnung", pk && /Protein je Woche/.test(pk.textContent),
+    pk && pk.textContent.slice(0, 120));
+  ok("Und sagt dazu, worauf sie beruht", pk && /Referenzwerte/.test(pk.textContent));
+
+  // Die Einstellung selbst.
+  App.goto("mehr");
+  App.mehrTab = "einstellungen";
+  App.render();
+  ok("Unter Mehr lässt sich die Weise wählen", /Ernährungsweise/.test($("main").textContent));
+  ok("Mit „Keine“ als Möglichkeit", /Keine/.test($("main").textContent));
+  ok("Und dem Hinweis, dass glutenfrei bewusst fehlt", (() => {
+    const info = [...$("main").querySelectorAll(".groupTitle")]
+      .find((h) => /Ernährung/.test(h.textContent));
+    if (!info) return false;
+    click(info.querySelector(".infoBtn"));
+    const treffer = /glutenfrei/i.test(doc.body.textContent);
+    // Verlässlich zumachen, nicht über einen gesuchten Knopf: ein
+    // offen gebliebenes Blatt riss vorher drei Wesen-Tests mit, die
+    // gar nichts mit dieser Funktion zu tun haben.
+    App.closeSheet();
+    return treffer;
+  })());
+
+  D.update((s) => { s.settings.diet = null; });
 }
 
 console.log("\n--- Das Wesen ---");

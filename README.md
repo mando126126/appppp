@@ -10,7 +10,7 @@ nicht reicht").
 ```bash
 npm install     # nur für die Tests (jsdom)
 npm run dev     # baut und startet http://localhost:8000
-npm test        # 2319 Tests, Simulation und Drei-Jahres-Langzeitlauf
+npm test        # 2401 Tests, Simulation und Drei-Jahres-Langzeitlauf
 ```
 
 ---
@@ -4657,6 +4657,72 @@ besteht.
 
 ---
 
+## Ernährungsweisen — rein optional (2026-09-05)
+
+Wunsch: Unterstützung für bestimmte Ernährungsweisen, vegan,
+proteinreich und dergleichen. Umgesetzt als `dietProfiles.js` mit drei
+Profilen — **Vegetarisch, Vegan, Proteinreich** — und der Vorgabe
+**Keine**. Solange die steht, ändert sich in der ganzen App nichts:
+keine Markierung, keine Kachel, kein Hinweis. Eine App, die ungefragt
+den Einkaufszettel kommentiert, erzieht, und das ist nicht ihre
+Aufgabe. Die Optionalität ist testgesichert, nicht nur beteuert.
+
+**Was sichtbar wird, wenn man eine Weise wählt:** auf der Liste trägt
+eine Zeile, die nicht dazu passt, eine ruhige Marke „passt nicht" —
+gestrichen wird nichts, denn die Zeile steht dort, weil das Produkt
+regelmäßig gekauft wird. Im Detail-Blatt stehen Alternativen aus
+derselben Kategorie, ein Tipp setzt eine davon auf die Liste. Unter
+„Zahlen → Ausgaben" zeigt eine Karte, wie sich die Ausgaben auf
+pflanzlich, Milch/Käse/Ei und Fleisch/Fisch verteilen — im selben
+Zeitraum wie „Wo dein Geld hingeht" darüber, damit nicht zwei Karten
+zwei verschiedene Wahrheiten über dasselbe Geld erzählen. Bei
+„Proteinreich" kommt die Grammrechnung je Woche dazu.
+
+**Drei Antworten, nicht zwei.** Jede Einordnung darf auch „unklar"
+sagen, und tut das bei rund einem Viertel des Katalogs: bei Saucen,
+Fertiggerichten und Süßwaren entscheidet die Zutatenliste, nicht der
+Name. Unklares wird **nicht markiert** und **nicht in die Anteile
+gerechnet**, sondern als eigener Betrag ausgewiesen — dazu die
+Abdeckung („bezieht sich auf 88 % der Ausgaben"). Ein Anteil, der ein
+Achtel des Einkaufs stillschweigend unterschlägt, wäre keine Auskunft,
+sondern eine Behauptung. Und ein falscher Haken an einem veganen
+Produkt wäre schlimmer als gar keiner: wo ein pflanzlicher Hinweis im
+Namen steht („Joghurt Soja Natur"), wird deshalb auf „unklar"
+entschieden statt auf „tierisch".
+
+**Glutenfrei und laktosefrei fehlen bewusst.** Das sind keine
+Vorlieben, sondern Unverträglichkeiten, und eine falsche Zusage macht
+jemanden krank. Der Katalog kennt weder Zutatenlisten noch
+Spurenkennzeichnung — was er hergibt, reicht für „enthält vermutlich
+kein Fleisch", niemals für „ist sicher glutenfrei". Dieselbe Linie wie
+bei den Verbrauchsdaten.
+
+**Zwei Fehler, die beim Bauen auffielen und ohne Test unsichtbar
+geblieben wären.** Erstens die Wortsuche: geprüft wurde zunächst auf
+ganze Wörter mit Wortgrenze — im Deutschen die falsche Regel.
+„Fischsauce" und „Müllermilch" sind EIN Wort, keine Grenze trennt den
+Stamm ab, und beide liefen als pflanzlich durch. Jetzt lange,
+eindeutige Stämme als Teiltreffer, kurze und mehrdeutige („ei",
+„rind") weiterhin mit Wortgrenze, dazu Ausnahmen mit Beispiel
+(Fleischtomate, Erdnussbutter, Honigmelone). Zweitens ein Tippfehler in
+einer Kennung: `tofu_raeucher` statt `tofu_geraeuchert` machte aus
+Räuchertofu stillschweigend Fleisch. Beide Listen prüfen jetzt im Test
+gegen den Katalog, dass es jede genannte Kennung wirklich gibt — das
+fand auf einen Schlag zehn weitere geratene Kennungen in der
+Protein-Tabelle.
+
+**Protein ohne Nährwertdaten.** Der Katalog führt keine. Die Tabelle
+in `dietProfiles.js` ist deshalb eine eigene, bewusst grobe Zuordnung
+von Referenzwerten je 100 g für die Produkte, bei denen Protein ins
+Gewicht fällt — Qualitätsstufe „schaetzwert", und für Produkte ohne
+Eintrag wird nichts geschätzt, sondern gezählt: die Karte sagt, aus
+wie vielen Positionen sie rechnet und wie viele sie nicht erfasst.
+
+64 neue Algorithmus-Tests, 18 neue Oberflächentests. Alle jetzt 2401
+Tests bestehen (Algorithmus 1406, Oberfläche 956, Langzeitlauf 39).
+
+---
+
 ## Aufbau
 
 ```
@@ -4727,13 +4793,13 @@ der Datei (`file://`) läuft die App, aber ohne Offline-Betrieb.
 ## Tests
 
 ```bash
-npm test          # alle 2319
-npm run test:algo # 1342 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
+npm test          # alle 2401
+npm run test:algo # 1406 Modultests (Regression, Stress, Funktionen, Haushalt, Suche, Marken,
                   #   Texterkennung, echte Bons, Abgleich, Sicherheit, Wiederherstellung, Liste,
                   #   Kalender, Verschwendung, Wochenstreifen, Vorrat, Schwarm, Einladungen/Prämie,
-                  #   Kontrast, Lernen, Rückblick)
+                  #   Ernährung, Kontrast, Lernen, Rückblick)
                   #   plus die Simulation
-npm run test:ui   # 938 Oberflächentests in jsdom
+npm run test:ui   # 956 Oberflächentests in jsdom
 npm run test:long # 39 Prüfungen aus dem Drei-Jahres-Lauf
 ```
 

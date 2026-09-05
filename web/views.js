@@ -635,6 +635,13 @@ const PILL_INFO = {
     "Etwas sehr Ähnliches steht schon auf der Liste oder wurde gerade erst gekauft.\n\nDie App " +
     "streicht deshalb nichts — sie fragt nur. Manchmal braucht man wirklich zwei."],
 
+  diet: ["Passt nicht zu deiner Ernährungsweise",
+    "Du hast unter „Mehr → Ernährung“ eine Ernährungsweise gewählt, und dieses Produkt passt " +
+    "nicht dazu.\n\nGestrichen wird trotzdem nichts: die Zeile steht hier, weil du das Produkt " +
+    "regelmäßig kaufst. Was auf der Liste landet, entscheidest du — im Detail-Blatt stehen " +
+    "Alternativen aus demselben Regal.\n\nEingeordnet wird nach Produktname und Kategorie, nicht " +
+    "nach Zutatenliste. Wo das nicht reicht, markiert die App gar nichts."],
+
   rest: ["Resthaltbarkeit",
     "Geschätzte Tage, die dieses Produkt bei richtiger Lagerung noch hat — gerechnet ab dem Kaufdatum " +
     "mit dem Katalogwert.\n\nEine Schätzung, kein Datum von der Packung. Was du aufgedruckt hast, " +
@@ -1370,6 +1377,37 @@ function productSheet(productId, ctx) {
         rat.kind === "vorrat" ? { value: "ca. " + eur(rat.ersparnis) } : {}));
       g.body.append(el("p", "srcnote",
         `Bester Preis bisher: ${eur(pm.lowest)}, üblich ${eur(pm.usual)}. ` + sourceNote(rat)));
+      body.append(g);
+    }
+  }
+
+  /* ---------- 8b. Ernährungsweise: Ersatz aus demselben Regal ----------
+     Nur wenn eine Weise gewählt IST und dieses Produkt nicht dazu
+     passt. Ein Tipp legt die Alternative auf die Liste — mehr passiert
+     nicht: nichts wird gestrichen, nichts umgebucht, keine Historie
+     angefasst. Die Zeile darunter sagt, worauf die Einordnung beruht,
+     weil „passt nicht" sonst nach einer Prüfung klingt, die es nicht
+     gegeben hat. */
+  {
+    const profil = Data.get().settings.diet;
+    if (!nf && fitsDiet(productId, profil) === false) {
+      const alts = dietAlternatives(productId, profil);
+      const g = uiGroup(`Passt nicht zu „${(dietProfileById(profil) || {}).label || profil}“`);
+      if (alts.length) {
+        alts.forEach((a) => g.body.append(uiRow(a.name, "auf die Liste setzen", null, {
+          value: eur(a.price),
+          onClick: () => {
+            const entry = Data.addManual({ productId: a.productId, week: ctx.weekKey });
+            App.closeSheet();
+            if (entry) App.toast(`${entry.name} auf der Liste`, { icon: "+" });
+          }
+        })));
+      } else {
+        g.body.append(uiRow("Kein Ersatz im Katalog", "in dieser Kategorie gibt es keine passende Zeile"));
+      }
+      g.append(el("p", "srcnote",
+        "Eingeordnet nach Produktname und Kategorie, nicht nach Zutatenliste. " +
+        "Gestrichen wird nichts — was du kaufst, entscheidest du."));
       body.append(g);
     }
   }
@@ -2839,6 +2877,15 @@ function listItem(it, ctx, app) {
      Seit abgewählte Positionen die Liste verlassen und sich unten in
      „Nicht diese Woche" sammeln, kann sie nie mehr erscheinen — sie
      wäre ab jetzt toter Code, der bei jeder Zeile mitgeprüft wird. */
+  /* Die Ernährungs-Marke steht vor „von dir": sie verlangt eine
+     Entscheidung, BEVOR man losgeht (etwas anderes mitnehmen), und
+     genau das ist die Bedingung dieser Liste. „von dir" ist dagegen
+     eine Auskunft. Erscheint überhaupt nur, wenn unter Mehr eine
+     Ernährungsweise gewählt ist -- fitsDiet() gibt sonst immer true
+     zurück, und `null` (nicht entscheidbar) markiert ebenfalls nichts. */
+  if (fitsDiet(it.productId, Data.get().settings.diet) === false) {
+    zeichen.push(["diet", "diet", "passt nicht"]);
+  }
   if (manuell) zeichen.push(["own", "own", "von dir"]);
   /* Ausgeschrieben, nicht abgekürzt.
      „VD“ stand hier zwei Buchstaben lang und erklärte sich nur dem,
@@ -4172,9 +4219,86 @@ function viewZahlen(ctx, app) {
 
   if (app.zahlenTab === "bilanz") renderZahlenBilanz(c, ctx, app);
   else if (app.zahlenTab === "verhalten") renderZahlenVerhalten(c, ctx, app);
-  else { c.append(moneyFlowCard(ctx, app)); renderZahlenAusgaben(c, ctx, app); }
+  else {
+    c.append(moneyFlowCard(ctx, app));
+    const ern = dietCard(ctx, app);
+    if (ern) c.append(ern);
+    renderZahlenAusgaben(c, ctx, app);
+  }
 
   return c;
+}
+
+/**
+ * Wie sich der Einkauf auf die Ernährungsweise verteilt.
+ *
+ * Gibt `null` zurück, solange keine Weise gewählt ist — das ist die
+ * ganze Optionalität dieser Funktion in einer Zeile.
+ *
+ * Derselbe Zeitraum wie „Wo dein Geld hingeht" darüber (dieselbe
+ * `zahlenSpanne`): zwei Karten übereinander mit zwei verschiedenen,
+ * nirgends benannten Zeiträumen wären zwei Wahrheiten über dasselbe
+ * Geld.
+ *
+ * Die Abdeckung steht ausdrücklich dabei. Ein Anteil, der 30 % des
+ * Einkaufs stillschweigend unterschlägt, ist keine Auskunft, sondern
+ * eine Behauptung — und die Einordnung liest Namen, keine
+ * Zutatenlisten (siehe dietProfiles.js).
+ */
+function dietCard(ctx, app) {
+  const profil = Data.get().settings.diet;
+  if (!profil) return null;
+  const p = dietProfileById(profil);
+  if (!p) return null;
+
+  const ref = Data.today();
+  const { from, to } = zahlenSpanne(App.zahlenFilter, ref);
+  const anteile = dietShares(ctx.history, { from, to });
+  if (!anteile.gesamt) return null;
+
+  const g = uiGroup(`Ernährung · ${p.label}`,
+    "Eingeordnet nach Produktname und Kategorie aus dem eigenen Katalog, nicht nach " +
+    "Zutatenliste. Was sich so nicht entscheiden lässt, zählt NICHT in die Anteile " +
+    "hinein, sondern steht als eigener Betrag da.\n\n" +
+    "Zeitraum und Auswahl sind dieselben wie in „Wo dein Geld hingeht“ darüber.");
+
+  const zeile = (titel, euro, prozent) => {
+    if (!euro) return;
+    g.body.append(uiRow(titel, prozent === null ? null : `${prozent} % des eingeordneten Teils`,
+      null, { value: eur(euro) }));
+  };
+  zeile("Pflanzlich", anteile.euros.pflanzlich, anteile.prozentPflanzlich);
+  zeile("Milch, Käse, Ei", anteile.euros.vegetarisch, anteile.prozentVegetarisch);
+  zeile("Fleisch und Fisch", anteile.euros.fleisch, anteile.prozentFleisch);
+  if (anteile.euros.unklar) {
+    g.body.append(uiRow("Nicht einzuordnen", "zählt in keinen Anteil mit", null,
+      { value: eur(anteile.euros.unklar) }));
+  }
+
+  /* Nur beim Protein-Profil: die Grammrechnung. Sie steht bewusst
+     nicht bei den anderen beiden -- wer vegan einkauft, hat nach
+     Anteilen gefragt, nicht nach Nährwerten. */
+  if (profil === "proteinreich") {
+    const wochen = Math.max(1, Math.round(daysBetween(from || ctx.totals.firstDate, to) / 7));
+    const pr = dietProtein(ctx.history, { from, to, wochen });
+    if (pr.mitWert) {
+      g.body.append(uiRow("Protein je Woche", `aus ${zahlwort(pr.mitWert, "Position", "Positionen")}`,
+        null, { value: `${de(pr.grammProWoche)} g` }));
+      if (pr.top.length) {
+        g.body.append(uiRow("Stärkste Quelle", pr.top[0].name, null,
+          { value: `${de(pr.top[0].gramm)} g` }));
+      }
+    }
+    g.append(el("p", "srcnote", esc(pr.hinweis +
+      (pr.ohneWert ? ` ${zahlwort(pr.ohneWert, "Position", "Positionen")} ohne hinterlegten Wert bleiben außen vor.` : ""))));
+  }
+
+  if (anteile.abdeckung !== null && anteile.abdeckung < 100) {
+    g.append(el("p", "srcnote",
+      `Die Anteile beziehen sich auf ${anteile.abdeckung} % der Lebensmittel-Ausgaben in diesem ` +
+      "Zeitraum. Der Rest ließ sich nach dem Namen nicht sicher einordnen."));
+  }
+  return g;
 }
 
 /** Unterbereich "Bilanz": was das bisherige Verhalten gebracht hat. */
@@ -4868,6 +4992,26 @@ function renderMehrEinstellungen(c, ctx, app) {
   look.body.append(uiRow("Schriftgröße", null,
     segmented([[1, "Normal"], [1.15, "Groß"], [1.3, "Sehr groß"]], S.settings.textScale,
       (v) => app.set((s) => { s.settings.textScale = v; }), "Schriftgröße"), { stacked: true }));
+
+  /* --- Ernährung ---
+     Vorgabe „Keine", und dann ist überall Ruhe. Der Hinweis unter der
+     Gruppe ist keine Höflichkeitsfloskel, sondern die Bedingung, unter
+     der diese Funktion überhaupt zu rechtfertigen ist: sie ordnet
+     Produkte nach Namen ein, nicht nach Zutatenliste, und sagt das. */
+  const ern = uiGroup("Ernährung",
+    "Markiert auf der Einkaufsliste, was nicht zur gewählten Weise passt, " +
+    "und zeigt unter „Zahlen“, wie sich dein Einkauf verteilt.\n\n" +
+    "Eingeordnet wird nach Produktname und Kategorie aus dem eigenen Katalog — " +
+    "nicht nach Zutatenliste. Was sich so nicht entscheiden lässt (Saucen, " +
+    "Fertiggerichte, Süßwaren), bleibt ausdrücklich unklar und wird weder " +
+    "markiert noch mitgezählt.\n\n" +
+    "Glutenfrei und laktosefrei stehen bewusst nicht zur Wahl: das sind " +
+    "Unverträglichkeiten, und dafür reicht diese Datengrundlage nicht.");
+  ern.body.append(uiRow("Ernährungsweise", null,
+    segmented([[null, "Keine"], ...DIET_PROFILES.map((p) => [p.id, p.label])],
+      S.settings.diet || null,
+      (v) => app.set((s) => { s.settings.diet = v; }), "Ernährungsweise"), { stacked: true }));
+  c.append(ern);
 
   /* --- Einstellungen für die Liste ---
      Standen früher unten auf der Startseite, dann ganz unten hier.

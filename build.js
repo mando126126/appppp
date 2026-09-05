@@ -92,6 +92,7 @@ const MODULES = [
   "priceShare.js",
   "offerAdvisor.js",
   "schwarmClient.js",
+  "dietProfiles.js",
   "referralSystem.js",
   "accountClient.js"
 ];

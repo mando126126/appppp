@@ -71,7 +71,14 @@ function emptyState() {
       // spätere Einwilligungs-Oberfläche einen echten, gesicherten
       // Zustand zum Umschalten hat statt eines neuen Felds mit allen
       // Wanderungsfragen, die ein neues Feld sonst aufwirft.
-      schwarm: { enabled: false }
+      schwarm: { enabled: false },
+      /* Ernährungsweise — ausdrücklich optional, Vorgabe `null`.
+         Solange hier nichts steht, ändert sich in der ganzen App
+         nichts: keine Markierung auf der Liste, keine Kachel unter
+         Zahlen, kein Hinweis. Die Rechnung dazu steht vollständig in
+         dietProfiles.js (siehe dortigen Kopf, auch dazu, warum
+         glutenfrei und laktosefrei bewusst fehlen). */
+      diet: null                // null | "vegetarisch" | "vegan" | "proteinreich"
     },
     // Haushaltsprofil: bestimmt Verbrauchsraten und filtert Produkte,
     // für die das Gerät fehlt. Ohne Kaffeemaschine kein Entkalker.
